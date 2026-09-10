@@ -26,6 +26,9 @@ Done when every decision ticket is closed and `docs/spec.md` is assembled from t
   the spec by ticket *Assemble docs/spec.md*):
   - `docs/adr/0002` — Dashboard Accounts panel is a flat, non-indented list (no account
     tree, no parent/subtotal rows).
+- **Architecture**: `docs/adr/0003` — ports-and-adapters / Clean Architecture; every source
+  dependency points inward to `internal/domain`; use cases declare their own ports, adapters
+  satisfy them structurally, `cmd/konto` wires.
 - **Domain glossary** is `CONTEXT.md`; **ADRs** live in `docs/adr/`. Both now exist.
 - **Pre-decided**: the `hledger` binary is a hard runtime dependency. konto shells out to it;
   no Go reimplementation or journal-parser port is pursued. The open integration question is
@@ -67,6 +70,16 @@ Done when every decision ticket is closed and `docs/spec.md` is assembled from t
   1.32`; missing journal → first-run skeleton-create screen; parse error → top-severity
   check issue. `!` panel runs each hledger check as its own invocation (first-failure only,
   fix→refresh→next), konto's own checks enumerate fully. `$EDITOR` via `tea.ExecProcess`.
+- [Go package and module layout](issues/04-package-module-layout.md) — **ports-and-adapters
+  / Clean Architecture** (ADR 0003). Circles inward: `cmd/konto` (composition root) →
+  `internal/ui` + one package per view (Bubble Tea confined here; import domain + the app
+  services they use; never adapters, never each other; leaves `ui/theme|layout|keys|widgets`)
+  → use cases `internal/{ledger,report,csvimport,periodic,forecast,entry}` (plain Go, each
+  **declares its own port interfaces**, imports domain only, no `app.App` facade) →
+  adapters `internal/hledger` + `internal/journal` (import domain only, satisfy the ports
+  **structurally**) → `internal/domain` (entities + pure rules, imports nothing). `cmd`
+  wires concretes into ports. Deviations from strict CA: adapters return domain entities
+  (ADR 0001), no standalone presenter, thin domain.
 - [konto domain model and core types](issues/03-domain-model-core-types.md) — **rich
   konto-owned model behind a gateway mapping layer** (ADR 0001); views never see hledger
   JSON. `Amount` = hand-rolled fixed-point `{Commodity, Mantissa int64, Scale int32}`, no
