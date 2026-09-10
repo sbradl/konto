@@ -1,7 +1,7 @@
 # 11 Test seams and fixture strategy
 
 Type: grilling
-Status: open
+Status: resolved
 Blocked by: 02, 03
 
 ## Question
@@ -25,3 +25,60 @@ the spec):
   unit tests on view models only. What's the bar?
 
 Feeds **Assemble docs/spec.md**; may graduate an "install hledger + sample journal" task.
+
+## Answer
+
+Three seam levels, matching the layers (ADR 0003):
+
+### 1. Use cases (`ledger`, `report`, `csvimport`, `periodic`, `forecast`, `entry`)
+
+Test against a **hand-written fake of the use case's own port interface**, in that package's
+`_test.go` (`type fakeLedgerGateway struct { ... }`). No adapter, no hledger, no journal
+file. This is the bulk of the logic tests and they are fast and hermetic.
+
+### 2. `internal/hledger` adapter
+
+- **Unit** (the bulk): fake the unexported `run()` to return canned bytes; assert (a) the
+  arg vector konto built and (b) the domain value the JSON/text maps to. Sample outputs are
+  small, committed under `internal/hledger/testdata/` (real fragments captured from
+  `hledger 1.52.1`, trimmed).
+- **Integration** (`//go:build integration`): run the **real** `hledger` binary against the
+  fixture journals, assert konto's mapping produces sane values. Catches hledger JSON-schema
+  drift. Runs in CI (hledger installed there); skipped by default locally.
+
+### 3. `internal/journal` adapter
+
+Pure text in / text out — no hledger needed. Table tests: fixture journal snippet → parsed
+struct; and for the writers, input + edit → golden output file. Under
+`internal/journal/testdata/`.
+
+### Fixture journals
+
+Hand-written, small, one concern each — **committed, part of the build, no task ticket**
+(hand-building these is quick; a big realistic journal is not needed and small focused files
+are better tests). Shared set under `testdata/journals/` at repo root for the integration
+tests:
+
+- `minimal.journal` — a couple of balanced transactions
+- `multicommodity.journal` — EUR + PLN + CZK holdings (the "+ N cur" / `-V` cases)
+- `periodic.journal` — two `~` rules with different intervals
+- `prices.journal` — `P` directives
+- `broken-assertion.journal` — a failing `= <amount>` (checks panel)
+- `accounts.journal` — `account` directives with / without `konto:source:` tags
+- `import/` — a `bank.csv` + `bank.csv.rules` + `.latest.bank.csv` triple
+
+### TUI testing
+
+- **Bulk**: unit tests on each view's `Update` (a pure `(Msg) → (View, Cmd)` function — feed
+  a `tea.KeyMsg`, assert the resulting model / emitted `Cmd`) and on `ui/widgets` render
+  helpers (string in / string out at a fixed width).
+- **Smoke**: a few full-program flows via `teatest` (launch → nav to each view → `!` panel →
+  quit). Build-time check: confirm `teatest` has a Bubble Tea v2-compatible release; if not,
+  drive a hand-rolled `Program` loop for these.
+- **Golden `View()` snapshots**: **sparingly** — only stable components (tab bar, status
+  bar) at fixed sizes. Not whole views during active development (too brittle).
+
+### Runner / tooling
+
+`go test ./...`; `go test -tags integration ./...` for the CI set. `golangci-lint`
+(already on the dev machine via mason). No `gotestsum`.

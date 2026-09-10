@@ -1,7 +1,7 @@
 # 10 Configuration and ANSI-16 theming
 
 Type: grilling
-Status: open
+Status: resolved
 
 ## Question
 
@@ -23,3 +23,45 @@ Decide konto's configuration and theming:
 - Where the theme/palette lives in the package tree (feeds ticket 04 if still open).
 
 Feeds **Assemble docs/spec.md**.
+
+## Answer
+
+Scoped to what the build hits first (re-scope 2026-09-10). **Resolved here:** journal-path
+resolution, the ANSI-16 palette. **Deferred to a follow-up ticket when the build needs
+them:** config-file format/location, the check-set on/off config shape, catch-all account
+name(s) for `Transaction.Uncategorized`, CSV import source directories. `internal/config`
+for v1 only resolves the journal path from flag + env + default; a config file is added
+when the first setting actually needs one.
+
+### Journal path resolution
+
+Order: `--file` CLI flag → `$LEDGER_FILE` → (future config `journal` key) → `~/.hledger.journal`.
+konto resolves to an **absolute path at startup** and passes `-f <path>` explicitly on every
+hledger invocation (deterministic; the `internal/journal` text layer needs the concrete
+path; `hledger files` expands the include set from there). If nothing resolves to an existing
+file → first-run screen (ticket 02).
+
+### ANSI-16 palette (`internal/ui/theme`)
+
+Fixed map of semantic role → ANSI index. `lipgloss.Color("N")`, never hex, so the TUI
+inherits the user's terminal theme (ADR 0005).
+
+| role | ANSI | |
+|---|---|---|
+| background | *unset* | terminal default |
+| foreground | *unset* | terminal default |
+| dim — labels, borders, secondary text | `8` | bright-black |
+| selection background | `8` | paired fg → `15` |
+| red — negative, error | `1` | |
+| green — positive | `2` | |
+| amber — warning, focus, manual-source `✎` | `3` | (not `11`) |
+| blue — mode indicator, forecast line | `4` | |
+| magenta — rule / price directive text | `5` | |
+| cyan — panel titles | `6` | |
+| bright-white — emphasis, grand totals | `15` | |
+
+Rule: normal colours `1`–`7` for standard roles; bright `8` / `15` only for de-emphasis and
+emphasis. **Fixed, not user-remappable in v1** — per-role override is a later config
+feature. `theme` exposes named `lipgloss.Style` values (e.g. `theme.Dim`, `theme.Negative`,
+`theme.PanelTitle`, `theme.Selected`, `theme.Emphasis`), built once from the role→index map;
+view/widget code uses the named styles, never raw indices.

@@ -3,12 +3,13 @@
 
 ## Destination
 
-`docs/spec.md` — a build-ready implementation spec for konto (the hledger TUI), written so a
-fresh implementation session (or `/to-tickets`) can execute it without re-deciding anything.
-Companion artifacts: `CONTEXT.md` glossary and `docs/adr/` entries for hard-to-reverse calls.
-**No application code is written during wayfinding** — this map produces decisions, not a build.
+**Foundation laid, build under way.** `docs/spec.md` captures the settled architecture
+(tickets 01–06, 10, 11) + `CONTEXT.md` + `docs/adr/`; the app shell and first Dashboard
+slices are built test-first on top of it. Per-feature design — CSV import (08/14), forecast
+(09), periodic transactions (13) — is grilled **just-in-time** as each view is built.
 
-Done when every decision ticket is closed and `docs/spec.md` is assembled from them.
+Done when the foundation spec exists and every view is built; per-feature tickets close as
+their views land.
 
 ## Notes
 
@@ -37,7 +38,12 @@ Done when every decision ticket is closed and `docs/spec.md` is assembled from t
   only *which subcommands / output format / invocation architecture*.
 - **Skills to consult** per ticket type: `/grilling` + `/domain-modeling` for decision
   tickets (the default), `/research` subagent for research tickets, `/prototype` for
-  prototype tickets. `craft-review` and `tdd-loop` are for the later build, not this map.
+  prototype tickets. `tdd-loop` + `craft-review` drive the build.
+- **This effort carries execution** (overriding wayfinder's plan-only default, re-scoped
+  2026-09-10): the foundation is decided; remaining work is the `tdd-loop` build plus JIT
+  grilling of per-feature tickets (08 import, 09 forecast, 13 periodic) when their view is
+  built. 14 (bank CSV samples, user-supplied) is a prerequisite for 08. 07 (responsive
+  layout) is done *during* the shell build, not before it.
 - **Environment fact** (dev machine, 2026-09-10): `hledger 1.52.1` is now installed
   (`/usr/bin/hledger`, installed during ticket 01 research). No journal file exists yet —
   the test-seams ticket still owns fixture-journal strategy, but "install hledger" is done.
@@ -77,6 +83,19 @@ Done when every decision ticket is closed and `docs/spec.md` is assembled from t
   1.32`; missing journal → first-run skeleton-create screen; parse error → top-severity
   check issue. `!` panel runs each hledger check as its own invocation (first-failure only,
   fix→refresh→next), konto's own checks enumerate fully. `$EDITOR` via `tea.ExecProcess`.
+- [Configuration and ANSI-16 theming](issues/10-config-and-theming.md) — *(partial —
+  build-critical bits only)* journal path resolved `--file` → `$LEDGER_FILE` → config →
+  `~/.hledger.journal`, to an absolute path, `-f` passed explicitly always. Fixed ANSI-16
+  palette (ADR 0005) in `internal/ui/theme` as named `lipgloss.Style`s: dim/selection `8`,
+  red `1` green `2` amber `3` blue `4` magenta `5` cyan `6`, emphasis `15`, bg/fg unset.
+  Config-file format + check-set + catch-all account deferred → ticket 15.
+- [Test seams and fixture strategy](issues/11-test-seams-and-fixtures.md) — three seam
+  levels: use cases fake their own port; `internal/hledger` unit-tested with a faked
+  `run()` + committed `testdata` output fragments, plus `//go:build integration` tests
+  against real hledger in CI; `internal/journal` is pure text table/golden tests. Small
+  one-concern fixture journals committed under `testdata/journals/` (no task ticket). TUI:
+  bulk = unit tests on pure `Update`, smoke = `teatest`, golden snapshots only for tab/
+  status bar. `go test ./...` + `-tags integration`.
 - [Bubble Tea model composition](issues/05-bubble-tea-model-composition.md) — one root model
   (`internal/ui`) mediates six always-alive view sub-models (ADR 0004). Root owns
   app-global state (`valuationMode`, `period`, `scenario`, size, read-only `*domain.Ledger`),
@@ -111,30 +130,30 @@ Done when every decision ticket is closed and `docs/spec.md` is assembled from t
 
 <!-- in-scope fog, too dim to ticket precisely; graduates as the frontier advances -->
 
-- **Per-view implementation notes** — once the domain model, model composition, and layout
-  strategy are locked, each of the six views likely needs a short spec section (which
-  Bubbles components, which hledger calls, which panels are overlay vs inline). May graduate
-  into one ticket per view, or fold straight into spec assembly.
+- **Per-view build + JIT design** — each of the six views is built in its own `tdd-loop`
+  pass; the views with real subsystem logic carry a grilling ticket done just before that
+  pass: Import (08, needs 14), Forecast (09), Scheduled (13). Dashboard, Entry, Reports have
+  no open design ticket — grill inline if a question surfaces during the build.
 - **Journal write targets** — write *mechanism* is settled (`internal/journal` owns
   line-oriented mutation; full `Ledger` refresh after each write). Still dim: *which* file
-  in an include chain each construct is appended to, and the Entry-view commit specifics
-  (which file, include-chain, check-satisfaction reporting). Post-occurrence writes are
-  owned by *Periodic transaction subsystem design*; the Entry commit path graduates once a
-  view is designed for it.
-- **Keymap / command-line dispatch detail** — the `CMDS` / `HINTS` / goto-prefix tables from
-  the mock's inline JS need transcribing into a Go keymap model; precise structure waits on
-  the Bubble Tea model composition decision.
-- **`ntcharts` capability + v2 build check** — folded into *Responsive layout strategy*:
+  in an include chain each construct is appended to, and the Entry-view commit specifics.
+  Post-occurrence writes are owned by *Periodic transaction subsystem design*; the Entry
+  commit path graduates when the Entry view is built.
+- **`CMDS` / `HINTS` tables** — transcribe the mock's inline-JS command list and per-view
+  hint strings into the `internal/ui/keys` structures (shape decided in ticket 05); a
+  mechanical build task, not a decision.
+- **`ntcharts` capability + v2 build check** — done in the shell/layout build (ticket 07):
   confirm the braille line chart supports the dual-series actual+forecast join and
   thousands-axis labelling, AND that `ntcharts/v2` compiles against the real
-  `charm.land/bubbletea/v2` (its `go.mod` `replace` is ignored by konto's build). A build
-  failure here is the one thing that could push konto back to the Charm v1 stack.
-- **Dev tooling conventions** — golangci-lint config, test runner, CI. Minor; likely a short
-  section in spec assembly rather than its own ticket.
+  `charm.land/bubbletea/v2`. A build failure here is the one thing that could push konto
+  back to the Charm v1 stack.
 
 ## Out of scope
 
 <!-- work consciously ruled beyond the destination; never graduates -->
 
-- **Writing any konto application code** — this map is planning-only (see Destination).
-- **Revising the design handoff's UX** — views, navigation model, feature scope are frozen.
+- **Revising the design handoff's UX** — views, navigation model, feature scope are frozen
+  (except the recorded deviations under Notes).
+
+<!-- "no application code" was removed 2026-09-10: the destination now carries the build. -->
+

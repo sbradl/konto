@@ -4,6 +4,11 @@ Type: prototype
 Status: open
 Blocked by: 06
 
+<!-- Re-scoped 2026-09-10: done DURING the shell build, not before it. The prototype IS the
+first slices of the app shell (tab bar + status bar + one panel at ~3 widths). Resolve this
+ticket once the shell build has settled the layout-helper shape. -->
+
+
 ## Question
 
 The mock is a fixed 180×60 grid; the real app must recompute all layout from
