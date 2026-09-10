@@ -14,6 +14,10 @@ Done when every decision ticket is closed and `docs/spec.md` is assembled from t
 
 - **Domain**: terminal UI frontend for [hledger](https://hledger.org) (plain-text accounting),
   single-user personal finance. Target stack: Go + Bubble Tea + Lip Gloss + Bubbles + `ntcharts`.
+- **Stack version decided** (via *Overlay and popup compositing mechanics*): the **Charm v2
+  stack** — `charm.land/bubbletea/v2`, `charm.land/lipgloss/v2`, `charm.land/bubbles/v2`
+  (vanity import paths, *not* `github.com/charmbracelet/.../v2`), `ntcharts/v2`. v1 is frozen.
+  Every downstream ticket (package layout, model composition, layout strategy) assumes v2.
 - **UX is frozen** in `docs/design_handoff_hledger_tui/README.md` — authoritative, not
   re-litigated. Wayfinding decides *implementation* only (architecture, data model, package
   layout, test seams, overlay/layout mechanics, subsystem logic). The handoff README stays
@@ -32,7 +36,12 @@ Done when every decision ticket is closed and `docs/spec.md` is assembled from t
 
 <!-- one line per closed ticket: gist of the answer, then the link for detail -->
 
-_(none yet)_
+- [Overlay and popup compositing mechanics](issues/06-overlay-popup-compositing.md) —
+  build on the **Charm v2 stack** and composite overlays with `lipgloss.Compositor` (v2's
+  cell-grid `Layer`/`Compositor`); no community overlay package, no hand-rolled splicing.
+  Cursor via `tea.View.Cursor`. One caveat handed to *Responsive layout strategy*: verify
+  `ntcharts/v2` builds against real `charm.land/bubbletea/v2` (its `go.mod` carries an
+  ignored `replace`). Full findings: `research/06-overlay-compositing.md`.
 
 ## Not yet specified
 
@@ -49,9 +58,11 @@ _(none yet)_
 - **Keymap / command-line dispatch detail** — the `CMDS` / `HINTS` / goto-prefix tables from
   the mock's inline JS need transcribing into a Go keymap model; precise structure waits on
   the Bubble Tea model composition decision.
-- **`ntcharts` capability check** — confirm the braille line chart supports the dual-series
-  actual+forecast join and thousands-axis labelling the handoff's Forecast/Dashboard charts
-  need. Folded into the responsive-layout prototype for now.
+- **`ntcharts` capability + v2 build check** — folded into *Responsive layout strategy*:
+  confirm the braille line chart supports the dual-series actual+forecast join and
+  thousands-axis labelling, AND that `ntcharts/v2` compiles against the real
+  `charm.land/bubbletea/v2` (its `go.mod` `replace` is ignored by konto's build). A build
+  failure here is the one thing that could push konto back to the Charm v1 stack.
 - **Dev tooling conventions** — golangci-lint config, test runner, CI. Minor; likely a short
   section in spec assembly rather than its own ticket.
 

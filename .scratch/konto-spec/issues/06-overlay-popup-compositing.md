@@ -1,8 +1,8 @@
 # 06 Overlay and popup compositing mechanics
 
 Type: research
-Status: claimed
-Context: /research subagent running (worktree-isolated); findings -> .scratch/konto-spec/research/06-overlay-compositing.md
+Status: resolved
+Findings: .scratch/konto-spec/research/06-overlay-compositing.md
 
 ## Question
 
@@ -22,3 +22,47 @@ source, Bubble Tea docs, the named community packages):
 
 Feeds **Responsive layout strategy**; the overlay decision itself is recorded when this
 ticket resolves.
+
+## Answer
+
+Full findings + sources: `.scratch/konto-spec/research/06-overlay-compositing.md`.
+
+**Decision: build konto on the Charm v2 stack and composite overlays with
+`lipgloss.Compositor` (Lip Gloss v2). No community overlay package, no hand-rolled
+line-splicing.**
+
+- Lip Gloss **v1** (`v1.1.0`, frozen since 2025-03-13) has only the `Place*` family, which
+  pads whitespace and cannot draw over content. There is no `PlaceOverlay` in Lip Gloss.
+- Lip Gloss **v2** (stable `v2.0.0` 2026-02-24, pin `v2.0.6`) ships a real cell-grid
+  compositor: `Layer` (content + `X/Y/Z` + `ID`), `Compositor` (`Render()`, `Hit(x,y)`),
+  `Canvas`. Compositing happens in a grapheme-aware `ultraviolet` cell buffer, so ANSI/SGR
+  styles, wide/CJK runes, and mid-line escapes are handled structurally — the whole reason
+  to prefer it over string splicing.
+- Bubble Tea v2 `Model.View()` returns a `tea.View` struct; set
+  `View.Content = compositor.Render()` and `View.Cursor = tea.NewCursor(x,y)` at the
+  post-composite field position. This fixes the classic v1 overlay-cursor problem (needed
+  for the `:` command palette).
+- konto shape: base view = one `Layer` at `X(0).Y(0).Z(0)` sized to `tea.WindowSizeMsg`;
+  the single visible popup = a `Layer` at `Z(10)`, `Y(screenH - popupH - 1)`. Only one of
+  `whichKeyMode` / `commandPaletteOpen` / `checksPanelOpen` is ever active, so no real
+  z-stack management.
+
+**Version pins** (v2 uses vanity import paths, not `github.com/charmbracelet/.../v2`):
+
+```
+charm.land/bubbletea/v2 v2.0.9
+charm.land/lipgloss/v2  v2.0.6
+charm.land/bubbles/v2   v2.2.1
+github.com/NimbleMarkets/ntcharts/v2 v2.2.0   # see caveat
+```
+
+**Caveat carried to ticket 07:** `ntcharts/v2` `go.mod` has
+`replace charm.land/bubbletea/v2 => github.com/neomantra/bubbletea/v2 ... // Awaiting upstream merges`.
+A dependency's `replace` is ignored by konto's build, so `ntcharts/v2` will compile against
+real `charm.land/bubbletea/v2` — must be build-verified with a trivial chart before v2 is
+locked. This is the only thing that could force the v1 fallback
+(`rmhubbert/bubbletea-overlay` + Bubble Tea v1.3.10, accepting a cursor hack).
+
+**Fallback if pinned to v1:** `rmhubbert/bubbletea-overlay` `v0.6.x` — it's the tested
+packaging of the string-splice algorithm (do not hand-roll); supports bottom-anchored
+full-width panels; no declarative cursor.
