@@ -22,6 +22,11 @@ Done when every decision ticket is closed and `docs/spec.md` is assembled from t
   re-litigated. Wayfinding decides *implementation* only (architecture, data model, package
   layout, test seams, overlay/layout mechanics, subsystem logic). The handoff README stays
   unedited; the spec references it for "what it looks like".
+- **Deliberate UX deviations from the handoff** (each recorded as an ADR, all collected in
+  the spec by ticket *Assemble docs/spec.md*):
+  - `docs/adr/0002` — Dashboard Accounts panel is a flat, non-indented list (no account
+    tree, no parent/subtotal rows).
+- **Domain glossary** is `CONTEXT.md`; **ADRs** live in `docs/adr/`. Both now exist.
 - **Pre-decided**: the `hledger` binary is a hard runtime dependency. konto shells out to it;
   no Go reimplementation or journal-parser port is pursued. The open integration question is
   only *which subcommands / output format / invocation architecture*.
@@ -51,6 +56,15 @@ Done when every decision ticket is closed and `docs/spec.md` is assembled from t
   Cursor via `tea.View.Cursor`. One caveat handed to *Responsive layout strategy*: verify
   `ntcharts/v2` builds against real `charm.land/bubbletea/v2` (its `go.mod` carries an
   ignored `replace`). Full findings: `research/06-overlay-compositing.md`.
+- [konto domain model and core types](issues/03-domain-model-core-types.md) — **rich
+  konto-owned model behind a gateway mapping layer** (ADR 0001); views never see hledger
+  JSON. `Amount` = hand-rolled fixed-point `{Commodity, Mantissa int64, Scale int32}`, no
+  deps; `MultiAmount []Amount` carries the "+ N cur" case. `[]Account` is a **flat list of
+  postable accounts** (ADR 0002), `Account.Source` optional `Manual | Import` read from a
+  `konto:source:` tag on the `account` directive — unclassified accounts prompt on open and
+  WARN. `ValuationMode` is a gateway query param (re-fetch with `-V`). `Ledger` is a
+  snapshot of independently-refreshable slices, not a monolithic type. Glossary in
+  `CONTEXT.md`. Graduated the *Periodic transaction subsystem design* ticket.
 
 ## Not yet specified
 
@@ -60,10 +74,12 @@ Done when every decision ticket is closed and `docs/spec.md` is assembled from t
   strategy are locked, each of the six views likely needs a short spec section (which
   Bubbles components, which hledger calls, which panels are overlay vs inline). May graduate
   into one ticket per view, or fold straight into spec assembly.
-- **Journal writes beyond CSV import** — manual Entry-screen commits and Scheduled-screen
-  "post next occurrence" both append journal text. Shape of that write path (which file,
-  include-chain, check-satisfaction reporting) is dim until the hledger invocation
-  architecture is settled.
+- **Journal writes beyond CSV import** — three write paths append/edit journal text:
+  Entry-screen manual commits, the account-classification tag write (from the domain-model
+  ticket), and Scheduled-screen "post next occurrence". The last is owned by *Periodic
+  transaction subsystem design*; the Entry commit path and the shared write mechanics
+  (which file, include-chain, check-satisfaction reporting, read-cache coordination) stay
+  dim until the hledger invocation architecture is settled.
 - **Keymap / command-line dispatch detail** — the `CMDS` / `HINTS` / goto-prefix tables from
   the mock's inline JS need transcribing into a Go keymap model; precise structure waits on
   the Bubble Tea model composition decision.
