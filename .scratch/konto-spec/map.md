@@ -28,7 +28,9 @@ Done when every decision ticket is closed and `docs/spec.md` is assembled from t
     tree, no parent/subtotal rows).
 - **Architecture**: `docs/adr/0003` — ports-and-adapters / Clean Architecture; every source
   dependency points inward to `internal/domain`; use cases declare their own ports, adapters
-  satisfy them structurally, `cmd/konto` wires.
+  satisfy them structurally, `cmd/konto` wires. `docs/adr/0004` — one root Bubble Tea model
+  mediates all six views; app-global state in the root; propagation by message, not shared
+  pointers.
 - **Domain glossary** is `CONTEXT.md`; **ADRs** live in `docs/adr/`. Both now exist.
 - **Pre-decided**: the `hledger` binary is a hard runtime dependency. konto shells out to it;
   no Go reimplementation or journal-parser port is pursued. The open integration question is
@@ -75,6 +77,16 @@ Done when every decision ticket is closed and `docs/spec.md` is assembled from t
   1.32`; missing journal → first-run skeleton-create screen; parse error → top-severity
   check issue. `!` panel runs each hledger check as its own invocation (first-failure only,
   fix→refresh→next), konto's own checks enumerate fully. `$EDITOR` via `tea.ExecProcess`.
+- [Bubble Tea model composition](issues/05-bubble-tea-model-composition.md) — one root model
+  (`internal/ui`) mediates six always-alive view sub-models (ADR 0004). Root owns
+  app-global state (`valuationMode`, `period`, `scenario`, size, read-only `*domain.Ledger`),
+  chrome, overlays, and the service ports. Routing: key/mouse → active view only (root
+  catches global keys first); data msgs → broadcast to all; view-specific async results →
+  routed to the owner with a per-view generation counter for stale-drop. Shared-state
+  changes are messages. `View` interface = `Update/View/Title/StatusHint/KeyMap`. Keymaps in
+  `ui/keys` (global set + per-view). Components: `bubbles/table` for grids, custom list
+  widget for Dashboard panels, `textinput`/`viewport`/`help`/`spinner`, `ntcharts`;
+  `bubbles/list` not used. First-run / parse-error are root `appMode`s, not views.
 - [Go package and module layout](issues/04-package-module-layout.md) — **ports-and-adapters
   / Clean Architecture** (ADR 0003). Circles inward: `cmd/konto` (composition root) →
   `internal/ui` + one package per view (Bubble Tea confined here; import domain + the app
