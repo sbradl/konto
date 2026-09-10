@@ -52,10 +52,41 @@ open tickets in `.scratch/konto-spec/issues/`.
 
 ## Commands
 
-- `go build ./...`, `go vet ./...`, `go test ./...`
-- `go test -run TestName ./internal/pkg` — single test
-- `go test -tags integration ./...` — the suite that runs the real `hledger` binary
-- `golangci-lint run` (installed via mason)
+Toolchain (go, golangci-lint, gotestsum, gremlins, hledger) is pinned in `mise.toml`;
+`mise install` provisions it. `mise tasks` lists every task.
+
+- `mise run build` — `go build ./...`
+- `mise run vet` — `go vet ./...`
+- `mise run lint` — `golangci-lint run`
+- `mise run check` — build + vet + lint + cover:check (the CI gate)
+
+Thresholds start maxed by user directive — loosen a threshold in `mise.toml` only with a
+recorded reason, never silently.
+
+## Testing
+
+Verified against this repo's `mise.toml` / installed toolchain. The repo has no Go packages
+yet, so the `./...` forms below were exercised through a throwaway package; substitute a
+real import path (e.g. `./internal/ledger`) once packages exist.
+
+- **Full test suite** — `mise run test` (unit, `-race`, gotestsum) ·
+  `mise run test:integration` (adds `-tags integration`, shells out to real `hledger`).
+  Raw equivalent: `go test -race ./...`
+- **Single test by name** — `go test -run 'TestName$' ./internal/pkg`
+  (or `gotestsum -- -run 'TestName$' ./internal/pkg`). Go has no file-scoped runner: run a
+  whole file's worth by `-run` over its test names, or pass the files explicitly:
+  `go test ./internal/pkg/foo.go ./internal/pkg/foo_test.go`
+- **Build / typecheck** — `mise run build` (`go build ./...`) · `mise run vet`
+  (`go vet ./...`). Single package: `go build ./internal/pkg`
+- **Coverage for a single file** — profile the package, then filter the per-function report
+  to that file:
+  `go test -coverprofile=coverage.out ./internal/pkg && go tool cover -func=coverage.out | grep 'foo\.go'`
+  Line-by-line: `go tool cover -html=coverage.out` (or `mise run cover:html`).
+  Whole-module gate: `mise run cover:check` (fails under `THRESHOLD`, default **100**).
+- **Mutation testing** — `mise run mutation internal/pkg` (one directory, recurses) ·
+  `mise run mutation` (whole module) · `mise run mutation:diff` (only lines changed vs
+  `main`). Efficacy + mutant-coverage thresholds are **100**.
+  Raw equivalent: `gremlins unleash --coverpkg=./... internal/pkg`
 
 ## Workflow
 

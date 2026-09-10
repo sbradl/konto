@@ -1,0 +1,78 @@
+[tools]
+go            = "1.27.1"
+golangci-lint = "2.13.2"
+gotestsum     = "1.13.0"
+hledger       = "1.52.1"   # hard runtime dep, spec requires >= 1.32; startup preflight also checks
+"go:github.com/go-gremlins/gremlins/cmd/gremlins" = "0.6.0"
+
+[env]
+# keep tool-installed binaries + `go install` output on PATH inside tasks
+_.path = ["{{config_root}}/bin"]
+
+# ---------------------------------------------------------------------------
+# Tasks — run `mise tasks` to list, `mise run <name>` to invoke.
+# ---------------------------------------------------------------------------
+
+[tasks.build]
+description = "Compile every package"
+run = 'test -n "$(go list ./... 2>/dev/null)" && go build ./... || echo "no packages yet — skipping"'
+
+[tasks.vet]
+description = "go vet"
+run = 'test -n "$(go list ./... 2>/dev/null)" && go vet ./... || echo "no packages yet — skipping"'
+
+[tasks.lint]
+description = "golangci-lint"
+run = 'test -n "$(go list ./... 2>/dev/null)" && golangci-lint run || echo "no packages yet — skipping"'
+
+[tasks.fmt]
+description = "Format (writes) and list changed files"
+run = "gofmt -w -l ."
+
+[tasks.test]
+description = "Unit tests (race, no hledger integration suite)"
+run = 'test -n "$(go list ./... 2>/dev/null)" && gotestsum --format pkgname -- -race -count=1 ./... || echo "no packages yet — skipping"'
+
+[tasks."test:integration"]
+description = "Full suite incl. tests that shell out to the real hledger binary"
+run = 'test -n "$(go list ./... 2>/dev/null)" && gotestsum --format standard-verbose -- -race -count=1 -tags integration ./... || echo "no packages yet — skipping"'
+
+[tasks.cover]
+description = "Write coverage.out and print the total"
+run = '''
+if [ -z "$(go list ./... 2>/dev/null)" ]; then echo "no packages yet — skipping"; exit 0; fi
+go test -race -covermode=atomic -coverpkg=./... -coverprofile=coverage.out ./...
+go tool cover -func=coverage.out | tail -n1
+'''
+
+[tasks."cover:html"]
+description = "Open coverage.out as an HTML report"
+depends = ["cover"]
+run = "go tool cover -html=coverage.out -o coverage.html && echo wrote coverage.html"
+
+[tasks."cover:check"]
+description = "Fail if total coverage < THRESHOLD (default 100)"
+depends = ["cover"]
+env = { THRESHOLD = "100" }
+run = '''
+if [ ! -f coverage.out ]; then echo "no coverage.out — skipping"; exit 0; fi
+total=$(go tool cover -func=coverage.out | awk '/^total:/ { sub(/%/,"",$3); print $3 }')
+printf 'total coverage: %s%%  (threshold %s%%)\n' "$total" "$THRESHOLD"
+awk -v t="$total" -v th="$THRESHOLD" 'BEGIN { exit (t + 0 < th + 0) }'
+'''
+
+# Mutation thresholds start maxed: efficacy = % of covered mutants killed,
+# mcover = % of mutants that are covered. Loosen in this file only with a reason.
+# gremlins takes a DIRECTORY and recurses (not the `go` `./...` pattern); "." = whole module.
+[tasks.mutation]
+description = "Mutation testing (gremlins). Scope it: mise run mutation internal/domain"
+usage = 'arg "[dir]" default="."'
+run = 'gremlins unleash --coverpkg=./... --timeout-coefficient=4 --threshold-efficacy=100 --threshold-mcover=100 "${usage_dir:-.}"'
+
+[tasks."mutation:diff"]
+description = "Mutation testing only on lines changed vs main (fast, for pre-push / CI)"
+run = "gremlins unleash --diff main --coverpkg=./... --timeout-coefficient=4 --threshold-efficacy=100 --threshold-mcover=100 ."
+
+[tasks.check]
+description = "Everything a CI run should gate on"
+depends = ["build", "vet", "lint", "cover:check"]

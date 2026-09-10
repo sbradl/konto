@@ -447,11 +447,18 @@ bar at fixed sizes only, not whole views during active development.
 
 ## 9. Dev tooling
 
-- `go test ./...`; `go test -tags integration ./...` for the CI set.
-- `golangci-lint` (installed on the dev machine via mason).
+- **`mise`** provisions and pins the toolchain (`mise.toml`): `go`, `golangci-lint`,
+  `gotestsum`, `gremlins` (mutation), `hledger`. `mise install`, then `mise tasks`.
+- Tasks: `build`, `vet`, `lint`, `test`, `test:integration` (`-tags integration`, real
+  `hledger`), `cover` / `cover:html` / `cover:check`, `mutation` / `mutation:diff`, and
+  `check` (build + vet + lint + cover:check — the CI gate).
+- **Quality gates start maxed** (user directive): line coverage `THRESHOLD` = 100;
+  gremlins efficacy + mutant-coverage thresholds = 100. Loosening any threshold needs a
+  recorded reason in `mise.toml`.
 - `gofmt` / standard Go idioms; match surrounding code.
-- CI: run `go build ./...`, `go vet ./...`, `golangci-lint run`, `go test ./...`, and the
-  integration suite (with `hledger` installed). Wire this up early in the build.
+- CI (not yet wired — no remote): run `mise run check` plus `mise run test:integration`.
+  Mutation testing runs out of the gate loop (`mutation:diff` on PRs, full `mutation`
+  nightly) — it recompiles per mutant and is slow by nature.
 
 ---
 

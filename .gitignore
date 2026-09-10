@@ -1,6 +1,12 @@
 # Build output
 /konto
 /dist/
+/bin/
+
+# Coverage / test artifacts
+/coverage.out
+/coverage.html
+/gremlins.*.json
 
 # Claude Code local settings
 .claude/settings.local.json
