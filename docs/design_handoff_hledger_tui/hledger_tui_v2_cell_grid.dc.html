@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics><link rel="preload" as="font" type="font/woff2" crossorigin href="https://cdn.jsdelivr.net/npm/@fontsource/cascadia-mono/files/cascadia-mono-latin-400-normal.woff2">
+<link rel="preload" as="font" type="font/woff2" crossorigin href="https://cdn.jsdelivr.net/npm/@fontsource/cascadia-mono/files/cascadia-mono-latin-700-normal.woff2">
+<style>
+@font-face{font-family:'Cascadia Mono';font-style:normal;font-weight:400;font-display:block;src:url(https://cdn.jsdelivr.net/npm/@fontsource/cascadia-mono/files/cascadia-mono-latin-400-normal.woff2) format('woff2')}
+@font-face{font-family:'Cascadia Mono';font-style:normal;font-weight:700;font-display:block;src:url(https://cdn.jsdelivr.net/npm/@fontsource/cascadia-mono/files/cascadia-mono-latin-700-normal.woff2) format('woff2')}
+html,body{margin:0;padding:0;background:#0a0a0e}
+*{box-sizing:border-box}
+a{color:#7dcfff}a:hover{color:#b4e3ff}
+</style></helmet>
+<div style="min-height:100vh;width:100%;background:#0a0a0e;overflow:auto;padding:14px;outline:none" tabindex="0" ref="{{ rootRef }}" onKeyDown="{{ onKey }}">
+  <div style="background:#16161e;padding:20px;width:max-content;margin:0 auto">
+    <div style="font-family:'Cascadia Mono',ui-monospace,Consolas,Menlo,monospace;font-size:13px;line-height:16px;letter-spacing:0;font-variant-ligatures:none;color:#a9b1d6"><sc-for list="{{ lines }}" as="ln" hint-placeholder-count="60"><div style="height:16px;white-space:pre"><sc-for list="{{ ln.segs }}" as="sg" hint-placeholder-count="8"><span style="{{ sg.style }}">{{ sg.t }}</span></sc-for></div></sc-for></div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{}">
+/* ANSI-16 palette (Tokyo Night). A real Bubble Tea build should use
+   lipgloss.Color("N") indices so the TUI inherits the terminal theme. */
+const C={bg:'#16161e',fg:'#a9b1d6',dim:'#414868',sel:'#292e42',
+ red:'#f7768e',grn:'#9ece6a',yel:'#e0af68',blu:'#7aa2f7',mag:'#bb9af7',cyn:'#7dcfff',wht:'#c0caf5'};
+
+const W=180,H=60;
+
+const SCREENS=[
+ {id:'dashboard',label:'1 dash',key:'d'},{id:'import',label:'2 import',key:'i'},
+ {id:'entry',label:'3 entry',key:'n'},{id:'scheduled',label:'4 sched',key:'s'},
+ {id:'forecast',label:'5 forecast',key:'f'},{id:'reports',label:'6 reports',key:'r'}
+];
+
+const ACCOUNTS=[
+ ['assets','85748.24','85877.71',0,0,''],
+ ['bank:checking','4182.36','4182.36',1,0,'i'],
+ ['bank:savings','18940.00','18940.00',1,0,'i'],
+ ['broker:ira','62410.88','62410.88',1,0,'i'],
+ ['cash:eur','215.00','215.00',1,0,'m'],
+ ['cash:pln','340.00 PLN','79.87',1,0,'m'],
+ ['cash:czk','1250.00 CZK','49.60',1,0,'m'],
+ ['lending','180.00','180.00',1,0,'m'],
+ ['liabilities','-9704.19','-9704.19',0,1,''],
+ ['visa','-1284.19','-1284.19',1,1,'i'],
+ ['loan:car','-8420.00','-8420.00',1,1,'i'],
+ ['income','-41920.00','-41920.00',0,1,''],
+ ['salary','-41920.00','-41920.00',1,1,'i'],
+ ['expenses','30007.81','30007.81',0,0,''],
+ ['rent','11600.00','11600.00',1,0,''],
+ ['groceries','3305.04','3305.04',1,0,''],
+ ['transport','1473.60','1473.60',1,0,''],
+ ['utilities','1141.20','1141.20',1,0,''],
+ ['dining','986.40','986.40',1,0,''],
+ ['equity:opening','-64131.86','-64131.86',0,1,'']
+];
+
+const RECENT=[
+ ['08-26','Kaufland','expenses:groceries','-64.31',0,0],
+ ['08-26','Deutsche Bahn','expenses:transport','-19.90',0,0],
+ ['08-25','AMZN Mktp DE*3K1LO','','-42.99',1,0],
+ ['08-24','Rent August','expenses:rent','-1450.00',0,0],
+ ['08-23','Salary Contoso GmbH','income:salary','+5240.00',0,1],
+ ['08-22','Rewe City','expenses:groceries','-31.08',0,0],
+ ['08-21','Stadtwerke München','expenses:utilities','-142.65',0,0],
+ ['08-20','SEPA 8829411 REF NR','','-88.00',1,0],
+ ['08-19','Trattoria Bella','expenses:dining','-52.40',0,0],
+ ['08-18','Visa payment','liabilities:visa','-600.00',0,0],
+ ['08-17','Spotify','expenses:subscriptions','-11.99',0,0],
+ ['08-16','Apotheke Nord','expenses:health','-23.85',0,0],
+ ['08-15','Bilety MPK Kraków','expenses:transport','-16.00 PLN',0,0],
+ ['08-14','IRA contribution','assets:broker:ira','-500.00',0,0],
+ ['08-13','Lidl Vertrieb','expenses:groceries','-38.72',0,0],
+ ['08-12','Jízdenka DPP Praha','expenses:transport','-120.00 CZK',0,0],
+ ['08-11','PayPal *STEAM','','-24.99',1,0],
+ ['08-10','Gym Fitline','expenses:health:gym','-39.00',0,0],
+ ['08-09','Bäckerei Zeit','expenses:groceries','-8.40',0,0],
+ ['08-08','Shell 4471 MUC','expenses:transport','-61.40',0,0],
+ ['08-07','Savings sweep','assets:bank:savings','-250.00',0,0],
+ ['08-06','dm Drogerie','expenses:household','-19.44',0,0],
+ ['08-05','Netflix','expenses:subscriptions','-13.99',0,0],
+ ['08-04','Rossmann 2201','expenses:household','-12.30',0,0],
+ ['08-03','SEPA 7710266 REF NR','','-45.00',1,0],
+ ['08-02','Kaufland','expenses:groceries','-52.19',0,0],
+ ['08-01','Rent August','expenses:rent','-1450.00',0,0],
+ ['08-01','Car loan','liabilities:loan:car','-312.00',0,0],
+ ['07-31','Interest','income:interest','+3.12',0,1],
+ ['07-30','Kaufland','expenses:groceries','-41.90',0,0]
+];
+
+const UPCOMING=[
+ ['09-01','Rent September','-1450.00',0],['09-01','Car loan','-312.00',0],
+ ['09-02','Gym membership','-39.00',0],['09-04','Savings sweep','-250.00',0],
+ ['09-05','Spotify','-11.99',0],['09-05','Netflix','-13.99',0],
+ ['09-15','IRA contribution','-500.00',0],['09-18','Savings sweep','-250.00',0],
+ ['09-23','Salary Contoso GmbH','+5240.00',1],['09-28','Liability insurance','-186.40',0],
+ ['10-01','Rent October','-1450.00',0],['10-01','Car loan','-312.00',0],
+ ['10-02','Gym membership','-39.00',0],['10-02','Savings sweep','-250.00',0],
+ ['10-05','Spotify','-11.99',0],['10-05','Netflix','-13.99',0],
+ ['10-15','IRA contribution','-500.00',0],['10-23','Salary Contoso GmbH','+5240.00',1]
+];
+
+const BUDGET=[['groceries',.82,'82%',0],['dining',1.12,'112%',1],['transport',.49,'49%',0],
+ ['utilities',.71,'71%',0],['subscriptions',.65,'65%',0],['household',.38,'38%',0],
+ ['health',.24,'24%',0]];
+
+const PRICES=[['P 2026-08-27 PLN','0.2349 EUR'],['P 2026-08-27 CZK','0.03968 EUR'],
+ ['P 2026-07-31 PLN','0.2331 EUR'],['P 2026-07-31 CZK','0.03952 EUR']];
+
+const SPEND=[2104,2455,2210,2612,2388,2355];
+
+const FILES=[['amex-2026-08.csv',1,'9 new rows'],['dkb-giro-08.csv',0,'up to date'],
+ ['ing-savings-q3.csv',1,'2 new rows'],['paypal-2026-08.csv',2,'never imported']];
+
+const CSV=[
+ ['08-02','REWE SAGT DANKE 5541','expenses:groceries','-48.12',1],
+ ['08-03','DB VERTRIEB GMBH','expenses:transport','-19.90',1],
+ ['08-04','AMZN Mktp DE*2J8QW','','-31.49',0],
+ ['08-06','SPOTIFY AB','expenses:subscriptions','-11.99',1],
+ ['08-07','KAUFLAND 0912','expenses:groceries','-64.31',1],
+ ['08-09','AMZN Mktp DE*4KK91','','-12.80',0],
+ ['08-11','STADTWERKE MUENCHEN','expenses:utilities','-142.65',1],
+ ['08-12','TRATTORIA BELLA','expenses:dining','-52.40',1],
+ ['08-14','SEPA 8829411 REF NR','','-88.00',0],
+ ['08-15','AMZN Mktp DE*3K1LO','','-42.99',0],
+ ['08-17','APOTHEKE NORD','expenses:health','-23.85',1],
+ ['08-19','REWE CITY 2280','expenses:groceries','-31.08',1],
+ ['08-21','AMZN Mktp DE*8XQ2P','','-74.20',0],
+ ['08-23','CONTOSO GMBH LOHN','income:salary','+5240.00',1],
+ ['08-25','SHELL 4471 MUC','expenses:transport','-61.40',1],
+ ['08-26','LIDL VERTRIEB 8812','expenses:groceries','-38.72',1],
+ ['08-27','DM DROGERIE 4410','expenses:household','-19.44',1],
+ ['08-28','NETFLIX INTL BV','expenses:subscriptions','-13.99',1],
+ ['08-29','ROSSMANN 2201','expenses:household','-12.30',1],
+ ['08-30','SEPA 7710266 REF NR','','-45.00',0],
+ ['08-30','FITLINE STUDIO MUC','expenses:health:gym','-39.00',1],
+ ['08-31','BAECKEREI ZEIT','expenses:groceries','-8.40',1]
+];
+
+const SCHED=[
+ ['Rent','monthly, 1st','09-01','-1450.00',0,0],
+ ['Salary Contoso GmbH','monthly, 23rd','09-23','+5240.00',1,0],
+ ['Car loan','monthly, 1st','09-01','-312.00',0,0],
+ ['IRA contribution','monthly, 15th','09-15','-500.00',0,0],
+ ['Spotify','monthly, 5th','09-05','-11.99',0,0],
+ ['Netflix','monthly, 5th','09-05','-13.99',0,0],
+ ['Liability insurance','every 3 months','09-28','-186.40',0,0],
+ ['Gym membership','monthly, 2nd','09-02','-39.00',0,0],
+ ['Savings sweep','every 2 weeks','09-04','-250.00',0,0],
+ ['Property tax','yearly, Feb 15','02-15','-940.00',0,0],
+ ['Newspaper','monthly, 1st','paused','-14.90',0,1]
+];
+
+const SCHED_JRN=[
+ '~ monthly from 2026-01-01\n    expenses:rent            1450.00 EUR\n    assets:bank:checking',
+ '~ monthly from 2026-01-23\n    assets:bank:checking     5240.00 EUR\n    income:salary',
+ '~ monthly from 2025-04-01 to 2029-04-01\n    liabilities:loan:car      264.10 EUR\n    expenses:interest          47.90 EUR\n    assets:bank:checking',
+ '~ monthly from 2026-01-15\n    assets:broker:ira         500.00 EUR\n    assets:bank:checking',
+ '~ monthly from 2026-01-05\n    expenses:subscriptions     11.99 EUR\n    liabilities:visa',
+ '~ monthly from 2026-01-05\n    expenses:subscriptions     13.99 EUR\n    liabilities:visa',
+ '~ every 3 months from 2026-03-28\n    expenses:insurance        186.40 EUR\n    assets:bank:checking',
+ '~ monthly from 2026-01-02\n    expenses:health:gym        39.00 EUR\n    assets:bank:checking',
+ '~ every 2 weeks from 2026-01-10\n    assets:bank:savings       250.00 EUR\n    assets:bank:checking',
+ '~ yearly from 2026-02-15\n    expenses:tax:property     940.00 EUR\n    assets:bank:checking',
+ '; paused 2026-06-30\n~ monthly from 2024-01-01\n    expenses:news              14.90 EUR\n    assets:bank:checking'
+];
+
+const OCC={'monthly, 1st':['2026-09-01','2026-10-01','2026-11-01','2026-12-01','2027-01-01','2027-02-01'],
+ 'monthly, 23rd':['2026-09-23','2026-10-23','2026-11-23','2026-12-23','2027-01-23','2027-02-23'],
+ 'monthly, 15th':['2026-09-15','2026-10-15','2026-11-15','2026-12-15','2027-01-15','2027-02-15'],
+ 'monthly, 5th':['2026-09-05','2026-10-05','2026-11-05','2026-12-05','2027-01-05','2027-02-05'],
+ 'monthly, 2nd':['2026-09-02','2026-10-02','2026-11-02','2026-12-02','2027-01-02','2027-02-02'],
+ 'every 3 months':['2026-09-28','2026-12-28','2027-03-28','2027-06-28','2027-09-28','2027-12-28'],
+ 'every 2 weeks':['2026-09-04','2026-09-18','2026-10-02','2026-10-16','2026-10-30','2026-11-13'],
+ 'yearly, Feb 15':['2027-02-15','2028-02-15','2029-02-15','2030-02-15','2031-02-15','2032-02-15']};
+
+const ACCT_OF={'Rent':'expenses:rent','Salary Contoso GmbH':'income:salary','Car loan':'liabilities:loan:car',
+ 'IRA contribution':'assets:broker:ira','Spotify':'expenses:subscriptions','Netflix':'expenses:subscriptions',
+ 'Liability insurance':'expenses:insurance','Gym membership':'expenses:health:gym',
+ 'Savings sweep':'assets:bank:savings','Property tax':'expenses:tax:property','Newspaper':'expenses:news'};
+
+const SCENARIOS=[{id:'base',label:'base',rate:1912,inc:5240,exp:3328},
+ {id:'lean',label:'lean · -15% spend',rate:2411,inc:5240,exp:2829},
+ {id:'gap',label:'3-month income gap',rate:980,inc:3930,exp:3328}];
+
+const DRIVERS=[['sched','Rent','monthly','-1450.00',0],['sched','Salary Contoso','monthly','+5240.00',1],
+ ['sched','Car loan','monthly','-312.00',0],['sched','IRA contribution','monthly','-500.00',0],
+ ['avg 6m','expenses:groceries','avg','-438.20',0],['avg 6m','expenses:transport','avg','-176.50',0],
+ ['avg 6m','expenses:dining','avg','-121.90',0],['avg 6m','expenses:household','avg','-64.30',0],
+ ['sched','Insurance','quarterly','-186.40',0],['sched','Property tax','yearly','-940.00',0]];
+
+const PERIODS=[['month to date','2026-08-01..08-27'],['quarter','2026 Q3'],
+ ['year to date','2026-01-01..08-27'],['all time','2019-04-02..2026-08-27']];
+
+/* kind: 0 leaf · 1 subtotal · 2 header · 3 negative leaf · 4 grand total */
+const BS=[['Assets','','','',2],
+ ['bank:checking','4182.36','4182.36','+612.44',0],
+ ['bank:savings','18940.00','18940.00','+250.00',0],
+ ['broker:ira','62410.88','62410.88','+1884.10',0],
+ ['cash:eur','215.00','215.00','-40.00',0],
+ ['cash:pln','340.00 PLN','79.87','+28.19',0],
+ ['cash:czk','1250.00 CZK','49.60','+9.92',0],
+ ['lending','180.00','180.00','0.00',0],
+ ['total','85748.24 + 2 cur','85877.71','+2744.65',1],
+ ['','','','',2],
+ ['Liabilities','','','',2],
+ ['visa','-1284.19','-1284.19','+318.20',3],
+ ['loan:car','-8420.00','-8420.00','+264.10',3],
+ ['total','-9704.19','-9704.19','+582.30',1],
+ ['','','','',2],
+ ['Net worth','76044.05 + 2 cur','76173.52','+3326.95',4]];
+
+const IST=[['Revenues','','','',2],
+ ['salary','5240.00','5240.00','100.0%',0],
+ ['interest','3.12','3.12','0.1%',0],
+ ['total','5243.12','5243.12','100.0%',1],
+ ['','','','',2],
+ ['Expenses','','','',2],
+ ['rent','1450.00','1450.00','27.7%',0],
+ ['groceries','412.88','412.88','7.9%',0],
+ ['transport','184.20','188.36','3.6%',0],
+ ['utilities','142.65','142.65','2.7%',0],
+ ['dining','98.40','98.40','1.9%',0],
+ ['health','62.85','62.85','1.2%',0],
+ ['subscriptions','57.72','57.72','1.1%',0],
+ ['total','2408.70','2412.86','46.0%',1],
+ ['','','','',2],
+ ['Net','2834.42','2830.26','54.0%',4]];
+
+const MANUAL=[['assets:cash:eur','215.00 EUR','12 txns'],['assets:cash:pln','340.00 PLN','31 txns'],
+ ['assets:cash:czk','1250.00 CZK','8 txns'],['assets:lending','180.00 EUR','2 txns']];
+
+const FORM=[['date','2026-08-27','today · +/- shifts a day'],
+ ['description','Bilety MPK Kraków','12 past matches'],
+ ['account','assets:cash:pln','manual accounts only'],
+ ['amount','-16.00',''],
+ ['commodity','PLN','declared: EUR PLN CZK'],
+ ['category','expenses:transport','from past entries'],
+ ['note','','optional']];
+
+const SIMILAR=[['2026-07-19','Bilety MPK Kraków','expenses:transport','-16.00 PLN'],
+ ['2026-07-04','Bilety MPK Kraków','expenses:transport','-16.00 PLN'],
+ ['2026-06-22','Bilet PKP Kraków','expenses:transport','-34.90 PLN'],
+ ['2026-06-11','Bilety MPK Kraków','expenses:transport','-16.00 PLN'],
+ ['2026-05-28','Jízdenka DPP Praha','expenses:transport','-120.00 CZK'],
+ ['2026-05-14','Bilety MPK Kraków','expenses:transport','-16.00 PLN'],
+ ['2026-04-30','Bilety MPK Kraków','expenses:transport','-15.00 PLN'],
+ ['2026-04-12','Bilet PKP Katowice','expenses:transport','-42.10 PLN']];
+
+const CHECKS=[
+ ['ERR ','transaction does not balance · off by 0.42 EUR','2026.journal:812'],
+ ['ERR ','balance assertion failed · want 3821.14, got 3759.74 EUR','2026.journal:1044'],
+ ['WARN','account not declared · expenses:health:gym','2026.journal:698'],
+ ['WARN','dates out of order · 2026-07-30 after 2026-08-02','2026.journal:731'],
+ ['WARN','duplicate leaf name · transport','accounts.journal:14'],
+ ['OK  ','commodities declared · EUR PLN CZK','commodities.journal'],
+ ['OK  ','no unused accounts · 41 declared, 41 used','accounts.journal'],
+ ['OK  ','all postings have a real account','2026.journal'],
+ ['OK  ','no mixed-commodity postings without price','2026.journal']
+];
+
+const CMDS=[[':dashboard','balances, recent activity, budget','dashboard'],
+ [':import','read CSV, build rules','import'],[':entry','manual transaction','entry'],
+ [':sched','periodic transactions','scheduled'],[':forecast 12m','project balances forward','forecast'],
+ [':bal --tree','balance report','reports'],[':is --monthly','income statement','reports'],
+ [':check --strict','run journal checks',null],[':reload','re-read journal from disk',null],
+ [':w','write pending entries',null],[':q','quit',null]];
+
+const WK_ROOT=[['1-6','jump to view'],[':','command line'],['g','goto prefix'],['j/k','move cursor'],
+ ['e','edit entry'],['c','categorize'],['n','new transaction'],['a','accept import row'],
+ ['v','valuation at market'],['!','journal checks'],['R','reload journal'],['q','quit']];
+const WK_G=[['gd','dashboard'],['gi','import'],['gn','entry'],['gs','scheduled'],
+ ['gf','forecast'],['gr','reports'],['gg','top of list'],['gj','journal in $EDITOR']];
+
+const HINTS={dashboard:'j/k row   c categorize   e edit   v valuation   ! journal checks',
+ import:'j/k row   a accept   A accept all matched   r edit rules   9 rows skipped by .latest',
+ entry:'Tab next field   j/k field   ⏎ commit to cash.journal   Esc discard',
+ scheduled:'j/k row   n new   e edit   p pause   x delete   ⏎ post next occurrence now',
+ forecast:'s cycle scenario   +/- horizon   ⏎ drill into month',
+ reports:'P cycle period   v valuation   y yank as CSV   ⏎ drill into account'};
+
+/* ---------- character grid ---------- */
+function grid(){const g=[];for(let y=0;y<H;y++){const r=[];for(let x=0;x<W;x++)r.push({c:' ',f:C.fg,b:null,o:0});g.push(r);}return g;}
+function put(g,x,y,s,o){o=o||{};if(y<0||y>=H)return;s=String(s);
+ for(let i=0;i<s.length;i++){const cx=x+i;if(cx<0||cx>=W)break;const q=g[y][cx];
+  q.c=s[i];if(o.f)q.f=o.f;if(o.b)q.b=o.b;q.o=o.o?1:0;}}
+function fill(g,x,y,w,o){put(g,x,y,' '.repeat(Math.max(0,w)),o);}
+function tr(s,w){s=String(s);return s.length<=w?s:(w<2?s.slice(0,w):s.slice(0,w-1)+'…');}
+function padr(s,w){s=tr(s,w);return s+' '.repeat(w-s.length);}
+function padl(s,w){s=tr(s,w);return ' '.repeat(w-s.length)+s;}
+function box(g,x,y,w,h,title,hint){
+ const b={f:C.dim};
+ put(g,x,y,'╭'+'─'.repeat(w-2)+'╮',b);
+ put(g,x,y+h-1,'╰'+'─'.repeat(w-2)+'╯',b);
+ for(let i=1;i<h-1;i++){put(g,x,y+i,'│',b);put(g,x+w-1,y+i,'│',b);}
+ if(title)put(g,x+2,y,' '+title+' ',{f:C.cyn,o:1});
+ if(hint){const t=tr(hint,w-6-(title?title.length+4:0));if(t.length>0)put(g,x+w-3-t.length,y,' '+t+' ',{f:C.dim});}
+}
+function bar(v,w){const f=Math.min(w,Math.round(Math.min(v,1.25)/1.25*w));return '█'.repeat(f)+'░'.repeat(w-f);}
+
+/* ---------- braille canvas: 2x4 subcells, as ntcharts does ---------- */
+const DOTS=[[0x01,0x02,0x04,0x40],[0x08,0x10,0x20,0x80]];
+function braille(cw,ch){
+ const cells=new Array(cw*ch).fill(0),cols=new Array(cw*ch).fill(null);
+ return {cw:cw,ch:ch,px:cw*2,py:ch*4,
+  set(x,y,col){x=Math.round(x);y=Math.round(y);
+   if(x<0||y<0||x>=this.px||y>=this.py)return;
+   const i=Math.floor(y/4)*cw+Math.floor(x/2);
+   cells[i]|=DOTS[x%2][y%4];cols[i]=col;},
+  line(x0,y0,x1,y1,col){const n=Math.max(Math.abs(x1-x0),Math.abs(y1-y0),1);
+   for(let s=0;s<=n;s++)this.set(x0+(x1-x0)*s/n,y0+(y1-y0)*s/n,col);},
+  series(vals,x0,x1,min,max,col,fillTo){
+   const n=vals.length;const sx=i=>x0+(x1-x0)*i/(n-1);
+   const sy=v=>this.py-1-(v-min)/(max-min)*(this.py-1);
+   for(let i=0;i<n-1;i++)this.line(sx(i),sy(vals[i]),sx(i+1),sy(vals[i+1]),col);
+   if(fillTo!==undefined)for(let i=0;i<n;i++){const yy=sy(vals[i]);
+    for(let y=yy;y<this.py;y+=4)this.set(sx(i),y,col);}
+   return {sx:sx,sy:sy};},
+  draw(g,gx,gy){for(let cy=0;cy<ch;cy++)for(let cx=0;cx<cw;cx++){
+   const i=cy*cw+cx;if(!cells[i])continue;
+   put(g,gx+cx,gy+cy,String.fromCharCode(0x2800+cells[i]),{f:cols[i]||C.fg});}}
+ };
+}
+
+function toLines(g){
+ return g.map(row=>{const segs=[];let cur=null,key=null;
+  for(const q of row){const k=q.f+'|'+(q.b||'-')+'|'+q.o;
+   if(k!==key){key=k;cur={t:'',style:'color:'+q.f+(q.b?';background:'+q.b:'')+(q.o?';font-weight:700':'')};segs.push(cur);}
+   cur.t+=q.c;}
+  return {segs:segs};});
+}
+
+class Component extends DCLogic {
+  state={screen:'dashboard',cur:{dashboard:2,import:9,scheduled:2,reports:0},field:1,
+   val:'native',period:0,scenario:0,file:0,doctor:false,whichKey:null,cmdOpen:false,cmdText:''};
+
+  componentDidMount(){if(this.root)this.root.focus();}
+  set(k,v){this.setState({[k]:v});}
+  go(id){this.setState({screen:id,cmdOpen:false,cmdText:'',whichKey:null});}
+  len(){const s=this.state.screen;
+   if(s==='dashboard')return RECENT.length;if(s==='import')return CSV.length;
+   if(s==='scheduled')return SCHED.length;if(s==='entry')return FORM.length;return 0;}
+  move(d){const s=this.state.screen,n=this.len();if(!n)return;
+   if(s==='entry'){this.setState({field:Math.max(0,Math.min(n-1,this.state.field+d))});return;}
+   const cur={...this.state.cur};cur[s]=Math.max(0,Math.min(n-1,(cur[s]||0)+d));this.setState({cur});}
+
+  onKey=(e)=>{
+   const k=e.key,st=this.state;
+   if(st.cmdOpen){
+    if(k==='Escape'){this.setState({cmdOpen:false,cmdText:''});e.preventDefault();return;}
+    if(k==='Enter'){const m=CMDS.filter(c=>c[0].startsWith(':'+st.cmdText))[0];
+     if(m&&m[2])this.go(m[2]);else this.setState({cmdOpen:false,cmdText:''});e.preventDefault();return;}
+    if(k==='Backspace'){this.setState({cmdText:st.cmdText.slice(0,-1)});e.preventDefault();return;}
+    if(k==='Tab'){const m=CMDS.filter(c=>c[0].startsWith(':'+st.cmdText))[0];
+     if(m)this.setState({cmdText:m[0].slice(1)});e.preventDefault();return;}
+    if(k.length===1){this.setState({cmdText:st.cmdText+k});e.preventDefault();}
+    return;}
+   if(st.whichKey==='g'){const t=SCREENS.find(s=>s.key===k);
+    if(t){this.go(t.id);e.preventDefault();return;}
+    this.setState({whichKey:null});e.preventDefault();return;}
+   if(k==='Escape'){this.setState({whichKey:null,doctor:false});e.preventDefault();return;}
+   if(k===':'){this.setState({cmdOpen:true,cmdText:'',whichKey:null,doctor:false});e.preventDefault();return;}
+   if(k==='?'){this.setState({whichKey:st.whichKey?null:'root',doctor:false});e.preventDefault();return;}
+   if(k==='g'){this.setState({whichKey:'g'});e.preventDefault();return;}
+   if(k>='1'&&k<='6'){this.go(SCREENS[+k-1].id);e.preventDefault();return;}
+   if(k==='!'){this.setState({doctor:!st.doctor,whichKey:null});e.preventDefault();return;}
+   if(k==='v'){this.set('val',st.val==='native'?'eur':'native');e.preventDefault();return;}
+   if(k==='j'||k==='ArrowDown'){this.move(1);e.preventDefault();return;}
+   if(k==='k'||k==='ArrowUp'){this.move(-1);e.preventDefault();return;}
+   if(k==='Tab'&&st.screen==='entry'){this.setState({field:(st.field+1)%FORM.length});e.preventDefault();return;}
+   if(k==='s'&&st.screen==='forecast'){this.set('scenario',(st.scenario+1)%SCENARIOS.length);e.preventDefault();return;}
+   if(k==='P'&&st.screen==='reports'){this.set('period',(st.period+1)%PERIODS.length);e.preventDefault();return;}
+  };
+
+  chrome(g){
+   const st=this.state;let x=1;
+   SCREENS.forEach((s,i)=>{
+    const on=s.id===st.screen,lbl=' '+s.label+' ';
+    put(g,x,0,lbl,on?{f:C.wht,b:C.sel,o:1}:{f:C.dim});
+    x+=lbl.length;
+    if(i<SCREENS.length-1){put(g,x,0,'│',{f:C.dim});x+=1;}
+   });
+   const val=st.val==='eur'?'-V market':'at cost';
+   put(g,W-56,0,'~/finance/2026.journal',{f:C.dim});
+   put(g,W-32,0,'1284 txns',{f:C.dim});
+   put(g,W-21,0,val,{f:C.yel});
+   put(g,W-9,0,'● clean',{f:C.grn});
+   put(g,0,1,'─'.repeat(W),{f:C.dim});
+  }
+
+  status(g){
+   const st=this.state;
+   if(st.cmdOpen){
+    fill(g,0,H-1,W,{b:C.bg});
+    put(g,0,H-1,':'+st.cmdText,{f:C.yel,o:1});
+    put(g,1+st.cmdText.length,H-1,'█',{f:C.yel});
+    return;}
+   fill(g,0,H-1,W,{b:C.sel});
+   const mode=st.whichKey==='g'?' PENDING g ':' NORMAL ';
+   put(g,0,H-1,mode,{f:C.bg,b:st.whichKey==='g'?C.yel:C.blu,o:1});
+   let x=mode.length+2;
+   put(g,x,H-1,st.screen,{f:C.wht,b:C.sel,o:1});x+=st.screen.length+3;
+   put(g,x,H-1,HINTS[st.screen]||'',{f:C.fg,b:C.sel});
+   const n=this.len(),cur=st.screen==='entry'?st.field:(st.cur[st.screen]||0);
+   const pos=n?((cur+1)+'/'+n):'—';
+   put(g,W-pos.length-12,H-1,pos,{f:C.fg,b:C.sel});
+   put(g,W-9,H-1,'? keys',{f:C.fg,b:C.sel});
+  }
+
+  /* ---------- 1 dashboard ---------- */
+  dash(g){
+   const st=this.state,eur=st.val==='eur';
+   const cards=[
+    eur?['NET WORTH · MARKET EUR','76173.52','-V --value=end',C.wht]
+       :['NET WORTH · AT COST','76044.05','+340 PLN  +1250 CZK',C.wht],
+    ['AUGUST CASH FLOW','+2834.42','5243.12 in / 2408.70 out',C.grn],
+    ['JOURNAL CHECKS','2 errors','3 warnings · ! to open',C.red]];
+   [0,60,120].forEach((x,i)=>{
+    const c=cards[i],w=i===2?60:60;
+    box(g,x,2,w,4);
+    put(g,x+2,3,tr(c[0],w-4),{f:C.dim});
+    put(g,x+2,4,c[1],{f:c[3],o:1});
+    put(g,x+3+c[1].length,4,tr(c[2],w-6-c[1].length),{f:C.dim});
+   });
+
+   box(g,0,6,52,22,'ACCOUNTS',eur?'bal --tree -V':'bal --tree');
+   put(g,2,7,'ACCOUNT                       '+(eur?'   EUR VALUE':'      BALANCE'),{f:C.dim});
+   ACCOUNTS.forEach((a,i)=>{
+    const y=8+i;if(y>26)return;
+    put(g,2+a[3]*2,y,tr(a[0],20-a[3]*2),{f:a[3]?C.fg:C.wht,o:a[3]?0:1});
+    if(a[5])put(g,24,y,a[5]==='m'?'✎':'↓',{f:a[5]==='m'?C.yel:C.dim});
+    put(g,32,y,padl(eur?a[2]:a[1],17),{f:a[4]?C.red:C.fg});
+   });
+
+   box(g,0,28,52,10,'BUDGET','bal --budget --tree');
+   BUDGET.forEach((b,i)=>{
+    const y=29+i;
+    put(g,2,y,padr(b[0],14),{f:C.fg});
+    put(g,17,y,bar(b[1],22),{f:b[3]?C.red:C.grn});
+    put(g,41,y,padl(b[2],8),{f:b[3]?C.red:C.dim});
+   });
+
+   box(g,0,38,52,8,'MARKET PRICES','price directives');
+   PRICES.forEach((p,i)=>{
+    put(g,2,39+i,padr(p[0],22),{f:C.mag});
+    put(g,25,39+i,padl(p[1],22),{f:C.fg});
+   });
+   put(g,2,44,'v toggles cost / market valuation',{f:C.dim});
+
+   box(g,0,46,52,13,'JOURNAL CHECKS','! for detail');
+   CHECKS.forEach((c,i)=>{
+    const y=47+i,sev=c[0].trim();
+    put(g,2,y,c[0],{f:sev==='ERR'?C.red:(sev==='WARN'?C.yel:C.grn),o:1});
+    put(g,7,y,tr(c[1],42),{f:sev==='OK'?C.dim:C.fg});
+   });
+
+   box(g,52,6,68,53,'RECENT','j/k move · e edit · c categorize');
+   put(g,54,7,'DATE    DESCRIPTION            CATEGORY                AMOUNT',{f:C.dim});
+   const cur=st.cur.dashboard||0;
+   RECENT.forEach((t,i)=>{
+    const y=9+i;if(y>57)return;
+    const sel=i===cur;
+    if(sel)fill(g,53,y,66,{b:C.sel});
+    const bg=sel?C.sel:null;
+    put(g,54,y,t[0],{f:sel?C.fg:C.dim,b:bg});
+    if(t[4])put(g,60,y,'?',{f:C.yel,b:bg,o:1});
+    put(g,62,y,padr(t[1],21),{f:sel?C.wht:C.fg,b:bg,o:sel?1:0});
+    put(g,84,y,padr(t[2]||'uncategorized',22),{f:t[4]?C.yel:C.dim,b:bg});
+    put(g,106,y,padl(t[3],12),{f:t[5]?C.grn:C.fg,b:bg});
+   });
+
+   box(g,120,6,60,30,'UPCOMING · 60 DAYS','from 10 periodic txns');
+   put(g,122,7,'DATE    DESCRIPTION                     AMOUNT',{f:C.dim});
+   UPCOMING.forEach((u,i)=>{
+    const y=9+i;if(y>34)return;
+    put(g,122,y,u[0],{f:C.dim});
+    put(g,130,y,padr(u[1],28),{f:C.fg});
+    put(g,159,y,padl(u[2],18),{f:u[3]?C.grn:C.fg});
+   });
+
+   box(g,120,36,60,23,'MONTHLY SPEND · 6 MONTHS','avg 2354 EUR');
+   const bc=braille(52,14);
+   const mn=1800,mx=2800;
+   bc.series(SPEND,0,bc.px-1,mn,mx,C.blu);
+   bc.draw(g,124,38);
+   put(g,121,38,padl('2.8',3),{f:C.dim});
+   put(g,121,45,padl('2.3',3),{f:C.dim});
+   put(g,121,51,padl('1.8',3),{f:C.dim});
+   put(g,124,53,'─'.repeat(52),{f:C.dim});
+   ['Mar','Apr','May','Jun','Jul','Aug'].forEach((m,i)=>put(g,124+i*10,54,m,{f:C.dim}));
+   put(g,122,56,'⣿ total expenses per month, EUR',{f:C.blu});
+   put(g,122,57,'braille plot · 2×4 dots per cell',{f:C.dim});
+  }
+
+  /* ---------- 2 import ---------- */
+  imp(g){
+   const st=this.state,cur=st.cur.import||0;
+   box(g,0,2,30,57,'FILES','~/bank-exports');
+   FILES.forEach((f,i)=>{
+    const y=4+i*2,sel=i===st.file;
+    if(sel)fill(g,1,y,28,{b:C.sel});
+    put(g,2,y,'●',{f:f[1]===2?C.red:(f[1]?C.yel:C.grn),b:sel?C.sel:null});
+    put(g,4,y,tr(f[0],23),{f:sel?C.wht:C.fg,b:sel?C.sel:null,o:sel?1:0});
+    put(g,4,y+1,tr(f[2],23),{f:C.dim});
+   });
+   put(g,2,13,'─'.repeat(26),{f:C.dim});
+   put(g,2,14,'DEDUPLICATION',{f:C.cyn,o:1});
+   ['.latest.amex holds the','date of the last row','imported. Rows at or','before it are skipped,','so re-running the same','file is safe.']
+    .forEach((l,i)=>put(g,2,15+i,tr(l,26),{f:C.dim}));
+   put(g,2,22,'last run  2026-08-22',{f:C.fg});
+   put(g,2,23,'skipped   9 rows',{f:C.fg});
+   put(g,2,25,'─'.repeat(26),{f:C.dim});
+   put(g,2,26,'KEYS',{f:C.cyn,o:1});
+   [['o','open file'],['r','edit rules file'],['a','accept row'],['A','accept all matched'],
+    ['d','mark duplicate'],['u','undo last accept'],['R','re-read .latest']]
+    .forEach((k,i)=>{put(g,2,27+i,padl(k[0],2),{f:C.yel,o:1});put(g,6,27+i,tr(k[1],22),{f:C.dim});});
+
+   box(g,30,2,90,57,'amex-2026-08.csv','38 rows · 9 skipped · 22 matched · 7 unmatched');
+   put(g,32,3,'   DATE    DESCRIPTION            → ACCOUNT                   AMOUNT   RULE',{f:C.dim});
+   CSV.forEach((r,i)=>{
+    const y=5+i;if(y>57)return;
+    const sel=i===cur;
+    if(sel)fill(g,31,y,88,{b:C.sel});
+    const bg=sel?C.sel:null;
+    put(g,32,y,r[4]?'✓':'?',{f:r[4]?C.grn:C.yel,b:bg,o:1});
+    put(g,35,y,r[0],{f:sel?C.fg:C.dim,b:bg});
+    put(g,43,y,padr(r[1],22),{f:sel?C.wht:C.fg,b:bg,o:sel?1:0});
+    put(g,66,y,padr(r[2]||'← needs a rule',25),{f:r[4]?C.dim:C.yel,b:bg});
+    put(g,92,y,padl(r[3],12),{f:r[4]&&r[3][0]==='+'?C.grn:C.fg,b:bg});
+    put(g,107,y,r[4]?('amex:'+(12+i)):'—',{f:C.dim,b:bg});
+   });
+
+   const row=CSV[cur]||CSV[0];
+   const amzn=row[1].indexOf('AMZN')===0;
+   box(g,120,2,60,16,'RULE FOR SELECTION',amzn?'matches 4 rows here':'matches 1 row here');
+   put(g,122,4,'if '+(amzn?'AMZN Mktp':row[1].split(' ').slice(0,2).join(' ')),{f:C.mag,o:1});
+   put(g,122,5,'  account2  '+(row[2]||'expenses:shopping'),{f:C.fg});
+   put(g,122,6,'  comment   imported from amex',{f:C.dim});
+   put(g,122,8,'⏎ save to amex.rules',{f:C.fg});
+   put(g,122,8,'⏎',{f:C.yel,o:1});
+   put(g,122,9,'t edit target account',{f:C.fg});
+   put(g,122,9,'t',{f:C.yel,o:1});
+   put(g,122,10,'d discard, leave unmatched',{f:C.fg});
+   put(g,122,10,'d',{f:C.yel,o:1});
+   put(g,122,12,'─'.repeat(56),{f:C.dim});
+   put(g,122,13,'matches in this file      '+(amzn?'4':'1'),{f:C.dim});
+   put(g,122,14,'matches across journal    12',{f:C.dim});
+   put(g,122,15,'existing rules            31',{f:C.dim});
+   put(g,122,16,'unmatched after save      '+(amzn?'3':'6'),{f:C.dim});
+
+   box(g,120,18,60,22,'POSTING PREVIEW','dry-run · nothing written yet');
+   const amt=row[3].replace('-','').replace('+','');
+   ['2026-'+row[0]+' * '+tr(row[1],28),
+    '    '+padr(row[2]||'expenses:shopping',26)+padl(amt+' EUR',16),
+    '    liabilities:visa',
+    '                            = -1284.19 EUR','',
+    '; balance assertion taken from the CSV',
+    '; balance column, so a dropped row or a',
+    '; botched rules change fails loudly','',
+    'writes to    2026.journal',
+    'rule file    amex.rules',
+    'marker       .latest.amex → 2026-08-31']
+    .forEach((l,i)=>put(g,122,20+i,tr(l,56),{f:l[0]===';'?C.dim:(i>8?C.dim:C.fg)}));
+
+   box(g,120,40,60,19,'SKIPPED AS ALREADY IMPORTED','9 rows');
+   put(g,122,41,'DATE    DESCRIPTION            AMOUNT',{f:C.dim});
+   [['07-28','REWE SAGT DANKE 5541','-44.02'],['07-29','DB VERTRIEB GMBH','-19.90'],
+    ['08-01','KAUFLAND 0912','-58.10'],['08-01','CONTOSO GMBH LOHN','+5240.00'],
+    ['08-01','STADTWERKE MUENCHEN','-142.65'],['08-02','SPOTIFY AB','-11.99'],
+    ['08-02','NETFLIX INTL BV','-13.99'],['08-02','FITLINE STUDIO MUC','-39.00'],
+    ['08-02','AMZN Mktp DE*1PP04','-27.30']]
+    .forEach((r,i)=>{const y=43+i;
+     put(g,122,y,r[0],{f:C.dim});put(g,130,y,padr(r[1],22),{f:C.dim});
+     put(g,153,y,padl(r[2],11),{f:C.dim});});
+   put(g,122,53,'─'.repeat(56),{f:C.dim});
+   put(g,122,54,'These were seen on the 2026-08-22 run.',{f:C.dim});
+   put(g,122,55,'d marks one as a genuine duplicate;',{f:C.dim});
+   put(g,122,56,'u re-imports it anyway.',{f:C.dim});
+  }
+
+  /* ---------- 3 entry ---------- */
+  entry(g){
+   const st=this.state;
+   box(g,0,2,34,57,'MANUAL ACCOUNTS','✎ hand-entered');
+   MANUAL.forEach((m,i)=>{
+    const y=4+i*2,sel=i===1;
+    if(sel)fill(g,1,y,32,{b:C.sel});
+    put(g,2,y,padr(m[0],19),{f:sel?C.wht:C.fg,b:sel?C.sel:null,o:sel?1:0});
+    put(g,22,y,padl(m[1],10),{f:C.fg,b:sel?C.sel:null});
+    put(g,2,y+1,m[2],{f:C.dim});
+   });
+   put(g,2,13,'─'.repeat(30),{f:C.dim});
+   put(g,2,14,'IMPORTED ACCOUNTS',{f:C.cyn,o:1});
+   ['assets:bank:checking','assets:bank:savings','assets:broker:ira','liabilities:visa','liabilities:loan:car']
+    .forEach((a,i)=>{put(g,2,15+i,'↓',{f:C.dim});put(g,4,15+i,tr(a,28),{f:C.dim});});
+   put(g,2,21,'read-only here — they are',{f:C.dim});
+   put(g,2,22,'written by CSV import only.',{f:C.dim});
+   put(g,2,24,'─'.repeat(30),{f:C.dim});
+   put(g,2,25,'KEYS',{f:C.cyn,o:1});
+   [['n','new transaction'],['e','edit last entry'],['y','duplicate last'],['x','delete entry'],
+    ['Tab','next field'],['⏎','commit'],['Esc','discard']]
+    .forEach((k,i)=>{put(g,2,26+i,padl(k[0],3),{f:C.yel,o:1});put(g,7,26+i,tr(k[1],24),{f:C.dim});});
+
+   box(g,34,2,76,57,'NEW TRANSACTION','assets:cash:pln · manual');
+   FORM.forEach((f,i)=>{
+    const y=5+i*3,on=i===st.field;
+    if(on)fill(g,35,y,74,{b:C.sel});
+    put(g,37,y,padl(f[0],13),{f:on?C.yel:C.dim,b:on?C.sel:null,o:on?1:0});
+    const v=f[1]||(on?'':'—');
+    put(g,53,y,tr(v,32),{f:f[1]?(on?C.wht:C.fg):C.dim,b:on?C.sel:null,o:on?1:0});
+    if(on)put(g,53+tr(v,32).length,y,'█',{f:C.yel,b:C.sel});
+    if(f[2])put(g,53,y+1,tr(f[2],40),{f:C.dim});
+   });
+   put(g,37,27,'─'.repeat(70),{f:C.dim});
+   put(g,37,28,'balances · 0.00 PLN',{f:C.grn,o:1});
+   put(g,58,28,'✓',{f:C.grn,o:1});
+   put(g,37,30,'Amount is in PLN. hledger keeps the posting in PLN and',{f:C.dim});
+   put(g,37,31,'converts only for reports, using the price directive below.',{f:C.dim});
+   put(g,37,33,'Tab / j / k  move between fields',{f:C.dim});
+   put(g,37,34,'⏎            append to cash.journal and clear the form',{f:C.dim});
+   put(g,37,35,'C-s          append and keep values for a second entry',{f:C.dim});
+   put(g,37,36,'Esc          discard',{f:C.dim});
+
+   box(g,110,2,70,20,'WILL APPEND TO cash.journal','preview');
+   ['2026-08-27 Bilety MPK Kraków',
+    '    expenses:transport                    16.00 PLN',
+    '    assets:cash:pln                      -16.00 PLN','',
+    '; the price line is written to prices.journal, not here,',
+    '; so the posting keeps its original commodity',
+    'P 2026-08-27 PLN 0.2349 EUR']
+    .forEach((l,i)=>put(g,112,4+i,tr(l,66),{f:l[0]===';'?C.dim:(l[0]==='P'?C.mag:C.fg)}));
+   put(g,112,13,'─'.repeat(66),{f:C.dim});
+   put(g,112,14,'file        cash.journal',{f:C.dim});
+   put(g,112,15,'included by 2026.journal',{f:C.dim});
+   put(g,112,16,'position    end of file',{f:C.dim});
+   put(g,112,17,'checks      balanced ✓   commodity declared ✓',{f:C.dim});
+   put(g,112,19,'Nothing is written until you press ⏎.',{f:C.dim});
+
+   box(g,110,22,70,20,'SIMILAR PAST ENTRIES','Tab autofills the rest');
+   put(g,112,23,'DATE        DESCRIPTION           CATEGORY          AMOUNT',{f:C.dim});
+   SIMILAR.forEach((p,i)=>{
+    const y=25+i;
+    put(g,112,y,p[0],{f:C.dim});
+    put(g,124,y,padr(p[1],20),{f:C.fg});
+    put(g,145,y,padr(p[2].replace('expenses:','e:'),15),{f:C.dim});
+    put(g,161,y,padl(p[3],16),{f:C.fg});
+   });
+   put(g,112,35,'─'.repeat(66),{f:C.dim});
+   put(g,112,36,'12 matches on this description, all filed to',{f:C.dim});
+   put(g,112,37,'expenses:transport. Category is prefilled from',{f:C.dim});
+   put(g,112,38,'the most recent one.',{f:C.dim});
+   put(g,112,40,'MPK tickets are always 16.00 PLN — y duplicates.',{f:C.dim});
+
+   box(g,110,42,70,17,'COMMODITIES','commodities.journal');
+   [['commodity EUR','1000.00 EUR','base'],['commodity PLN','1000.00 PLN','0.2349'],
+    ['commodity CZK','1000.00 CZK','0.03968']]
+    .forEach((c,i)=>{const y=44+i;
+     put(g,112,y,padr(c[0],20),{f:C.mag});
+     put(g,133,y,padr(c[1],16),{f:C.fg});
+     put(g,150,y,padl(c[2],10),{f:C.dim});});
+   put(g,112,48,'─'.repeat(66),{f:C.dim});
+   ['Declaring commodities makes hledger check --strict',
+    'reject a typo like 16.00 PNL instead of silently',
+    'creating a new commodity.','',
+    'Cash accounts are per-commodity, so a PLN entry can',
+    'only be posted to assets:cash:pln. The category side',
+    'takes the same commodity — conversion happens at',
+    'report time.']
+    .forEach((l,i)=>put(g,112,49+i,tr(l,66),{f:C.dim}));
+  }
+
+  /* ---------- 4 scheduled ---------- */
+  sched(g){
+   const st=this.state,cur=st.cur.scheduled||0;
+   box(g,0,2,110,57,'PERIODIC TRANSACTIONS','10 active · 1 paused');
+   put(g,2,3,'   DESCRIPTION               CADENCE            NEXT        AMOUNT      ACCOUNT',{f:C.dim});
+   SCHED.forEach((s,i)=>{
+    const y=5+i*2,sel=i===cur,off=s[5];
+    if(sel)fill(g,1,y,108,{b:C.sel});
+    const bg=sel?C.sel:null;
+    put(g,2,y,off?'⏸':'●',{f:off?C.dim:C.grn,b:bg});
+    put(g,5,y,padr(s[0],25),{f:off?C.dim:(sel?C.wht:C.fg),b:bg,o:sel?1:0});
+    put(g,31,y,padr(s[1],18),{f:off?C.dim:C.fg,b:bg});
+    put(g,50,y,padr(s[2],10),{f:off?C.dim:C.dim,b:bg});
+    put(g,61,y,padl(s[3],12),{f:off?C.dim:(s[4]?C.grn:C.fg),b:bg});
+    put(g,76,y,padr(ACCT_OF[s[0]]||'',31),{f:C.dim,b:bg});
+   });
+   put(g,2,28,'─'.repeat(106),{f:C.dim});
+   put(g,2,29,'These live in periodic.journal as ~ entries. hledger does not post them automatically —',{f:C.dim});
+   put(g,2,30,'they generate forecast transactions for reports, and ⏎ writes the next occurrence into',{f:C.dim});
+   put(g,2,31,'2026.journal as a real transaction when it actually happens.',{f:C.dim});
+   put(g,2,33,'n new    e edit    p pause    x delete    ⏎ post next occurrence now    f forecast only',{f:C.fg});
+   ['n','e','p','x','⏎','f'].forEach((k,i)=>{const xs=[2,11,20,31,42,73];put(g,xs[i],33,k,{f:C.yel,o:1});});
+
+   const s=SCHED[cur];
+   box(g,110,2,70,16,'JOURNAL ENTRY','periodic.journal');
+   (SCHED_JRN[cur]||'').split('\n').forEach((l,i)=>
+    put(g,112,4+i,tr(l,66),{f:l[0]===';'?C.dim:(l[0]==='~'?C.mag:C.fg)}));
+   put(g,112,12,'─'.repeat(66),{f:C.dim});
+   put(g,112,13,'The ~ line is the recurrence rule. Everything',{f:C.dim});
+   put(g,112,14,'below it is an ordinary transaction body, so a',{f:C.dim});
+   put(g,112,15,'periodic entry can have any number of postings',{f:C.dim});
+   put(g,112,16,'— see the car loan, which splits interest.',{f:C.dim});
+
+   box(g,110,18,70,17,'NEXT 6 OCCURRENCES','generated, not written');
+   put(g,112,19,'DATE          ACCOUNT                        AMOUNT',{f:C.dim});
+   (OCC[s[1]]||OCC['monthly, 1st']).forEach((d,i)=>{
+    const y=21+i;
+    put(g,112,y,d,{f:C.dim});
+    put(g,126,y,padr(ACCT_OF[s[0]]||'expenses',30),{f:C.fg});
+    put(g,157,y,padl(s[3],20),{f:s[5]?C.dim:(s[4]?C.grn:C.fg)});
+   });
+   put(g,112,28,'─'.repeat(66),{f:C.dim});
+   put(g,112,29,'Shown in the forecast and in Upcoming on the',{f:C.dim});
+   put(g,112,30,'dashboard. Not part of any balance until posted.',{f:C.dim});
+   put(g,112,32,'⏎ writes the 2026-09-01 one into 2026.journal.',{f:C.dim});
+   put(g,112,32,'⏎',{f:C.yel,o:1});
+
+   box(g,110,35,70,24,'ANNUAL IMPACT','sum of all active');
+   put(g,112,36,'DESCRIPTION               CADENCE        PER YEAR',{f:C.dim});
+   const annual=[['Salary Contoso GmbH',12,5240],['Rent',12,-1450],['Car loan',12,-312],
+    ['IRA contribution',12,-500],['Savings sweep',26,-250],['Liability insurance',4,-186.4],
+    ['Gym membership',12,-39],['Spotify',12,-11.99],['Netflix',12,-13.99],['Property tax',1,-940]];
+   annual.forEach((a,i)=>{
+    const y=38+i,tot=a[1]*a[2];
+    put(g,112,y,padr(a[0],25),{f:C.fg});
+    put(g,138,y,padr(a[1]+'×',6),{f:C.dim});
+    put(g,145,y,padl((tot>=0?'+':'')+tot.toFixed(2),32),{f:tot>=0?C.grn:C.fg});
+   });
+   put(g,112,49,'─'.repeat(66),{f:C.dim});
+   put(g,112,50,padr('net scheduled per year',25),{f:C.wht,o:1});
+   put(g,145,50,padl('+21285.26',32),{f:C.grn,o:1});
+   put(g,112,52,'Everything not listed here is estimated in the',{f:C.dim});
+   put(g,112,53,'forecast from a 6-month trailing average.',{f:C.dim});
+   put(g,112,55,'Paused entries are excluded from both.',{f:C.dim});
+  }
+
+  /* ---------- 5 forecast ---------- */
+  fc(g){
+   const sc=SCENARIOS[this.state.scenario];
+   box(g,0,2,180,32,'NET WORTH · 6 MONTHS ACTUAL + 12 MONTHS FORECAST',
+    'scenario: '+sc.label+'   s cycles   +/- horizon');
+   const hist=[66100,68020,69940,71830,74140,76044];
+   const fcv=[76044];let v=76044;
+   for(let i=0;i<12;i++){v+=(sc.id==='gap'&&i<3)?-900:sc.rate;fcv.push(v);}
+   const all=hist.concat(fcv);
+   const max=Math.ceil(Math.max.apply(null,all)/5000)*5000;
+   const min=Math.floor(Math.min.apply(null,all)/5000)*5000-2500;
+
+   const CW=164,CH=24;
+   const bc=braille(CW,CH);
+   const span=CW*2-1;
+   const histEnd=Math.round(span*5/17);
+   bc.series(hist,0,histEnd,min,max,C.grn);
+   bc.series(fcv,histEnd,span,min,max,C.blu);
+   bc.draw(g,12,4);
+
+   for(let r=0;r<=6;r++){
+    const val=max-(max-min)*r/6;
+    put(g,3,4+Math.round(r*(CH-1)/6),padl((val/1000).toFixed(0)+'k',6),{f:C.dim});
+   }
+   put(g,12,28,'─'.repeat(CW),{f:C.dim});
+   const months=['Mar 26','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan 27','Feb','Mar','Apr','May','Jun','Jul','Aug'];
+   months.forEach((m,i)=>put(g,12+Math.round(i*(CW-1)/17),29,m,{f:i===5?C.fg:C.dim}));
+   put(g,12+Math.round(5*(CW-1)/17),28,'┴',{f:C.fg});
+   put(g,12,31,'⣿ actual',{f:C.grn});
+   put(g,24,31,'⣿ forecast — periodic transactions plus a 6-month trailing average for everything else',{f:C.blu});
+   put(g,12,32,'braille plot, 2×4 dots per cell, as ntcharts draws it',{f:C.dim});
+
+   box(g,0,34,110,25,'PROJECTION','--forecast --monthly');
+   put(g,2,35,'MONTH          INCOME     EXPENSES          NET          BALANCE   NOTE',{f:C.dim});
+   const names=['Sep 2026','Oct 2026','Nov 2026','Dec 2026','Jan 2027','Feb 2027',
+    'Mar 2027','Apr 2027','May 2027','Jun 2027','Jul 2027','Aug 2027'];
+   for(let i=0;i<12;i++){
+    const y=37+i*(i<12?1:1)+Math.floor(i/12);
+    const yy=37+i;
+    const gap=sc.id==='gap'&&i<3;
+    const inc=gap?sc.inc:SCENARIOS[0].inc,exp=sc.exp,net=inc-exp;
+    put(g,2,yy,padr(names[i],13),{f:C.fg});
+    put(g,15,yy,padl(inc.toFixed(2),10),{f:gap?C.yel:C.grn});
+    put(g,28,yy,padl(exp.toFixed(2),11),{f:C.red});
+    put(g,42,yy,padl((net>=0?'+':'')+net.toFixed(2),11),{f:net>=0?C.fg:C.red});
+    put(g,56,yy,padl(fcv[i+1].toFixed(2),14),{f:C.wht,o:1});
+    put(g,73,yy,gap?'reduced income':(i===5?'property tax in Feb':''),{f:C.dim});
+   }
+   put(g,2,50,'─'.repeat(106),{f:C.dim});
+   put(g,2,51,'12-month change',{f:C.wht,o:1});
+   put(g,56,51,padl(((fcv[12]-fcv[0])>=0?'+':'')+(fcv[12]-fcv[0]).toFixed(2),14),{f:C.grn,o:1});
+   put(g,2,53,'Forecast transactions are generated on the fly. They never enter the journal, so a',{f:C.dim});
+   put(g,2,54,'forecast can never corrupt your actuals — drop the flag and they are gone.',{f:C.dim});
+   put(g,2,56,'⏎ drills into a month and lists the generated transactions behind the number.',{f:C.dim});
+   put(g,2,56,'⏎',{f:C.yel,o:1});
+
+   box(g,110,34,70,25,'DRIVERS','what builds the forecast');
+   put(g,112,35,'SOURCE   ACCOUNT                CADENCE        PER MONTH',{f:C.dim});
+   DRIVERS.forEach((d,i)=>{
+    const y=37+i;
+    put(g,112,y,padr(d[0],8),{f:d[0]==='sched'?C.cyn:C.dim});
+    put(g,121,y,padr(d[1],22),{f:C.fg});
+    put(g,144,y,padr(d[2],10),{f:C.dim});
+    put(g,155,y,padl(d[3],22),{f:d[4]?C.grn:C.fg});
+   });
+   put(g,112,48,'─'.repeat(66),{f:C.dim});
+   put(g,112,49,'sched   exact, from periodic.journal',{f:C.dim});
+   put(g,112,49,'sched',{f:C.cyn});
+   put(g,112,50,'avg 6m  estimated from the last 6 months',{f:C.dim});
+   put(g,112,52,'Scenarios adjust the estimated half only:',{f:C.dim});
+   put(g,112,53,'base                 as-is',{f:C.fg});
+   put(g,112,54,'lean                 −15% on avg expenses',{f:C.fg});
+   put(g,112,55,'3-month income gap   salary at 75% to Nov',{f:C.fg});
+   put(g,112,57,'s cycles · e edits an average in place',{f:C.dim});
+   put(g,112,57,'s',{f:C.yel,o:1});
+  }
+
+  /* ---------- 6 reports ---------- */
+  rep(g){
+   const st=this.state,p=PERIODS[st.period],eur=st.val==='eur';
+   let x=1;
+   PERIODS.forEach((q,i)=>{
+    const lbl=' '+q[0]+' ',on=i===st.period;
+    put(g,x,2,lbl,on?{f:C.wht,b:C.sel,o:1}:{f:C.dim});
+    x+=lbl.length+1;
+   });
+   put(g,x+3,2,p[1],{f:C.dim});
+   put(g,W-58,2,eur?'valuation: market EUR (-V)':'valuation: at cost',{f:C.yel});
+   put(g,W-28,2,'P period   v value   y yank',{f:C.dim});
+
+   const mk=(x0,w,title,cmd,rows,c3)=>{
+    box(g,x0,4,w,55,title,cmd);
+    put(g,x0+2,5,padr('ACCOUNT',30)+padl(eur?'EUR VALUE':'BALANCE',18)+padl(c3,14),{f:C.dim});
+    rows.forEach((r,i)=>{
+     const y=7+i*2;if(y>56)return;
+     const kind=r[4];
+     if(!r[0]&&kind===2)return;
+     if(kind===1)put(g,x0+2,y,'└─',{f:C.dim});
+     const nameX=x0+2+(kind===2||kind===4?0:(kind===1?3:2));
+     const col=kind===2?C.cyn:(kind===4?C.wht:(kind===1?C.fg:C.fg));
+     put(g,nameX,y,tr(r[0],28),{f:col,o:kind===2||kind===4||kind===1?1:0});
+     if(kind===2)return;
+     const bal=eur?r[2]:r[1];
+     put(g,x0+32,y,padl(bal,18),{f:kind===3?C.red:(kind===4?C.wht:C.fg),o:kind===4?1:0});
+     const d=r[3];
+     put(g,x0+51,y,padl(d,14),{f:d&&d[0]==='-'?C.red:(d&&d[0]==='+'?C.grn:C.fg)});
+    });
+   };
+   mk(0,90,'BALANCE SHEET','bal --tree'+(eur?' -V':''),BS,'Δ PERIOD');
+   mk(90,90,'INCOME STATEMENT','is --tree'+(eur?' -V':''),IST,'SHARE');
+
+   if(!eur){
+    put(g,2,52,'At cost, assets hold three commodities, so the total cannot collapse to one number.',{f:C.dim});
+    put(g,2,53,'v applies the market prices in prices.journal and gives a single EUR figure.',{f:C.dim});
+   }else{
+    put(g,2,52,'Valued with the latest price for each commodity (--value=end).',{f:C.dim});
+    put(g,2,53,'The difference against cost is exchange-rate gain, not spending.',{f:C.dim});
+   }
+   put(g,92,52,'Δ PERIOD compares against the previous period of the same length.',{f:C.dim});
+   put(g,92,53,'y copies the visible table as CSV; Y includes the hidden subaccounts.',{f:C.dim});
+  }
+
+  /* ---------- overlays, composited into the buffer ---------- */
+  overlay(g){
+   const st=this.state;
+   if(st.doctor){
+    const h=CHECKS.length+4,y=H-1-h;
+    for(let i=0;i<h;i++)fill(g,0,y+i,W,{b:C.bg});
+    box(g,0,y,W,h,'hledger check --strict','2 errors · 3 warnings · ⏎ open at line · ! closes');
+    CHECKS.forEach((c,i)=>{
+     const yy=y+2+i,sev=c[0].trim();
+     if(i===0)fill(g,1,yy,W-2,{b:C.sel});
+     const bg=i===0?C.sel:null;
+     put(g,3,yy,c[0],{f:sev==='ERR'?C.red:(sev==='WARN'?C.yel:C.grn),b:bg,o:1});
+     put(g,9,yy,padr(c[1],W-40),{f:sev==='OK'?C.dim:C.fg,b:bg});
+     put(g,W-3-c[2].length,yy,c[2],{f:C.dim,b:bg});
+    });
+    return;}
+   if(st.whichKey){
+    const items=st.whichKey==='g'?WK_G:WK_ROOT,rows=Math.ceil(items.length/4),h=rows+4,y=H-1-h;
+    for(let i=0;i<h;i++)fill(g,0,y+i,W,{b:C.bg});
+    box(g,0,y,W,h,st.whichKey==='g'?'g — goto':'keys','Esc closes');
+    items.forEach((it,i)=>{
+     const col=i%4,r=Math.floor(i/4),xx=3+col*44,yy=y+2+r;
+     put(g,xx,yy,padl(it[0],4),{f:C.yel,o:1});
+     put(g,xx+6,yy,'→',{f:C.dim});
+     put(g,xx+8,yy,tr(it[1],30),{f:C.fg});
+    });
+    return;}
+   if(st.cmdOpen){
+    const m=CMDS.filter(c=>c[0].startsWith(':'+st.cmdText)).slice(0,8);
+    if(!m.length)return;
+    const h=m.length+2,y=H-1-h;
+    for(let i=0;i<h;i++)fill(g,0,y+i,W,{b:C.bg});
+    box(g,0,y,W,h,null,null);
+    m.forEach((c,i)=>{
+     const yy=y+1+i;
+     if(i===0)fill(g,1,yy,W-2,{b:C.sel});
+     const bg=i===0?C.sel:null;
+     put(g,3,yy,padr(c[0],24),{f:i===0?C.yel:C.fg,b:bg,o:i===0?1:0});
+     put(g,29,yy,c[1],{f:C.dim,b:bg});
+    });}
+  }
+
+  renderVals(){
+   const g=grid(),s=this.state.screen;
+   this.chrome(g);
+   if(s==='dashboard')this.dash(g);
+   else if(s==='import')this.imp(g);
+   else if(s==='entry')this.entry(g);
+   else if(s==='scheduled')this.sched(g);
+   else if(s==='forecast')this.fc(g);
+   else this.rep(g);
+   this.overlay(g);
+   this.status(g);
+   return {lines:toLines(g),rootRef:el=>{this.root=el;},onKey:this.onKey};
+  }
+}
+</script>
+</body>
+</html>
