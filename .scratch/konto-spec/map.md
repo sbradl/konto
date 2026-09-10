@@ -39,6 +39,11 @@ Done when every decision ticket is closed and `docs/spec.md` is assembled from t
 - **Environment fact** (dev machine, 2026-09-10): `hledger 1.52.1` is now installed
   (`/usr/bin/hledger`, installed during ticket 01 research). No journal file exists yet —
   the test-seams ticket still owns fixture-journal strategy, but "install hledger" is done.
+- **CSV import scope**: primary bank is **Postbank** (German — expect `;` delimiter,
+  Latin-1/CP1252 encoding, comma decimals, `DD.MM.YYYY`, possible preamble). The import
+  subsystem must be **format-extensible** to other banks. *CSV import subsystem design*
+  owns the abstraction; it is blocked on *Obtain sample bank CSV files* (the user supplies
+  real Postbank exports — samples land in `.scratch/konto-spec/samples/`).
 
 ## Decisions so far
 
