@@ -56,6 +56,17 @@ Done when every decision ticket is closed and `docs/spec.md` is assembled from t
   Cursor via `tea.View.Cursor`. One caveat handed to *Responsive layout strategy*: verify
   `ntcharts/v2` builds against real `charm.land/bubbletea/v2` (its `go.mod` carries an
   ignored `replace`). Full findings: `research/06-overlay-compositing.md`.
+- [hledger invocation architecture](issues/02-hledger-invocation-architecture.md) — two
+  data paths behind a `Loader` that builds the `Ledger` snapshot: an `internal/hledger`
+  **gateway** (plain blocking Go, no `bubbletea` import; unexported `run()` exec chokepoint
+  + typed `Client`; UI wraps calls in `tea.Cmd`) and an `internal/journal` **targeted
+  line-oriented reader/writer** for `~` blocks, `account` tags, `.latest` files (not a
+  parser). **Eager** load at startup, held snapshot, explicit `r` refresh + auto-refresh
+  after writes and after `$EDITOR`; no watcher; any write → full refresh;
+  stale-while-revalidate rendering. Startup preflight refuses to run without `hledger >=
+  1.32`; missing journal → first-run skeleton-create screen; parse error → top-severity
+  check issue. `!` panel runs each hledger check as its own invocation (first-failure only,
+  fix→refresh→next), konto's own checks enumerate fully. `$EDITOR` via `tea.ExecProcess`.
 - [konto domain model and core types](issues/03-domain-model-core-types.md) — **rich
   konto-owned model behind a gateway mapping layer** (ADR 0001); views never see hledger
   JSON. `Amount` = hand-rolled fixed-point `{Commodity, Mantissa int64, Scale int32}`, no
@@ -74,12 +85,12 @@ Done when every decision ticket is closed and `docs/spec.md` is assembled from t
   strategy are locked, each of the six views likely needs a short spec section (which
   Bubbles components, which hledger calls, which panels are overlay vs inline). May graduate
   into one ticket per view, or fold straight into spec assembly.
-- **Journal writes beyond CSV import** — three write paths append/edit journal text:
-  Entry-screen manual commits, the account-classification tag write (from the domain-model
-  ticket), and Scheduled-screen "post next occurrence". The last is owned by *Periodic
-  transaction subsystem design*; the Entry commit path and the shared write mechanics
-  (which file, include-chain, check-satisfaction reporting, read-cache coordination) stay
-  dim until the hledger invocation architecture is settled.
+- **Journal write targets** — write *mechanism* is settled (`internal/journal` owns
+  line-oriented mutation; full `Ledger` refresh after each write). Still dim: *which* file
+  in an include chain each construct is appended to, and the Entry-view commit specifics
+  (which file, include-chain, check-satisfaction reporting). Post-occurrence writes are
+  owned by *Periodic transaction subsystem design*; the Entry commit path graduates once a
+  view is designed for it.
 - **Keymap / command-line dispatch detail** — the `CMDS` / `HINTS` / goto-prefix tables from
   the mock's inline JS need transcribing into a Go keymap model; precise structure waits on
   the Bubble Tea model composition decision.

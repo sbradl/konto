@@ -11,6 +11,10 @@ Decide konto's configuration and theming:
   hledger's own default search), CSV import source directories, `.rules` file locations.
   Precedence order. Is there a config file at all, and if so format + location (XDG
   `~/.config/konto/`)?
+- **Which journal checks konto runs** (ticket 02): basic always; strict (`balanced`,
+  `commodities`, `accounts`) default-on; opt-in (`ordereddates`, `uniqueleafnames`, `tags`,
+  `recentassertions`) default-off. Config shape for the on/off set.
+- **Catch-all account name(s)** for `Transaction.Uncategorized` detection (ticket 03).
 - **Theming**: the handoff requires `lipgloss.Color("0")`–`"15"` ANSI indices, never hex, so
   the TUI inherits the user's terminal theme (they switch themes in Omarchy/Ghostty). Map
   the ~11 semantic roles (background, foreground, dim, selection, red, green, amber, blue,

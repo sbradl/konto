@@ -9,8 +9,11 @@ Blocked by: 02, 03
 Decide konto's package tree and the seams between parts:
 
 - Top-level layout: `cmd/konto` entrypoint; `internal/...` for everything else?
-- Where the hledger gateway lives (`internal/hledger`), where the domain types live
-  (`internal/domain` or co-located), where UI lives.
+- Ticket 02 introduced working names to place/confirm: `internal/hledger` (gateway),
+  `internal/journal` (targeted line-oriented reader/writer), and a `Loader` that composes
+  both into the `Ledger` snapshot — where does `Loader` live (domain? its own `ledger`
+  package?).
+- Where the domain types live (`internal/domain` or co-located), where UI lives.
 - UI packaging: one `internal/ui` package for all six views, or one package per view? How
   shared UI primitives (layout helpers, theme, keymap, overlay compositor) are packaged so
   view packages don't import each other.
