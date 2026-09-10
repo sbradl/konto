@@ -57,6 +57,10 @@ their views land.
 
 <!-- one line per closed ticket: gist of the answer, then the link for detail -->
 
+- [Assemble docs/spec.md](issues/12-assemble-spec.md) — **`docs/spec.md`** written: the
+  foundation spec synthesising tickets 01–06, 10, 11 + `CONTEXT.md` + ADRs 0001–0005, with
+  a build order. `CLAUDE.md` rewritten to point at it. Per-feature areas (07, 08/14, 09,
+  13, 15) marked deferred.
 - [hledger machine-readable output](issues/01-hledger-machine-readable-output.md) —
   `-O json` for `print`/`register`/`aregister`/`bal`/`bs`/`is`/`cf`; **no** machine format
   for `check`/`accounts`/`commodities`/`prices`. `print` drops `~` rules (konto parses the
