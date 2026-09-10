@@ -9,9 +9,11 @@ Blocked by: 02, 03
 The Forecast view is a read-only projection — forecast transactions are never written to the
 journal (hard product rule). Decide how it's computed:
 
-- Use `hledger balance --forecast` (ticket 01 established what it emits) for the periodic
-  part, or generate periodic occurrences in konto? Can the two feeds — exact `sched` rows
-  and estimated `avg 6m` rows — be produced/distinguished cleanly?
+- Ticket 01 found: `bal --forecast` aggregates only (forecast rows not separable); forecast
+  rows ARE identifiable via the `_generated-transaction` tag on `print --forecast` /
+  `aregister --forecast` json. Decide: drive the periodic part off those tagged rows, or
+  generate periodic occurrences in konto from the parsed `~` rules? Can the exact `sched`
+  rows and estimated `avg 6m` rows be produced/distinguished cleanly?
 - The trailing-average logic: 6-month window over what exactly (all non-periodic expense
   accounts? income too?), and how it projects forward.
 - The three scenarios and precisely what each mutates:

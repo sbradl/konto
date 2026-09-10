@@ -28,14 +28,23 @@ Done when every decision ticket is closed and `docs/spec.md` is assembled from t
 - **Skills to consult** per ticket type: `/grilling` + `/domain-modeling` for decision
   tickets (the default), `/research` subagent for research tickets, `/prototype` for
   prototype tickets. `craft-review` and `tdd-loop` are for the later build, not this map.
-- **Environment fact** (charting machine, 2026-09-10): `hledger` is not installed and no
-  journal file exists. The test-seams ticket must resolve how konto is tested without one;
-  it may graduate an install/fixture task.
+- **Environment fact** (dev machine, 2026-09-10): `hledger 1.52.1` is now installed
+  (`/usr/bin/hledger`, installed during ticket 01 research). No journal file exists yet —
+  the test-seams ticket still owns fixture-journal strategy, but "install hledger" is done.
 
 ## Decisions so far
 
 <!-- one line per closed ticket: gist of the answer, then the link for detail -->
 
+- [hledger machine-readable output](issues/01-hledger-machine-readable-output.md) —
+  `-O json` for `print`/`register`/`aregister`/`bal`/`bs`/`is`/`cf`; **no** machine format
+  for `check`/`accounts`/`commodities`/`prices`. `print` drops `~` rules (konto parses the
+  journal itself for verbatim rule text); `check --strict` = first-failure-only prose on
+  stderr, exit 1, no severities (run per-check + regex + fix-rerun to enumerate); forecast
+  rows only separable via the `_generated-transaction` tag on `print`/`aregister --forecast`;
+  `import --dry-run` doesn't list skipped rows (konto builds its own). **Version floor:
+  `hledger >= 1.32`**, checked at startup, JSON decoded tolerantly. Full detail:
+  `research/01-hledger-output.md`.
 - [Overlay and popup compositing mechanics](issues/06-overlay-popup-compositing.md) —
   build on the **Charm v2 stack** and composite overlays with `lipgloss.Compositor` (v2's
   cell-grid `Layer`/`Compositor`); no community overlay package, no hand-rolled splicing.

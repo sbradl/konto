@@ -15,9 +15,10 @@ the spec):
 - Fixture journals: hand-written minimal `.journal` files covering the tricky cases
   (multi-commodity EUR/PLN/CZK, periodic `~` rules, price directives, a failing balance
   assertion, an import `.rules` + CSV pair). Where they live.
-- **The environment problem**: `hledger` is not installed on the dev machine and no journal
-  exists (see map Notes). Resolve whether the build requires developers to install `hledger`
-  + create a sample journal — if so this ticket graduates an AFK `task` ticket to do it.
+- **The fixture problem**: `hledger 1.52.1` is now installed on the dev machine (done during
+  ticket 01), but no journal exists. Resolve whether the build requires a committed sample
+  journal set and/or committed golden `hledger` JSON outputs — if hand-building a realistic
+  multi-account journal is non-trivial, this ticket graduates an AFK `task` ticket to do it.
 - TUI testing: `teatest` for full-program flows, golden `View()` snapshots for layout, or
   unit tests on view models only. What's the bar?
 
