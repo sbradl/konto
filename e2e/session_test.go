@@ -235,6 +235,28 @@ func (s *session) cellBackground(x, y int) int {
 	return -1
 }
 
+// backgrounds returns the distinct non-default background colours on screen,
+// as ANSI-16 indices, or -1 for any other kind of colour.
+func (s *session) backgrounds() map[int]bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	seen := map[int]bool{}
+	for y := range s.term.Height() {
+		for x := range s.term.Width() {
+			c := s.term.CellAt(x, y)
+			if c == nil || c.Style.Bg == nil {
+				continue
+			}
+			if bc, ok := c.Style.Bg.(ansi.BasicColor); ok {
+				seen[int(bc)] = true
+			} else {
+				seen[-1] = true
+			}
+		}
+	}
+	return seen
+}
+
 // find returns the cell position of the first occurrence of text on screen.
 func (s *session) find(text string) (x, y int, ok bool) {
 	for y, line := range s.screenLines() {

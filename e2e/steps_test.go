@@ -45,7 +45,7 @@ func registerGivenSteps(sc *godog.ScenarioContext, w *world) {
 		return removeIfExists(w.journal)
 	})
 	sc.Step(`^today is (\d{4}-\d{2}-\d{2})$`, func(day string) { w.env["KONTO_TODAY"] = day })
-	sc.Step(`^the terminal is (\d+)×(\d+)$`, func(width, height int) { w.width, w.height = width, height })
+	sc.Step(`^the terminal is (\d+)×(\d+)$`, w.setTerminalSize)
 	sc.Step(`^XDG_DOWNLOAD_DIR is not configured$`, func() { w.unset["XDG_DOWNLOAD_DIR"] = true })
 	sc.Step(`^a Postbank CSV "([^"]*)" for IBAN "([^"]*)" with closing balance ([\d.,-]+) EUR( and CRLF line endings| and a trailing blank line)?:$`,
 		func(file, iban, balance, variant string, table *godog.Table) error {

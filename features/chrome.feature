@@ -219,7 +219,6 @@ Feature: Chrome, navigation and global keys
 
   Rule: Responsive layout
 
-    @wip
     Scenario Outline: layout fills the terminal at any size
       Given the terminal is <w>×<h>
       Then every line of the screen is at most <w> cells wide
@@ -250,11 +249,10 @@ Feature: Chrome, navigation and global keys
 
   Rule: Theme
 
-    @adr-0005 @wip
+    @adr-0005
     Scenario: output uses ANSI-16 indices only
       Then the screen contains no 24-bit or 256-colour escape sequences
 
-    @wip
     Scenario: background and foreground are unset
       Then no cell sets a background colour except the selected row and the popup
 

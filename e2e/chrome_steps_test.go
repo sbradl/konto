@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/x/ansi"
 	"github.com/cucumber/godog"
 )
 
@@ -47,7 +48,88 @@ func (w *world) expectActiveTab(want string) error {
 	return fmt.Errorf("active tab is %q, want %q", got, want)
 }
 
+// setTerminalSize sets the size konto starts at, or resizes it if already running.
+func (w *world) setTerminalSize(width, height int) error {
+	w.width, w.height = width, height
+	if w.s == nil {
+		return nil
+	}
+	if err := w.s.resize(width, height); err != nil {
+		return err
+	}
+	w.s.settle(w.suite.timeout)
+	return nil
+}
+
+func (w *world) expectScreenLines(check func(lines []string) error) error {
+	s, err := w.session()
+	if err != nil {
+		return err
+	}
+	var failure error
+	s.waitFor(w.suite.timeout, func(string) bool {
+		failure = check(s.screenLines())
+		return failure == nil
+	})
+	if failure != nil {
+		return fmt.Errorf("%w\n%s", failure, s.screenText())
+	}
+	return nil
+}
+
+func checkLineWidths(width int) func(lines []string) error {
+	return func(lines []string) error {
+		for i, line := range lines {
+			if got := ansi.StringWidth(line); got > width {
+				return fmt.Errorf("line %d is %d cells wide, want at most %d", i, got, width)
+			}
+		}
+		return nil
+	}
+}
+
+func checkHeight(height int) func(lines []string) error {
+	return func(lines []string) error {
+		if len(lines) != height || strings.TrimSpace(lines[0]) == "" {
+			return fmt.Errorf("screen has %d lines and starts with %q, want %d lines from the tab bar down",
+				len(lines), lines[0], height)
+		}
+		return nil
+	}
+}
+
+func checkStatusBarLast(lines []string) error {
+	if last := lines[len(lines)-1]; !strings.HasPrefix(strings.TrimSpace(last), "dash") {
+		return fmt.Errorf("last line is %q, want the status bar", last)
+	}
+	return nil
+}
+
+func registerLayoutSteps(sc *godog.ScenarioContext, w *world) {
+	sc.Step(`^every line of the screen is at most (\d+) cells wide$`, func(width int) error {
+		return w.expectScreenLines(checkLineWidths(width))
+	})
+	sc.Step(`^the screen has exactly (\d+) lines$`, func(height int) error {
+		return w.expectScreenLines(checkHeight(height))
+	})
+	sc.Step(`^the status bar is on the last line$`, func() error { return w.expectScreenLines(checkStatusBarLast) })
+}
+
 func registerChromeSteps(sc *godog.ScenarioContext, w *world) {
+	sc.Step(`^no cell sets a background colour except the selected row and the popup$`, func() error {
+		s, err := w.session()
+		if err != nil {
+			return err
+		}
+		s.settle(w.suite.timeout)
+		for colour := range s.backgrounds() {
+			if colour != selectionBackground {
+				return fmt.Errorf("a cell has background %d; only the selection background %d is allowed", colour, selectionBackground)
+			}
+		}
+		return nil
+	})
+	registerLayoutSteps(sc, w)
 	sc.Step(`^the active tab is "([^"]*)"$`, w.expectActiveTab)
 	sc.Step(`^the active tab is unchanged$`, func() error { return w.expectActiveTab(w.tabAtBaseline) })
 	sc.Step(`^the tab bar shows the journal path and "(\d+)" transactions on the right$`, func(count string) error {
