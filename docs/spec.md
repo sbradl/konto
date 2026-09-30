@@ -11,7 +11,7 @@ responsive layout into §6.8) beyond that is **deliberately not in this spec** �
 (§12).
 
 Sources: the wayfinder map and decision tickets under `.scratch/konto-spec/`, `CONTEXT.md`
-(domain glossary), `docs/adr/0001`–`0011`.
+(domain glossary), `docs/adr/0001`–`0012`.
 
 ---
 
@@ -53,7 +53,7 @@ the concrete in.
 cmd/konto            Composition root. Only package importing concretes from every circle.
 
 internal/ui/…         Frameworks & Drivers. Bubble Tea / Lip Gloss confined here.
-internal/{ledger,report,csvimport,periodic,forecast,entry}
+internal/{ledger,accounts,checks,report,csvimport,periodic,forecast,entry}
                      Use cases. Plain Go, no tea/lipgloss/exec. Each declares its own ports.
 internal/hledger     Adapter → the hledger binary.       ┐ import domain only;
 internal/journal     Adapter → the journal text file.    ┘ satisfy the ports structurally
@@ -94,20 +94,25 @@ cmd/konto/main.go        wiring: config → hledger version preflight → constr
                          construct use-case services → construct root ui model → tea.Program
 
 internal/
-  domain/                types + pure rules (Amount arithmetic/format, MultiAmount helpers,
-                         ReportRow.Kind, check-severity-by-name). No I/O.
+  domain/                SHARED KERNEL (ADR 0012). types + pure rules (Amount arithmetic/
+                         format, MultiAmount helpers, ReportRow.Kind, check-severity-by-name,
+                         Account aggregate behaviour, Changeset/Edit write model). No I/O.
 
   hledger/               ADAPTER. unexported run(ctx, args...) exec chokepoint + exported
                          Client (Balance, Print, Register, ARegister, Prices, Check,
                          ConvertCSV, Version). hledger JSON/text ⇄ domain. No tea import.
-  journal/               ADAPTER. targeted line reader/writer of journal text (~ blocks,
-                         account directives + tags, categories.rules). NOT a parser.
+  journal/               ADAPTER. targeted line reader of journal text (~ blocks, account
+                         directives + tags, categories.rules) + Apply(Changeset). NOT a parser.
 
   ledger/                USE CASE. Loader + the Ledger snapshot type; load/refresh by
-                         composing hledger + journal.
+                         composing hledger + journal. Read-only.
+  accounts/              USE CASE. close/reopen (ADR 0012).
+  checks/                USE CASE. the check run: per-check hledger calls + konto's own
+                         checks → CheckRun (ADR 0012).
   report/                USE CASE. Reports: bs/is for the selected period (native only in v1).
-  csvimport/             USE CASE. import staging, dedup, rule building, write. (t.08)
-  periodic/              USE CASE. ~ rule parse/edit/post-occurrence. (ticket 13)
+  csvimport/             USE CASE. import staging, dedup, rule building, write. Owns
+                         StagedImport, CsvRow, ImportRule, Watermark. (t.08)
+  periodic/              USE CASE. ~ rule read/new/edit/delete. Owns RuleSpec. (ticket 13)
   forecast/              USE CASE. read-only projection. (ticket 09)
   entry/                 USE CASE. draft-entry validation, commit. NOT IN v1 (ADR 0010).
   config/                journal-path resolution (no config file in v1).
@@ -163,9 +168,13 @@ The `internal/journal` adapter is a **targeted line-oriented reader/writer, not 
   postings in `print -O json`, but text parsing is the primary source.
 - **`categories.rules`** — append new `if` blocks, append a matcher line to an existing
   block (§4.9). No `.latest` files (ADR 0009).
-- **Writes**: append a new transaction, add/modify an `account`-directive tag (creating the
-  directive if absent), append / replace-in-place / delete a `~` rule block (§4.8), write
-  `categories.rules` blocks.
+- **Writes** — one entry point, `Apply(domain.Changeset)` (ADR 0012). A `Changeset` is a
+  list of `Edit`s: insert a transaction at its date position, add/modify/remove an
+  `account`-directive tag (creating the directive if absent), declare an account/payee,
+  append / replace-in-place / delete a `~` rule block (§4.8), append a `categories.rules`
+  block or matcher line. Applied per file via temp + rename. Import, periodic rules and
+  close/reopen all write through it; each declares its own
+  `journalWriter{ Apply(domain.Changeset) error }` port.
 
 It gets the include-set file list from `hledger files` and works per file. It never needs to
 understand transactions, amounts, or include resolution.
@@ -188,7 +197,11 @@ understand transactions, amounts, or include resolution.
 - **Eager**: `Loader` builds the full `Ledger` snapshot at startup; konto holds it. hledger
   calls are sub-100ms for a personal journal.
 - **Refresh triggers**: explicit `r` key; automatically after any konto journal write;
-  automatically on return from `$EDITOR`. **No filesystem watcher in v1.**
+  automatically on return from `$EDITOR`. **No filesystem watcher in v1.** All three go
+  through one root path: a successful write makes the writing view emit
+  `journalChangedMsg{summary}`; the root shows the status-bar confirmation, runs
+  `Loader.Refresh()` + the check run, and broadcasts the results (ADR 0012). Views and write
+  use cases never hold the `Loader`.
 - **Granularity**: any journal write → **full `Ledger` refresh**. A `categories.rules` change
   on disk (konto's `w`, or a hand edit + `r`) does not touch the journal — it re-converts a
   staged import only.
@@ -330,6 +343,11 @@ jump-to-location — its only use in v1 (no `e`-to-editor on list views, ADR 001
 
 Glossary: `CONTEXT.md`. Full type sketch: ticket `03-domain-model-core-types`.
 
+**Where types live** (ADR 0012): `internal/domain` is the **shared kernel** — the types
+more than one context uses (§5.1–§5.3, §5.6). A type only one context uses lives in that
+use-case package (§5.4). "Today" is never read from the system clock inside a use case:
+each service that needs it takes `today func() domain.Date` in its constructor.
+
 ### 5.1 Value types (`internal/domain`)
 
 - **`Amount`** — `{Commodity, Mantissa int64, Scale int32}`. Exact mirror of hledger's wire
@@ -383,21 +401,44 @@ Glossary: `CONTEXT.md`. Full type sketch: ticket `03-domain-model-core-types`.
   accounts list dimmed (`8`) below the open ones with `closed <date>` in the balance column,
   counted in no total or stat card. Import into a closed account's IBAN is refused:
   "account closed — reopen with `o`".
+- **`Account` is an aggregate** (ADR 0012): `Close(balance, referencingRules)`, `Reopen()`
+  and `CanBeImportTarget()` enforce the rules above and return the `Changeset` to write.
+  `internal/accounts` orchestrates close/reopen (loads balance + referencing rules, calls the
+  aggregate, validates, applies).
 - Balance-report hierarchies are `ReportTable`, separate from `[]Account`.
 
 ### 5.4 konto-only entities (no hledger counterpart)
 
-`CsvRow`, `ImportRule`, `RuleMatchStats` — ticket 08 (§4.9). No `ImportSource` or
-`Watermark` entity: the source is the chosen file, the watermark is derived from the journal.
-(Forecast has none — `ForecastDriver` / `Scenario` dropped, ADR 0007.)
+Context-owned, in their use-case package (ADR 0012):
+
+- **`internal/csvimport`** — `StagedImport` (aggregate root, in-memory only: target
+  account or new account, rows, staged rules, new categories, opening balance, closing
+  assertion; `Categorise`, `AddRule` refusing overlap, `CanWrite`, `Changeset()`), `CsvRow`
+  (skipped / matched / needs category / once), `ImportRule`, `RuleMatchStats`, and
+  `Watermark` — a value object derived from the journal on each import, never stored
+  (ADR 0009). No `ImportSource`: the source is the chosen file. Ticket 08 (§4.9).
+- **`internal/periodic`** — `RuleSpec`, the form's value object (frequency, from, count,
+  amount, from/to account) that renders a `~` block (§4.8).
+- Forecast has none — `ForecastDriver` / `Scenario` dropped, ADR 0007.
 
 ### 5.5 `Ledger` — the loaded snapshot (`internal/ledger`)
 
 No monolithic `Journal` type. `Ledger` `{Meta LedgerMeta, Accounts []Account, Transactions
-[]Transaction, Prices []PriceDirective, Periodics []PeriodicRule, Checks CheckRun}`; each
+[]Transaction, Prices []PriceDirective, Periodics []PeriodicRule}`; each
 field populated by its own gateway call, independently refreshable. `LedgerMeta`
 `{JournalPath, TxnCount, HledgerVersion, LoadedAt, Health}` — backs the tab-bar chrome.
-Views hold a read-only `*Ledger`, replaced wholesale on refresh, never mutated.
+Views hold a read-only `*Ledger`, replaced wholesale on refresh, never mutated. The
+`CheckRun` is not part of it: `internal/checks` produces it and the root holds the latest
+one (ADR 0012).
+
+### 5.6 `Changeset` — the write model (`internal/domain`, ADR 0012)
+
+`Changeset{Edits []Edit}`, pure data. Edits: insert transaction (date position), set /
+remove account-directive tag, declare account / payee, append / replace / delete a `~`
+block, append a `categories.rules` block or matcher line. Produced by `Account`,
+`StagedImport` and the `periodic` service; applied by `internal/journal` (§4.2). Every write
+runs **validate → apply → refresh**: pre-check via hledger on stdin, `Apply`, then
+`journalChangedMsg` (§4.4).
 
 ---
 
@@ -417,7 +458,8 @@ The program's single `tea.Model`. Holds:
   `CheckRun`.
 - **chrome**: active view id, tab bar, status bar. **overlay state**: `keysPopupOpen` (`?`),
   `checksPanelOpen` (`!`). No which-key goto, no command line (ADR 0011).
-- the use-case **ports** it needs (`ledgerService`, checks) — injected by `cmd/konto`.
+- the use-case **ports** it needs (`ledger` Loader, `checks` run) — injected by `cmd/konto`.
+  It handles `journalChangedMsg` (§4.4).
 
 Views never reference each other. Cross-view effects are mediated: a view acts → state
 changes → root broadcasts → every view updates.

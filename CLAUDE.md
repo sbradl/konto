@@ -13,7 +13,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   account model, 0003 ports-and-adapters, 0004 root-mediator Bubble Tea model, 0005 fixed
   ANSI-16 palette, 0006 periodic rules forecast-only,
   0007 forecast = balances + schedules, 0008 always categorised,
-  0009 import: journal is the watermark, 0010 no manual-entry UI in v1, 0011 v1 keyboard and chrome).
+  0009 import: journal is the watermark, 0010 no manual-entry UI in v1, 0011 v1 keyboard and chrome,
+  0012 context-owned models, Account aggregate, shared Changeset write model).
 - **`docs/design_handoff_hledger_tui/README.md`** — the frozen UX spec (six views — Entry deferred in v1,
   keymaps, panels, tokens). Authoritative except the deviations listed in `docs/spec.md` §11.
   The bundled `.dc.html` is a browser mock, **not code to port** — consult it for the `HINTS`
