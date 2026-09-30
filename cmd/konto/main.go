@@ -8,6 +8,7 @@ import (
 
 	"github.com/sbradl/konto/internal/config"
 	"github.com/sbradl/konto/internal/domain"
+	"github.com/sbradl/konto/internal/journal"
 )
 
 // app is konto's start-up sequence with its collaborators injected.
@@ -15,6 +16,7 @@ type app struct {
 	stderr    io.Writer
 	resolve   func() (config.Config, error)
 	preflight func() (domain.HledgerVersion, error)
+	lock      func(journalPath string) (release func() error, err error)
 	program   func(config.Config) error
 	exit      func(code int)
 }
@@ -31,7 +33,14 @@ func (a app) run() {
 		a.fail(err)
 		return
 	}
-	if err := a.program(cfg); err != nil {
+	release, err := a.lock(cfg.JournalPath)
+	if err != nil {
+		a.fail(err)
+		return
+	}
+	err = a.program(cfg)
+	_ = release()
+	if err != nil {
 		a.fail(err)
 	}
 }
@@ -63,4 +72,14 @@ func resolveConfig(args []string, sys sysEnv) (config.Config, error) {
 		return config.Config{}, fmt.Errorf("resolving configuration: %w", err)
 	}
 	return cfg, nil
+}
+
+// lockJournal takes the single-instance lock on the journal and returns the
+// function that gives it up.
+func lockJournal(journalPath string) (func() error, error) {
+	lock, err := journal.Acquire(journalPath)
+	if err != nil {
+		return nil, fmt.Errorf("locking journal: %w", err)
+	}
+	return lock.Release, nil
 }

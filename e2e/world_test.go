@@ -135,6 +135,7 @@ type world struct {
 	shimLog  string
 
 	s              *session
+	earlier        []*session // instances started before the current one
 	journalAtStart []byte
 	rulesAtStart   []byte
 	baseline       string
@@ -310,6 +311,9 @@ func (w *world) dump(name string) {
 }
 
 func (w *world) close() {
+	for _, earlier := range w.earlier {
+		earlier.stop()
+	}
 	if w.s != nil {
 		w.s.stop()
 	}

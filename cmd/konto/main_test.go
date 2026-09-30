@@ -3,11 +3,14 @@ package main
 import (
 	"bytes"
 	"errors"
+	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/sbradl/konto/internal/config"
 	"github.com/sbradl/konto/internal/domain"
+	"github.com/sbradl/konto/internal/journal"
 )
 
 type outcome struct {
@@ -15,6 +18,7 @@ type outcome struct {
 	exit   int // -1 when exit was not called
 	ran    bool
 	cfg    config.Config
+	events []string // "lock", "run", "release" in the order they happened
 }
 
 func passingPreflight() (domain.HledgerVersion, error) {
@@ -26,21 +30,31 @@ func passingConfig() (config.Config, error) {
 }
 
 func start(preflight func() (domain.HledgerVersion, error), program error) *outcome {
-	return startWith(passingConfig, preflight, program)
+	return startWith(passingConfig, preflight, program, nil)
 }
 
 func startWith(
 	resolve func() (config.Config, error),
 	preflight func() (domain.HledgerVersion, error),
 	program error,
+	lockErr error,
 ) *outcome {
 	got := &outcome{exit: -1}
 	a := app{
 		stderr:    &got.stderr,
 		resolve:   resolve,
 		preflight: preflight,
-		program:   func(cfg config.Config) error { got.ran = true; got.cfg = cfg; return program },
-		exit:      func(code int) { got.exit = code },
+		lock: func(path string) (func() error, error) {
+			got.events = append(got.events, "lock "+path)
+			return func() error { got.events = append(got.events, "release"); return nil }, lockErr
+		},
+		program: func(cfg config.Config) error {
+			got.ran = true
+			got.cfg = cfg
+			got.events = append(got.events, "run")
+			return program
+		},
+		exit: func(code int) { got.exit = code },
 	}
 	a.run()
 	return got
@@ -108,7 +122,7 @@ func TestRunReportsConfigFailureAndExitsOne(t *testing.T) {
 		return domain.HledgerVersion{}, nil
 	}
 
-	got := startWith(failing, preflight, nil)
+	got := startWith(failing, preflight, nil, nil)
 
 	if got.exit != 1 || got.ran {
 		t.Errorf("got exit %d, ui ran %v; want exit 1 and no UI", got.exit, got.ran)
@@ -171,4 +185,57 @@ func TestResolveConfigRejectsBadArguments(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "nope") {
 		t.Errorf("expected an error naming the bad flag, got: %v", err)
 	}
+}
+
+// The journal is locked for the whole run and released when the UI ends.
+func TestRunHoldsJournalLockWhileUIRuns(t *testing.T) {
+	got := start(passingPreflight, nil)
+
+	want := []string{"lock /data/main.journal", "run", "release"}
+	if !reflect.DeepEqual(got.events, want) {
+		t.Errorf("events = %v, want %v", got.events, want)
+	}
+}
+
+// A journal already in use by another konto is reported with exit 1, without a UI.
+func TestRunRefusesWhenJournalIsLocked(t *testing.T) {
+	got := startWith(passingConfig, passingPreflight, nil, errors.New("konto is already running on this journal"))
+
+	if got.exit != 1 || got.ran {
+		t.Errorf("got exit %d, ui ran %v; want exit 1 and no UI", got.exit, got.ran)
+	}
+	if !strings.Contains(got.stderr.String(), "already running") {
+		t.Errorf("stderr should say konto is already running, got: %q", got.stderr.String())
+	}
+}
+
+// A UI failure still releases the lock before konto exits.
+func TestRunReleasesLockWhenUIFails(t *testing.T) {
+	got := start(passingPreflight, errors.New("no tty"))
+
+	if !reflect.DeepEqual(got.events, []string{"lock /data/main.journal", "run", "release"}) {
+		t.Errorf("events = %v, want the lock released after run", got.events)
+	}
+}
+
+// lockJournal holds the journal until the returned release is called.
+func TestLockJournalHoldsUntilReleased(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "main.journal")
+	release, err := lockJournal(path)
+	if err != nil {
+		t.Fatalf("first lock failed: %v", err)
+	}
+
+	if _, err := lockJournal(path); !errors.Is(err, journal.ErrAlreadyRunning) {
+		t.Errorf("second lock error = %v, want ErrAlreadyRunning", err)
+	}
+
+	if err := release(); err != nil {
+		t.Fatalf("release failed: %v", err)
+	}
+	again, err := lockJournal(path)
+	if err != nil {
+		t.Fatalf("lock after release failed: %v", err)
+	}
+	_ = again()
 }

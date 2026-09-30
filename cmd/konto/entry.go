@@ -20,6 +20,7 @@ func main() {
 			return resolveConfig(os.Args[1:], sysEnv{getenv: os.Getenv, userHomeDir: os.UserHomeDir, getwd: os.Getwd})
 		},
 		preflight: hledger.PreflightOnPath,
+		lock:      lockJournal,
 		program:   runProgram,
 		exit:      os.Exit,
 	}.run()

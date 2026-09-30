@@ -40,7 +40,6 @@ Feature: Startup, preflight and journal resolution
     When I start konto
     Then every recorded hledger invocation contains "-f <absolute journal path>"
 
-  @wip
   Scenario: a second instance refuses to start
     Given the journal "minimal"
     And konto is already running on it
@@ -48,7 +47,6 @@ Feature: Startup, preflight and journal resolution
     Then konto exits with code 1
     And stderr mentions "already running"
 
-  @wip
   Scenario: lock is released on quit
     Given the journal "minimal"
     And konto is running on it
