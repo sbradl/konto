@@ -20,6 +20,15 @@ should support at v1. For each, capture in the ticket answer:
   signature)
 - whether the export is newest-first or oldest-first
 
-Store the sample files under `.scratch/konto-spec/samples/` (redact balances/account
-numbers if the user wants — structure is what matters). The answer records the format
+Store the **real, unredacted** sample files under `.scratch/konto-spec/samples/` — that
+directory is **gitignored**; the files are a format reference only and never leave the
+machine. Ideally two exports: one long period (3–6 months, in/out, card, direct debit,
+transfer, PayPal, a pending booking, a repeated shop) and a second downloaded a few days
+later that overlaps it (dedup, row-order stability, pending→booked, filename change).
+
+**Test fixtures are never copies of the real files.** The build creates synthetic,
+anonymised CSVs under `testdata/` that reproduce the format exactly (encoding, delimiter,
+preamble, columns, quirks) with invented names, IBANs, purposes and amounts — running
+balances kept internally consistent so assertions and opening-balance derivation are
+testable. The answer records the format
 findings; ticket 08 designs the abstraction from them.

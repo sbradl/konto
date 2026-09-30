@@ -14,3 +14,6 @@
 
 # Agent worktrees
 .claude/worktrees/
+
+# Real bank exports — format reference only, never committed (ticket 14)
+.scratch/konto-spec/samples/
