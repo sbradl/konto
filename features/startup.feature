@@ -13,7 +13,6 @@ Feature: Startup, preflight and journal resolution
     Then konto exits with code 1
     And stderr mentions the minimum version "1.32"
 
-  @wip
   Scenario: hledger at minimum version starts
     Given hledger reports version "1.32"
     And the journal "minimal"

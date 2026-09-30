@@ -5,21 +5,31 @@ package main
 import (
 	"fmt"
 	"io"
-	"os"
 
 	"github.com/sbradl/konto/internal/domain"
-	"github.com/sbradl/konto/internal/hledger"
 )
 
-func main() {
-	run(os.Stderr, hledger.PreflightOnPath, os.Exit)
+// app is konto's start-up sequence with its collaborators injected.
+type app struct {
+	stderr    io.Writer
+	preflight func() (domain.HledgerVersion, error)
+	program   func() error
+	exit      func(code int)
 }
 
-// run starts konto; on a startup failure it reports to stderr and calls exit(1),
-// otherwise it returns normally.
-func run(stderr io.Writer, preflight func() (domain.HledgerVersion, error), exit func(code int)) {
-	if _, err := preflight(); err != nil {
-		_, _ = fmt.Fprintf(stderr, "konto: %v\n", err)
-		exit(1)
+// run checks hledger, then runs the UI; any failure is reported to stderr and
+// ends the process with exit code 1.
+func (a app) run() {
+	if _, err := a.preflight(); err != nil {
+		a.fail(err)
+		return
 	}
+	if err := a.program(); err != nil {
+		a.fail(err)
+	}
+}
+
+func (a app) fail(err error) {
+	_, _ = fmt.Fprintf(a.stderr, "konto: %v\n", err)
+	a.exit(1)
 }
