@@ -278,6 +278,10 @@ jump-to-location — its only use in v1 (no `e`-to-editor on list views, ADR 001
   stdin — a failing `= <balance>` assertion blocks with bank / journal / difference.
   Target file = the account's latest transaction's file (else main journal), date-ordered
   insert, payees declared.
+- **After the write**: status-bar confirmation (`imported N transactions into <account>`),
+  then Import returns to its empty start state (`n` picks the next file). Staged work
+  (categorised, unwritten rows) survives view switches (views stay alive, §6.1); `q` with
+  staged work asks y/n before quitting.
 - **First import** into an empty account: konto derives an opening balance from the CSV
   (trailer balance − sum of rows), writes it against `equity:opening-balances` with an
   assertion, dated the day before the oldest row; confirmed in the preview.
