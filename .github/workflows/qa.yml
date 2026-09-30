@@ -1,0 +1,91 @@
+# The full QA process. Every job calls a mise task, so CI and `mise run qa`
+# locally run the same thing; thresholds live in mise.toml / .golangci.yml.
+name: QA
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "17 3 * * *" # nightly full mutation run
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qa-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GOTOOLCHAIN: local # the mise-pinned go, never an auto-download
+
+jobs:
+  check:
+    name: build · vet · lint · archtest · unit tests (100% coverage)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup
+      - run: mise run tidy
+      - run: mise run check
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage
+          path: coverage.out
+          if-no-files-found: ignore
+
+  vuln:
+    name: govulncheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup
+      - run: mise run vuln
+
+  integration:
+    name: integration (real hledger)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup
+      - run: mise run test:integration
+
+  e2e:
+    name: e2e (Gherkin, compiled binary on a pty)
+    runs-on: ubuntu-latest
+    env:
+      KONTO_E2E_ARTIFACTS: ${{ github.workspace }}/e2e-artifacts
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup
+      - run: mise run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: e2e-failures
+          path: e2e-artifacts/
+          if-no-files-found: ignore
+
+  mutation-diff:
+    name: mutation testing (changed lines)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - run: git fetch --no-tags origin main:main
+      - uses: ./.github/actions/setup
+      - run: mise run mutation:diff
+
+  mutation:
+    name: mutation testing (whole module)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup
+      - run: mise run mutation

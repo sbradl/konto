@@ -1,0 +1,15 @@
+name: Set up konto toolchain
+description: Installs the mise-pinned toolchain (go, golangci-lint, gotestsum, gremlins, govulncheck, hledger) and restores Go caches.
+runs:
+  using: composite
+  steps:
+    - uses: jdx/mise-action@v3
+      with:
+        cache: true
+    - uses: actions/cache@v4
+      with:
+        path: |
+          ~/go/pkg/mod
+          ~/.cache/go-build
+        key: go-${{ runner.os }}-${{ hashFiles('go.sum', 'mise.toml') }}
+        restore-keys: go-${{ runner.os }}-
