@@ -16,3 +16,8 @@ All figures come from a single `hledger bal assets liabilities -M -H --forecast=
 konto performs no projection math and no currency conversion in this view.
 
 Status: accepted.
+
+Amendment (2026-09-30): the projection for each import-fed account starts at its watermark
+(latest transaction date), not today — the journal balance is only as fresh as the last
+import, and the rules already describe what happened since. This needs one `bal` call per
+account instead of one overall.

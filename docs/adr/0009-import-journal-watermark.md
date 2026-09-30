@@ -20,3 +20,8 @@ Reversible: the conversion step can be swapped for a konto-owned reader if hledg
 engine proves insufficient; the watermark and write path are unaffected.
 
 Status: accepted.
+
+Amendment (2026-09-30): transfers between two import-fed accounts would put a transaction
+from one account's CSV into the other account, breaking its watermark (rows before the
+transfer date skipped) and double-writing the other side's row. Each side therefore imports
+its own leg against a single transfer clearing account; the legs net it to zero.

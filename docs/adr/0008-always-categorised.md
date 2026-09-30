@@ -14,3 +14,8 @@ of placeholder postings. Reversing this later would require a catch-all concept,
 and a categorise flow, but no data migration.
 
 Status: accepted.
+
+Amendment (2026-09-30): "categorised" means the counterpart is a category **or** another
+account. A **transfer** (to savings, card payoff) picks an asset/liability account in the
+category picker; an **opening balance** posts against `equity:opening-balances`. Forcing
+either into a category would distort net income.

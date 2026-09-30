@@ -157,7 +157,7 @@ The `internal/journal` adapter is a **targeted line-oriented reader/writer, not 
   `tsourcepos` = the `~` line). No command lists the rules. konto reads the `~` line +
   indented postings + trailing comment/tags from journal text. Dates are never computed
   from this text — see §4.8.
-- **`account` directives and their tags** — the `konto:source:manual|import` tag
+- **`account` directives and their tags** — the `konto:source:manual|import|clearing` tag
   (§7), the `konto:closed:<date>` tag (§5.3) and the `konto:format:<bank>` /
   `konto:iban:<IBAN>` tags (§4.9). `accounts --directives` drops tags; the tag *does* inherit onto that account's
   postings in `print -O json`, but text parsing is the primary source.
@@ -189,8 +189,9 @@ understand transactions, amounts, or include resolution.
   calls are sub-100ms for a personal journal.
 - **Refresh triggers**: explicit `r` key; automatically after any konto journal write;
   automatically on return from `$EDITOR`. **No filesystem watcher in v1.**
-- **Granularity**: any journal write → **full `Ledger` refresh**. A `.rules` edit does not
-  touch the journal — it invalidates import-staging state only.
+- **Granularity**: any journal write → **full `Ledger` refresh**. A `categories.rules` change
+  on disk (konto's `w`, or a hand edit + `r`) does not touch the journal — it re-converts a
+  staged import only.
 - **In-flight UI contract**: stale-while-revalidate. The held snapshot always renders; a
   refresh sets an in-flight flag shown as a status-bar spinner; panels never blank. First
   load shows a centred "loading journal…". A failed refresh keeps the stale snapshot.
@@ -200,7 +201,7 @@ understand transactions, amounts, or include resolution.
 | Situation | Behaviour |
 |---|---|
 | `hledger` missing on `PATH`, or version `< 1.32` | **Refuse to start.** Preflight in `main` before the TUI: `exec.LookPath` → `hledger --version` → parse `hledger X.Y(.Z)` → compare. Print problem + minimum to stderr, exit non-zero. Version also stored in `LedgerMeta`. |
-| No journal file configured / file absent | **First-run screen**: shows the resolved path (§7.1); `y` creates the skeleton there (parent dirs too), `n` quits. No path input — another location is chosen via `$LEDGER_FILE` / `--file` (no config file). Skeleton: `decimal-mark ,`, `commodity 1.000,00 EUR`, `account equity:opening-balances`, `tag konto:source` / `konto:iban` / `konto:format` / `konto:closed` / `konto-rule`; plus an empty `categories.rules` beside it. Check-clean from the first write. |
+| No journal file configured / file absent | **First-run screen**: shows the resolved path (§7.1); `y` creates the skeleton there (parent dirs too), `n` quits. No path input — another location is chosen via `$LEDGER_FILE` / `--file` (no config file). Skeleton: `decimal-mark ,`, `commodity 1.000,00 EUR`, `account equity:opening-balances`, `account assets:transfers  ; konto:source:clearing` (transfer clearing account), `tag konto:source` / `konto:iban` / `konto:format` / `konto:closed` / `konto-rule`; plus an empty `categories.rules` beside it. Check-clean from the first write. |
 | Journal exists but `hledger` cannot parse it | Show the parse error as a top-severity `CheckIssue`; offer jump-to-`$EDITOR`; do not enter the normal views until it parses. |
 | Runtime `hledger` call fails / unparseable output | Keep the last good `Ledger`; error indicator in the status bar + detail in the `!` panel; never crash. |
 
@@ -259,12 +260,16 @@ jump-to-location — its only use in v1 (no `e`-to-editor on list views, ADR 001
 
 - **hledger converts, konto owns the rest.** `hledger print -f <csv> --rules-file <tmp>
   -O json`, where `<tmp>` `include`s the embedded bank format (`go:embed`) +
-  `categories.rules` (one shared file next to the journal) and sets `account1`. No
-  `hledger import`, no `.latest`.
+  `categories.rules` (one shared file next to the journal) + the **staged** rules and sets
+  `account1`. No `hledger import`, no `.latest`.
+- **Staged import**: everything the flow creates — new account, new categories, new/widened
+  rules, row categorisations — is held in memory and written as **one unit on `w`** (one
+  y/n, one check run). Nothing touches disk before `w`. Each staged-rule change re-converts
+  the CSV through the temp rules file, so hledger still applies all rules.
 - **Flow**: filepicker (XDG Downloads, `.csv`) → account detected by IBAN from the preamble
   (`konto:iban:<IBAN>`; unknown IBAN → **create account**: suggested, editable name,
   `uniqueleafnames`-checked, `account` directive with `konto:source:import`, `konto:iban:`,
-  `konto:format:<bank>` written to the main journal; no attach-to-existing, ADR 0010) → row table (`✓` rule id / `?`) + skipped list →
+  `konto:format:<bank>`, staged for the main journal; no attach-to-existing, ADR 0010) → row table (`✓` rule id / `?`) + skipped list →
   categorise → Enter.
 - **Dedup**: journal is the watermark — D = the account's latest transaction date; `< D`
   skipped, `> D` new, `= D` compared by date+amount+description as a multiset.
@@ -272,19 +277,24 @@ jump-to-location — its only use in v1 (no `e`-to-editor on list views, ADR 001
   live count) / add to existing rule (appends an OR matcher line) / once. `✓` rows may be
   overridden once. Rules carry `comment konto-rule:<id>`. **Overlapping rules refused**
   (konto matches patterns in Go, case-insensitive, for this check only).
-- **Category picker**: all categories, amount's direction first; "+ create" (prefix from
+- **Category picker**: all categories, amount's direction first, then the other open
+  accounts as **transfer** targets (ADR 0008 amendment) — an import-fed target is replaced by
+  the **transfer clearing account**, so each side imports its own leg and no import-fed
+  account gets a transaction from another account's CSV (keeps ADR 0009's watermark sound); "+ create" (prefix from
   direction, `uniqueleafnames` check, `account` directive).
-- **Write**: only when no `?` rows remain; pre-check journal + candidates via hledger on
+- **Write** (`w`): only when no `?` rows remain; writes the account directive (if new),
+  category directives, `categories.rules` changes and transactions together; pre-check journal + candidates via hledger on
   stdin — a failing `= <balance>` assertion blocks with bank / journal / difference.
   Target file = the account's latest transaction's file (else main journal), date-ordered
   insert, payees declared.
 - **After the write**: status-bar confirmation (`imported N transactions into <account>`),
-  then Import returns to its empty start state (`n` picks the next file). Staged work
-  (categorised, unwritten rows) survives view switches (views stay alive, §6.1); `q` with
-  staged work asks y/n before quitting.
+  then Import returns to its empty start state (`n` picks the next file). The staged import
+  survives view switches (views stay alive, §6.1); `q` with a staged import asks y/n before
+  quitting — discarding it leaves disk untouched.
 - **First import** into an empty account: konto derives an opening balance from the CSV
   (trailer balance − sum of rows), writes it against `equity:opening-balances` with an
-  assertion, dated the day before the oldest row; confirmed in the preview.
+  assertion, dated the day before the oldest row; confirmed in the preview. Written even
+  when it is zero (uniform: every import-fed account starts with one).
 - **Postbank** (only bank at v1): UTF-8+BOM, `;`, `skip 7`, trailer `Kontostand;…` skipped via
   `if ^Kontostand`; `%-d.%-m.%Y`; `decimal-mark ,`; newest first; no pending rows; no
   per-row balance — the trailer is the period-end balance → `=` assertion on the newest
@@ -296,12 +306,17 @@ jump-to-location — its only use in v1 (no `e`-to-editor on list views, ADR 001
 ### 4.10 Forecast (ticket 09, ADR 0007)
 
 - **Current balances + scheduled transactions only.** No averages, no scenarios, no drivers.
-- **One call**: `bal assets liabilities -M -H --layout=bare -b <today−6m>
-  --forecast=<today>..<today+12m> -O json` → month-end balance per account per commodity,
-  history + forecast. konto drops closed accounts, groups by commodity, ignores `Total:`.
+- **Projection starts at each account's watermark** (ADR 0007 amendment), not today:
+  occurrences between the last import and today count, so a stale import doesn't understate
+  the forecast. Import-fed: from watermark + 1 day; manual (no watermark): from today.
+- **One call per account**: `bal <account> -M -H --layout=bare -b <today−6m>
+  --forecast=<start>..<today+12m> -O json` → month-end balance per commodity, history +
+  forecast (one global `--forecast` start would double-count or miss occurrences across
+  accounts with different watermarks). konto drops closed accounts and the clearing account,
+  groups by commodity, ignores `Total:`.
 - **View**: one braille chart per currency, stacked vertically; one line per open
   asset/liability account in that currency; colour per account in fixed order (ANSI
-  2,4,5,6,3,1); legend; dim vertical line where the forecast begins. Below: milestone table
+  2,4,5,6,3,1); legend; dim vertical line at today. Below: milestone table
   (accounts grouped by currency × today/+3/+6/+12 months), no totals.
 
 ---
@@ -346,7 +361,7 @@ Glossary: `CONTEXT.md`. Full type sketch: ticket `03-domain-model-core-types`.
 ### 5.3 Account (ADR 0002)
 
 - **`[]Account` — flat list of postable accounts only.** No parent/aggregation entities.
-- **`Account.Source`** — optional `Manual | Import`, unset = unclassified. **Only
+- **`Account.Source`** — optional `Manual | Import | Clearing`, unset = unclassified. `Clearing` = the one transfer clearing account `assets:transfers`: in net worth and the account list, never closable, never an import target, not forecast. **Only
   `assets:*` / `liabilities:*`** are classified; categories (`expenses:*`, `income:*`) and
   equity never are, never WARN, and are usable from Import (and Entry, once it returns). From the
   `konto:source:` tag on the `account` directive (§4.2).
@@ -393,7 +408,7 @@ The program's single `tea.Model`. Holds:
   tab UI, not a seventh view.
 - the **five view sub-models** (six once Entry returns, ADR 0010), constructed at startup, alive for the whole run. Tab switch
   changes which one renders + receives input; cursor/scroll/draft state survives.
-- **app-global state**: `period`, terminal size, the read-only `*domain.Ledger`, the latest
+- **app-global state**: terminal size, the read-only `*domain.Ledger`, the latest
   `CheckRun`.
 - **chrome**: active view id, tab bar, status bar. **overlay state**: `keysPopupOpen` (`?`),
   `checksPanelOpen` (`!`). No which-key goto, no command line (ADR 0011).
@@ -450,7 +465,7 @@ letter means the same action in every view (`d` = delete, `n` new, `e` edit, `c`
 | Dashboard | Accounts panel: `c` close · `o` reopen |
 | Import | `Enter` categorise row (popup: new rule / add to rule / once — `✓` rows: once only; picked with arrows + Enter) · `w` write import (y/n, only with no `?` rows) · `n` new file |
 | Scheduled | `n` new · `e` edit · `d` delete |
-| Reports | `p` cycle period. Read-only, no cursor; arrows scroll both tables together. |
+| Reports | `p` cycle report period (Reports-local state; Dashboard is always month to date). Read-only, no cursor; arrows scroll both tables together. |
 | `!` panel | arrows select · `Enter` jump to `$EDITOR` |
 
 No panel focus: each view has at most one cursor panel; read-only panels that overflow show
@@ -464,7 +479,7 @@ No panel focus: each view has at most one cursor panel; read-only panels that ov
   spinner / error indicator · check status `● clean` (green) or `● 2 err · 3 warn` (red with
   errors, amber warnings-only) · `? keys`. No mode badge.
 - **Dashboard**: two stat cards — `NET WORTH` (sum of open assets + liabilities) and
-  `<MONTH> CASH FLOW` (calendar month to date, income − expenses from `is`, note
+  `<MONTH> NET INCOME` (calendar month to date, income − expenses from `is`, note
   `<in> in / <out> out`, green/red). Left column: Accounts, full height. Right: Recent
   (newest first, all accounts, not selectable), Upcoming (next occurrences, not selectable),
   monthly spend chart (total `expenses:*` per month, last 6 complete months, one line).
@@ -629,8 +644,9 @@ bar at fixed sizes only, not whole views during active development.
 - **CSV dedup** derives the watermark from the journal (ADR 0009); konto surfaces skipped
   rows as a **list**, not a count.
 - **No overlapping import rules**; a failing import balance assertion blocks the write.
-- On CSV import, konto **writes a `= <balance>` assertion** on the last posting from the
-  bank export's running-balance column — this is the reconciliation mechanism.
+- On CSV import, konto **writes a `= <balance>` assertion** on the account's posting of the
+  newest imported transaction, stating the bank's closing balance for the export (Postbank:
+  the `Kontostand` trailer) — this is the reconciliation mechanism.
 - **Valuation**: not in v1 (EUR-only UI, ADR 0011). When it returns: "at cost" keeps
   multi-commodity totals as multiple amounts; `-V` collapses to one; UI copy explains the
   delta is unrealized FX gain, not spending.
@@ -644,7 +660,8 @@ bar at fixed sizes only, not whole views during active development.
 - UI copy says **"currency"**, never "commodity" (code/domain keep `Commodity`).
 - UI copy says **"category"** for `expenses:*`/`income:*` and **"account"** for
   `assets:*`/`liabilities:*`; code and journal say "account" for both.
-- **Every transaction is categorised** — no catch-all account; import writes only once all
+- **Every transaction is categorised** — or is a transfer (counterpart another account) or an
+  opening balance; no catch-all account; import writes only once all
   rows have a category (no skip); entry (once it returns) requires one (ADR 0008).
 - **Every hledger check passes** after every konto write (§4.6).
 
@@ -675,6 +692,10 @@ The handoff (`design_handoff_hledger_tui/README.md`) is otherwise authoritative.
   stat card (check status lives in the status bar); no Reports drill-in; no `y` export; no
   Recent `e` edit; `!` panel lists issues only (no `OK` rows); Reports period is `p`,
   `quarter` is quarter-to-date, and the income statement has no `% share` column.
+
+- **Glossary** — the handoff's *Cash Flow* stat card is **`<MONTH> NET INCOME`**: it shows
+  income − expenses, which hledger calls net income; hledger's *cashflow* (`cf`, change in
+  cash accounts) is a different figure (CONTEXT.md).
 
 New deviations get an ADR and a line here.
 
