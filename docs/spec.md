@@ -12,7 +12,7 @@ is **deliberately not in this spec** — it is grilled just-in-time as each view
 (§12).
 
 Sources: the wayfinder map and decision tickets under `.scratch/konto-spec/`, `CONTEXT.md`
-(domain glossary), `docs/adr/0001`–`0007`.
+(domain glossary), `docs/adr/0001`–`0008`.
 
 ---
 
@@ -112,7 +112,7 @@ internal/
   periodic/              USE CASE. ~ rule parse/edit/post-occurrence. (ticket 13)
   forecast/              USE CASE. read-only projection. (ticket 09)
   entry/                 USE CASE. draft-entry validation, commit, account classification.
-  config/                config load + path resolution.
+  config/                journal-path resolution (no config file in v1).
 
   ui/                    ui.go = root model, tab chrome, app-level keymap dispatch, wiring.
     theme/               ANSI-16 palette → named lipgloss.Style values.
@@ -215,9 +215,13 @@ severities**. konto:
   prefix). Each check contributes 0 or 1 issue → the panel shows ≤ ~10 rows.
 - **Fix-one → refresh → next-instance-appears** is the working loop (hledger cannot do
   better). Document this in-app.
-- Check set: basic (`parseable`, `autobalanced`, `assertions`) always; strict (`balanced`,
-  `commodities`, `accounts`) default on; opt-in (`ordereddates`, `uniqueleafnames`, `tags`,
-  `recentassertions`) default off. The on/off config is deferred (ticket 15).
+- Check set: **every hledger check, always, not configurable** (ticket 15) — basic
+  (`parseable`, `autobalanced`, `assertions`), strict (`balanced`, `commodities`,
+  `accounts`), plus `ordereddates`, `tags`, `payees`, `recentassertions`, `uniqueleafnames`.
+- konto's own writes must pass them: insert transactions at their **date position** in the
+  file (not append); auto-declare konto's tags (`tag konto:source`, …), each new payee, and
+  new categories/accounts; refuse a new name whose last part already exists
+  (`uniqueleafnames`). `recentassertions` is satisfied by import's `=` assertion.
 - konto's own checks (unclassified account, and future ones) run in Go over the `Ledger` and
   **enumerate fully**.
 - Severity assigned by check name (§7 `CheckIssue`).
@@ -284,8 +288,8 @@ Glossary: `CONTEXT.md`. Full type sketch: ticket `03-domain-model-core-types`.
 ### 5.2 Entities (mapped from hledger by the adapter)
 
 - **`Transaction`** `{Index, Date, Status, Code, Description, Comment, Tags, Source
-  SourcePos, Postings []Posting, Uncategorized bool}`. `SourcePos{File, Line}` for
-  jump-to-`$EDITOR`. `Uncategorized` is computed.
+  SourcePos, Postings []Posting}`. `SourcePos{File, Line}` for jump-to-`$EDITOR`. No
+  `Uncategorized` — every transaction is categorised (ADR 0008).
 - **`Posting`** `{Account, Amounts MultiAmount, BalanceAssertion *Assertion, Status,
   Comment, Tags, Type}` (`Type` = Regular/Virtual/BalancedVirtual).
 - **`Assertion`** `{Amount, Inclusive bool, Total bool, Pos SourcePos}`.
@@ -296,8 +300,8 @@ Glossary: `CONTEXT.md`. Full type sketch: ticket `03-domain-model-core-types`.
 - **`CheckIssue`** `{Check string, Severity ERR|WARN, Message, File string, Line, Col int}`.
   `CheckRun` aggregates issues + clean/dirty for the `● clean` indicator. Severity by check
   name: `parseable`/`autobalanced`/`assertions`/`balanced` = ERR; `commodities`/`accounts`/
-  `ordereddates`/`uniqueleafnames`/`tags`/`recentassertions` + konto's unclassified-account
-  check = WARN.
+  `ordereddates`/`uniqueleafnames`/`tags`/`payees`/`recentassertions` + konto's
+  unclassified-account check = WARN.
 - **`ReportTable`** `{Rows []ReportRow}` where `ReportRow{Kind, Label, Depth, Amounts
   []MultiAmount, Delta *MultiAmount, Share *float64}`, `Kind ∈ {SectionHeader, Leaf,
   NegativeLeaf, Subtotal, GrandTotal}` computed from structure + sign.
@@ -424,22 +428,24 @@ the load result.
 
 ## 7. Configuration & theming
 
-Ticket `10-config-and-theming` (partial — build-critical only). Remaining config: ticket 15.
+Tickets 10 and 15. **konto has no config file and no state file in v1** — every candidate
+setting was either fixed or moved into the journal as an `account`-directive tag.
 
 ### 7.1 Journal path (`internal/config`)
 
-Order: `--file` flag → `$LEDGER_FILE` → (future config `journal` key) → `~/.hledger.journal`.
+Order: `--file` flag → `$LEDGER_FILE` → `~/.hledger.journal`.
 Resolve to an **absolute path at startup**; pass `-f <path>` explicitly on every hledger
 call. Nothing resolves to an existing file → first-run screen (§4.5).
 
-For v1, `internal/config` only does this. A config file is introduced when the first real
-setting needs one (ticket 15: file format/location, check on/off set, catch-all account
-name for `Uncategorized`, import source dirs).
+`internal/config` only does this. Journal-intrinsic settings are `account` tags (§4.2);
+the check set is fixed (§4.6); CSV files are chosen with the Bubbles `filepicker` opening in
+the XDG download directory (no remembered directory). A config file is added only when a
+real user setting appears.
 
 ### 7.2 ANSI-16 palette (`internal/ui/theme`, ADR 0005)
 
 `lipgloss.Color("N")`, never hex — the TUI inherits the terminal theme. Fixed map, not
-user-remappable in v1:
+user-remappable (no override planned — the terminal theme is the colour knob):
 
 | role | ANSI |
 |---|---|
@@ -523,6 +529,11 @@ bar at fixed sizes only, not whole views during active development.
 - **Closed accounts** are visible only in the account overview; closing requires zero
   balance and no referencing `~` rule.
 - UI copy says **"currency"**, never "commodity" (code/domain keep `Commodity`).
+- UI copy says **"category"** for `expenses:*`/`income:*` and **"account"** for
+  `assets:*`/`liabilities:*`; code and journal say "account" for both.
+- **Every transaction is categorised** — no catch-all account; import writes only once all
+  rows have a category (no skip); entry requires one (ADR 0008).
+- **Every hledger check passes** after every konto write (§4.6).
 
 ---
 
@@ -539,6 +550,8 @@ The handoff (`design_handoff_hledger_tui/README.md`) is otherwise authoritative.
 - **ADR 0007** — the **Forecast view has no scenarios, no drivers panel, no projection
   table, no averages**; it shows one chart per currency (line per account) plus a milestone
   table.
+- **ADR 0008** — **no `?` uncategorised marker and no `c` categorise key** on the Dashboard;
+  transactions cannot be uncategorised.
 
 New deviations get an ADR and a line here.
 
@@ -553,7 +566,6 @@ grilled immediately before the `tdd-loop` pass for its view:
 |---|---|---|
 | Responsive layout helper shape | 07 | done *in* the shell build; also runs the ntcharts/v2 check |
 | CSV import subsystem (Postbank + format-extensible) | 08 | **14** — user provides real Postbank CSV exports into `.scratch/konto-spec/samples/` |
-| Config file format + remaining settings | 15 | — |
 
 ---
 

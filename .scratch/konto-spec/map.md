@@ -136,7 +136,8 @@ their views land.
 
 - **Per-view build + JIT design** — each of the six views is built in its own `tdd-loop`
   pass; the views with real subsystem logic carry a grilling ticket done just before that
-  pass: Import (08, needs 14). Scheduled (13) and Forecast (09) resolved 2026-09-30. Dashboard, Entry, Reports have
+  pass: Import (08, needs 14). Scheduled (13), Forecast (09) and config (15) resolved
+  2026-09-30. Dashboard, Entry, Reports have
   no open design ticket — grill inline if a question surfaces during the build.
 - **Journal write targets** — write *mechanism* is settled (`internal/journal` owns
   line-oriented mutation; full `Ledger` refresh after each write). Still dim: *which* file

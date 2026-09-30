@@ -23,7 +23,14 @@ authoritative store; konto reads it through `hledger` and writes to it directly 
 **Account**:
 A postable hledger account, identified by its full colon-separated name. konto holds
 accounts as a flat list and does not model parent or aggregation accounts as entities.
-_Avoid_: Category, Ledger account
+In UI copy, "account" means only `assets:*` / `liabilities:*` (real money places).
+_Avoid_: Ledger account
+
+**Category**:
+UI word for an `expenses:*` / `income:*` account — what money was spent on or came from.
+In code and the journal it is an `Account`. Every transaction has one; there is no
+catch-all or "uncategorized" (ADR 0008).
+_Avoid_: Catch-all, Uncategorized
 
 **Account source**:
 Whether an account's entries come from manual entry (`Manual`) or CSV import (`Import`).
@@ -82,9 +89,6 @@ An `= <amount>` claim that an account's balance equals a known figure at that po
 writes one on the last posting of each imported transaction, from the bank's running-balance
 column.
 
-**Uncategorized transaction**:
-A transaction konto flags as needing attention — a posting still lands in a catch-all
-account, or the importer matched no rule. Shown with a `?` marker.
 
 ## Periodic transactions
 
