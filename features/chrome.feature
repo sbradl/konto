@@ -6,13 +6,11 @@ Feature: Chrome, navigation and global keys
     And the terminal is 120×40
     And I start konto
 
-  @wip
   Scenario: tab bar
     Then the tab bar reads " 1 dash │ 2 import │ 3 sched │ 4 forecast │ 5 reports "
     And the tab bar shows the journal path and "54" transactions on the right
     And the tab bar does not show a check status
 
-  @wip
   Scenario Outline: number keys switch views
     When I press "<key>"
     Then the active tab is "<tab>"
@@ -26,12 +24,10 @@ Feature: Chrome, navigation and global keys
       | 4   | forecast | forecast |
       | 5   | reports  | reports  |
 
-  @wip
   Scenario: there is no sixth view
     When I press "6"
     Then the active tab is unchanged
 
-  @wip
   Scenario Outline: vim-style and dropped chrome is unbound
     When I press "<key>"
     Then the screen is unchanged
@@ -75,7 +71,6 @@ Feature: Chrome, navigation and global keys
 
   Rule: Every key press is a real key, not a substring match
 
-    @wip
     Scenario Outline: modified keys do not trigger plain-letter actions
       When I press "<chord>"
       Then the screen is unchanged
@@ -88,7 +83,6 @@ Feature: Chrome, navigation and global keys
         | Ctrl+q  |
         | Shift+q |
 
-    @wip
     Scenario: unknown keys are ignored
       When I press "F5"
       And I press "Insert"
@@ -169,7 +163,6 @@ Feature: Chrome, navigation and global keys
 
   Rule: Quit
 
-    @wip
     Scenario Outline: quit keys
       When I press "<key>"
       Then konto exits with code 0

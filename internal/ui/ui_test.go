@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os/exec"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -14,6 +15,7 @@ import (
 
 	"github.com/sbradl/konto/internal/domain"
 	"github.com/sbradl/konto/internal/ledger"
+	"github.com/sbradl/konto/internal/ui/theme"
 )
 
 const journalPath = "/data/household.journal"
@@ -82,9 +84,19 @@ func started(t *testing.T, loader fakeLoader) Model {
 	return updated.(Model)
 }
 
+var escapes = regexp.MustCompile(`\x1b\[[0-9;:]*m`)
+
+// plain is s as the terminal shows it, without styling.
+func plain(s string) string { return escapes.ReplaceAllString(s, "") }
+
 func firstLine(m Model) string {
-	first, _, _ := strings.Cut(m.View().Content, "\n")
+	first, _, _ := strings.Cut(plain(m.View().Content), "\n")
 	return first
+}
+
+func lastLine(m Model) string {
+	lines := strings.Split(plain(m.View().Content), "\n")
+	return lines[len(lines)-1]
 }
 
 // Until the journal has loaded, konto says so instead of showing empty chrome.
@@ -183,7 +195,7 @@ func TestTabBarKeepsTabsAndPathApartWhenPathIsLong(t *testing.T) {
 	updated, _ := model.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	updated, _ = updated.Update(model.Init()())
 
-	first, _, _ := strings.Cut(updated.View().Content, "\n")
+	first, _, _ := strings.Cut(plain(updated.View().Content), "\n")
 
 	if !strings.Contains(first, "5 reports "+long) {
 		t.Errorf("tabs and path should be separated by a space, got %q", first)
@@ -441,5 +453,83 @@ func TestGrowingTheTerminalRecovers(t *testing.T) {
 
 	if !strings.Contains(model.View().Content, "1 dash") {
 		t.Errorf("content = %q, want the tab bar again", model.View().Content)
+	}
+}
+
+// The status bar names the active view; number keys 1–5 switch between them.
+func TestNumberKeysSwitchViews(t *testing.T) {
+	model := started(t, fakeLoader{})
+	if got := lastLine(model); !strings.HasPrefix(strings.TrimSpace(got), "dash") {
+		t.Fatalf("status bar = %q, want it to start with the dashboard", got)
+	}
+	model, _ = press(model, "3") // every key must switch from another view, including 1
+
+	for key, view := range map[string]string{"1": "dash", "2": "import", "3": "sched", "4": "forecast", "5": "reports"} {
+		switched, _ := press(model, key)
+
+		if got := lastLine(switched); !strings.HasPrefix(strings.TrimSpace(got), view) {
+			t.Errorf("after %s the status bar = %q, want it to start with %q", key, got, view)
+		}
+	}
+}
+
+// The active tab is drawn selected; the others are not.
+func TestActiveTabIsSelected(t *testing.T) {
+	model, _ := press(started(t, fakeLoader{}), "3")
+
+	content := model.View().Content
+
+	if !strings.Contains(content, theme.Selected.Render(" 3 sched ")) {
+		t.Errorf("tab 3 should be selected, got %q", content)
+	}
+	if strings.Contains(content, theme.Selected.Render(" 1 dash ")) {
+		t.Errorf("tab 1 should no longer be selected, got %q", content)
+	}
+}
+
+// There is no sixth view, and other keys switch nothing.
+func TestOtherKeysDoNotSwitchViews(t *testing.T) {
+	model, _ := press(started(t, fakeLoader{}), "3")
+
+	for _, key := range []string{"6", "0", "x"} {
+		unchanged, _ := press(model, key)
+
+		if got := lastLine(unchanged); !strings.HasPrefix(strings.TrimSpace(got), "sched") {
+			t.Errorf("%s changed the view: status bar = %q", key, got)
+		}
+	}
+}
+
+// Number keys mean nothing until there are views to switch between.
+func TestNumberKeysDoNothingOnTheFirstRunScreen(t *testing.T) {
+	model := firstRunModel(t, &fakeCreator{})
+	before := model.View().Content
+
+	after, _ := press(model, "2")
+
+	if after.View().Content != before {
+		t.Error("2 should not change the first-run screen")
+	}
+}
+
+// The screen has exactly the terminal's height: tab bar on top, status bar at the bottom,
+// a rule between the tab bar and the view.
+func TestLayoutFillsTheTerminal(t *testing.T) {
+	lines := strings.Split(plain(started(t, fakeLoader{}).View().Content), "\n")
+
+	if len(lines) != 40 {
+		t.Fatalf("screen has %d lines, want 40", len(lines))
+	}
+	if want := strings.Repeat("─", 120); lines[1] != want {
+		t.Errorf("line 1 = %q, want a full-width rule", lines[1])
+	}
+}
+
+// Only Enter means something on the parse-error screen.
+func TestOtherKeysDoNothingOnTheParseErrorScreen(t *testing.T) {
+	var calls []editorCall
+
+	if _, cmd := press(parseErrorModel(t, &calls), "x"); cmd != nil || len(calls) != 0 {
+		t.Errorf("x should do nothing (cmd=%v, calls=%v)", cmd != nil, calls)
 	}
 }

@@ -90,6 +90,7 @@ const (
 func (w *world) markBaseline(stepType string) {
 	if stepType == actionStep && w.lastStepType != actionStep && w.s != nil {
 		w.baseline = w.s.screenText()
+		w.tabAtBaseline, _ = w.activeTab()
 	}
 	w.lastStepType = stepType
 }

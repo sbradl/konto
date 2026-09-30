@@ -140,6 +140,7 @@ type world struct {
 	journalAtStart []byte
 	rulesAtStart   []byte
 	baseline       string
+	tabAtBaseline  string
 	lastStepType   string
 }
 

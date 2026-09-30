@@ -5,12 +5,10 @@ package ui
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os/exec"
-	"strings"
+	"strconv"
 
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 
 	"github.com/sbradl/konto/internal/domain"
 	"github.com/sbradl/konto/internal/ledger"
@@ -22,7 +20,13 @@ const (
 	minHeight = 30
 )
 
-const tabs = " 1 dash │ 2 import │ 3 sched │ 4 forecast │ 5 reports "
+// tabCount is the number of v1 views.
+const tabCount = 5
+
+// tabNames are the five v1 views, in tab order; number key i+1 selects tab i.
+func tabNames() [tabCount]string {
+	return [tabCount]string{"dash", "import", "sched", "forecast", "reports"}
+}
 
 type ledgerLoader interface {
 	Load(ctx context.Context) (domain.Ledger, error)
@@ -49,6 +53,7 @@ type Model struct {
 	editor      func(file string, line int) *exec.Cmd
 	ledger      *domain.Ledger
 	loadErr     error
+	active      int // index into tabNames
 	firstRun    bool
 	parseIssue  *domain.CheckIssue
 	createErr   error
@@ -101,34 +106,54 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.load
 	}
 	if key, ok := msg.(tea.KeyPressMsg); ok {
-		return m, m.onKey(key)
+		return m.onKey(key)
 	}
 	return m, nil
 }
 
-func (m Model) onKey(key tea.KeyPressMsg) tea.Cmd {
+func (m Model) onKey(key tea.KeyPressMsg) (Model, tea.Cmd) {
 	switch key.String() {
 	case "q", "ctrl+c":
-		return tea.Quit
+		return m, tea.Quit
 	}
 	if m.tooSmall() {
-		return nil
+		return m, nil
 	}
-	switch key.String() {
+	if m.firstRun {
+		return m, m.onFirstRunKey(key.String())
+	}
+	if m.parseIssue != nil {
+		return m, m.onParseErrorKey(key.String())
+	}
+	if m.ledger != nil {
+		return m.onViewKey(key.String()), nil
+	}
+	return m, nil
+}
+
+func (m Model) onFirstRunKey(key string) tea.Cmd {
+	switch key {
 	case "y":
-		if m.firstRun {
-			return m.create
-		}
+		return m.create
 	case "n":
-		if m.firstRun {
-			return tea.Quit
-		}
-	case "enter":
-		if m.parseIssue != nil {
-			return m.openEditor(*m.parseIssue)
-		}
+		return tea.Quit
 	}
 	return nil
+}
+
+func (m Model) onParseErrorKey(key string) tea.Cmd {
+	if key == "enter" {
+		return m.openEditor(*m.parseIssue)
+	}
+	return nil
+}
+
+// onViewKey handles the global keys of the normal views: 1–5 switch the view.
+func (m Model) onViewKey(key string) Model {
+	if number, err := strconv.Atoi(key); err == nil && number >= 1 && number <= tabCount {
+		m.active = number - 1
+	}
+	return m
 }
 
 // openEditor suspends konto while the user's editor shows the issue.
@@ -138,74 +163,3 @@ func (m Model) openEditor(issue domain.CheckIssue) tea.Cmd {
 
 // editorClosed turns the editor's exit, however it went, into a reload request.
 func editorClosed(error) tea.Msg { return editorClosedMsg{} }
-
-// View renders the tab bar.
-func (m Model) View() tea.View {
-	view := tea.NewView(m.content())
-	view.AltScreen = true
-	return view
-}
-
-// tooSmall reports a terminal below the floor; before the first size report
-// there is nothing to judge.
-func (m Model) tooSmall() bool {
-	return m.width > 0 && (m.width < minWidth || m.height < minHeight)
-}
-
-func (m Model) content() string {
-	if m.tooSmall() {
-		return m.centred(fmt.Sprintf(
-			"terminal too small — need ≥%d×%d, have %d×%d", minWidth, minHeight, m.width, m.height))
-	}
-	if m.firstRun {
-		return m.centred(m.firstRunText())
-	}
-	if m.parseIssue != nil {
-		return m.centred(parseErrorText(*m.parseIssue))
-	}
-	if m.ledger == nil {
-		return m.centred("loading journal…")
-	}
-	if m.loadErr != nil {
-		return m.tabBar() + "\n" + m.loadErr.Error()
-	}
-	return m.tabBar()
-}
-
-func (m Model) firstRunText() string {
-	text := "No journal found at " + m.journalPath + "\n\ny to create it · n to quit"
-	if m.createErr != nil {
-		text += "\n\n" + m.createErr.Error()
-	}
-	return text
-}
-
-func (m Model) centred(text string) string {
-	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, text)
-}
-
-// tabBar puts the tabs on the left and the journal path, with the
-// transaction count once loaded, at the right edge.
-func (m Model) tabBar() string {
-	info := m.journalPath
-	if m.ledger != nil {
-		info += fmt.Sprintf(" · %d txns", m.ledger.TransactionCount())
-	}
-	info += " "
-	gap := max(0, m.width-lipgloss.Width(tabs)-lipgloss.Width(info))
-	return tabs + strings.Repeat(" ", gap) + info
-}
-
-// issueOf is the located journal issue behind err, if there is one.
-func issueOf(err error) *domain.CheckIssue {
-	var journalErr domain.JournalError
-	if !errors.As(err, &journalErr) {
-		return nil
-	}
-	return &journalErr.Issue
-}
-
-func parseErrorText(issue domain.CheckIssue) string {
-	return issue.Severity.String() + " " + issue.Check + "  " + issue.Location() + "\n\n" +
-		issue.Message + "\n\nEnter to jump to the editor · q to quit"
-}

@@ -220,6 +220,21 @@ func (s *session) cellColour(x, y int) int {
 	return -1
 }
 
+// cellBackground is the background of the cell at column x of row y as an
+// ANSI-16 index, or -1 when the cell has no ANSI-16 background.
+func (s *session) cellBackground(x, y int) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c := s.term.CellAt(x, y)
+	if c == nil {
+		return -1
+	}
+	if bc, ok := c.Style.Bg.(ansi.BasicColor); ok {
+		return int(bc)
+	}
+	return -1
+}
+
 // find returns the cell position of the first occurrence of text on screen.
 func (s *session) find(text string) (x, y int, ok bool) {
 	for y, line := range s.screenLines() {
