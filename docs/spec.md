@@ -6,12 +6,13 @@ session needs before writing code. It does not restate the UX — that lives in
 [`design_handoff_hledger_tui/README.md`](design_handoff_hledger_tui/README.md), which is
 authoritative and frozen (except the deviations in §11).
 
-Per-feature design (CSV import, forecast, periodic transactions, responsive-layout details)
+Per-feature design (CSV import, forecast, responsive-layout details; periodic rules resolved
+into §4.8)
 is **deliberately not in this spec** — it is grilled just-in-time as each view is built
 (§12).
 
 Sources: the wayfinder map and decision tickets under `.scratch/konto-spec/`, `CONTEXT.md`
-(domain glossary), `docs/adr/0001`–`0005`.
+(domain glossary), `docs/adr/0001`–`0006`.
 
 ---
 
@@ -156,14 +157,15 @@ The `internal/journal` adapter is a **targeted line-oriented reader/writer, not 
 - **`~` periodic-rule blocks** — `print` drops `~` rules entirely; `print --forecast`
   expands them (generated txns tagged `_generated-transaction`, value = interval text,
   `tsourcepos` = the `~` line). No command lists the rules. konto reads the `~` line +
-  indented postings + trailing comment/tags from journal text.
+  indented postings + trailing comment/tags from journal text. Dates are never computed
+  from this text — see §4.8.
 - **`account` directives and their tags** — the `konto:source:manual|import` tag
   (§7). `accounts --directives` drops tags; the tag *does* inherit onto that account's
   postings in `print -O json`, but text parsing is the primary source.
 - **`.latest.<file>` watermark files** — read and write (hledger's dedup convention;
   ticket 08).
 - **Writes**: append a new transaction, add/modify an `account`-directive tag (creating the
-  directive if absent), append a posted occurrence, toggle a `~` rule's pause state, write
+  directive if absent), append / replace-in-place / delete a `~` rule block (§4.8), write
   `.rules` blocks.
 
 It gets the include-set file list from `hledger files` and works per file. It never needs to
@@ -226,6 +228,29 @@ severities**. konto:
 default with `+<line> <file>`, resumes, then fires a full refresh. Used by the `!` panel's
 jump-to-location and the `e` edit key on list views.
 
+### 4.8 Periodic rules (ticket 13, ADR 0006)
+
+- **Forecast-only.** konto never writes an occurrence; no Enter-to-post, no pause.
+- **Dates from hledger only**: one `print --forecast=<today>..<today+1y> -O json`, generated
+  txns grouped by `tsourcepos` (the `~` line) → next date, next 6 occurrences, 12-month sum.
+  `--forecast=PERIOD` must be explicit (default horizon starts after the latest regular
+  transaction, not today). Status = upcoming / none in the next 12 months. Cadence column =
+  raw period expression.
+- **Form** (`n`, `e`): next due date, frequency dropdown (`weekly`/`biweekly`/`monthly`/
+  `quarterly`/`half-yearly`→`every 6 months`/`yearly`), optional remaining-payment count,
+  description, amount + currency (declared commodities), from/to account (existing only).
+  Writes `~ <freq> from <date>[ to <end>]  <desc>` + two postings, amount on the first.
+  Count → `to <N-th occurrence + 1 day>`, N-th date obtained by piping the candidate rule to
+  `hledger -f - print --forecast=…`.
+- **`e`** only on rules that fit the form (that expression shape, 2 postings, one
+  single-commodity amount without `@`/`=`, no comments/tags); otherwise refused. Save
+  replaces the block in place.
+- **`n`** appends to the file of the last existing `~` rule, else the main journal.
+- **`x`** deletes any rule after y/n: the `~` line + its indented lines; comments above stay.
+- **Write safety**: full reload after every write; single-instance `flock` on a lock file
+  next to the journal at startup (a second konto refuses to start). No compare-before-write.
+- Annual-impact total follows `v` (per currency at cost / EUR at market via `-V`).
+
 ---
 
 ## 5. Domain model
@@ -253,7 +278,9 @@ Glossary: `CONTEXT.md`. Full type sketch: ticket `03-domain-model-core-types`.
   Comment, Tags, Type}` (`Type` = Regular/Virtual/BalancedVirtual).
 - **`Assertion`** `{Amount, Inclusive bool, Total bool, Pos SourcePos}`.
 - **`PriceDirective`** `{Date, From Commodity, Price Amount}` (from `hledger prices` text).
-- **`PeriodicRule`** — named only; fields, pause mechanism, write path are ticket 13.
+- **`PeriodicRule`** `{Period string (raw expression), Description, Postings []Posting,
+  Raw string (block text), Pos SourcePos, FitsForm bool}`. `FitsForm` is computed (§4.8).
+  Occurrences / annual impact are joined from the forecast call, not stored on the rule.
 - **`CheckIssue`** `{Check string, Severity ERR|WARN, Message, File string, Line, Col int}`.
   `CheckRun` aggregates issues + clean/dirty for the `● clean` indicator. Severity by check
   name: `parseable`/`autobalanced`/`assertions`/`balanced` = ERR; `commodities`/`accounts`/
@@ -476,6 +503,8 @@ bar at fixed sizes only, not whole views during active development.
 - All layout is **responsive to `tea.WindowSizeMsg`**, recomputed from real terminal
   columns/rows — never hardcoded to the mock's 180×60.
 - Colours are **ANSI indices, never hex**.
+- **Periodic rules never post** — they are forecast inputs only (ADR 0006).
+- UI copy says **"currency"**, never "commodity" (code/domain keep `Commodity`).
 
 ---
 
@@ -486,6 +515,9 @@ The handoff (`design_handoff_hledger_tui/README.md`) is otherwise authoritative.
 - **ADR 0002** — the Dashboard **Accounts panel is a flat, non-indented list** (full account
   names + balance + source glyph). No account tree, no parent/header rows, no subtotals.
   Balance sheet / income statement hierarchies are unaffected.
+- **ADR 0006** — the **Scheduled view has no Enter-to-post and no `p` pause**; periodic rules
+  are forecast-only. `n`/`e` use an in-TUI form (not free text); cadence shows the raw
+  period expression, not plain English.
 
 New deviations get an ADR and a line here.
 
@@ -501,7 +533,6 @@ grilled immediately before the `tdd-loop` pass for its view:
 | Responsive layout helper shape | 07 | done *in* the shell build; also runs the ntcharts/v2 check |
 | CSV import subsystem (Postbank + format-extensible) | 08 | **14** — user provides real Postbank CSV exports into `.scratch/konto-spec/samples/` |
 | Forecast computation (trailing averages, scenarios, drivers) | 09 | — |
-| Periodic transaction subsystem (`~` parse/edit, pause, post-occurrence) | 13 | — |
 | Config file format + remaining settings | 15 | — |
 
 ---

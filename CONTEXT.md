@@ -51,6 +51,7 @@ _Avoid_: Balance (may be a single amount or a multi-amount)
 **Commodity**:
 A currency or unit symbol together with its declared display style — symbol side, spacing,
 decimal mark, digit grouping, precision.
+UI copy calls it **currency**; "commodity" stays in code and docs.
 
 **Valuation mode**:
 Whether amounts show in their original commodity (`Native`, "at cost") or all converted to
@@ -84,8 +85,8 @@ account, or the importer matched no rule. Shown with a `?` marker.
 
 **Periodic rule**:
 A `~` rule in the journal describing a recurring transaction (rent, salary). hledger has no
-command to list these; konto parses them from journal text. Never posts on its own — it
-generates projected occurrences until one is committed.
+command to list these; konto parses them from journal text. Forecast-only: it generates
+projected occurrences (via hledger) and never posts into the journal.
 _Avoid_: Scheduled transaction, Recurring transaction, Template
 
 ## Import

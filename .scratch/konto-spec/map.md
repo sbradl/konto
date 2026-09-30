@@ -136,13 +136,13 @@ their views land.
 
 - **Per-view build + JIT design** — each of the six views is built in its own `tdd-loop`
   pass; the views with real subsystem logic carry a grilling ticket done just before that
-  pass: Import (08, needs 14), Forecast (09), Scheduled (13). Dashboard, Entry, Reports have
+  pass: Import (08, needs 14), Forecast (09). Scheduled (13) resolved 2026-09-30. Dashboard, Entry, Reports have
   no open design ticket — grill inline if a question surfaces during the build.
 - **Journal write targets** — write *mechanism* is settled (`internal/journal` owns
   line-oriented mutation; full `Ledger` refresh after each write). Still dim: *which* file
   in an include chain each construct is appended to, and the Entry-view commit specifics.
-  Post-occurrence writes are owned by *Periodic transaction subsystem design*; the Entry
-  commit path graduates when the Entry view is built.
+  Periodic rules never post (ticket 13, ADR 0006); the Entry commit path graduates when
+  the Entry view is built.
 - **`CMDS` / `HINTS` tables** — transcribe the mock's inline-JS command list and per-view
   hint strings into the `internal/ui/keys` structures (shape decided in ticket 05); a
   mechanical build task, not a decision.
