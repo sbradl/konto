@@ -63,6 +63,11 @@ their views land.
   accounts are created by **first import** (unknown IBAN → create, directive in main
   journal; no attach-to-existing). Future Entry commit target = file of the account's
   latest transaction, else main journal, date-ordered. Spec §4.9, §5.3, §11.
+- *First-run skeleton + account closing* (grilled inline 2026-09-30) — skeleton only at the
+  resolved path (`y`/`n`), EUR + `decimal-mark ,` + equity + konto tag declarations +
+  empty `categories.rules`. Dashboard Accounts: `c` close / `o` reopen, both y/n; closed
+  accounts dimmed at bottom, import into one refused. Key principle: first letter of the
+  action (Scheduled `x` → `d`). Spec §4.5, §5.3, §6.4.
 
 - [Responsive layout strategy](issues/07-responsive-layout-strategy.md) — floor ≈100×30
   (too-small screen below); **priority drop** (shrink to mins, then hide low-priority

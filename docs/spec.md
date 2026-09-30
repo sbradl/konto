@@ -200,7 +200,7 @@ understand transactions, amounts, or include resolution.
 | Situation | Behaviour |
 |---|---|
 | `hledger` missing on `PATH`, or version `< 1.32` | **Refuse to start.** Preflight in `main` before the TUI: `exec.LookPath` → `hledger --version` → parse `hledger X.Y(.Z)` → compare. Print problem + minimum to stderr, exit non-zero. Version also stored in `LedgerMeta`. |
-| No journal file configured / file absent | **First-run screen** offering to create a minimal skeleton journal at a chosen path. |
+| No journal file configured / file absent | **First-run screen**: shows the resolved path (§7.1); `y` creates the skeleton there (parent dirs too), `n` quits. No path input — another location is chosen via `$LEDGER_FILE` / `--file` (no config file). Skeleton: `decimal-mark ,`, `commodity 1.000,00 EUR`, `account equity:opening-balances`, `tag konto:source` / `konto:iban` / `konto:format` / `konto:closed` / `konto-rule`; plus an empty `categories.rules` beside it. Check-clean from the first write. |
 | Journal exists but `hledger` cannot parse it | Show the parse error as a top-severity `CheckIssue`; offer jump-to-`$EDITOR`; do not enter the normal views until it parses. |
 | Runtime `hledger` call fails / unparseable output | Keep the last good `Ledger`; error indicator in the status bar + detail in the `!` panel; never crash. |
 
@@ -250,7 +250,7 @@ jump-to-location and the `e` edit key on list views.
   single-commodity amount without `@`/`=`, no comments/tags); otherwise refused. Save
   replaces the block in place.
 - **`n`** appends to the file of the last existing `~` rule, else the main journal.
-- **`x`** deletes any rule after y/n: the `~` line + its indented lines; comments above stay.
+- **`d`** deletes any rule after y/n (handoff's `x`, renamed per §6.4): the `~` line + its indented lines; comments above stay.
 - **Write safety**: full reload after every write; single-instance `flock` on a lock file
   next to the journal at startup (a second konto refuses to start). No compare-before-write.
 - Annual-impact total follows `v` (per currency at cost / EUR at market via `-V`).
@@ -352,7 +352,13 @@ Glossary: `CONTEXT.md`. Full type sketch: ticket `03-domain-model-core-types`.
 - **Manual** accounts stay in the model but have no v1 UI (ADR 0010); import refuses them.
 - **`Account.Closed`** — optional date, from a `konto:closed:<date>` tag. Closing is refused
   unless balance is zero and no `~` rule references the account. Closed accounts appear only
-  in the account overview; excluded from Forecast, Entry, import targets and the rule form.
+  in the Dashboard Accounts panel; excluded from Forecast, Entry, import targets and the rule form.
+- **Close / reopen** (Dashboard Accounts panel): **`c`** closes the selected open account after
+  y/n — refused with the reason (nonzero balance / referencing rules) — writing
+  `konto:closed:<today>`; **`o`** reopens a closed one after y/n (removes the tag). Closed
+  accounts list dimmed (`8`) below the open ones with `closed <date>` in the balance column,
+  counted in no total or stat card. Import into a closed account's IBAN is refused:
+  "account closed — reopen with `o`".
 - Balance-report hierarchies are `ReportTable`, separate from `[]Account`.
 
 ### 5.4 konto-only entities (no hledger counterpart)
@@ -412,7 +418,7 @@ scroll, generation counter).
 
 | Message class | Routed to |
 |---|---|
-| `tea.KeyMsg`, `tea.MouseMsg` | open overlay if any, else the **active view only**. Global keys (`1`–`6`, `g`, `:`, `?`, `!`, `v`, `q`/`ctrl+c`) caught by root **first**; if the active view has a focused text input, only `Esc`/`Ctrl+C` are caught. |
+| `tea.KeyMsg`, `tea.MouseMsg` | open overlay if any, else the **active view only**. Global keys (`1`–`5`, `g`, `:`, `?`, `!`, `v`, `q`/`ctrl+c`) caught by root **first**; if the active view has a focused text input, only `Esc`/`Ctrl+C` are caught. |
 | `tea.WindowSizeMsg` | root computes the content rect (window − tab bar − rule − status bar), forwards a **content-dimension** `WindowSizeMsg` to **all** views |
 | `ledgerLoadedMsg`, `valuationChangedMsg`, `checksLoadedMsg`, ticks | root updates its state, **broadcasts** to all views |
 | view-specific async results (`reportLoadedMsg`, …) | root forwards to the **one owning view** |
@@ -426,6 +432,10 @@ context cancellation). Sub-model `Cmd`s bubble up and are `tea.Batch`-ed by root
 `key.Binding` sets — one global + one per view. Root resolves against the global set first
 (after overlay / text-input checks), else forwards to the active view. `?` and which-key
 render from the binding sets (`bubbles/help`). `g` goto-prefix is a root state machine.
+
+**Key principle:** every key is the **first letter of its action** where possible, and a
+letter means the same action in every view (`d` = delete, `n` new, `e` edit, `c` close,
+`o` open). Every write triggered by a key asks y/n first.
 
 ### 6.5 Overlays
 
