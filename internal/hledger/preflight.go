@@ -4,7 +4,9 @@
 package hledger
 
 import (
+	"context"
 	"fmt"
+	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
@@ -32,7 +34,8 @@ func Preflight(
 	runVersion func() (string, error),
 ) (domain.HledgerVersion, error) {
 	if _, err := lookPath("hledger"); err != nil {
-		return domain.HledgerVersion{}, fmt.Errorf("hledger binary not found on PATH: %w", err)
+		return domain.HledgerVersion{}, fmt.Errorf(
+			"hledger binary not found on PATH (konto needs hledger %d.%d or newer): %w", minMajor, minMinor, err)
 	}
 	out, err := runVersion()
 	if err != nil {
@@ -47,6 +50,14 @@ func Preflight(
 			version.Major, version.Minor, minimum.Major, minimum.Minor)
 	}
 	return version, nil
+}
+
+// PreflightOnPath runs Preflight against the hledger binary on PATH.
+func PreflightOnPath() (domain.HledgerVersion, error) {
+	return Preflight(exec.LookPath, func() (string, error) {
+		out, err := exec.CommandContext(context.Background(), "hledger", "--version").Output()
+		return string(out), err
+	})
 }
 
 // parseVersion extracts the version components from `hledger --version` output

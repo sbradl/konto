@@ -1,14 +1,12 @@
 @spec-4.5 @spec-7.1
 Feature: Startup, preflight and journal resolution
 
-  @wip
   Scenario: hledger missing refuses to start
     Given hledger is not on PATH
     When I start konto
     Then konto exits with code 1
     And stderr mentions "hledger" and "1.32"
 
-  @wip
   Scenario: hledger too old refuses to start
     Given hledger reports version "1.31"
     When I start konto

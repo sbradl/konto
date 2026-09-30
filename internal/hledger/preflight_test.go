@@ -2,6 +2,9 @@ package hledger
 
 import (
 	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -27,6 +30,9 @@ func TestPreflightRefusesWhenHledgerNotOnPath(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "hledger") {
 		t.Errorf("error should identify hledger as not found, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "1.32") {
+		t.Errorf("error should name the minimum version 1.32, got: %v", err)
 	}
 }
 
@@ -118,4 +124,62 @@ func TestPreflightRefusesTooOldVersion(t *testing.T) {
 
 func versionOutput(out string) func() (string, error) {
 	return func() (string, error) { return out, nil }
+}
+
+// fakeHledger puts an executable "hledger" that prints stdout and exits with
+// code on a PATH containing nothing else.
+func fakeHledger(t *testing.T, stdout string, code int) {
+	t.Helper()
+	dir := t.TempDir()
+	script := fmt.Sprintf("#!/bin/sh\necho '%s'\nexit %d\n", stdout, code)
+	if err := os.WriteFile(filepath.Join(dir, "hledger"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir)
+}
+
+// konto refuses to start when no hledger is on PATH, naming the minimum.
+func TestPreflightOnPathRefusesWithoutHledger(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+
+	_, err := PreflightOnPath()
+
+	if err == nil || !strings.Contains(err.Error(), "1.32") {
+		t.Fatalf("expected a not-found error naming 1.32, got: %v", err)
+	}
+}
+
+// konto starts when the hledger on PATH is recent enough.
+func TestPreflightOnPathAcceptsRecentHledger(t *testing.T) {
+	fakeHledger(t, "hledger 1.32", 0)
+
+	version, err := PreflightOnPath()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if want := (domain.HledgerVersion{Major: 1, Minor: 32}); version != want {
+		t.Errorf("version = %+v, want %+v", version, want)
+	}
+}
+
+// konto refuses to start when the hledger on PATH is too old.
+func TestPreflightOnPathRefusesOldHledger(t *testing.T) {
+	fakeHledger(t, "hledger 1.31", 0)
+
+	_, err := PreflightOnPath()
+
+	if err == nil || !strings.Contains(err.Error(), "1.32") {
+		t.Fatalf("expected a too-old error naming 1.32, got: %v", err)
+	}
+}
+
+// konto refuses to start when `hledger --version` exits non-zero.
+func TestPreflightOnPathRefusesWhenVersionCommandFails(t *testing.T) {
+	fakeHledger(t, "boom", 3)
+
+	_, err := PreflightOnPath()
+
+	if err == nil {
+		t.Fatal("expected an error when hledger --version exits non-zero, got nil")
+	}
 }
