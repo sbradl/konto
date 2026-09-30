@@ -1,0 +1,28 @@
+include household.journal
+
+account expenses:insurance
+account expenses:streaming
+
+payee Gym
+payee Streaming
+payee Car insurance
+
+~ monthly from 2026-10-01  Vermieter Mueller
+    expenses:rent  900,00 EUR
+    assets:checking
+
+~ monthly from 2026-10-25  Acme GmbH
+    assets:checking  3.000,00 EUR
+    income:salary
+
+~ monthly from 2026-10-26  Sparen
+    assets:savings  500,00 EUR
+    assets:checking
+
+~ yearly from 2026-11-15  Car insurance
+    expenses:insurance  240,00 EUR
+    assets:checking
+
+~ monthly from 2026-10-05  Streaming  ; shared account
+    expenses:streaming  13,00 EUR
+    assets:checking

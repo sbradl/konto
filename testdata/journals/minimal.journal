@@ -1,0 +1,6 @@
+decimal-mark ,
+commodity 1.000,00 EUR
+account equity:opening-balances
+account assets:transfers  ; konto:source:clearing
+tag konto
+tag konto-rule

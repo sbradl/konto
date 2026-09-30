@@ -1,0 +1,240 @@
+decimal-mark ,
+commodity 1.000,00 EUR
+
+account equity:opening-balances
+account assets:transfers  ; konto:source:clearing
+account assets:checking  ; konto:source:import, konto:iban:DE89370400440532013000, konto:format:postbank
+account assets:savings  ; konto:source:import, konto:iban:DE44500105175407324931, konto:format:postbank
+account assets:spare  ; konto:source:import, konto:iban:DE12500105170648489890, konto:format:postbank
+account liabilities:creditcard  ; konto:source:import, konto:iban:DE02120300000000202051, konto:format:postbank
+account assets:old-account  ; konto:source:import, konto:iban:DE75512108001245126199, konto:format:postbank, konto:closed:2026-03-01
+account expenses:groceries
+account expenses:rent
+account expenses:books
+account income:salary
+
+tag konto
+tag konto-rule
+
+payee Vermieter Mueller
+payee Acme GmbH
+payee REWE
+payee Thalia
+payee Sparen
+payee opening balance
+
+2026-01-01 opening balance
+    assets:checking  1.000,00 EUR = 1.000,00 EUR
+    equity:opening-balances
+
+2026-01-01 opening balance
+    assets:savings  9.000,00 EUR = 9.000,00 EUR
+    equity:opening-balances
+
+2026-01-01 opening balance
+    liabilities:creditcard  0,00 EUR = 0,00 EUR
+    equity:opening-balances
+
+2026-01-01 opening balance
+    assets:spare  0,00 EUR = 0,00 EUR
+    equity:opening-balances
+
+2026-01-01 opening balance
+    assets:old-account  0,00 EUR = 0,00 EUR
+    equity:opening-balances
+
+2026-01-02 Vermieter Mueller
+    expenses:rent  900,00 EUR
+    assets:checking
+
+2026-01-10 REWE
+    expenses:groceries  210,00 EUR
+    assets:checking
+
+2026-01-25 Acme GmbH
+    assets:checking  3.000,00 EUR
+    income:salary
+
+2026-01-26 Sparen
+    assets:transfers  500,00 EUR
+    assets:checking
+
+2026-01-26 Sparen
+    assets:savings  500,00 EUR
+    assets:transfers
+
+2026-02-02 Vermieter Mueller
+    expenses:rent  900,00 EUR
+    assets:checking
+
+2026-02-10 REWE
+    expenses:groceries  230,00 EUR
+    assets:checking
+
+2026-02-25 Acme GmbH
+    assets:checking  3.000,00 EUR
+    income:salary
+
+2026-02-26 Sparen
+    assets:transfers  500,00 EUR
+    assets:checking
+
+2026-02-26 Sparen
+    assets:savings  500,00 EUR
+    assets:transfers
+
+2026-03-02 Vermieter Mueller
+    expenses:rent  900,00 EUR
+    assets:checking
+
+2026-03-10 REWE
+    expenses:groceries  240,00 EUR
+    assets:checking
+
+2026-03-14 Thalia
+    expenses:books  35,00 EUR
+    liabilities:creditcard
+
+2026-03-25 Acme GmbH
+    assets:checking  3.000,00 EUR
+    income:salary
+
+2026-03-26 Sparen
+    assets:transfers  500,00 EUR
+    assets:checking
+
+2026-03-26 Sparen
+    assets:savings  500,00 EUR
+    assets:transfers
+
+2026-04-02 Vermieter Mueller
+    expenses:rent  900,00 EUR
+    assets:checking
+
+2026-04-10 REWE
+    expenses:groceries  220,00 EUR
+    assets:checking
+
+2026-04-25 Acme GmbH
+    assets:checking  3.000,00 EUR
+    income:salary
+
+2026-04-26 Sparen
+    assets:transfers  500,00 EUR
+    assets:checking
+
+2026-04-26 Sparen
+    assets:savings  500,00 EUR
+    assets:transfers
+
+2026-05-02 Vermieter Mueller
+    expenses:rent  900,00 EUR
+    assets:checking
+
+2026-05-10 REWE
+    expenses:groceries  260,00 EUR
+    assets:checking
+
+2026-05-14 Thalia
+    expenses:books  35,00 EUR
+    liabilities:creditcard
+
+2026-05-25 Acme GmbH
+    assets:checking  3.000,00 EUR
+    income:salary
+
+2026-05-26 Sparen
+    assets:transfers  500,00 EUR
+    assets:checking
+
+2026-05-26 Sparen
+    assets:savings  500,00 EUR
+    assets:transfers
+
+2026-06-02 Vermieter Mueller
+    expenses:rent  900,00 EUR
+    assets:checking
+
+2026-06-10 REWE
+    expenses:groceries  250,00 EUR
+    assets:checking
+
+2026-06-25 Acme GmbH
+    assets:checking  3.000,00 EUR
+    income:salary
+
+2026-06-26 Sparen
+    assets:transfers  500,00 EUR
+    assets:checking
+
+2026-06-26 Sparen
+    assets:savings  500,00 EUR
+    assets:transfers
+
+2026-07-02 Vermieter Mueller
+    expenses:rent  900,00 EUR
+    assets:checking
+
+2026-07-10 REWE
+    expenses:groceries  270,00 EUR
+    assets:checking
+
+2026-07-14 Thalia
+    expenses:books  35,00 EUR
+    liabilities:creditcard
+
+2026-07-25 Acme GmbH
+    assets:checking  3.000,00 EUR
+    income:salary
+
+2026-07-26 Sparen
+    assets:transfers  500,00 EUR
+    assets:checking
+
+2026-07-26 Sparen
+    assets:savings  500,00 EUR
+    assets:transfers
+
+2026-08-02 Vermieter Mueller
+    expenses:rent  900,00 EUR
+    assets:checking
+
+2026-08-10 REWE
+    expenses:groceries  230,00 EUR
+    assets:checking
+
+2026-08-25 Acme GmbH
+    assets:checking  3.000,00 EUR
+    income:salary
+
+2026-08-26 Sparen
+    assets:transfers  500,00 EUR
+    assets:checking
+
+2026-08-26 Sparen
+    assets:savings  500,00 EUR
+    assets:transfers
+
+2026-09-02 Vermieter Mueller
+    expenses:rent  900,00 EUR
+    assets:checking
+
+2026-09-10 REWE
+    expenses:groceries  250,00 EUR
+    assets:checking
+
+2026-09-14 Thalia
+    expenses:books  35,00 EUR
+    liabilities:creditcard  = -140,00 EUR
+
+2026-09-25 Acme GmbH
+    assets:checking  3.000,00 EUR
+    income:salary
+
+2026-09-26 Sparen
+    assets:transfers  500,00 EUR
+    assets:checking  = 13.240,00 EUR
+
+2026-09-26 Sparen
+    assets:savings  500,00 EUR = 13.500,00 EUR
+    assets:transfers

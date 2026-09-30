@@ -1,0 +1,42 @@
+decimal-mark ,
+commodity 1.000,00 EUR
+commodity 1.000,00 PLN
+commodity 1.000,00 CZK
+
+account equity:opening-balances
+account assets:transfers  ; konto:source:clearing
+account assets:checking  ; konto:source:import, konto:iban:DE89370400440532013000, konto:format:postbank
+account assets:wallet  ; konto:source:manual
+account expenses:coffee
+account expenses:transport
+account income:salary
+
+tag konto
+tag konto-rule
+
+payee Acme GmbH
+payee opening balance
+
+2026-09-01 opening balance
+    assets:checking  1.000,00 EUR = 1.000,00 EUR
+    equity:opening-balances
+
+2026-09-01 opening balance
+    assets:wallet  50,00 EUR
+    assets:wallet  400,00 PLN
+    assets:wallet  2.500,00 CZK
+    equity:opening-balances  -50,00 EUR
+    equity:opening-balances  -400,00 PLN
+    equity:opening-balances  -2.500,00 CZK
+
+2026-09-25 Acme GmbH
+    assets:checking  3.000,00 EUR = 4.000,00 EUR
+    income:salary
+
+~ monthly from 2026-10-10  Coffee
+    expenses:coffee  4,00 EUR
+    assets:wallet
+
+~ monthly from 2026-10-12  Bus
+    expenses:transport  20,00 PLN
+    assets:wallet

@@ -1,0 +1,19 @@
+if %payee Vermieter Mueller
+    account2 expenses:rent
+    comment2 konto-rule:1
+
+if %payee REWE
+    account2 expenses:groceries
+    comment2 konto-rule:2
+
+if %payee Acme GmbH
+    account2 income:salary
+    comment2 konto-rule:3
+
+if %payee Thalia
+    account2 expenses:books
+    comment2 konto-rule:4
+
+if %payee Sparen
+    account2 assets:transfers
+    comment2 konto-rule:5
