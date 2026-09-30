@@ -89,6 +89,8 @@ const (
 // before acting.
 func (w *world) markBaseline(stepType string) {
 	if stepType == actionStep && w.lastStepType != actionStep && w.s != nil {
+		w.waitLoaded(w.s)
+		w.s.settle(w.suite.timeout)
 		w.baseline = w.s.screenText()
 		w.tabAtBaseline, _ = w.activeTab()
 	}

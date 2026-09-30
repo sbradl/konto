@@ -276,12 +276,19 @@ func (w *world) session() (*session, error) {
 	return w.s, nil
 }
 
+// waitLoaded gives konto time to finish its first load before input: keys
+// sent while "loading journal…" shows are (rightly) ignored.
+func (w *world) waitLoaded(s *session) {
+	s.waitFor(w.suite.timeout, func(screen string) bool { return !strings.Contains(screen, "loading journal…") })
+}
+
 // press sends keys and waits for the screen to settle.
 func (w *world) press(keys ...string) error {
 	s, err := w.session()
 	if err != nil {
 		return err
 	}
+	w.waitLoaded(s)
 	for _, k := range keys {
 		b, err := keyBytes(k)
 		if err != nil {

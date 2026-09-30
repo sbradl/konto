@@ -340,6 +340,7 @@ func (w *world) typeText(text string) error {
 	if err != nil {
 		return err
 	}
+	w.waitLoaded(s)
 	if err := s.send(text); err != nil {
 		return err
 	}
