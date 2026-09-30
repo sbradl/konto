@@ -336,7 +336,7 @@ Glossary: `CONTEXT.md`. Full type sketch: ticket `03-domain-model-core-types`.
   `ordereddates`/`uniqueleafnames`/`tags`/`payees`/`recentassertions` + konto's
   unclassified-account check = WARN.
 - **`ReportTable`** `{Rows []ReportRow}` where `ReportRow{Kind, Label, Depth, Amounts
-  []MultiAmount, Delta *MultiAmount, Share *float64}`, `Kind ∈ {SectionHeader, Leaf,
+  []MultiAmount, Delta *MultiAmount}` (no `Share` — dropped, ADR 0011), `Kind ∈ {SectionHeader, Leaf,
   NegativeLeaf, Subtotal, GrandTotal}` computed from structure + sign.
 
 ### 5.3 Account (ADR 0002)
@@ -465,6 +465,11 @@ No panel focus: each view has at most one cursor panel; read-only panels that ov
   (newest first, all accounts, not selectable), Upcoming (next occurrences, not selectable),
   monthly spend chart (total `expenses:*` per month, last 6 complete months, one line).
 - **`!` panel**: issues only; when clean a single dim-green `✓ all N checks pass`.
+- **Reports**: `p` cycles `month to date · quarter to date · year to date · all time`, all
+  ending today. Balance sheet = balance at today (`bs -H`) + **`Δ period`** = change within
+  the period (second call, `bs --change -p <period>`), green/red, `0` dim; the Δ column is
+  hidden under `all time`. Income statement = account + amount for the period only — no
+  share, no third column.
 
 ### 6.5 Overlays
 
@@ -664,7 +669,8 @@ The handoff (`design_handoff_hledger_tui/README.md`) is otherwise authoritative.
   command line, no `g` prefix / which-key goto, no mode badge); no panel focus; EUR-only UI
   (no `v`, no Market Prices panel); no Budget panel; no Dashboard Journal Checks panel or
   stat card (check status lives in the status bar); no Reports drill-in; no `y` export; no
-  Recent `e` edit; `!` panel lists issues only (no `OK` rows); Reports period is `p`.
+  Recent `e` edit; `!` panel lists issues only (no `OK` rows); Reports period is `p`,
+  `quarter` is quarter-to-date, and the income statement has no `% share` column.
 
 New deviations get an ADR and a line here.
 

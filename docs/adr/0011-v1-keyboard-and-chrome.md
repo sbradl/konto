@@ -19,7 +19,8 @@ konto v1 instead:
 - is **EUR-only in the UI** — no `v` valuation toggle, no `-V`, no Market Prices panel, no
   FX footnotes (the domain keeps `MultiAmount`; a stray non-EUR amount renders `+ N cur`);
 - has **no export** (`y` dropped; out of scope, not deferred), no Budget panel, no
-  Dashboard Journal Checks list or stat card, no Reports drill-in, no Recent `e` edit;
+  Dashboard Journal Checks list or stat card, no Reports drill-in, no income-statement
+  `% share` column, no Recent `e` edit;
 - shows **journal-check status in the status bar** of every view (`● clean` /
   `● 2 err · 3 warn`), not the tab bar.
 

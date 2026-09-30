@@ -73,6 +73,9 @@ their views land.
   no Dashboard checks panel/card (check status in status bar), no drill-in, no export, no
   Recent edit; Cash Flow = month-to-date income − expenses; spend chart = 6 complete
   months; Import `Enter` categorise / `w` write / `n` new file; Reports `p`. Spec §6.4/§6.4a.
+- *Reports columns* (grilled inline 2026-09-30) — periods all "to date" (quarter = QTD);
+  bs `Δ period` = change within period via `bs --change`, hidden under all time; is has no
+  `% share`. Spec §5, §6.4a.
 
 - [Responsive layout strategy](issues/07-responsive-layout-strategy.md) — floor ≈100×30
   (too-small screen below); **priority drop** (shrink to mins, then hide low-priority
