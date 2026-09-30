@@ -132,3 +132,8 @@ indented lines (postings, posting comments). Comment lines *above* the `~` are k
 `{Period string (raw expression), Description, Postings []Posting (raw), Raw string (block
 text), Pos SourcePos, FitsForm bool (computed)}`; projections (`Occurrences []Date`,
 annual impact) joined from the forecast call, not stored on the rule.
+
+### Amendment (ticket 09, 2026-09-30)
+
+Frequency dropdown gains **`once`** → `~ <date>  <description>`; remaining-payments field
+hidden. Account picker excludes closed accounts. See ticket 09.

@@ -6,13 +6,13 @@ session needs before writing code. It does not restate the UX — that lives in
 [`design_handoff_hledger_tui/README.md`](design_handoff_hledger_tui/README.md), which is
 authoritative and frozen (except the deviations in §11).
 
-Per-feature design (CSV import, forecast, responsive-layout details; periodic rules resolved
-into §4.8)
+Per-feature design (CSV import, responsive-layout details; periodic rules and forecast
+resolved into §4.8/§4.9)
 is **deliberately not in this spec** — it is grilled just-in-time as each view is built
 (§12).
 
 Sources: the wayfinder map and decision tickets under `.scratch/konto-spec/`, `CONTEXT.md`
-(domain glossary), `docs/adr/0001`–`0006`.
+(domain glossary), `docs/adr/0001`–`0007`.
 
 ---
 
@@ -160,7 +160,7 @@ The `internal/journal` adapter is a **targeted line-oriented reader/writer, not 
   indented postings + trailing comment/tags from journal text. Dates are never computed
   from this text — see §4.8.
 - **`account` directives and their tags** — the `konto:source:manual|import` tag
-  (§7). `accounts --directives` drops tags; the tag *does* inherit onto that account's
+  (§7) and the `konto:closed:<date>` tag (§5.3). `accounts --directives` drops tags; the tag *does* inherit onto that account's
   postings in `print -O json`, but text parsing is the primary source.
 - **`.latest.<file>` watermark files** — read and write (hledger's dedup convention;
   ticket 08).
@@ -236,10 +236,11 @@ jump-to-location and the `e` edit key on list views.
   `--forecast=PERIOD` must be explicit (default horizon starts after the latest regular
   transaction, not today). Status = upcoming / none in the next 12 months. Cadence column =
   raw period expression.
-- **Form** (`n`, `e`): next due date, frequency dropdown (`weekly`/`biweekly`/`monthly`/
-  `quarterly`/`half-yearly`→`every 6 months`/`yearly`), optional remaining-payment count,
-  description, amount + currency (declared commodities), from/to account (existing only).
-  Writes `~ <freq> from <date>[ to <end>]  <desc>` + two postings, amount on the first.
+- **Form** (`n`, `e`): next due date, frequency dropdown (`once`/`weekly`/`biweekly`/
+  `monthly`/`quarterly`/`half-yearly`→`every 6 months`/`yearly`), optional remaining-payment
+  count (hidden for `once`), description, amount + currency (declared commodities), from/to
+  account (existing, open only). Writes `~ <freq> from <date>[ to <end>]  <desc>` (or
+  `~ <date>  <desc>` for `once`) + two postings, amount on the first.
   Count → `to <N-th occurrence + 1 day>`, N-th date obtained by piping the candidate rule to
   `hledger -f - print --forecast=…`.
 - **`e`** only on rules that fit the form (that expression shape, 2 postings, one
@@ -250,6 +251,17 @@ jump-to-location and the `e` edit key on list views.
 - **Write safety**: full reload after every write; single-instance `flock` on a lock file
   next to the journal at startup (a second konto refuses to start). No compare-before-write.
 - Annual-impact total follows `v` (per currency at cost / EUR at market via `-V`).
+
+### 4.9 Forecast (ticket 09, ADR 0007)
+
+- **Current balances + scheduled transactions only.** No averages, no scenarios, no drivers.
+- **One call**: `bal assets liabilities -M -H --layout=bare -b <today−6m>
+  --forecast=<today>..<today+12m> -O json` → month-end balance per account per commodity,
+  history + forecast. konto drops closed accounts, groups by commodity, ignores `Total:`.
+- **View**: one braille chart per currency, stacked vertically; one line per open
+  asset/liability account in that currency; colour per account in fixed order (ANSI
+  2,4,5,6,3,1); legend; dim vertical line where the forecast begins. Below: milestone table
+  (accounts grouped by currency × today/+3/+6/+12 months), no totals. `v` has no effect.
 
 ---
 
@@ -297,12 +309,15 @@ Glossary: `CONTEXT.md`. Full type sketch: ticket `03-domain-model-core-types`.
   `konto:source:` tag on the `account` directive (§4.2).
 - **Unclassified** (postable, no tag): excluded from Entry and import targets; a konto WARN;
   konto prompts manual/import on first open and writes the tag.
+- **`Account.Closed`** — optional date, from a `konto:closed:<date>` tag. Closing is refused
+  unless balance is zero and no `~` rule references the account. Closed accounts appear only
+  in the account overview; excluded from Forecast, Entry, import targets and the rule form.
 - Balance-report hierarchies are `ReportTable`, separate from `[]Account`.
 
 ### 5.4 konto-only entities (no hledger counterpart)
 
 `ImportSource`, `CsvRow`, `ImportRule`, `RuleMatchStats`, `Watermark` — ticket 08.
-`ForecastDriver`, `Scenario` — ticket 09.
+(Forecast has none — `ForecastDriver` / `Scenario` dropped, ADR 0007.)
 
 ### 5.5 `Ledger` — the loaded snapshot (`internal/ledger`)
 
@@ -326,7 +341,7 @@ The program's single `tea.Model`. Holds:
   tab UI, not a seventh view.
 - the **six view sub-models**, constructed at startup, alive for the whole run. Tab switch
   changes which one renders + receives input; cursor/scroll/draft state survives.
-- **app-global state**: `valuationMode`, `period`, `scenario`, terminal size, the read-only
+- **app-global state**: `valuationMode`, `period`, terminal size, the read-only
   `*domain.Ledger`.
 - **chrome**: active view id, tab bar, status bar. **overlay state**: `whichKeyMode`
   (`none|root|goto`), command-line (`active`, `text`, filtered `CMDS`), `checksPanelOpen`.
@@ -434,7 +449,7 @@ user-remappable in v1:
 | red (negative, error) | `1` |
 | green (positive) | `2` |
 | amber (warning, focus, manual-source `✎`) | `3` |
-| blue (mode indicator, forecast line) | `4` |
+| blue (mode indicator; forecast account line) | `4` |
 | magenta (rule / price directive text) | `5` |
 | cyan (panel titles) | `6` |
 | bright-white (emphasis, grand totals) | `15` |
@@ -504,6 +519,9 @@ bar at fixed sizes only, not whole views during active development.
   columns/rows — never hardcoded to the mock's 180×60.
 - Colours are **ANSI indices, never hex**.
 - **Periodic rules never post** — they are forecast inputs only (ADR 0006).
+- **The forecast never guesses** — current balances + periodic rules only (ADR 0007).
+- **Closed accounts** are visible only in the account overview; closing requires zero
+  balance and no referencing `~` rule.
 - UI copy says **"currency"**, never "commodity" (code/domain keep `Commodity`).
 
 ---
@@ -518,6 +536,9 @@ The handoff (`design_handoff_hledger_tui/README.md`) is otherwise authoritative.
 - **ADR 0006** — the **Scheduled view has no Enter-to-post and no `p` pause**; periodic rules
   are forecast-only. `n`/`e` use an in-TUI form (not free text); cadence shows the raw
   period expression, not plain English.
+- **ADR 0007** — the **Forecast view has no scenarios, no drivers panel, no projection
+  table, no averages**; it shows one chart per currency (line per account) plus a milestone
+  table.
 
 New deviations get an ADR and a line here.
 
@@ -532,7 +553,6 @@ grilled immediately before the `tdd-loop` pass for its view:
 |---|---|---|
 | Responsive layout helper shape | 07 | done *in* the shell build; also runs the ntcharts/v2 check |
 | CSV import subsystem (Postbank + format-extensible) | 08 | **14** — user provides real Postbank CSV exports into `.scratch/konto-spec/samples/` |
-| Forecast computation (trailing averages, scenarios, drivers) | 09 | — |
 | Config file format + remaining settings | 15 | — |
 
 ---

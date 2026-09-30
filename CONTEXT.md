@@ -36,6 +36,11 @@ A postable account with no account-source tag yet. Excluded from manual entry an
 import targets, and surfaced as a warning; konto asks the user to classify it the first
 time the account is opened.
 
+**Closed account**:
+An account the user has retired, marked by a `konto:closed:<date>` tag on its `account`
+directive. Only closable at zero balance and when no periodic rule references it. Visible
+only in the account overview; hidden from forecast, entry, import and rule forms.
+
 ## Amounts
 
 **Amount**:
@@ -114,14 +119,10 @@ _Avoid_: Dedup marker, Cursor
 
 ## Forecast
 
-**Forecast driver**:
-An input line to the forecast projection, tagged `sched` (an exact figure from a periodic
-rule) or `avg 6m` (a six-month trailing average). Inspectable, and for averages editable
-in place.
-
-**Scenario**:
-A named set of assumptions the forecast runs under — `base`, `lean` (−15% spend), or
-`3-month income gap`. Never written to the journal.
+**Forecast**:
+Each open asset/liability account's current balance projected forward by its periodic
+rules' occurrences — nothing averaged or guessed. Never written to the journal.
+_Avoid_: Scenario, Forecast driver, Trailing average (dropped, ADR 0007)
 
 ## Checks
 

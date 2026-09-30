@@ -11,7 +11,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **`CONTEXT.md`** — the domain glossary (ubiquitous language). Use these terms.
 - **`docs/adr/`** — the hard-to-reverse decisions (0001 rich domain model, 0002 flat
   account model, 0003 ports-and-adapters, 0004 root-mediator Bubble Tea model, 0005 fixed
-  ANSI-16 palette, 0006 periodic rules forecast-only).
+  ANSI-16 palette, 0006 periodic rules forecast-only,
+  0007 forecast = balances + schedules).
 - **`docs/design_handoff_hledger_tui/README.md`** — the frozen UX spec (all six views,
   keymaps, panels, tokens). Authoritative except the deviations listed in `docs/spec.md` §11.
   The bundled `.dc.html` is a browser mock, **not code to port** — consult it for the `CMDS`
