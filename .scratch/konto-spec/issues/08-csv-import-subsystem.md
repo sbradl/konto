@@ -111,6 +111,23 @@ manual override.
   journal. Inserted at date position; new payees declared (ticket 15).
 - `= <balance>` assertion on the last transaction from the CSV's running-balance column.
 
+### First import — opening balance
+
+On the first import into an account with no transactions, konto derives the opening
+balance from the CSV (first row's running balance − its amount) and writes, dated the day
+before the first row:
+
+```
+<date> opening balance
+    <account>                <amt> = <amt>
+    equity:opening-balances
+```
+
+shown in the preview for confirmation. If the bank format has no balance column, the user
+enters the opening balance by hand first (import blocked with a hint until then). Side
+effect: the per-import assertion also catches **gaps** (CSV starting after D with missing
+rows) as a blocked import.
+
 ### View
 
 Filepicker (Downloads, `.csv`) → account (+ format on first import) → row table (`✓` by

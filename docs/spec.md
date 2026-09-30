@@ -278,6 +278,10 @@ jump-to-location and the `e` edit key on list views.
   stdin — a failing `= <balance>` assertion blocks with bank / journal / difference.
   Target file = the account's latest transaction's file (else main journal), date-ordered
   insert, payees declared.
+- **First import** into an empty account: konto derives an opening balance from the CSV
+  (first row's balance − its amount), writes it against `equity:opening-balances` with an
+  assertion, dated the day before the first row; confirmed in the preview. No balance
+  column → user enters it by hand first.
 
 ### 4.10 Forecast (ticket 09, ADR 0007)
 
