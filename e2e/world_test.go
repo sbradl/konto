@@ -20,6 +20,7 @@ const (
 	defaultWidth  = 120
 	defaultHeight = 40
 	settleQuiet   = 120 * time.Millisecond
+	reactWindow   = 250 * time.Millisecond
 )
 
 // suite is what every scenario shares: paths and binaries built once.

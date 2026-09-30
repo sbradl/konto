@@ -2,6 +2,7 @@ package journal
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -64,9 +65,23 @@ func TestDifferentJournalsLockIndependently(t *testing.T) {
 	_ = second.Release()
 }
 
+// A first run may lock a journal whose directory does not exist yet.
+func TestAcquireCreatesMissingDirectory(t *testing.T) {
+	lock, err := Acquire(filepath.Join(t.TempDir(), "a", "b", "main.journal"))
+	if err != nil {
+		t.Fatalf("Acquire failed: %v", err)
+	}
+	_ = lock.Release()
+}
+
 // A lock file that cannot be created is an error, not a silent pass.
 func TestAcquireFailsWhenLockFileCannotBeCreated(t *testing.T) {
-	_, err := Acquire(filepath.Join(t.TempDir(), "missing-dir", "main.journal"))
+	blocker := filepath.Join(t.TempDir(), "file")
+	if err := os.WriteFile(blocker, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := Acquire(filepath.Join(blocker, "main.journal"))
 
 	if err == nil || errors.Is(err, ErrAlreadyRunning) {
 		t.Errorf("expected a plain creation error, got: %v", err)
@@ -85,5 +100,19 @@ func TestReleaseTwiceFails(t *testing.T) {
 
 	if err := lock.Release(); err == nil {
 		t.Error("second Release should fail, got nil")
+	}
+}
+
+// A lock file that cannot be opened is an error, not a silent pass.
+func TestAcquireFailsWhenLockFileCannotBeOpened(t *testing.T) {
+	path := journalIn(t)
+	if err := os.Mkdir(path+".lock", 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := Acquire(path)
+
+	if err == nil || errors.Is(err, ErrAlreadyRunning) {
+		t.Errorf("expected a plain open error, got: %v", err)
 	}
 }

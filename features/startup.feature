@@ -57,7 +57,6 @@ Feature: Startup, preflight and journal resolution
   @adr-0010 @spec-4.5
   Rule: First run
 
-    @wip
     Scenario: no journal shows first-run screen
       Given no journal exists at the resolved path
       When I start konto
@@ -65,14 +64,12 @@ Feature: Startup, preflight and journal resolution
       And I see "y" to create and "n" to quit
       And I do not see the tab bar
 
-    @wip
     Scenario: no path input on first-run
       Given no journal exists at the resolved path
       When I start konto
       And I type "/tmp/elsewhere"
       Then no journal is created at "/tmp/elsewhere"
 
-    @wip
     Scenario: y creates the skeleton including parent dirs
       Given no journal exists at "<tmp>/a/b/main.journal"
       When I start konto with "--file <tmp>/a/b/main.journal"
@@ -91,7 +88,6 @@ Feature: Startup, preflight and journal resolution
       And every hledger check passes individually
       And I see the tab bar
 
-    @wip
     Scenario: n quits without writing
       Given no journal exists at the resolved path
       When I start konto

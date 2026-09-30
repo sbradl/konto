@@ -30,6 +30,7 @@ type session struct {
 	term       *vt.Emulator
 	raw        bytes.Buffer // every byte the program wrote to the terminal
 	lastOutput time.Time
+	lastSend   time.Time
 
 	stderr   lockedBuffer
 	done     chan struct{}
@@ -111,6 +112,9 @@ func (s *session) wait() {
 }
 
 func (s *session) send(b string) error {
+	s.mu.Lock()
+	s.lastSend = time.Now()
+	s.mu.Unlock()
 	_, err := s.pty.WriteString(b)
 	return err
 }
@@ -142,13 +146,16 @@ func (s *session) waitExit(timeout time.Duration) (int, error) {
 }
 
 // settle waits until the program has been quiet for settleQuiet, or exited.
+// After input it also gives the program reactWindow to start reacting, so a
+// slow reaction is not mistaken for a program that ignored the key.
 func (s *session) settle(timeout time.Duration) {
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) && !s.exited() {
 		s.mu.Lock()
 		idle := time.Since(s.lastOutput)
+		reacted := s.lastOutput.After(s.lastSend) || time.Since(s.lastSend) >= reactWindow
 		s.mu.Unlock()
-		if idle >= settleQuiet {
+		if idle >= settleQuiet && reacted {
 			return
 		}
 		time.Sleep(10 * time.Millisecond)

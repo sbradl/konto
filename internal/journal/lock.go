@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"syscall"
 )
 
@@ -27,6 +28,9 @@ type Lock struct {
 func Acquire(journalPath string) (*Lock, error) {
 	// The lock file sits next to the journal konto was told to open.
 	lockPath := journalPath + ".lock"
+	if err := os.MkdirAll(filepath.Dir(lockPath), dirMode); err != nil {
+		return nil, fmt.Errorf("creating lock directory: %w", err)
+	}
 	file, err := os.OpenFile(lockPath, lockFlags, lockMode) //nolint:gosec // derived from the configured journal
 	if err != nil {
 		return nil, fmt.Errorf("creating lock file: %w", err)
