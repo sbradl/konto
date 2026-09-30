@@ -23,7 +23,7 @@ source in `@spec-N.N` / `@adr-NNNN` tags so every requirement is traceable.
 ## Tags
 
 `@spec-N.N` `@adr-NNNN` traceability · `@proposed` spec is silent, scenario encodes the obvious
-reading — confirm or change · `@needs-decision` two readings are plausible, blocks the test ·
+reading — confirm or change · `@needs-decision` two readings are plausible, blocks the test (none open) ·
 `@wip` not implemented yet · `@integration` needs real hledger · `@slow`
 
 ## Harness (not built yet — proposal)

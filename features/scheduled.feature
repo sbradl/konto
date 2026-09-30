@@ -117,18 +117,24 @@ Feature: Scheduled — periodic rules (forecast-only)
       When I select the rule "Acme GmbH"
       Then the occurrences panel's first date is "2026-10-25"
 
-    Scenario: annual impact is the 12-month sum per rule
-      Then the annual impact table shows "Vermieter Mueller" with "10.800,00 EUR"
-      And it shows "Streaming" with "156,00 EUR"
-      And it shows "Acme GmbH" with "36.000,00 EUR"
-      And it shows "Sparen" with "6.000,00 EUR"
-      And it shows "Car insurance" with "240,00 EUR"
+    Scenario: annual impact is the signed 12-month net-worth effect per rule
+      Then the annual impact table shows "Vermieter Mueller" with "-10.800,00 EUR" coloured 1
+      And it shows "Streaming" with "-156,00 EUR" coloured 1
+      And it shows "Acme GmbH" with "36.000,00 EUR" coloured 2
+      And it shows "Car insurance" with "-240,00 EUR" coloured 1
 
-    @needs-decision
-    Scenario: annual impact has a net total in plain EUR
-      # sign convention (net-worth effect vs posting amount) is not specified
-      Then the annual impact table has a total line
+    Scenario: a transfer between own accounts has zero impact
+      Then the annual impact table shows "Sparen" with "0,00 EUR" coloured 8
+
+    Scenario: the total is the net change of net worth, in plain EUR
+      Then the annual impact total is "24.804,00 EUR" coloured 2
       And there is no valuation toggle
+
+    Scenario: a net-negative load is red
+      Given the journal "household-scheduled" with a rule "~ monthly from 2026-10-02  Big bill\n    expenses:rent  5.000,00 EUR\n    assets:checking\n"
+      And I start konto
+      And I press "3"
+      Then the annual impact total is "-35.196,00 EUR" coloured 1
 
     Scenario: occurrences are projections, not journal entries
       Then the journal is unchanged

@@ -225,6 +225,9 @@ severities**. konto:
 - konto's own checks (unclassified account, and future ones) run in Go over the `Ledger` and
   **enumerate fully**.
 - Severity assigned by check name (§7 `CheckIssue`).
+- `parseable` / `autobalanced` / `assertions` fail at **load** (konto does not pass `-I`): they surface as
+  the parse-error screen (§4.5), never as `!` rows. The `!` panel therefore only ever lists the WARN checks
+  plus konto's own.
 
 ### 4.7 `$EDITOR`
 
@@ -254,7 +257,9 @@ jump-to-location — its only use in v1 (no `e`-to-editor on list views, ADR 001
 - **`d`** deletes any rule after y/n (handoff's `x`, renamed per §6.4): the `~` line + its indented lines; comments above stay.
 - **Write safety**: full reload after every write; single-instance `flock` on a lock file
   next to the journal at startup (a second konto refuses to start). No compare-before-write.
-- Annual-impact total is plain EUR (no valuation toggle in v1, ADR 0011).
+- Annual impact per rule = signed 12-month change in asset/liability balances (expense red, income green,
+  transfer between own accounts `0,00` dim); the total is the net change of net worth. Plain EUR
+  (no valuation toggle in v1, ADR 0011).
 
 ### 4.9 CSV import (ticket 08, ADR 0009)
 
@@ -289,7 +294,7 @@ jump-to-location — its only use in v1 (no `e`-to-editor on list views, ADR 001
   insert, payees declared.
 - **After the write**: status-bar confirmation (`imported N transactions into <account>`),
   then Import returns to its empty start state (`n` picks the next file). The staged import
-  survives view switches (views stay alive, §6.1); `q` with a staged import asks y/n before
+  survives view switches (views stay alive, §6.1); `q` / `Ctrl+C` with a staged import asks y/n before
   quitting — discarding it leaves disk untouched.
 - **First import** into an empty account: konto derives an opening balance from the CSV
   (trailer balance − sum of rows), writes it against `equity:opening-balances` with an

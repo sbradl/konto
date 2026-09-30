@@ -225,7 +225,7 @@ payee opening balance
 
 2026-09-14 Thalia
     expenses:books  35,00 EUR
-    liabilities:creditcard  = -140,00 EUR
+    liabilities:creditcard  -35,00 EUR = -140,00 EUR
 
 2026-09-25 Acme GmbH
     assets:checking  3.000,00 EUR
@@ -233,7 +233,7 @@ payee opening balance
 
 2026-09-26 Sparen
     assets:transfers  500,00 EUR
-    assets:checking  = 13.240,00 EUR
+    assets:checking  -500,00 EUR = 13.240,00 EUR
 
 2026-09-26 Sparen
     assets:savings  500,00 EUR = 13.500,00 EUR

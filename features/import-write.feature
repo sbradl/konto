@@ -195,12 +195,10 @@ Feature: Import — writing, assertions, opening balance, staging and quitting
       Then the write succeeds
 
     @proposed
-    Scenario: a pre-existing journal assertion failure is reported, not hidden
+    Scenario: a journal with a failing assertion never reaches Import
       Given the journal "household" with a wrong assertion "= 99,00 EUR" on the last "assets:checking" posting
-      And I start konto
-      When I import "sept.csv" categorising every row
-      Then the write is blocked
-      And the journal is unchanged
+      When I start konto
+      Then I do not see the tab bar
 
   Rule: After the write
 

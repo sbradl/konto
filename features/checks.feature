@@ -74,17 +74,14 @@ Feature: Journal checks — status bar indicator and the ! panel
         | commodities     | WARN     | 11   | ● 1 warn | \npayee Kiosk\naccount expenses:x\n2026-09-01 Kiosk\n    expenses:x  1,00 USD\n    assets:transfers\n |
         | payees          | WARN     | 9    | ● 1 warn | \naccount expenses:x\n2026-09-01 Kiosk\n    expenses:x  1,00 EUR\n    assets:transfers\n |
 
-    @needs-decision
-    Scenario: a failing balance assertion is an ERR
-      # hledger loads assertions by default; konto must either pass -I for loads (so the
-      # journal stays browsable and the ERR shows here) or route this to the parse-error
-      # screen. Decide and pin down; this scenario encodes the first reading.
+    Scenario: a failing balance assertion is a load failure, not a panel row
+      # hledger refuses to load a journal whose assertion fails; konto does not pass -I,
+      # so this is the parse-error screen (decided). `assertions` therefore never reaches `!`.
       Given the journal "household" with a wrong assertion "= 99,00 EUR" on the last "assets:checking" posting
-      And I start konto
-      Then the status bar shows "● 1 err"
-      And "● 1 err" is coloured 1
-      When I press "!"
-      Then the row shows severity "ERR" and check "assertions"
+      When I start konto
+      Then I see an "ERR" issue with a "file:line" reference
+      And I do not see the tab bar
+      And I see an offer to jump to the editor
 
     Scenario: recentassertions WARN when an import account's latest transaction has no assertion
       Given the journal "household" without the assertion on the last "assets:checking" transaction

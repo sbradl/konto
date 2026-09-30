@@ -100,11 +100,16 @@ Feature: Import — a staged import survives view switches and guards quitting
       When I press "q"
       Then konto exits with code 0
 
-    @needs-decision
-    Scenario: Ctrl+C with staged work
-      # spec only says `q` asks; decide whether Ctrl+C asks too
+    Scenario: Ctrl+C with staged work asks exactly like q
       When I press "Ctrl+C"
       Then I see a y/n prompt about discarding the staged import
+      And konto is still running
+
+    Scenario: Ctrl+C then y quits and leaves the disk untouched
+      Given I press "Ctrl+C"
+      When I press "y"
+      Then konto exits with code 0
+      And the journal is unchanged
 
   Rule: Discarding
 
