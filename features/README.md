@@ -26,23 +26,29 @@ source in `@spec-N.N` / `@adr-NNNN` tags so every requirement is traceable.
 reading — confirm or change · `@needs-decision` two readings are plausible, blocks the test (none open) ·
 `@wip` not implemented yet · `@integration` needs real hledger · `@slow`
 
-## Harness (not built yet — proposal)
+## Harness — `e2e/`
 
-- Runner `godog`, `//go:build e2e`, `mise run test:e2e`. Drives the **compiled binary** in a PTY
-  at a fixed size (default 120×40), renders bytes through `charmbracelet/x/vt`, asserts on
-  screen text, cell colour (ANSI index), exit code, and the files on disk.
-- Real pinned `hledger`; every scenario gets a temp dir with a copy of the named fixture.
-- **Clock seam**: features assume `today is 2026-09-30` unless a step says otherwise → one
-  test-only env (`KONTO_TODAY`); konto passes explicit dates to hledger everywhere.
-- Table cells may contain `\n` (Gherkin escape) — used to append multi-line journal snippets.
-- `the journal contains` compares whitespace-normalised lines; `the journal is unchanged` is a
-  byte comparison against the state at `I start konto`.
-- **CSV generator**: `a Postbank CSV "x" for IBAN … with closing balance … :` renders a full
-  Postbank export (UTF-8 BOM, preamble, header, rows as given — newest first — `Kontostand`
-  trailer) into the XDG download dir. No real bank data anywhere; `import-format` alone feeds
-  raw bytes.
-- `EDITOR`/`VISUAL` stubs and a `hledger` shim (version faking, slowing, failing, garbage output,
-  invocation recording) live in the harness.
+- `mise run test:e2e` runs godog (`//go:build e2e`) over these features; godog flags after `--`
+  (`mise run test:e2e -- -godog.tags=@spec-4.5 -godog.format=progress`). Default filter
+  `~@wip && ~@needs-decision`, strict: a non-`@wip` scenario with an undefined step fails.
+- **`@wip` is on every scenario until its behaviour is built.** Building a slice = remove `@wip`
+  from its scenarios, add any view-specific steps, make them pass.
+- Drives the **compiled binary** (built lazily from `cmd/konto`) in a PTY (default 120×40),
+  rendered through `charmbracelet/x/vt`; asserts on screen text, cell colour (ANSI index), exit
+  code, stderr, and the files on disk. The harness imports nothing of konto's (archtest).
+- One sandbox per scenario: temp dir with its own `HOME`, XDG dirs, download dir, journal
+  (`LEDGER_FILE`), `KONTO_TODAY` (default 2026-09-30), `EDITOR` stub.
+- **`hledger` shim** (`e2e/hledgershim`) first on `PATH`: records every call, fakes the version,
+  slows, fails or returns garbage per scenario, else execs the real pinned hledger.
+- **Postbank CSV generator** renders the table steps into a full export (BOM, preamble, header,
+  rows newest first, `Kontostand` trailer). No real bank data anywhere.
+- `the journal contains` compares whitespace-normalised consecutive lines; `the journal is
+  unchanged` is a byte comparison against the state at `I start konto`; `the screen is
+  unchanged` compares against the screen before the first action of the When block.
+- Failures dump screen, stderr and hledger calls to `$KONTO_E2E_ARTIFACTS` (CI uploads them);
+  `KONTO_E2E_KEEP=1` keeps the sandboxes.
+- Harness self-tests (`e2e/harness_test.go`) pin the pty, screen, keys, shim, CSV generator and
+  matchers, so a green run means konto behaved.
 
 ## Fixtures — `testdata/journals/` (hand-written, verified against hledger 1.52.1)
 

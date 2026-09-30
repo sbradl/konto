@@ -20,6 +20,7 @@ Feature: Import — a staged import survives view switches and guards quitting
 
   Rule: Views stay alive
 
+    @wip
     Scenario Outline: the staged import survives switching views
       When I press "<view>"
       And I press "2"
@@ -33,16 +34,19 @@ Feature: Import — a staged import survives view switches and guards quitting
         | 4    |
         | 5    |
 
+    @wip
     Scenario: the selected row survives switching views
       Given I select the row "Kaffeehaus"
       When I press "1"
       And I press "2"
       Then the row "Kaffeehaus" is selected
 
+    @wip
     Scenario: a refresh keeps the staged import
       When I press "r"
       Then the row "Kiosk" shows "✓" and rule id "6"
 
+    @wip
     Scenario: a refresh re-derives the skipped list from the new journal
       When I append to the journal externally a checking transaction on 2026-09-29 "Bäckerei Schmidt" of 6,50 EUR
       And I press "r"
@@ -50,22 +54,26 @@ Feature: Import — a staged import survives view switches and guards quitting
 
   Rule: Quitting with staged work
 
+    @wip
     Scenario: q asks y/n when something is staged
       When I press "q"
       Then I see a y/n prompt about discarding the staged import
       And konto is still running
 
+    @wip
     Scenario: n stays
       Given I press "q"
       When I press "n"
       Then konto is still running
       And the row "Kiosk" shows "✓"
 
+    @wip
     Scenario: Esc stays
       Given I press "q"
       When I press "Esc"
       Then konto is still running
 
+    @wip
     Scenario: y quits and leaves the disk untouched
       Given I press "q"
       When I press "y"
@@ -74,11 +82,13 @@ Feature: Import — a staged import survives view switches and guards quitting
       And categories.rules is unchanged
       And no new file exists next to the journal
 
+    @wip
     Scenario: q on another view still asks while work is staged
       Given I press "1"
       When I press "q"
       Then I see a y/n prompt about discarding the staged import
 
+    @wip
     Scenario: opening a file with nothing categorised already counts as staged
       Given I press "q"
       And I press "y"
@@ -87,12 +97,14 @@ Feature: Import — a staged import survives view switches and guards quitting
       When I press "q"
       Then I see a y/n prompt about discarding the staged import
 
+    @wip
     Scenario: q quits at once after a successful write
       Given I open "sept.csv" in Import and categorise every row
       And I write the import
       When I press "q"
       Then konto exits with code 0
 
+    @wip
     Scenario: q quits at once with no import in progress
       Given I press "q"
       And I press "y"
@@ -100,11 +112,13 @@ Feature: Import — a staged import survives view switches and guards quitting
       When I press "q"
       Then konto exits with code 0
 
+    @wip
     Scenario: Ctrl+C with staged work asks exactly like q
       When I press "Ctrl+C"
       Then I see a y/n prompt about discarding the staged import
       And konto is still running
 
+    @wip
     Scenario: Ctrl+C then y quits and leaves the disk untouched
       Given I press "Ctrl+C"
       When I press "y"
@@ -113,6 +127,7 @@ Feature: Import — a staged import survives view switches and guards quitting
 
   Rule: Discarding
 
+    @wip
     Scenario: a discarded import can be started again from scratch
       Given I press "q"
       And I press "y"
@@ -121,6 +136,7 @@ Feature: Import — a staged import survives view switches and guards quitting
       Then the row "Kiosk" shows "?"
       And no rule is staged
 
+    @wip
     Scenario: the lock is released after discarding
       Given I press "q"
       And I press "y"
@@ -129,6 +145,7 @@ Feature: Import — a staged import survives view switches and guards quitting
 
   Rule: Staged rules do not leak into the next file
 
+    @wip
     Scenario: a fresh file starts with only the rules on disk
       Given I import "sept.csv" categorising every row
       And a Postbank CSV "later.csv" for IBAN "DE89370400440532013000" with closing balance 13.000,00 EUR:

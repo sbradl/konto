@@ -17,3 +17,6 @@
 
 # Real bank exports — format reference only, never committed (ticket 14)
 .scratch/konto-spec/samples/
+
+# e2e failure dumps (screen, stderr, hledger calls)
+/e2e-artifacts/

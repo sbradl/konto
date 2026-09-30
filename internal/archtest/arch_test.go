@@ -30,6 +30,7 @@ const (
 	layerView
 	layerUIRoot
 	layerCmd
+	layerE2E
 )
 
 var layerNames = map[layer]string{
@@ -41,6 +42,7 @@ var layerNames = map[layer]string{
 	layerView:    "view",
 	layerUIRoot:  "ui root",
 	layerCmd:     "composition root",
+	layerE2E:     "e2e harness",
 }
 
 // layers classifies every package konto may have (spec §3, ADR 0012). A
@@ -77,6 +79,9 @@ var layers = map[string]layer{
 	"internal/ui/scheduled": layerView,
 	"internal/ui/forecast":  layerView,
 	"internal/ui/reports":   layerView,
+
+	"e2e":             layerE2E,
+	"e2e/hledgershim": layerE2E,
 }
 
 // mayImport lists the konto layers each layer may depend on. Dependencies
@@ -91,11 +96,12 @@ var mayImport = map[layer][]layer{
 	layerView:    {layerDomain, layerUseCase, layerUILeaf},
 	layerUIRoot:  {layerDomain, layerUseCase, layerUILeaf, layerView},
 	layerCmd:     {layerDomain, layerAdapter, layerConfig, layerUseCase, layerUILeaf, layerView, layerUIRoot},
+	layerE2E:     nil, // black box: drives the compiled binary only
 }
 
-// charmV2 is the only third-party code konto uses (spec §1), confined to the
-// UI circle and the composition root. The frozen v1 import paths
-// (github.com/charmbracelet/...) are therefore rejected like any other module.
+// charmV2 is the only third-party code konto itself uses (spec §1), confined
+// to the UI circle and the composition root. The frozen v1 import paths
+// (github.com/charmbracelet/bubbletea, …) are rejected like any other module.
 var charmV2 = []string{
 	"charm.land/bubbletea/v2",
 	"charm.land/lipgloss/v2",
@@ -103,7 +109,23 @@ var charmV2 = []string{
 	"github.com/NimbleMarkets/ntcharts/v2",
 }
 
-var charmLayers = []layer{layerUILeaf, layerView, layerUIRoot, layerCmd}
+// e2eDeps is the harness's toolkit (features/README.md): Gherkin runner, pty,
+// virtual terminal.
+var e2eDeps = []string{
+	"github.com/cucumber/godog",
+	"github.com/creack/pty",
+	"github.com/charmbracelet/x/vt",
+	"github.com/charmbracelet/x/ansi",
+}
+
+// thirdParty lists the modules each layer may import; unlisted layers none.
+var thirdParty = map[layer][]string{
+	layerUILeaf: charmV2,
+	layerView:   charmV2,
+	layerUIRoot: charmV2,
+	layerCmd:    charmV2,
+	layerE2E:    e2eDeps,
+}
 
 // forbiddenStdlib bans I/O from the pure domain (non-test files only).
 var forbiddenStdlib = map[layer][]string{
@@ -112,7 +134,8 @@ var forbiddenStdlib = map[layer][]string{
 
 // execAllowed lists the only packages that may start processes: the hledger
 // adapter, main (preflight), and the ui root ($EDITOR via tea.ExecProcess).
-var execAllowed = []string{"internal/hledger", "cmd/konto", "internal/ui"}
+// The e2e harness starts konto, the shim and hledger.
+var execAllowed = []string{"internal/hledger", "cmd/konto", "internal/ui", "e2e", "e2e/hledgershim"}
 
 // clockFree layers must take "today" as an injected func (ADR 0012).
 var clockFree = []layer{layerDomain, layerUseCase}
@@ -137,57 +160,84 @@ type repo struct {
 	pkgs   []pkg
 }
 
+// file is one Go file placed in its package and layer.
+type file struct {
+	goFile
+	dir   string
+	layer layer
+	where string // module-relative path, for messages
+}
+
 func (r repo) check() []string {
 	var out []string
 	for _, p := range r.pkgs {
 		l, known := layers[p.dir]
 		if !known {
-			out = append(out, fmt.Sprintf("%s: unclassified package; add it to archtest layers deliberately (spec §3)", p.dir))
+			out = append(out, p.dir+": unclassified package; add it to archtest layers deliberately (spec §3)")
 			continue
 		}
-		for _, f := range p.files {
-			out = append(out, r.checkImports(p, l, f)...)
-			out = append(out, checkClock(p, l, f)...)
-			out = append(out, checkColours(p, f)...)
+		for _, gf := range p.files {
+			f := file{goFile: gf, dir: p.dir, layer: l, where: path.Join(p.dir, gf.name)}
+			out = append(out, r.checkImports(f)...)
+			out = append(out, checkClock(f)...)
+			out = append(out, checkColours(f)...)
 		}
 	}
 	return out
 }
 
-func (r repo) checkImports(p pkg, l layer, f goFile) []string {
+func (r repo) checkImports(f file) []string {
 	var out []string
-	where := path.Join(p.dir, f.name)
 	for _, spec := range f.ast.Imports {
 		imp, _ := strconv.Unquote(spec.Path.Value)
+		var problem string
 		switch {
 		case imp == r.module || strings.HasPrefix(imp, r.module+"/"):
-			dep := strings.TrimPrefix(strings.TrimPrefix(imp, r.module), "/")
-			if dep == p.dir {
-				continue // external test package importing its own package
-			}
-			depLayer, known := layers[dep]
-			if !known || !slices.Contains(mayImport[l], depLayer) {
-				out = append(out, fmt.Sprintf("%s: %s must not import %s (ADR 0003)", where, layerNames[l], dep))
-			}
+			problem = kontoImportProblem(f, strings.TrimPrefix(strings.TrimPrefix(imp, r.module), "/"))
 		case isStdlib(imp):
-			if imp == "os/exec" && !slices.Contains(execAllowed, p.dir) {
-				out = append(out, fmt.Sprintf("%s: %s must not import os/exec; only the hledger adapter, main and the ui root start processes", where, layerNames[l]))
-			} else if !f.test && slices.Contains(forbiddenStdlib[l], imp) {
-				out = append(out, fmt.Sprintf("%s: %s must not import %s; it does no I/O", where, layerNames[l], imp))
-			}
-		case hasModulePrefix(imp, charmV2):
-			if !slices.Contains(charmLayers, l) {
-				out = append(out, fmt.Sprintf("%s: %s must not import %s; Charm is confined to internal/ui and cmd", where, layerNames[l], imp))
-			}
+			problem = stdlibImportProblem(f, imp)
 		default:
-			out = append(out, fmt.Sprintf("%s: third-party import %s not allowed; konto's only dependencies are the Charm v2 stack (spec §1)", where, imp))
+			problem = thirdPartyImportProblem(f, imp)
+		}
+		if problem != "" {
+			out = append(out, f.where+": "+problem)
 		}
 	}
 	return out
 }
 
-func checkClock(p pkg, l layer, f goFile) []string {
-	if f.test || !slices.Contains(clockFree, l) {
+func kontoImportProblem(f file, dep string) string {
+	if dep == f.dir {
+		return "" // external test package importing its own package
+	}
+	if depLayer, known := layers[dep]; known && slices.Contains(mayImport[f.layer], depLayer) {
+		return ""
+	}
+	return fmt.Sprintf("%s must not import %s (ADR 0003)", layerNames[f.layer], dep)
+}
+
+func stdlibImportProblem(f file, imp string) string {
+	switch {
+	case imp == "os/exec" && !slices.Contains(execAllowed, f.dir):
+		return layerNames[f.layer] + " must not import os/exec; only the hledger adapter, main and the ui root start processes"
+	case !f.test && slices.Contains(forbiddenStdlib[f.layer], imp):
+		return fmt.Sprintf("%s must not import %s; it does no I/O", layerNames[f.layer], imp)
+	}
+	return ""
+}
+
+func thirdPartyImportProblem(f file, imp string) string {
+	switch {
+	case hasModulePrefix(imp, thirdParty[f.layer]):
+		return ""
+	case hasModulePrefix(imp, charmV2):
+		return fmt.Sprintf("%s must not import %s; Charm is confined to internal/ui and cmd", layerNames[f.layer], imp)
+	}
+	return fmt.Sprintf("third-party import %s not allowed in %s (spec §1)", imp, layerNames[f.layer])
+}
+
+func checkClock(f file) []string {
+	if f.test || !slices.Contains(clockFree, f.layer) {
 		return nil
 	}
 	name := localName(f.ast, "time")
@@ -197,39 +247,56 @@ func checkClock(p pkg, l layer, f goFile) []string {
 	var out []string
 	ast.Inspect(f.ast, func(n ast.Node) bool {
 		if isSelector(n, name, "Now") {
-			out = append(out, fmt.Sprintf("%s: %s reads time.Now; inject today func() domain.Date (ADR 0012)", path.Join(p.dir, f.name), layerNames[layers[p.dir]]))
+			out = append(out, fmt.Sprintf("%s: %s reads time.Now; inject today func() domain.Date (ADR 0012)",
+				f.where, layerNames[f.layer]))
 		}
 		return true
 	})
 	return out
 }
 
-func checkColours(p pkg, f goFile) []string {
+func checkColours(f file) []string {
 	if f.test {
 		return nil
 	}
-	where := path.Join(p.dir, f.name)
 	lipgloss := localName(f.ast, "charm.land/lipgloss/v2")
 	var out []string
 	ast.Inspect(f.ast, func(n ast.Node) bool {
+		var problem string
 		switch n := n.(type) {
 		case *ast.BasicLit:
-			if s, err := strconv.Unquote(n.Value); n.Kind == token.STRING && err == nil && hexColour.MatchString(s) {
-				out = append(out, fmt.Sprintf("%s: hex colour %q; use ANSI-16 indices (ADR 0005)", where, s))
-			}
+			problem = hexLiteralProblem(n)
 		case *ast.CallExpr:
-			if lipgloss == "" || !isSelector(n.Fun, lipgloss, "Color") {
-				return true
-			}
-			if p.dir != themeDir {
-				out = append(out, fmt.Sprintf("%s: lipgloss.Color outside %s; use the named theme styles (ADR 0005)", where, themeDir))
-			} else if !isANSIIndex(n.Args) {
-				out = append(out, fmt.Sprintf("%s: lipgloss.Color takes a literal ANSI index \"0\"–\"15\" (ADR 0005)", where))
-			}
+			problem = colourCallProblem(f.dir, lipgloss, n)
+		}
+		if problem != "" {
+			out = append(out, f.where+": "+problem)
 		}
 		return true
 	})
 	return out
+}
+
+func hexLiteralProblem(lit *ast.BasicLit) string {
+	if lit.Kind != token.STRING {
+		return ""
+	}
+	if s, err := strconv.Unquote(lit.Value); err == nil && hexColour.MatchString(s) {
+		return fmt.Sprintf("hex colour %q; use ANSI-16 indices (ADR 0005)", s)
+	}
+	return ""
+}
+
+func colourCallProblem(dir, lipgloss string, call *ast.CallExpr) string {
+	switch {
+	case lipgloss == "" || !isSelector(call.Fun, lipgloss, "Color"):
+		return ""
+	case dir != themeDir:
+		return "lipgloss.Color outside " + themeDir + "; use the named theme styles (ADR 0005)"
+	case !isANSIIndex(call.Args):
+		return "lipgloss.Color takes a literal ANSI index \"0\"–\"15\" (ADR 0005)"
+	}
+	return ""
 }
 
 func isANSIIndex(args []ast.Expr) bool {
@@ -283,66 +350,72 @@ func hasModulePrefix(imp string, modules []string) bool {
 	return false
 }
 
-// loadRepo parses every Go file under the module root, skipping hidden,
-// underscore, testdata and vendor directories as the go tool does.
+// loadRepo parses every Go file under the module root except archtest's own.
 func loadRepo(t *testing.T) repo {
 	t.Helper()
 	root := moduleRoot(t)
+	pkgs, err := parsePackages(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := repo{module: modulePath(t, root)}
+	for _, p := range pkgs {
+		if p.dir != "internal/archtest" {
+			r.pkgs = append(r.pkgs, p)
+		}
+	}
+	return r
+}
+
+func modulePath(t *testing.T, root string) string {
+	t.Helper()
 	mod, err := os.ReadFile(filepath.Join(root, "go.mod"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	module := ""
-	for _, line := range strings.Split(string(mod), "\n") {
+	for line := range strings.SplitSeq(string(mod), "\n") {
 		if rest, ok := strings.CutPrefix(line, "module "); ok {
-			module = strings.TrimSpace(rest)
+			return strings.TrimSpace(rest)
 		}
 	}
-	if module == "" {
-		t.Fatal("no module line in go.mod")
-	}
+	t.Fatal("no module line in go.mod")
+	return ""
+}
 
+// parsePackages parses every Go file under root, grouped by directory in walk
+// order, skipping the directories the go tool skips.
+func parsePackages(root string) ([]pkg, error) {
 	fset := token.NewFileSet()
-	byDir := map[string]*pkg{}
-	var dirs []string
-	err = filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
+	var pkgs []pkg
+	index := map[string]int{}
+	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+		switch {
+		case err != nil:
 			return err
-		}
-		name := d.Name()
-		if d.IsDir() {
-			if p != root && (strings.HasPrefix(name, ".") || strings.HasPrefix(name, "_") || name == "testdata" || name == "vendor") {
-				return filepath.SkipDir
-			}
+		case d.IsDir() && p != root && ignoredDir(d.Name()):
+			return filepath.SkipDir
+		case d.IsDir() || !strings.HasSuffix(p, ".go"):
 			return nil
 		}
-		if !strings.HasSuffix(name, ".go") {
-			return nil
-		}
-		f, err := parser.ParseFile(fset, p, nil, parser.SkipObjectResolution)
+		parsed, err := parser.ParseFile(fset, p, nil, parser.SkipObjectResolution)
 		if err != nil {
 			return err
 		}
 		rel, _ := filepath.Rel(root, filepath.Dir(p))
 		dir := filepath.ToSlash(rel)
-		if byDir[dir] == nil {
-			byDir[dir] = &pkg{dir: dir}
-			dirs = append(dirs, dir)
+		if _, seen := index[dir]; !seen {
+			index[dir] = len(pkgs)
+			pkgs = append(pkgs, pkg{dir: dir})
 		}
-		byDir[dir].files = append(byDir[dir].files, goFile{name: name, test: strings.HasSuffix(name, "_test.go"), ast: f})
+		gf := goFile{name: d.Name(), test: strings.HasSuffix(p, "_test.go"), ast: parsed}
+		pkgs[index[dir]].files = append(pkgs[index[dir]].files, gf)
 		return nil
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	r := repo{module: module}
-	for _, d := range dirs {
-		if d == "internal/archtest" {
-			continue
-		}
-		r.pkgs = append(r.pkgs, *byDir[d])
-	}
-	return r
+	return pkgs, err
+}
+
+func ignoredDir(name string) bool {
+	return strings.HasPrefix(name, ".") || strings.HasPrefix(name, "_") || name == "testdata" || name == "vendor"
 }
 
 func moduleRoot(t *testing.T) string {
@@ -378,7 +451,7 @@ func TestLoaderFindsKnownPackages(t *testing.T) {
 	if r.module != "github.com/sbradl/konto" {
 		t.Errorf("module = %q", r.module)
 	}
-	var dirs []string
+	dirs := make([]string, 0, len(r.pkgs))
 	for _, p := range r.pkgs {
 		dirs = append(dirs, p.dir)
 	}
@@ -446,6 +519,10 @@ func TestRules(t *testing.T) {
 		{"use case must not import charm", "internal/periodic", "a.go", imports("periodic", "charm.land/lipgloss/v2"), "use case must not import charm.land/lipgloss/v2"},
 		{"charm v1 paths rejected", "internal/ui", "a.go", imports("ui", "github.com/charmbracelet/bubbletea"), "third-party import github.com/charmbracelet/bubbletea not allowed"},
 		{"no other third-party modules", "internal/domain", "a.go", imports("domain", "github.com/shopspring/decimal"), "third-party import github.com/shopspring/decimal not allowed"},
+		{"e2e harness toolkit", "e2e", "a_test.go", imports("e2e", "github.com/cucumber/godog", "github.com/creack/pty", "github.com/charmbracelet/x/vt", "os/exec"), ""},
+		{"e2e is a black box", "e2e", "a_test.go", imports("e2e", k("internal/domain")), "e2e harness must not import internal/domain"},
+		{"e2e toolkit stays in e2e", "internal/ui", "a.go", imports("ui", "github.com/charmbracelet/x/vt"), "third-party import github.com/charmbracelet/x/vt not allowed in ui root"},
+		{"e2e must not use charm", "e2e", "a_test.go", imports("e2e", "charm.land/bubbletea/v2"), "e2e harness must not import charm.land/bubbletea/v2"},
 
 		// I/O and processes
 		{"domain does no I/O", "internal/domain", "a.go", imports("domain", "os"), "domain must not import os;"},

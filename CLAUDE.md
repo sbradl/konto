@@ -31,8 +31,9 @@ scheduled/periodic transactions, forecast, reports (manual entry deferred, ADR 0
 
 ## State
 
-Foundation spec complete; build not yet started. `go.mod` (`github.com/sbradl/konto`,
-go 1.27) is the only Go artifact. Per-feature design (CSV import, forecast, periodic
+Foundation spec complete. Built so far: hledger version preflight (`internal/hledger`,
+`internal/domain`), architecture tests (`internal/archtest`), the e2e harness (`e2e/`) and CI.
+Next: the Bubble Tea shell (`cmd/konto`, spec §13). Per-feature design (CSV import, forecast, periodic
 transactions) is grilled just-in-time as each view is built — see `docs/spec.md` §12 and the
 open tickets in `.scratch/konto-spec/issues/`.
 
@@ -61,16 +62,18 @@ Toolchain (go, golangci-lint, gotestsum, gremlins, hledger) is pinned in `mise.t
 - `mise run build` — `go build ./...`
 - `mise run vet` — `go vet ./...`
 - `mise run lint` — `golangci-lint run`
-- `mise run check` — build + vet + lint + cover:check (the CI gate)
+- `mise run check` — build + vet + lint + cover:check (fast gate; archtest runs inside the tests)
+- `mise run qa` — everything CI runs on a PR: tidy, check, vuln, test:integration, test:e2e,
+  mutation:diff (`.github/workflows/qa.yml` calls the same tasks)
+- `mise run test:e2e` — Gherkin suite (`features/`, harness in `e2e/`); godog flags after `--`,
+  e.g. `mise run test:e2e -- -godog.tags=@spec-4.5`. Every scenario is `@wip` until built.
 
 Thresholds start maxed by user directive — loosen a threshold in `mise.toml` only with a
 recorded reason, never silently.
 
 ## Testing
 
-Verified against this repo's `mise.toml` / installed toolchain. The repo has no Go packages
-yet, so the `./...` forms below were exercised through a throwaway package; substitute a
-real import path (e.g. `./internal/ledger`) once packages exist.
+Verified against this repo's `mise.toml` / installed toolchain.
 
 - **Full test suite** — `mise run test` (unit, `-race`, gotestsum) ·
   `mise run test:integration` (adds `-tags integration`, shells out to real `hledger`).
@@ -98,5 +101,8 @@ Test-first. Skills in `.claude/skills/`:
   `tdd-refactor` at each batch boundary.
 - `craft-review` — five-lens diff review (DDD, code smells, Clean Code, Pragmatic
   Programmer, Philosophy of Software Design).
+- `clean-review` — runs the static gate (`.golangci.yml` maps linters to Clean Code rules,
+  `internal/archtest`), then reviews only what tools can't judge: Clean Code, DDD, Pragmatic.
+  New Clean Code rules go into `.golangci.yml` when a linter can check them.
 
 To advance a deferred per-feature ticket: `/mattpocock-skills:wayfinder work through the map, ticket NN`.

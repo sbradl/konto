@@ -666,6 +666,14 @@ Ticket `11-test-seams-and-fixtures`. Three seam levels matching the layers:
 `minimal`, `multicommodity` (EUR/PLN/CZK), `periodic` (`~` rules), `prices`,
 `broken-assertion`, `accounts` (tagged + untagged), `import/` (`.csv` + `categories.rules`).
 
+**e2e** — Gherkin features in `features/` run by `e2e/` (godog + pty + virtual terminal against
+the compiled binary, real hledger behind a recording shim); `features/README.md`. Scenarios
+carry `@wip` until their behaviour is built.
+
+**Static analysis** — `.golangci.yml` enforces every Clean Code (Martin, 2nd ed.) rule a tool can
+judge, each linter annotated with its rule; the `clean-review` skill reviews the rest plus DDD and
+Pragmatic Programmer rules.
+
 **TUI** — bulk = unit tests on each view's pure `Update` + `ui/widgets` render helpers
 (string in / string out at fixed width). Smoke = a few full-program `teatest` flows (launch
 → nav each view → `!` → quit); build-time check that `teatest` has a Bubble Tea v2 release,
@@ -685,9 +693,10 @@ bar at fixed sizes only, not whole views during active development.
   gremlins efficacy + mutant-coverage thresholds = 100. Loosening any threshold needs a
   recorded reason in `mise.toml`.
 - `gofmt` / standard Go idioms; match surrounding code.
-- CI (not yet wired — no remote): run `mise run check` plus `mise run test:integration`.
-  Mutation testing runs out of the gate loop (`mutation:diff` on PRs, full `mutation`
-  nightly) — it recompiles per mutant and is slow by nature.
+- CI: `.github/workflows/qa.yml` — jobs `check` (tidy + build/vet/lint/archtest/unit
+  tests at 100% coverage), `vuln` (govulncheck), `integration`, `e2e`, `mutation-diff` on pull
+  requests, full `mutation` nightly. Each job is one mise task; `mise run qa` runs the PR set
+  locally.
 
 ---
 

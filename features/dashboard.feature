@@ -13,14 +13,17 @@ Feature: Dashboard
 
   Rule: Stat cards
 
+    @wip
     Scenario: net worth is the sum of open assets and liabilities
       Then I see a "NET WORTH" card showing "26.600,00 EUR"
 
+    @wip
     Scenario: net income card is the calendar month to date
       Then I see a "SEPTEMBER NET INCOME" card showing "1.815,00 EUR"
       And the card note reads "3.000,00 in / 1.185,00 out"
       And "1.815,00 EUR" is coloured 2
 
+    @wip
     Scenario: negative net income is red
       Given the journal "minimal" with appended text "\npayee Kiosk\naccount expenses:x\n2026-09-05 Kiosk\n    expenses:x  40,00 EUR\n    assets:transfers\n"
       And I start konto
@@ -28,33 +31,40 @@ Feature: Dashboard
       And "-40,00 EUR" is coloured 1
       And the card note reads "0,00 in / 40,00 out"
 
+    @wip
     Scenario: transfers are neither income nor expense
       Then the "SEPTEMBER NET INCOME" figure does not include the 500,00 EUR transfer to savings
 
+    @wip
     Scenario: month label follows today
       Given today is 2026-10-01
       And I start konto
       Then I see a "OCTOBER NET INCOME" card showing "0,00 EUR"
       And the card note reads "0,00 in / 0,00 out"
 
+    @wip
     Scenario: first day of the month excludes last month's transactions
       Given today is 2026-10-01
       And I start konto
       Then the "OCTOBER NET INCOME" figure does not include any September transaction
 
+    @wip
     Scenario: last day of a short month
       Given today is 2026-02-28
       And I start konto
       Then I see a "FEBRUARY NET INCOME" card showing "1.870,00 EUR"
 
+    @wip
     Scenario: there are exactly two stat cards
       Then I see exactly 2 stat cards
       And I do not see "JOURNAL CHECKS"
       And I do not see "CASH FLOW"
 
+    @wip
     Scenario: the card is not hledger's cashflow
       Then "SEPTEMBER NET INCOME" equals income minus expenses, not the change in asset accounts
 
+    @wip
     Scenario: net worth counts the clearing account
       # checking -200 is imported, the savings leg is not yet: clearing +200 keeps net worth whole
       Given the journal "household" with a one-sided transfer leg of 200,00 EUR on the clearing account
@@ -62,18 +72,20 @@ Feature: Dashboard
       Then the row "assets:transfers" shows "200,00 EUR"
       And I see a "NET WORTH" card showing "26.600,00 EUR"
 
+    @wip
     Scenario: net worth excludes closed accounts even with a stray balance
       Given the journal "household" where closed account "assets:old-account" holds 50,00 EUR
       And I start konto
       Then I see a "NET WORTH" card showing "26.600,00 EUR"
 
-    @proposed
+    @proposed @wip
     Scenario: a foreign-currency balance renders as "+ N cur"
       Given the journal "household" where "assets:spare" holds 100,00 PLN
       And I start konto
       Then the "assets:spare" row shows "+ 1 cur" or "100,00 PLN"
       And I do not see the words "commodity" or "at cost"
 
+    @wip
     Scenario: dashboard is month to date whatever Reports shows
       Given I press "5"
       And I press "p" 3 times
@@ -82,7 +94,7 @@ Feature: Dashboard
 
   Rule: Accounts panel
 
-    @proposed
+    @proposed @wip
     Scenario: flat list of full names, not a tree
       Then the Accounts panel lists in order
         | assets:checking        |
@@ -94,37 +106,44 @@ Feature: Dashboard
       And no Accounts row is a parent or header row
       And there are no subtotal rows
 
+    @wip
     Scenario: balances are right-aligned
       Then every balance in the Accounts panel ends at the same column
       And "assets:checking" shows "13.240,00 EUR"
       And "assets:savings" shows "13.500,00 EUR"
 
+    @wip
     Scenario: negative balances are red
       Then "-140,00 EUR" on "liabilities:creditcard" is coloured 1
       And "13.240,00 EUR" on "assets:checking" is not coloured 1
 
+    @wip
     Scenario: import-fed accounts show the import glyph
       Then the row "assets:checking" shows the glyph "↓" coloured 8
       And the row "assets:savings" shows the glyph "↓" coloured 8
 
-    @proposed
+    @proposed @wip
     Scenario: manual accounts show the manual glyph
       Given the journal "household" with "assets:cash" declared as "konto:source:manual"
       And I start konto
       Then the row "assets:cash" shows the glyph "✎" coloured 3
 
+    @wip
     Scenario: closed accounts are listed dimmed below open ones
       Then the last Accounts row is "assets:old-account"
       And it shows "closed 2026-03-01" in the balance column
       And the row is coloured 8
 
+    @wip
     Scenario: closed accounts do not count toward any total or stat card
       Then I see a "NET WORTH" card showing "26.600,00 EUR"
 
+    @wip
     Scenario: the first row is selected at start
       Then the row "assets:checking" is selected with background 8 and foreground 15
       And the status bar shows "1/6"
 
+    @wip
     Scenario Outline: arrows move the cursor
       When I press "<key>"
       Then the row "<row>" is selected
@@ -138,6 +157,7 @@ Feature: Dashboard
         | PgDn | assets:old-account     | 6/6 |
         | PgUp | assets:checking        | 1/6 |
 
+    @wip
     Scenario: cursor stops at both ends
       When I press "↑"
       Then the row "assets:checking" is selected
@@ -145,10 +165,12 @@ Feature: Dashboard
       And I press "↓"
       Then the row "assets:old-account" is selected
 
+    @wip
     Scenario: vim keys do not move the cursor
       When I press "j"
       Then the row "assets:checking" is selected
 
+    @wip
     Scenario: paging on a long list
       Given the journal "household" with 40 open import accounts
       And the terminal is 120×40
@@ -159,6 +181,7 @@ Feature: Dashboard
       When I press "End"
       Then the last account is selected and visible
 
+    @wip
     Scenario: an overflowing read-only panel says how many rows are hidden
       Given the journal "household" with 200 transactions
       And the terminal is 100×30
@@ -167,41 +190,44 @@ Feature: Dashboard
 
   Rule: Recent panel
 
-    @proposed
+    @proposed @wip
     Scenario: newest first across all accounts
       Then the Recent panel's first two rows are dated "2026-09-26" and describe "Sparen"
       And the third row is dated "2026-09-25" and describes "Acme GmbH"
       And the rows are in non-increasing date order
 
-    @proposed
+    @proposed @wip
     Scenario: row shape is date, description, category, amount
       Then the Recent row for "Acme GmbH" on "2026-09-25" shows category "income:salary"
       And it shows "3.000,00 EUR" coloured 2
 
-    @proposed
+    @proposed @wip
     Scenario: expenses are not green
       Then the Recent row for "REWE" on "2026-09-10" shows category "expenses:groceries"
       And its amount is not coloured 2
 
-    @proposed
+    @proposed @wip
     Scenario: a transfer shows the counterpart account, not a category
       Then the Recent rows for "Sparen" show "assets:transfers"
 
-    @proposed
+    @proposed @wip
     Scenario: rows are not selectable
       When I press "↓"
       Then no Recent row is highlighted with background 8
 
+    @wip
     Scenario: no uncategorised marker
       Then I do not see "?" in any Recent row
       And I do not see the word "uncategorized" anywhere
 
+    @wip
     Scenario: no edit key on Recent
       When I press "e"
       Then the screen is unchanged
 
   Rule: Upcoming panel
 
+    @wip
     Scenario: next occurrences from periodic rules, soonest first
       Then the Upcoming panel lists in order
         | 2026-10-01 | Vermieter Mueller |
@@ -209,16 +235,17 @@ Feature: Dashboard
         | 2026-10-25 | Acme GmbH         |
         | 2026-10-26 | Sparen            |
 
-    @proposed
+    @proposed @wip
     Scenario: rows are not selectable
       When I press "↓"
       Then no Upcoming row is highlighted with background 8
 
+    @wip
     Scenario: upcoming items are not journal transactions
       Then the journal is unchanged
       And the transaction count in the tab bar is still 54
 
-    @proposed
+    @proposed @wip
     Scenario: no rules means an empty panel, not an error
       Given the journal "household"
       And I start konto
@@ -227,27 +254,33 @@ Feature: Dashboard
 
   Rule: Monthly spend chart
 
+    @wip
     Scenario: last six complete months of total expenses
       Then I see a braille chart of monthly spend
       And the x-axis labels are "Mar" "Apr" "May" "Jun" "Jul" "Aug"
       And the x-axis does not include "Sep"
       And the plotted monthly totals are 1175, 1120, 1195, 1150, 1205, 1130
 
+    @wip
     Scenario: single line
       Then the chart has exactly 1 data series
 
+    @wip
     Scenario: transfers and income are not spend
       Then the plotted totals do not include the monthly 500,00 EUR transfer
       And the plotted totals do not include salary
 
+    @wip
     Scenario: y-axis labels are in thousands
       Then the y-axis labels are formatted in thousands
 
+    @wip
     Scenario: chart uses only ANSI-16 colours
       Then every chart cell colour is an ANSI index below 16
 
   Rule: Dropped panels
 
+    @wip
     Scenario Outline: v1 does not show handoff panels
       Then I do not see "<text>"
 
@@ -259,6 +292,7 @@ Feature: Dashboard
         | at cost       |
         | -V market     |
 
+    @wip
     Scenario Outline: dropped keys do nothing
       When I press "<key>"
       Then the screen is unchanged
@@ -271,6 +305,7 @@ Feature: Dashboard
 
   Rule: Refresh and errors
 
+    @wip
     Scenario: external change shows after r
       When I append this to the journal externally:
         """
@@ -282,13 +317,14 @@ Feature: Dashboard
       Then I see a "SEPTEMBER NET INCOME" card showing "1.805,00 EUR"
       And the Recent panel's first row is dated "2026-09-29"
 
+    @wip
     Scenario: external change is not visible before r
       When I append a transaction to the journal externally
       Then the screen is unchanged
 
   Rule: Responsive panels
 
-    @proposed
+    @proposed @wip
     Scenario Outline: Accounts always survives, lower priorities drop
       Given the terminal is <w>×<h>
       Then I see the "ACCOUNTS" panel
@@ -300,17 +336,19 @@ Feature: Dashboard
         | 120 | 40 |
         | 180 | 60 |
 
-    @proposed
+    @proposed @wip
     Scenario: hidden panels are counted in the status bar
       Given the terminal is 100×30
       Then the status bar shows "panels hidden · widen terminal"
 
+    @wip
     Scenario: dropped panels come back when the terminal grows
       Given the terminal is 100×30
       When I resize the terminal to 180×60
       Then I see the "RECENT" and "UPCOMING" panels
       And the status bar does not show "hidden"
 
+    @wip
     Scenario: panel titles are inset two cells
       Then the top border of the "ACCOUNTS" panel reads "╭─ ACCOUNTS"
       And panel borders use rounded box-drawing characters

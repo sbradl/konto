@@ -18,6 +18,7 @@ Feature: Product invariants that must hold across the whole app
         | 26.9.2026 | Umbuchung        | Sparen            | Sparen       | -500,00  |
       And I start konto
 
+    @wip
     Scenario Outline: after each kind of write all eleven checks pass individually
       When I perform the write "<write>"
       Then every hledger check passes individually
@@ -33,10 +34,12 @@ Feature: Product invariants that must hold across the whole app
         | edited periodic rule                       |
         | deleted periodic rule                      |
 
+    @wip
     Scenario: a konto write never introduces a new issue into a clean journal
       When I perform every kind of write in sequence
       Then the checks panel shows "✓ all"
 
+    @wip
     Scenario: a konto write on a journal that already has a warning adds no new warning
       Given the journal "household-scheduled" with one warning
       And I start konto
@@ -45,6 +48,7 @@ Feature: Product invariants that must hold across the whole app
 
   Rule: An account is manual or import-fed, never both
 
+    @wip
     Scenario: import refuses a manual account
       Given the journal "household" where "assets:cash" is manual with IBAN DE91100000000123456789
       And a Postbank CSV "x.csv" for IBAN "DE91100000000123456789" with closing balance 1,00 EUR:
@@ -54,6 +58,7 @@ Feature: Product invariants that must hold across the whole app
       When I open "x.csv" in Import
       Then the import is refused with a message naming "assets:cash"
 
+    @wip
     Scenario: konto never writes a source tag that flips an account's source
       Given the journal "household"
       And I start konto
@@ -61,6 +66,7 @@ Feature: Product invariants that must hold across the whole app
       Then the directive of "assets:spare" still contains "konto:source:import"
       And it does not contain "konto:source:manual"
 
+    @wip
     Scenario: a new import account is import-fed and only that
       Given the journal "household"
       And a Postbank CSV "new.csv" for IBAN "DE27100777770209299700" with closing balance 10,00 EUR:
@@ -73,6 +79,7 @@ Feature: Product invariants that must hold across the whole app
 
   Rule: Every transaction is categorised, a transfer, or an opening balance (ADR 0008)
 
+    @wip
     Scenario: after any import no transaction sits in a catch-all account
       Given the journal "household"
       And a Postbank CSV "sept.csv" for IBAN "DE89370400440532013000" with closing balance 13.239,00 EUR:
@@ -83,6 +90,7 @@ Feature: Product invariants that must hold across the whole app
       Then every transaction has a counterpart that is a category, an account, or "equity:opening-balances"
       And the journal has no account named "unknown" or "uncategorized" or "uncategorised"
 
+    @wip
     Scenario: the import cannot be written with an uncategorised row
       Given the journal "household"
       And a Postbank CSV "sept.csv" for IBAN "DE89370400440532013000" with closing balance 13.239,00 EUR:
@@ -95,6 +103,7 @@ Feature: Product invariants that must hold across the whole app
 
   Rule: Forecast and periodic rules never write transactions (ADR 0006, 0007)
 
+    @wip
     Scenario: a long session across every view writes nothing
       Given the journal "household-scheduled"
       And I start konto
@@ -103,6 +112,7 @@ Feature: Product invariants that must hold across the whole app
       And categories.rules is unchanged
       And the transaction count is still 54
 
+    @wip
     Scenario: periodic rules with past dates do not materialise
       Given the journal "household-scheduled" with a rule "~ monthly from 2026-01-01  Old\n    expenses:rent  5,00 EUR\n    assets:checking\n"
       And I start konto
@@ -111,6 +121,7 @@ Feature: Product invariants that must hold across the whole app
 
   Rule: Dedup surfaces skipped rows as a list
 
+    @wip
     Scenario: the skipped rows are named, not counted
       Given the journal "household"
       And a Postbank CSV "sept.csv" for IBAN "DE89370400440532013000" with closing balance 13.240,00 EUR:
@@ -122,6 +133,7 @@ Feature: Product invariants that must hold across the whole app
 
   Rule: Import writes the reconciliation assertion
 
+    @wip
     Scenario: the newest imported transaction states the bank's closing balance
       Given the journal "household"
       And a Postbank CSV "sept.csv" for IBAN "DE89370400440532013000" with closing balance 13.239,00 EUR:
@@ -131,6 +143,7 @@ Feature: Product invariants that must hold across the whole app
       When I import "sept.csv" categorising every row
       Then the "2026-09-29 Kiosk" transaction has the assertion "= 13.239,00 EUR" on "assets:checking"
 
+    @wip
     Scenario: a failing assertion blocks the write
       Given the journal "household"
       And a Postbank CSV "sept.csv" for IBAN "DE89370400440532013000" with closing balance 1,00 EUR:
@@ -143,6 +156,7 @@ Feature: Product invariants that must hold across the whole app
 
   Rule: Vocabulary — "currency" and "category", never "commodity" or "catch-all"
 
+    @wip
     Scenario Outline: UI copy
       Given the journal "household-scheduled"
       And I start konto
@@ -158,6 +172,7 @@ Feature: Product invariants that must hold across the whole app
         | 4    |
         | 5    |
 
+    @wip
     Scenario: the rule form says currency
       Given the journal "household-scheduled"
       And I start konto
@@ -166,6 +181,7 @@ Feature: Product invariants that must hold across the whole app
       Then I see the field "currency"
       And I do not see the word "commodity"
 
+    @wip
     Scenario: expenses and income are called categories, accounts are assets and liabilities
       Given the journal "household-scheduled"
       And I start konto
@@ -174,14 +190,14 @@ Feature: Product invariants that must hold across the whole app
 
   Rule: No network, no hidden files
 
-    @proposed
+    @proposed @wip
     Scenario: konto makes no network connection
       Given the journal "household-scheduled"
       And I start konto
       When I visit every view
       Then konto opened no network sockets
 
-    @proposed
+    @proposed @wip
     Scenario: no config or state file is created
       Given the journal "household-scheduled"
       And I start konto
@@ -191,19 +207,20 @@ Feature: Product invariants that must hold across the whole app
 
   Rule: Single instance lock
 
+    @wip
     Scenario: lock file lives next to the journal
       Given the journal "household"
       And I start konto
       Then a lock file exists next to the journal
 
-    @proposed
+    @proposed @wip
     Scenario: a crashed konto does not leave a stuck lock
       Given the journal "household"
       And konto was killed with SIGKILL
       When I start konto
       Then I see the tab bar
 
-    @proposed
+    @proposed @wip
     Scenario: SIGTERM and SIGINT quit cleanly and release the lock
       Given the journal "household"
       And I start konto
@@ -211,7 +228,7 @@ Feature: Product invariants that must hold across the whole app
       Then konto exits
       And I can start konto again
 
-    @proposed
+    @proposed @wip
     Scenario: the terminal is restored on exit
       Given the journal "household"
       And I start konto
@@ -221,7 +238,7 @@ Feature: Product invariants that must hold across the whole app
 
   Rule: Robustness against hostile or odd journals
 
-    @proposed
+    @proposed @wip
     Scenario Outline: odd journals do not crash konto
       Given a journal containing "<content>"
       When I start konto
@@ -235,6 +252,7 @@ Feature: Product invariants that must hold across the whole app
         | decimal-mark ,\n                                          |
         | account assets:x\n                                        |
 
+    @wip
     Scenario: a journal with no transactions starts cleanly
       Given the journal "minimal"
       When I start konto
@@ -242,19 +260,20 @@ Feature: Product invariants that must hold across the whole app
       And the tab bar shows "0" transactions
       And I see a "NET WORTH" card showing "0,00 EUR"
 
-    @proposed
+    @proposed @wip
     Scenario: a huge journal stays responsive
       Given the journal "household" with 20000 transactions
       When I start konto
       Then I see the tab bar within 5 seconds
       And pressing "5" shows reports within 2 seconds
 
+    @wip
     Scenario: unicode and spaces in paths
       Given the journal "household" at "<tmp>/mein Konto ä/main.journal"
       When I start konto with "--file" pointing there
       Then I see the tab bar
 
-    @proposed
+    @proposed @wip
     Scenario: a read-only journal is browsable but writes fail visibly
       Given the journal "household" is read-only
       And I start konto
@@ -263,7 +282,7 @@ Feature: Product invariants that must hold across the whole app
       Then I see an error naming the file
       And konto is still running
 
-    @proposed
+    @proposed @wip
     Scenario: the journal file disappears while running
       Given the journal "household"
       And I start konto

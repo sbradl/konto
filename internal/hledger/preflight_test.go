@@ -12,7 +12,7 @@ func okLookPath(string) (string, error) { return "/usr/bin/hledger", nil }
 
 // konto refuses to start when the hledger binary is not on PATH.
 func TestPreflightRefusesWhenHledgerNotOnPath(t *testing.T) {
-	lookPath := func(name string) (string, error) {
+	lookPath := func(string) (string, error) {
 		return "", errors.New("exec: \"hledger\": executable file not found in $PATH")
 	}
 	runVersion := func() (string, error) {
@@ -63,70 +63,59 @@ func TestPreflightRefusesWhenVersionUnrecognisable(t *testing.T) {
 	}
 }
 
-// Preflight reports the installed hledger version, and refuses a release older
-// than the supported minimum.
-func TestPreflightChecksInstalledVersion(t *testing.T) {
+// Preflight reports the installed hledger version.
+func TestPreflightReportsInstalledVersion(t *testing.T) {
 	tests := []struct {
-		name        string
-		versionOut  string
-		wantVersion domain.HledgerVersion
-		wantErr     []string // substrings the refusal must name; nil means expect success
+		name       string
+		versionOut string
+		want       domain.HledgerVersion
 	}{
+		{"supported release", "hledger 1.32\n", domain.HledgerVersion{Major: 1, Minor: 32}},
+		{"reports the actual major/minor/patch", "hledger 1.40.2\n", domain.HledgerVersion{Major: 1, Minor: 40, Patch: 2}},
+		{"newer major version", "hledger 2.0\n", domain.HledgerVersion{Major: 2, Minor: 0, Patch: 0}},
 		{
-			name:        "supported release",
-			versionOut:  "hledger 1.32\n",
-			wantVersion: domain.HledgerVersion{Major: 1, Minor: 32},
-		},
-		{
-			name:        "reports the actual major/minor/patch",
-			versionOut:  "hledger 1.40.2\n",
-			wantVersion: domain.HledgerVersion{Major: 1, Minor: 40, Patch: 2},
-		},
-		{
-			name:        "newer major version",
-			versionOut:  "hledger 2.0\n",
-			wantVersion: domain.HledgerVersion{Major: 2, Minor: 0, Patch: 0},
-		},
-		{
-			name:        "real --version output with a platform suffix",
-			versionOut:  "hledger 1.32.2, linux-x86_64\n",
-			wantVersion: domain.HledgerVersion{Major: 1, Minor: 32, Patch: 2},
-		},
-		{
-			name:       "older than the 1.32 minimum",
-			versionOut: "hledger 1.31\n",
-			wantErr:    []string{"1.31", "1.32"},
-		},
-		{
-			name:       "major version below the minimum",
-			versionOut: "hledger 0.99\n",
-			wantErr:    []string{"0.99", "1.32"},
+			"real --version output with a platform suffix", "hledger 1.32.2, linux-x86_64\n",
+			domain.HledgerVersion{Major: 1, Minor: 32, Patch: 2},
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			runVersion := func() (string, error) { return tt.versionOut, nil }
-
-			got, err := Preflight(okLookPath, runVersion)
-
-			if tt.wantErr != nil {
-				if err == nil {
-					t.Fatalf("expected an error for %q, got nil", tt.versionOut)
-				}
-				for _, want := range tt.wantErr {
-					if !strings.Contains(err.Error(), want) {
-						t.Errorf("error should name %q, got: %v", want, err)
-					}
-				}
-				return
-			}
+			got, err := Preflight(okLookPath, versionOutput(tt.versionOut))
 			if err != nil {
 				t.Fatalf("expected no error for a supported hledger, got: %v", err)
 			}
-			if got != tt.wantVersion {
-				t.Errorf("expected version %+v, got %+v", tt.wantVersion, got)
+			if got != tt.want {
+				t.Errorf("expected version %+v, got %+v", tt.want, got)
 			}
 		})
 	}
+}
+
+// Preflight refuses a release older than the supported minimum, naming both.
+func TestPreflightRefusesTooOldVersion(t *testing.T) {
+	tests := []struct {
+		name       string
+		versionOut string
+		installed  string
+	}{
+		{"older than the 1.32 minimum", "hledger 1.31\n", "1.31"},
+		{"major version below the minimum", "hledger 0.99\n", "0.99"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := Preflight(okLookPath, versionOutput(tt.versionOut))
+			if err == nil {
+				t.Fatalf("expected an error for %q, got nil", tt.versionOut)
+			}
+			for _, want := range []string{tt.installed, "1.32"} {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("error should name %q, got: %v", want, err)
+				}
+			}
+		})
+	}
+}
+
+func versionOutput(out string) func() (string, error) {
+	return func() (string, error) { return out, nil }
 }

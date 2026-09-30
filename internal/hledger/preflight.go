@@ -1,3 +1,6 @@
+// Package hledger is the adapter to the hledger binary: it runs hledger and
+// maps its output into domain types. It satisfies use-case ports structurally
+// (ADR 0003).
 package hledger
 
 import (
@@ -13,11 +16,21 @@ import (
 // output, ignoring any trailing platform suffix.
 var versionPattern = regexp.MustCompile(`^hledger (\d+)\.(\d+)(?:\.(\d+))?`)
 
-// minVersion is the oldest hledger release konto supports.
-var minVersion = domain.HledgerVersion{Major: 1, Minor: 32}
+// The oldest hledger release konto supports (spec §4.5).
+const (
+	minMajor = 1
+	minMinor = 32
+)
+
+func minVersion() domain.HledgerVersion {
+	return domain.HledgerVersion{Major: minMajor, Minor: minMinor}
+}
 
 // Preflight verifies that the hledger binary is available before konto starts.
-func Preflight(lookPath func(name string) (string, error), runVersion func() (string, error)) (domain.HledgerVersion, error) {
+func Preflight(
+	lookPath func(name string) (string, error),
+	runVersion func() (string, error),
+) (domain.HledgerVersion, error) {
 	if _, err := lookPath("hledger"); err != nil {
 		return domain.HledgerVersion{}, fmt.Errorf("hledger binary not found on PATH: %w", err)
 	}
@@ -29,8 +42,9 @@ func Preflight(lookPath func(name string) (string, error), runVersion func() (st
 	if err != nil {
 		return domain.HledgerVersion{}, err
 	}
-	if !version.AtLeast(minVersion) {
-		return domain.HledgerVersion{}, fmt.Errorf("hledger %d.%d is too old; konto needs %d.%d or newer", version.Major, version.Minor, minVersion.Major, minVersion.Minor)
+	if minimum := minVersion(); !version.AtLeast(minimum) {
+		return domain.HledgerVersion{}, fmt.Errorf("hledger %d.%d is too old; konto needs %d.%d or newer",
+			version.Major, version.Minor, minimum.Major, minimum.Minor)
 	}
 	return version, nil
 }

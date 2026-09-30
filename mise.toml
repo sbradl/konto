@@ -4,6 +4,7 @@ golangci-lint = "2.13.2"
 gotestsum     = "1.13.0"
 hledger       = "1.52.1"   # hard runtime dep, spec requires >= 1.32; startup preflight also checks
 "go:github.com/go-gremlins/gremlins/cmd/gremlins" = "0.6.0"
+"go:golang.org/x/vuln/cmd/govulncheck" = "1.8.0"
 
 [env]
 # keep tool-installed binaries + `go install` output on PATH inside tasks
@@ -18,8 +19,8 @@ description = "Compile every package"
 run = 'test -n "$(go list ./... 2>/dev/null)" && go build ./... || echo "no packages yet — skipping"'
 
 [tasks.vet]
-description = "go vet"
-run = 'test -n "$(go list ./... 2>/dev/null)" && go vet ./... || echo "no packages yet — skipping"'
+description = "go vet (incl. integration and e2e build tags)"
+run = 'test -n "$(go list ./... 2>/dev/null)" && go vet -tags integration,e2e ./... || echo "no packages yet — skipping"'
 
 [tasks.lint]
 description = "golangci-lint"
@@ -36,6 +37,18 @@ run = 'test -n "$(go list ./... 2>/dev/null)" && gotestsum --format pkgname -- -
 [tasks."test:integration"]
 description = "Full suite incl. tests that shell out to the real hledger binary"
 run = 'test -n "$(go list ./... 2>/dev/null)" && gotestsum --format standard-verbose -- -race -count=1 -tags integration ./... || echo "no packages yet — skipping"'
+
+[tasks."test:e2e"]
+description = "Gherkin e2e suite against the compiled binary (needs real hledger). Extra args go to godog: mise run test:e2e -- -godog.tags=@spec-4.5"
+run = 'gotestsum --format standard-verbose -- -count=1 -timeout 30m -tags e2e ./e2e -args {{arg(name="godog", var=true, default="")}}'
+
+[tasks.vuln]
+description = "Known-vulnerability scan of reachable code (govulncheck)"
+run = "govulncheck -tags integration,e2e ./..."
+
+[tasks.tidy]
+description = "Fail if go.mod/go.sum are not tidy"
+run = "go mod tidy -diff"
 
 [tasks.cover]
 description = "Write coverage.out and print the total"
@@ -74,5 +87,9 @@ description = "Mutation testing only on lines changed vs main (fast, for pre-pus
 run = "gremlins unleash --diff main --coverpkg=./... --timeout-coefficient=4 --threshold-efficacy=100 --threshold-mcover=100 ."
 
 [tasks.check]
-description = "Everything a CI run should gate on"
+description = "Fast gate: build, vet, lint (Clean Code), archtest + unit tests with 100% coverage"
 depends = ["build", "vet", "lint", "cover:check"]
+
+[tasks.qa]
+description = "Everything CI runs on a pull request, locally (mutation:diff needs a main branch)"
+depends = ["tidy", "check", "vuln", "test:integration", "test:e2e", "mutation:diff"]
