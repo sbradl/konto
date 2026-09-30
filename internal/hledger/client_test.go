@@ -3,6 +3,8 @@ package hledger
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -19,9 +21,13 @@ const printJSON = `[
 type call struct{ args []string }
 
 func recording(out string, err error, calls *[]call) runner {
-	return func(_ context.Context, args ...string) ([]byte, error) {
+	return recordingStderr(out, "", err, calls)
+}
+
+func recordingStderr(out, stderr string, err error, calls *[]call) runner {
+	return func(_ context.Context, args ...string) ([]byte, string, error) {
 		*calls = append(*calls, call{args})
-		return []byte(out), err
+		return []byte(out), stderr, err
 	}
 }
 
@@ -113,5 +119,83 @@ func TestNewReportsBinaryFailure(t *testing.T) {
 
 	if _, err := New("hledger", "/data/main.journal").Print(context.Background()); err == nil {
 		t.Error("expected an error when hledger exits non-zero, got nil")
+	}
+}
+
+func printErrors(t *testing.T, stderr string) error {
+	t.Helper()
+	client := newClient(recordingStderr("", stderr, errors.New("exit status 1"), new([]call)), "/data/main.journal")
+	_, err := client.Print(context.Background())
+	return err
+}
+
+// hledger's parse errors become a located ERR issue for the parse-error screen.
+func TestPrintTurnsParseErrorIntoJournalError(t *testing.T) {
+	err := printErrors(t, "hledger: Error: /data/main.journal:3:5:\n  |\n3 | bad line\n  | ^\n"+
+		"unexpected 't'\nexpecting end of input or transaction or directive\n")
+
+	var got domain.JournalError
+	if !errors.As(err, &got) {
+		t.Fatalf("error = %v, want a JournalError", err)
+	}
+	want := domain.CheckIssue{
+		Check: "parseable", Severity: domain.SeverityErr, Message: "unexpected 't'",
+		File: "/data/main.journal", Line: 3, Col: 5,
+	}
+	if got.Issue != want {
+		t.Errorf("issue = %+v, want %+v", got.Issue, want)
+	}
+}
+
+// A line range without a column locates the issue at the range's first line.
+func TestPrintReadsLineRanges(t *testing.T) {
+	err := printErrors(t, "hledger: Error: /data/main.journal:2-4:\n2 | 2026-01-01 x\n  |     a   1 EUR\n\n"+
+		"This transaction is unbalanced.\nThe real postings all have the same sign.\n")
+
+	var got domain.JournalError
+	if !errors.As(err, &got) {
+		t.Fatalf("error = %v, want a JournalError", err)
+	}
+	if got.Issue.Line != 2 || got.Issue.Col != 0 || got.Issue.Message != "This transaction is unbalanced." {
+		t.Errorf("issue = %+v, want line 2, no column and the first message line", got.Issue)
+	}
+}
+
+// Stderr that is not a located hledger error is reported as plain text.
+func TestPrintKeepsUnlocatedStderr(t *testing.T) {
+	err := printErrors(t, "hledger: Error: something odd\n")
+
+	if _, ok := errors.AsType[domain.JournalError](err); ok {
+		t.Fatalf("error = %v, should not be a JournalError", err)
+	}
+	if !strings.Contains(err.Error(), "something odd") {
+		t.Errorf("error = %v, want the stderr text", err)
+	}
+}
+
+// The real runner hands hledger's stderr to the parse-error mapping.
+func TestNewMapsRealStderrToJournalError(t *testing.T) {
+	dir := t.TempDir()
+	script := "#!/bin/sh\necho 'hledger: Error: /data/main.journal:1:1:' >&2\necho 'unexpected x' >&2\nexit 1\n"
+	if err := os.WriteFile(filepath.Join(dir, "hledger"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir)
+
+	_, err := New("hledger", "/data/main.journal").Print(context.Background())
+
+	var got domain.JournalError
+	if !errors.As(err, &got) || got.Issue.Message != "unexpected x" {
+		t.Errorf("error = %v, want a JournalError carrying the message", err)
+	}
+}
+
+// A located error without any message text still locates the issue.
+func TestPrintToleratesMissingMessage(t *testing.T) {
+	err := printErrors(t, "hledger: Error: /data/main.journal:1:1:\n  | ^\n")
+
+	var got domain.JournalError
+	if !errors.As(err, &got) || got.Issue.Message != "" || got.Issue.Line != 1 {
+		t.Errorf("error = %v, want a located JournalError with an empty message", err)
 	}
 }

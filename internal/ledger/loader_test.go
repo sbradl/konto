@@ -68,3 +68,15 @@ func TestLoadReportsUnreadableJournal(t *testing.T) {
 		t.Errorf("expected an error carrying the cause, got: %v", err)
 	}
 }
+
+// A journal hledger cannot read keeps its located issue for the parse-error screen.
+func TestLoadKeepsTheJournalError(t *testing.T) {
+	issue := domain.CheckIssue{Check: "parseable", Severity: domain.SeverityErr, File: "j", Line: 1, Col: 1}
+
+	_, err := NewLoader(fakeGateway{err: domain.JournalError{Issue: issue}}, present).Load(context.Background())
+
+	var got domain.JournalError
+	if !errors.As(err, &got) || got.Issue != issue {
+		t.Errorf("error = %v, want the JournalError back through errors.As", err)
+	}
+}

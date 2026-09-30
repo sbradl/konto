@@ -97,7 +97,6 @@ Feature: Startup, preflight and journal resolution
 
   Rule: Parse error
 
-    @wip
     Scenario: unparseable journal shows top-severity issue and no tabs
       Given a journal containing "this is not valid hledger"
       When I start konto
@@ -105,7 +104,6 @@ Feature: Startup, preflight and journal resolution
       And I do not see the tab bar
       And I see an offer to jump to the editor
 
-    @wip
     Scenario: jumping to the editor from the parse error
       Given a journal containing "this is not valid hledger" on line 1
       And EDITOR is a stub recording its arguments
@@ -113,7 +111,6 @@ Feature: Startup, preflight and journal resolution
       And I press "Enter"
       Then the editor was called with "+1 <journal path>"
 
-    @wip
     Scenario: fixing the file externally enters the normal views
       Given a journal containing "this is not valid hledger"
       And EDITOR is a stub that replaces the journal with "minimal"

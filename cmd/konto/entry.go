@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"os/exec"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -30,6 +31,10 @@ func main() {
 func runProgram(cfg config.Config) error {
 	file := journal.NewFile(cfg.JournalPath)
 	loader := ledger.NewLoader(hledger.New("hledger", cfg.JournalPath), file)
-	_, err := tea.NewProgram(ui.New(cfg.JournalPath, loader, file)).Run()
+	_, err := tea.NewProgram(ui.New(cfg.JournalPath, loader, file, openInEditor)).Run()
 	return err //nolint:wrapcheck // the program's own error is already self-describing
+}
+
+func openInEditor(file string, line int) *exec.Cmd {
+	return editorCommand(os.Getenv, file, line)
 }

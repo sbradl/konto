@@ -239,3 +239,26 @@ func TestLockJournalHoldsUntilReleased(t *testing.T) {
 	}
 	_ = again()
 }
+
+func envOf(vars map[string]string) func(string) string {
+	return func(key string) string { return vars[key] }
+}
+
+// The editor is opened at the issue's line: $VISUAL first, then $EDITOR, then vi.
+func TestEditorCommandPrefersVisualThenEditorThenVi(t *testing.T) {
+	for name, tc := range map[string]struct {
+		vars map[string]string
+		want []string
+	}{
+		"visual":  {map[string]string{"VISUAL": "code -w", "EDITOR": "nano"}, []string{"code", "-w", "+7", "/data/main.journal"}},
+		"editor":  {map[string]string{"EDITOR": "nano"}, []string{"nano", "+7", "/data/main.journal"}},
+		"blank":   {map[string]string{"VISUAL": "  ", "EDITOR": " "}, []string{"vi", "+7", "/data/main.journal"}},
+		"default": {nil, []string{"vi", "+7", "/data/main.journal"}},
+	} {
+		got := editorCommand(envOf(tc.vars), "/data/main.journal", 7)
+
+		if !reflect.DeepEqual(got.Args, tc.want) {
+			t.Errorf("%s: args = %v, want %v", name, got.Args, tc.want)
+		}
+	}
+}

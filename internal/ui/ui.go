@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os/exec"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -39,18 +40,26 @@ type Model struct {
 	journalPath string
 	loader      ledgerLoader
 	creator     journalCreator
+	editor      func(file string, line int) *exec.Cmd
 	ledger      *domain.Ledger
 	loadErr     error
 	firstRun    bool
+	parseIssue  *domain.CheckIssue
 	createErr   error
 	width       int
 	height      int
 }
 
+// editorClosedMsg reports that the user's editor has exited.
+type editorClosedMsg struct{}
+
 // New returns the root model for the journal at journalPath, loaded through
-// loader; creator writes the journal on first run.
-func New(journalPath string, loader ledgerLoader, creator journalCreator) Model {
-	return Model{journalPath: journalPath, loader: loader, creator: creator}
+// loader; creator writes the journal on first run; editor builds the command
+// that opens a file at a line.
+func New(
+	journalPath string, loader ledgerLoader, creator journalCreator, editor func(file string, line int) *exec.Cmd,
+) Model {
+	return Model{journalPath: journalPath, loader: loader, creator: creator, editor: editor}
 }
 
 // Init starts loading the ledger.
@@ -77,9 +86,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if loaded, ok := msg.(ledgerLoadedMsg); ok {
 		m.ledger, m.loadErr = &loaded.ledger, loaded.err
 		m.firstRun = errors.Is(loaded.err, ledger.ErrNoJournal)
+		m.parseIssue = issueOf(loaded.err)
 	}
 	if failed, ok := msg.(journalCreateFailedMsg); ok {
 		m.createErr = failed.err
+	}
+	if _, ok := msg.(editorClosedMsg); ok {
+		return m, m.load
 	}
 	if key, ok := msg.(tea.KeyPressMsg); ok {
 		return m, m.onKey(key)
@@ -99,9 +112,21 @@ func (m Model) onKey(key tea.KeyPressMsg) tea.Cmd {
 		if m.firstRun {
 			return tea.Quit
 		}
+	case "enter":
+		if m.parseIssue != nil {
+			return m.openEditor(*m.parseIssue)
+		}
 	}
 	return nil
 }
+
+// openEditor suspends konto while the user's editor shows the issue.
+func (m Model) openEditor(issue domain.CheckIssue) tea.Cmd {
+	return tea.ExecProcess(m.editor(issue.File, issue.Line), editorClosed)
+}
+
+// editorClosed turns the editor's exit, however it went, into a reload request.
+func editorClosed(error) tea.Msg { return editorClosedMsg{} }
 
 // View renders the tab bar.
 func (m Model) View() tea.View {
@@ -113,6 +138,9 @@ func (m Model) View() tea.View {
 func (m Model) content() string {
 	if m.firstRun {
 		return m.centred(m.firstRunText())
+	}
+	if m.parseIssue != nil {
+		return m.centred(parseErrorText(*m.parseIssue))
 	}
 	if m.ledger == nil {
 		return m.centred("loading journal…")
@@ -145,4 +173,18 @@ func (m Model) tabBar() string {
 	info += " "
 	gap := max(0, m.width-lipgloss.Width(tabs)-lipgloss.Width(info))
 	return tabs + strings.Repeat(" ", gap) + info
+}
+
+// issueOf is the located journal issue behind err, if there is one.
+func issueOf(err error) *domain.CheckIssue {
+	var journalErr domain.JournalError
+	if !errors.As(err, &journalErr) {
+		return nil
+	}
+	return &journalErr.Issue
+}
+
+func parseErrorText(issue domain.CheckIssue) string {
+	return issue.Severity.String() + " " + issue.Check + "  " + issue.Location() + "\n\n" +
+		issue.Message + "\n\nEnter to jump to the editor · q to quit"
 }

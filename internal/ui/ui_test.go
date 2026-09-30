@@ -3,6 +3,9 @@ package ui
 import (
 	"context"
 	"errors"
+	"fmt"
+	"os/exec"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -44,7 +47,22 @@ func (j journalLoader) Load(context.Context) (domain.Ledger, error) {
 	return domain.Ledger{}, nil
 }
 
-func newModel() Model { return New(journalPath, fakeLoader{}, &fakeCreator{}) }
+// recordingEditor is an editor command builder that notes what it was asked to open.
+func recordingEditor(calls *[]editorCall) func(file string, line int) *exec.Cmd {
+	return func(file string, line int) *exec.Cmd {
+		if calls != nil {
+			*calls = append(*calls, editorCall{file, line})
+		}
+		return exec.CommandContext(context.Background(), "true")
+	}
+}
+
+type editorCall struct {
+	file string
+	line int
+}
+
+func newModel() Model { return New(journalPath, fakeLoader{}, &fakeCreator{}, recordingEditor(nil)) }
 
 func ledgerWith(transactions int) domain.Ledger {
 	return domain.Ledger{Transactions: make([]domain.Transaction, transactions)}
@@ -54,7 +72,7 @@ func ledgerWith(transactions int) domain.Ledger {
 // loader finished with the given result.
 func started(t *testing.T, loader fakeLoader, width int) Model {
 	t.Helper()
-	model := New(journalPath, loader, &fakeCreator{})
+	model := New(journalPath, loader, &fakeCreator{}, recordingEditor(nil))
 	cmd := model.Init()
 	if cmd == nil {
 		t.Fatal("Init should start loading the ledger")
@@ -201,7 +219,7 @@ func TestLoadingIndicatorIsCentred(t *testing.T) {
 
 func firstRunModel(t *testing.T, creator *fakeCreator) Model {
 	t.Helper()
-	model := New(journalPath, journalLoader{creator: creator}, creator)
+	model := New(journalPath, journalLoader{creator: creator}, creator, recordingEditor(nil))
 	updated, _ := model.Update(model.Init()())
 	return updated.(Model)
 }
@@ -209,6 +227,11 @@ func firstRunModel(t *testing.T, creator *fakeCreator) Model {
 func press(m Model, text string) (Model, tea.Cmd) {
 	updated, cmd := m.Update(tea.KeyPressMsg{Code: rune(text[0]), Text: text})
 	return updated.(Model), cmd
+}
+
+func pressEnter(m Model) tea.Cmd {
+	_, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	return cmd
 }
 
 // Pressing y on the first-run screen creates the journal and enters the views.
@@ -265,6 +288,83 @@ func TestYAndNDoNothingOutsideTheFirstRunScreen(t *testing.T) {
 	for _, key := range []string{"y", "n"} {
 		if _, cmd := press(model, key); cmd != nil {
 			t.Errorf("%s should do nothing in the normal views", key)
+		}
+	}
+}
+
+// A journal hledger cannot parse shows its ERR issue with a file:line
+// reference and an offer to jump to the editor, instead of the views.
+func TestParseErrorScreenShowsIssueAndEditorOffer(t *testing.T) {
+	issue := domain.CheckIssue{
+		Check: "parseable", Severity: domain.SeverityErr, Message: "unexpected 't'",
+		File: "/data/household.journal", Line: 3, Col: 1,
+	}
+	model := started(t, fakeLoader{err: fmt.Errorf("loading ledger: %w", domain.JournalError{Issue: issue})}, 120)
+
+	content := model.View().Content
+
+	for _, want := range []string{"ERR", "parseable", "/data/household.journal:3:1", "unexpected 't'", "Enter", "editor"} {
+		if !strings.Contains(content, want) {
+			t.Errorf("parse-error screen should contain %q, got %q", want, content)
+		}
+	}
+	if strings.Contains(content, "1 dash") {
+		t.Errorf("parse-error screen should not show the tab bar, got %q", content)
+	}
+}
+
+func parseErrorModel(t *testing.T, calls *[]editorCall) Model {
+	t.Helper()
+	issue := domain.CheckIssue{Check: "parseable", Severity: domain.SeverityErr, File: "/data/household.journal", Line: 3, Col: 1}
+	loader := fakeLoader{err: fmt.Errorf("loading ledger: %w", domain.JournalError{Issue: issue})}
+	model := New(journalPath, loader, &fakeCreator{}, recordingEditor(calls))
+	updated, _ := model.Update(model.Init()())
+	return updated.(Model)
+}
+
+// Enter on the parse-error screen opens the editor at the issue's line.
+func TestEnterOpensTheEditorAtTheIssue(t *testing.T) {
+	var calls []editorCall
+	cmd := pressEnter(parseErrorModel(t, &calls))
+
+	if cmd == nil {
+		t.Fatal("Enter should start the editor")
+	}
+	if want := []editorCall{{"/data/household.journal", 3}}; !reflect.DeepEqual(calls, want) {
+		t.Errorf("editor calls = %v, want %v", calls, want)
+	}
+}
+
+// Enter means nothing outside the parse-error screen.
+func TestEnterDoesNothingOutsideTheParseErrorScreen(t *testing.T) {
+	var calls []editorCall
+	model := New(journalPath, fakeLoader{}, &fakeCreator{}, recordingEditor(&calls))
+	updated, _ := model.Update(model.Init()())
+
+	cmd := pressEnter(updated.(Model))
+
+	if cmd != nil || len(calls) != 0 {
+		t.Errorf("Enter should do nothing in the normal views (cmd=%v, calls=%v)", cmd != nil, calls)
+	}
+}
+
+// When the editor closes, konto reloads the journal.
+func TestClosingTheEditorReloadsTheJournal(t *testing.T) {
+	_, cmd := parseErrorModel(t, nil).Update(editorClosedMsg{})
+
+	if cmd == nil {
+		t.Fatal("closing the editor should reload the journal")
+	}
+	if _, ok := cmd().(ledgerLoadedMsg); !ok {
+		t.Error("the reload should produce a ledgerLoadedMsg")
+	}
+}
+
+// However the editor exits, konto reloads the journal.
+func TestEditorExitBecomesReload(t *testing.T) {
+	for _, exit := range []error{nil, errors.New("exit status 1")} {
+		if _, ok := editorClosed(exit).(editorClosedMsg); !ok {
+			t.Errorf("editorClosed(%v) should be an editorClosedMsg", exit)
 		}
 	}
 }

@@ -26,6 +26,7 @@ func registerSteps(sc *godog.ScenarioContext, w *world) {
 	registerJournalPathSteps(sc, w)
 	registerInstanceSteps(sc, w)
 	registerFirstRunSteps(sc, w)
+	registerParseErrorSteps(sc, w)
 }
 
 func registerGivenSteps(sc *godog.ScenarioContext, w *world) {

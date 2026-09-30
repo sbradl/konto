@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 
 	"github.com/cucumber/godog"
 )
@@ -34,4 +36,33 @@ func registerFirstRunSteps(sc *godog.ScenarioContext, w *world) {
 		}
 		return w.expectScreen(true, quit+" to quit")
 	})
+}
+
+func registerParseErrorSteps(sc *godog.ScenarioContext, w *world) {
+	sc.Step(`^a journal containing "(.*)" on line (\d+)$`, func(text string, line int) error {
+		content := strings.Repeat("\n", line-1) + unescape(text) + "\n"
+		return os.WriteFile(w.journal, []byte(content), 0o644)
+	})
+	sc.Step(`^I see an "(ERR|WARN)" issue with a "file:line" reference$`, func(severity string) error {
+		if err := w.expectScreen(true, severity); err != nil {
+			return err
+		}
+		return w.expectScreenMatch(`\S+:\d+(:\d+)?`)
+	})
+	sc.Step(`^I see an offer to jump to the editor$`, func() error {
+		return w.expectScreen(true, "Enter to jump to the editor")
+	})
+}
+
+// expectScreenMatch waits for the screen to match the pattern.
+func (w *world) expectScreenMatch(pattern string) error {
+	s, err := w.session()
+	if err != nil {
+		return err
+	}
+	re := regexp.MustCompile(pattern)
+	if s.waitFor(w.suite.timeout, re.MatchString) {
+		return nil
+	}
+	return fmt.Errorf("screen does not match %q:\n%s", pattern, s.screenText())
 }

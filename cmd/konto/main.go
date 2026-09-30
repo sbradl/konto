@@ -3,8 +3,14 @@
 package main
 
 import (
+	"cmp"
+	"context"
 	"fmt"
 	"io"
+	"os/exec"
+	"slices"
+	"strconv"
+	"strings"
 
 	"github.com/sbradl/konto/internal/config"
 	"github.com/sbradl/konto/internal/domain"
@@ -82,4 +88,14 @@ func lockJournal(journalPath string) (func() error, error) {
 		return nil, fmt.Errorf("locking journal: %w", err)
 	}
 	return lock.Release, nil
+}
+
+// editorCommand opens file at line in the user's editor: $VISUAL, then
+// $EDITOR, then vi (spec §4.7).
+func editorCommand(getenv func(string) string, file string, line int) *exec.Cmd {
+	editor := cmp.Or(strings.TrimSpace(getenv("VISUAL")), strings.TrimSpace(getenv("EDITOR")), "vi")
+	words := strings.Fields(editor)
+	args := slices.Concat(words[1:], []string{"+" + strconv.Itoa(line), file})
+	//nolint:gosec // the user's own editor, by design
+	return exec.CommandContext(context.Background(), words[0], args...)
 }
