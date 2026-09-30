@@ -16,6 +16,12 @@ import (
 	"github.com/sbradl/konto/internal/ledger"
 )
 
+// The smallest terminal konto lays its views out in (spec §6.8).
+const (
+	minWidth  = 100
+	minHeight = 30
+)
+
 const tabs = " 1 dash │ 2 import │ 3 sched │ 4 forecast │ 5 reports "
 
 type ledgerLoader interface {
@@ -104,6 +110,11 @@ func (m Model) onKey(key tea.KeyPressMsg) tea.Cmd {
 	switch key.String() {
 	case "q", "ctrl+c":
 		return tea.Quit
+	}
+	if m.tooSmall() {
+		return nil
+	}
+	switch key.String() {
 	case "y":
 		if m.firstRun {
 			return m.create
@@ -135,7 +146,17 @@ func (m Model) View() tea.View {
 	return view
 }
 
+// tooSmall reports a terminal below the floor; before the first size report
+// there is nothing to judge.
+func (m Model) tooSmall() bool {
+	return m.width > 0 && (m.width < minWidth || m.height < minHeight)
+}
+
 func (m Model) content() string {
+	if m.tooSmall() {
+		return m.centred(fmt.Sprintf(
+			"terminal too small — need ≥%d×%d, have %d×%d", minWidth, minHeight, m.width, m.height))
+	}
 	if m.firstRun {
 		return m.centred(m.firstRunText())
 	}

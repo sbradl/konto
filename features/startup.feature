@@ -118,7 +118,6 @@ Feature: Startup, preflight and journal resolution
       And I press "Enter"
       Then I see the tab bar
 
-  @wip
   Scenario: too-small terminal
     Given the journal "minimal"
     And the terminal is 80×20
@@ -127,7 +126,6 @@ Feature: Startup, preflight and journal resolution
     And I see "have 80×20"
     And I do not see the tab bar
 
-  @wip
   Scenario: only q is live when too small
     Given the journal "minimal"
     And the terminal is 80×20
@@ -137,7 +135,6 @@ Feature: Startup, preflight and journal resolution
     When I press "q"
     Then konto exits with code 0
 
-  @wip
   Scenario: growing the terminal recovers
     Given the journal "minimal"
     And the terminal is 80×20
@@ -145,7 +142,7 @@ Feature: Startup, preflight and journal resolution
     And I resize the terminal to 120×40
     Then I see the tab bar
 
-  @proposed @wip
+  @proposed
   Scenario: first load shows loading indicator
     Given the journal "minimal"
     And hledger is slowed by 500ms

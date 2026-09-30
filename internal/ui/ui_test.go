@@ -70,14 +70,14 @@ func ledgerWith(transactions int) domain.Ledger {
 
 // started returns the model after the terminal reported its size and the
 // loader finished with the given result.
-func started(t *testing.T, loader fakeLoader, width int) Model {
+func started(t *testing.T, loader fakeLoader) Model {
 	t.Helper()
 	model := New(journalPath, loader, &fakeCreator{}, recordingEditor(nil))
 	cmd := model.Init()
 	if cmd == nil {
 		t.Fatal("Init should start loading the ledger")
 	}
-	updated, _ := model.Update(tea.WindowSizeMsg{Width: width, Height: 40})
+	updated, _ := model.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	updated, _ = updated.Update(cmd())
 	return updated.(Model)
 }
@@ -103,7 +103,7 @@ func TestViewShowsLoadingUntilLoaded(t *testing.T) {
 func TestViewShowsTabBarOnFirstLine(t *testing.T) {
 	want := " 1 dash │ 2 import │ 3 sched │ 4 forecast │ 5 reports "
 
-	if first := firstLine(started(t, fakeLoader{}, 120)); !strings.Contains(first, want) {
+	if first := firstLine(started(t, fakeLoader{})); !strings.Contains(first, want) {
 		t.Errorf("first line = %q, want it to contain %q", first, want)
 	}
 }
@@ -143,7 +143,7 @@ func TestOtherInputDoesNotQuit(t *testing.T) {
 
 // Once the ledger has loaded, the tab bar shows how many transactions it holds.
 func TestTabBarShowsTransactionCountAfterLoad(t *testing.T) {
-	first := firstLine(started(t, fakeLoader{ledger: ledgerWith(54)}, 120))
+	first := firstLine(started(t, fakeLoader{ledger: ledgerWith(54)}))
 
 	if want := journalPath + " · 54 txns "; !strings.HasSuffix(first, want) {
 		t.Errorf("line should end with %q, got %q", want, first)
@@ -152,7 +152,7 @@ func TestTabBarShowsTransactionCountAfterLoad(t *testing.T) {
 
 // A failed load is shown below the tab bar instead of being swallowed.
 func TestFailedLoadIsShown(t *testing.T) {
-	model := started(t, fakeLoader{err: errors.New("hledger exploded")}, 120)
+	model := started(t, fakeLoader{err: errors.New("hledger exploded")})
 
 	_, rest, _ := strings.Cut(model.View().Content, "\n")
 
@@ -163,7 +163,7 @@ func TestFailedLoadIsShown(t *testing.T) {
 
 // The journal path sits at the right edge of the tab bar, opposite the tabs.
 func TestTabBarShowsJournalPathAtRightEdge(t *testing.T) {
-	first := firstLine(started(t, fakeLoader{}, 120))
+	first := firstLine(started(t, fakeLoader{}))
 
 	if !strings.HasPrefix(first, " 1 dash") {
 		t.Errorf("tabs should start the line, got %q", first)
@@ -176,11 +176,16 @@ func TestTabBarShowsJournalPathAtRightEdge(t *testing.T) {
 	}
 }
 
-// On a terminal too narrow for both, the tabs and the path are still separated.
-func TestTabBarKeepsTabsAndPathApartWhenNarrow(t *testing.T) {
-	first := firstLine(started(t, fakeLoader{}, 40))
+// When the path is too long to fit beside the tabs, they are still separated.
+func TestTabBarKeepsTabsAndPathApartWhenPathIsLong(t *testing.T) {
+	long := "/" + strings.Repeat("deep/", 20) + "main.journal"
+	model := New(long, fakeLoader{}, &fakeCreator{}, recordingEditor(nil))
+	updated, _ := model.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	updated, _ = updated.Update(model.Init()())
 
-	if !strings.Contains(first, "5 reports "+journalPath) {
+	first, _, _ := strings.Cut(updated.View().Content, "\n")
+
+	if !strings.Contains(first, "5 reports "+long) {
 		t.Errorf("tabs and path should be separated by a space, got %q", first)
 	}
 }
@@ -188,7 +193,7 @@ func TestTabBarKeepsTabsAndPathApartWhenNarrow(t *testing.T) {
 // With no journal yet, konto offers to create one at the resolved path and
 // shows no tab bar.
 func TestFirstRunScreenOffersToCreateTheJournal(t *testing.T) {
-	model := started(t, fakeLoader{err: ledger.ErrNoJournal}, 120)
+	model := started(t, fakeLoader{err: ledger.ErrNoJournal})
 
 	content := model.View().Content
 
@@ -204,16 +209,16 @@ func TestFirstRunScreenOffersToCreateTheJournal(t *testing.T) {
 
 // The loading indicator is centred on the screen.
 func TestLoadingIndicatorIsCentred(t *testing.T) {
-	updated, _ := newModel().Update(tea.WindowSizeMsg{Width: 41, Height: 11})
+	updated, _ := newModel().Update(tea.WindowSizeMsg{Width: 101, Height: 31})
 
 	lines := strings.Split(updated.View().Content, "\n")
 
-	if len(lines) != 11 {
-		t.Fatalf("screen has %d lines, want 11", len(lines))
+	if len(lines) != 31 {
+		t.Fatalf("screen has %d lines, want 31", len(lines))
 	}
-	want := strings.Repeat(" ", 12) + "loading journal…"
-	if !strings.HasPrefix(lines[5], want) {
-		t.Errorf("middle line = %q, want it to start with %q", lines[5], want)
+	want := strings.Repeat(" ", 42) + "loading journal…"
+	if !strings.HasPrefix(lines[15], want) {
+		t.Errorf("middle line = %q, want it to start with %q", lines[15], want)
 	}
 }
 
@@ -283,7 +288,7 @@ func TestNQuitsWithoutCreating(t *testing.T) {
 
 // y and n mean nothing once the journal is open.
 func TestYAndNDoNothingOutsideTheFirstRunScreen(t *testing.T) {
-	model := started(t, fakeLoader{}, 120)
+	model := started(t, fakeLoader{})
 
 	for _, key := range []string{"y", "n"} {
 		if _, cmd := press(model, key); cmd != nil {
@@ -299,7 +304,7 @@ func TestParseErrorScreenShowsIssueAndEditorOffer(t *testing.T) {
 		Check: "parseable", Severity: domain.SeverityErr, Message: "unexpected 't'",
 		File: "/data/household.journal", Line: 3, Col: 1,
 	}
-	model := started(t, fakeLoader{err: fmt.Errorf("loading ledger: %w", domain.JournalError{Issue: issue})}, 120)
+	model := started(t, fakeLoader{err: fmt.Errorf("loading ledger: %w", domain.JournalError{Issue: issue})})
 
 	content := model.View().Content
 
@@ -366,5 +371,75 @@ func TestEditorExitBecomesReload(t *testing.T) {
 		if _, ok := editorClosed(exit).(editorClosedMsg); !ok {
 			t.Errorf("editorClosed(%v) should be an editorClosedMsg", exit)
 		}
+	}
+}
+
+func resized(m Model, width, height int) Model {
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: width, Height: height})
+	return updated.(Model)
+}
+
+// Below the floor, konto shows only what it needs and what it has.
+func TestTooSmallTerminalShowsOnlyTheFloorMessage(t *testing.T) {
+	model := resized(started(t, fakeLoader{}), 80, 20)
+
+	content := model.View().Content
+
+	for _, want := range []string{"terminal too small", "need ≥100×30", "have 80×20"} {
+		if !strings.Contains(content, want) {
+			t.Errorf("content should contain %q, got %q", want, content)
+		}
+	}
+	if strings.Contains(content, "1 dash") {
+		t.Errorf("content should not show the tab bar, got %q", content)
+	}
+}
+
+// Each dimension has its own floor, and the floor itself is big enough.
+func TestFloorBoundaries(t *testing.T) {
+	for name, tc := range map[string]struct {
+		width, height int
+		tooSmall      bool
+	}{
+		"exactly the floor": {100, 30, false},
+		"one column short":  {99, 30, true},
+		"one row short":     {100, 29, true},
+	} {
+		model := resized(started(t, fakeLoader{}), tc.width, tc.height)
+
+		if got := strings.Contains(model.View().Content, "terminal too small"); got != tc.tooSmall {
+			t.Errorf("%s: too small = %v, want %v", name, got, tc.tooSmall)
+		}
+	}
+}
+
+// While too small only q is live: the first-run and editor keys are ignored.
+func TestOnlyQIsLiveWhenTooSmall(t *testing.T) {
+	firstRun := resized(firstRunModel(t, &fakeCreator{}), 80, 20)
+	for _, key := range []string{"y", "n"} {
+		if _, cmd := press(firstRun, key); cmd != nil {
+			t.Errorf("%s should do nothing on a too-small first-run screen", key)
+		}
+	}
+	if cmd := pressEnter(resized(parseErrorModel(t, nil), 80, 20)); cmd != nil {
+		t.Error("Enter should do nothing on a too-small parse-error screen")
+	}
+
+	_, cmd := press(firstRun, "q")
+
+	if cmd == nil {
+		t.Fatal("q should still quit")
+	}
+	if _, ok := cmd().(tea.QuitMsg); !ok {
+		t.Error("q should quit")
+	}
+}
+
+// Growing the terminal brings the views back.
+func TestGrowingTheTerminalRecovers(t *testing.T) {
+	model := resized(resized(started(t, fakeLoader{}), 80, 20), 120, 40)
+
+	if !strings.Contains(model.View().Content, "1 dash") {
+		t.Errorf("content = %q, want the tab bar again", model.View().Content)
 	}
 }
