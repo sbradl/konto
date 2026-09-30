@@ -69,8 +69,8 @@ UI copy calls it **currency**; "commodity" stays in code and docs.
 
 **Valuation mode**:
 Whether amounts show in their original commodity (`Native`, "at cost") or all converted to
-one commodity via the latest price directives (`Market`, hledger's `-V`). Toggled with `v`,
-shared by Dashboard and Reports. konto never computes valuation — it re-asks hledger.
+one commodity via the latest price directives (`Market`, hledger's `-V`). Not surfaced in
+v1 (EUR-only UI, ADR 0011); when it returns, one toggle shared by Dashboard and Reports. konto never computes valuation — it re-asks hledger.
 _Avoid_: Cost (hledger "cost", `-B`, is conversion at transaction price — a different thing)
 
 **Price directive**:
@@ -138,7 +138,7 @@ _Avoid_: Scenario, Forecast driver, Trailing average (dropped, ADR 0007)
 
 **Check run**:
 The result of running hledger's journal checks — a list of check issues, or clean. Backs
-the `!` panel and the `● clean` health indicator.
+the `!` panel and the status-bar check status (`● clean` / `● 2 err · 3 warn`).
 
 **Check issue**:
 One problem found by a check: the check name, konto-assigned severity (`ERR` / `WARN`), a

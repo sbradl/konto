@@ -1,7 +1,7 @@
 # Root-mediator Bubble Tea model
 
 Bubble Tea runs exactly one `Model`. konto's is a root model in `internal/ui` that owns all
-app-global state (`valuationMode`, `period`, `scenario`, terminal size, the read-only
+app-global state (`period`, terminal size, the read-only
 `*domain.Ledger` snapshot), the chrome, the overlay state, and the view sub-models (five in v1, ADR 0010) —
 which are all constructed at startup and kept alive for the whole run.
 

@@ -68,6 +68,11 @@ their views land.
   empty `categories.rules`. Dashboard Accounts: `c` close / `o` reopen, both y/n; closed
   accounts dimmed at bottom, import into one refused. Key principle: first letter of the
   action (Scheduled `x` → `d`). Spec §4.5, §5.3, §6.4.
+- *v1 UI surface sweep* (grilled inline 2026-09-30, ADR 0011) — arrows, no `j`/`k`; views
+  `1`–`5` only (no `:`, no `g`); no panel focus; EUR-only UI (no `v`, no prices); no Budget,
+  no Dashboard checks panel/card (check status in status bar), no drill-in, no export, no
+  Recent edit; Cash Flow = month-to-date income − expenses; spend chart = 6 complete
+  months; Import `Enter` categorise / `w` write / `n` new file; Reports `p`. Spec §6.4/§6.4a.
 
 - [Responsive layout strategy](issues/07-responsive-layout-strategy.md) — floor ≈100×30
   (too-small screen below); **priority drop** (shrink to mins, then hide low-priority
@@ -156,8 +161,8 @@ their views land.
   pass; the views with real subsystem logic carry a grilling ticket done just before that
   pass: Import (08), Scheduled (13), Forecast (09) and config (15) all resolved 2026-09-30. Dashboard, Reports have
   no open design ticket — grill inline if a question surfaces during the build.
-- **`CMDS` / `HINTS` tables** — transcribe the mock's inline-JS command list and per-view
-  hint strings into the `internal/ui/keys` structures (shape decided in ticket 05); a
+- **`HINTS` strings** — transcribe the mock's per-view
+  hint strings (adapted to the ADR 0011 keymap) into the `internal/ui/keys` structures (shape decided in ticket 05); a
   mechanical build task, not a decision.
 
 ## Out of scope
@@ -166,6 +171,9 @@ their views land.
 
 - **Entry view / manual-account UI in v1** (ADR 0010) — the model keeps manual accounts;
   the view returns after v1 over the unchanged model.
+- **Export** (`y` yank / CSV of reports) — dropped entirely, not deferred (ADR 0011).
+- **Post-v1, not v1**: budgets (own design ticket), Reports register drill-in, multi-currency
+  valuation UI, panel focus.
 - **Revising the design handoff's UX** — views, navigation model, feature scope are frozen
   (except the recorded deviations under Notes).
 

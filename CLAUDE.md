@@ -13,11 +13,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   account model, 0003 ports-and-adapters, 0004 root-mediator Bubble Tea model, 0005 fixed
   ANSI-16 palette, 0006 periodic rules forecast-only,
   0007 forecast = balances + schedules, 0008 always categorised,
-  0009 import: journal is the watermark, 0010 no manual-entry UI in v1).
+  0009 import: journal is the watermark, 0010 no manual-entry UI in v1, 0011 v1 keyboard and chrome).
 - **`docs/design_handoff_hledger_tui/README.md`** — the frozen UX spec (six views — Entry deferred in v1,
   keymaps, panels, tokens). Authoritative except the deviations listed in `docs/spec.md` §11.
-  The bundled `.dc.html` is a browser mock, **not code to port** — consult it for the `CMDS`
-  / `HINTS` / keymap tables and layout proportions only, never literal coordinates.
+  The bundled `.dc.html` is a browser mock, **not code to port** — consult it for the `HINTS`
+  strings and layout proportions only (keymap = spec §6.4, ADR 0011), never literal coordinates.
 - **`.scratch/konto-spec/`** — the wayfinder map and decision tickets (the "why" behind
   every choice in the spec), plus `research/` (hledger output, overlay compositing) and,
   later, `samples/` (bank CSV exports).
@@ -26,7 +26,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `konto` — a terminal UI frontend for [hledger](https://hledger.org) (plain-text accounting),
 single-user personal finance. Five views in v1: dashboard, CSV import with rule-building,
-scheduled/periodic transactions, forecast, reports (manual entry deferred, ADR 0010). Vim-style keyboard-only navigation.
+scheduled/periodic transactions, forecast, reports (manual entry deferred, ADR 0010). Keyboard-only: arrows move, `1`–`5` switch views, keys are the first letter of their action.
 
 ## State
 

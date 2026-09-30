@@ -11,7 +11,7 @@ responsive layout into §6.8) beyond that is **deliberately not in this spec** �
 (§12).
 
 Sources: the wayfinder map and decision tickets under `.scratch/konto-spec/`, `CONTEXT.md`
-(domain glossary), `docs/adr/0001`–`0010`.
+(domain glossary), `docs/adr/0001`–`0011`.
 
 ---
 
@@ -105,7 +105,7 @@ internal/
 
   ledger/                USE CASE. Loader + the Ledger snapshot type; load/refresh by
                          composing hledger + journal.
-  report/                USE CASE. Reports: native + market bs/is, diff for the FX footnote.
+  report/                USE CASE. Reports: bs/is for the selected period (native only in v1).
   csvimport/             USE CASE. import staging, dedup, rule building, write. (t.08)
   periodic/              USE CASE. ~ rule parse/edit/post-occurrence. (ticket 13)
   forecast/              USE CASE. read-only projection. (ticket 09)
@@ -115,7 +115,7 @@ internal/
   ui/                    ui.go = root model, tab chrome, app-level keymap dispatch, wiring.
     theme/               ANSI-16 palette → named lipgloss.Style values.
     layout/              responsive layout helpers + the lipgloss.Compositor overlay wrapper.
-    keys/                key.Binding sets (global + per view); the CMDS / HINTS / goto tables.
+    keys/                key.Binding sets (global + per view); the per-view HINTS strings.
     widgets/             shared render helpers (stat card, panel frame, selectable-list
                          styling, ntcharts wrapper).
     dashboard/ imports/ scheduled/ forecast/ reports/   (entry/ deferred, ADR 0010)
@@ -229,7 +229,7 @@ severities**. konto:
 
 `tea.ExecProcess` (Bubble Tea v2) suspends the TUI, runs `$VISUAL` → `$EDITOR` → a sane
 default with `+<line> <file>`, resumes, then fires a full refresh. Used by the `!` panel's
-jump-to-location and the `e` edit key on list views.
+jump-to-location — its only use in v1 (no `e`-to-editor on list views, ADR 0011).
 
 ### 4.8 Periodic rules (ticket 13, ADR 0006)
 
@@ -253,7 +253,7 @@ jump-to-location and the `e` edit key on list views.
 - **`d`** deletes any rule after y/n (handoff's `x`, renamed per §6.4): the `~` line + its indented lines; comments above stay.
 - **Write safety**: full reload after every write; single-instance `flock` on a lock file
   next to the journal at startup (a second konto refuses to start). No compare-before-write.
-- Annual-impact total follows `v` (per currency at cost / EUR at market via `-V`).
+- Annual-impact total is plain EUR (no valuation toggle in v1, ADR 0011).
 
 ### 4.9 CSV import (ticket 08, ADR 0009)
 
@@ -298,7 +298,7 @@ jump-to-location and the `e` edit key on list views.
 - **View**: one braille chart per currency, stacked vertically; one line per open
   asset/liability account in that currency; colour per account in fixed order (ANSI
   2,4,5,6,3,1); legend; dim vertical line where the forecast begins. Below: milestone table
-  (accounts grouped by currency × today/+3/+6/+12 months), no totals. `v` has no effect.
+  (accounts grouped by currency × today/+3/+6/+12 months), no totals.
 
 ---
 
@@ -316,7 +316,7 @@ Glossary: `CONTEXT.md`. Full type sketch: ticket `03-domain-model-core-types`.
 - **`MultiAmount []Amount`** — one entry per commodity, hledger's order. `Single() (Amount,
   bool)`, `ExtraCount() int` (= `len-1`), `IsAllNegative() bool`. Market valuation → `len 1`.
 - **`ValuationMode`** = `Native | Market`. A gateway query parameter (§4). No valuation math
-  in konto.
+  in konto. **Not built in v1** — the UI is EUR-only (ADR 0011); every call is native.
 
 ### 5.2 Entities (mapped from hledger by the adapter)
 
@@ -389,10 +389,10 @@ The program's single `tea.Model`. Holds:
   tab UI, not a seventh view.
 - the **five view sub-models** (six once Entry returns, ADR 0010), constructed at startup, alive for the whole run. Tab switch
   changes which one renders + receives input; cursor/scroll/draft state survives.
-- **app-global state**: `valuationMode`, `period`, terminal size, the read-only
-  `*domain.Ledger`.
-- **chrome**: active view id, tab bar, status bar. **overlay state**: `whichKeyMode`
-  (`none|root|goto`), command-line (`active`, `text`, filtered `CMDS`), `checksPanelOpen`.
+- **app-global state**: `period`, terminal size, the read-only `*domain.Ledger`, the latest
+  `CheckRun`.
+- **chrome**: active view id, tab bar, status bar. **overlay state**: `keysPopupOpen` (`?`),
+  `checksPanelOpen` (`!`). No which-key goto, no command line (ADR 0011).
 - the use-case **ports** it needs (`ledgerService`, checks) — injected by `cmd/konto`.
 
 Views never reference each other. Cross-view effects are mediated: a view acts → state
@@ -406,7 +406,7 @@ type View interface {
     View() string          // renders into its content area (size via WindowSizeMsg)
     Title() string
     StatusHint() string    // handoff HINTS map
-    KeyMap() []key.Binding  // feeds ? / which-key
+    KeyMap() []key.Binding  // feeds the ? popup
 }
 ```
 
@@ -418,9 +418,9 @@ scroll, generation counter).
 
 | Message class | Routed to |
 |---|---|
-| `tea.KeyMsg`, `tea.MouseMsg` | open overlay if any, else the **active view only**. Global keys (`1`–`5`, `g`, `:`, `?`, `!`, `v`, `q`/`ctrl+c`) caught by root **first**; if the active view has a focused text input, only `Esc`/`Ctrl+C` are caught. |
+| `tea.KeyMsg`, `tea.MouseMsg` | open overlay if any, else the **active view only**. Global keys (`1`–`5`, `?`, `!`, `r`, `q`/`ctrl+c`) caught by root **first**; if the active view has a focused text input, only `Esc`/`Ctrl+C` are caught. |
 | `tea.WindowSizeMsg` | root computes the content rect (window − tab bar − rule − status bar), forwards a **content-dimension** `WindowSizeMsg` to **all** views |
-| `ledgerLoadedMsg`, `valuationChangedMsg`, `checksLoadedMsg`, ticks | root updates its state, **broadcasts** to all views |
+| `ledgerLoadedMsg`, `checksLoadedMsg`, ticks | root updates its state, **broadcasts** to all views |
 | view-specific async results (`reportLoadedMsg`, …) | root forwards to the **one owning view** |
 
 Shared-state changes are **messages, not shared pointers**. Async races: each request
@@ -430,17 +430,45 @@ context cancellation). Sub-model `Cmd`s bubble up and are `tea.Batch`-ed by root
 ### 6.4 Keymaps (`internal/ui/keys`)
 
 `key.Binding` sets — one global + one per view. Root resolves against the global set first
-(after overlay / text-input checks), else forwards to the active view. `?` and which-key
-render from the binding sets (`bubbles/help`). `g` goto-prefix is a root state machine.
+(after overlay / text-input checks), else forwards to the active view. The `?` popup renders
+from the binding sets (`bubbles/help`).
 
 **Key principle:** every key is the **first letter of its action** where possible, and a
 letter means the same action in every view (`d` = delete, `n` new, `e` edit, `c` close,
 `o` open). Every write triggered by a key asks y/n first.
 
+**v1 keymap** (ADR 0011):
+
+| Scope | Keys |
+|---|---|
+| Global | `1`–`5` views · `?` keys popup · `!` checks panel · `r` refresh · `q` / `Ctrl+C` quit · `Esc` cancel / close popup |
+| Movement | `↑`/`↓` row · `PgUp`/`PgDn` page · `Home`/`End` ends · `Tab`/`Shift+Tab` form fields. No `j`/`k`. |
+| Dashboard | Accounts panel: `c` close · `o` reopen |
+| Import | `Enter` categorise row (popup: new rule / add to rule / once — `✓` rows: once only; picked with arrows + Enter) · `w` write import (y/n, only with no `?` rows) · `n` new file |
+| Scheduled | `n` new · `e` edit · `d` delete |
+| Reports | `p` cycle period. Read-only, no cursor; arrows scroll both tables together. |
+| `!` panel | arrows select · `Enter` jump to `$EDITOR` |
+
+No panel focus: each view has at most one cursor panel; read-only panels that overflow show
+`… N more`.
+
+### 6.4a Chrome and Dashboard (v1)
+
+- **Tab bar**: ` 1 dash │ 2 import │ 3 sched │ 4 forecast │ 5 reports `; right-aligned
+  journal path + transaction count.
+- **Status bar**: view name · per-view hint · `n/total` (cursor views only) · refresh
+  spinner / error indicator · check status `● clean` (green) or `● 2 err · 3 warn` (red with
+  errors, amber warnings-only) · `? keys`. No mode badge.
+- **Dashboard**: two stat cards — `NET WORTH` (sum of open assets + liabilities) and
+  `<MONTH> CASH FLOW` (calendar month to date, income − expenses from `is`, note
+  `<in> in / <out> out`, green/red). Left column: Accounts, full height. Right: Recent
+  (newest first, all accounts, not selectable), Upcoming (next occurrences, not selectable),
+  monthly spend chart (total `expenses:*` per month, last 6 complete months, one line).
+- **`!` panel**: issues only; when clean a single dim-green `✓ all N checks pass`.
+
 ### 6.5 Overlays
 
-Root-owned. The `:` command-line **input** replaces the status-bar row (handoff). The
-filtered-command **dropdown**, the which-key popup, and the `!` checks panel are
+Root-owned. The `?` keys popup and the `!` checks panel are
 `lipgloss.Compositor` (Lip Gloss v2) layers over the composed base:
 
 - base view = one `Layer` at `X(0).Y(0).Z(0)` sized to `tea.WindowSizeMsg`
@@ -456,8 +484,8 @@ Details: `research/06-overlay-compositing.md`.
 | Component | Use |
 |---|---|
 | `bubbles/table` | Import CSV-row grid, Reports tables |
-| custom selectable-list widget (`ui/widgets`) | Dashboard panels (Recent, Upcoming, Accounts) |
-| `bubbles/textinput` | command line, rule-editor target, import account-name, form fields |
+| custom list widget (`ui/widgets`) | Dashboard panels (Accounts selectable; Recent, Upcoming read-only) |
+| `bubbles/textinput` | rule-editor target, import account-name, category typeahead, form fields |
 | `bubbles/viewport` | scrollable panels (journal preview, checks body) |
 | `bubbles/key`, `bubbles/help`, `bubbles/spinner` | bindings, `?` render, refresh indicator |
 | `ntcharts` | Dashboard trend + Forecast braille charts |
@@ -492,9 +520,8 @@ the load result.
   - `Panel(title, w, h, body)` — rounded border, title inset 2 cells.
   - Not a declarative layout tree; views own their structure.
 - **Popups** (§6.5): full width; height = content, capped at ½ screen height; each popup
-  reports its natural size and the root clamps it. Over the cap the checks list and the
-  command dropdown scroll (`j`/`k`); which-key reflows to `min(4, floor(w/minColW))`
-  columns.
+  reports its natural size and the root clamps it. Over the cap the checks list scrolls
+  (arrows); the `?` popup reflows to `min(4, floor(w/minColW))` columns.
 - **Deferred to the shell build** (implementation, not decisions): exact floor numbers,
   per-view priority orders, inter-panel gap cells, `Allocate` leftover-cell distribution
   and priority tie-break.
@@ -595,14 +622,15 @@ bar at fixed sizes only, not whole views during active development.
 - **No overlapping import rules**; a failing import balance assertion blocks the write.
 - On CSV import, konto **writes a `= <balance>` assertion** on the last posting from the
   bank export's running-balance column — this is the reconciliation mechanism.
-- **Valuation**: "at cost" keeps multi-commodity totals as multiple amounts; `-V` collapses
-  to one; UI copy explains the delta is unrealized FX gain, not spending.
+- **Valuation**: not in v1 (EUR-only UI, ADR 0011). When it returns: "at cost" keeps
+  multi-commodity totals as multiple amounts; `-V` collapses to one; UI copy explains the
+  delta is unrealized FX gain, not spending.
 - All layout is **responsive to `tea.WindowSizeMsg`**, recomputed from real terminal
   columns/rows — never hardcoded to the mock's 180×60.
 - Colours are **ANSI indices, never hex**.
 - **Periodic rules never post** — they are forecast inputs only (ADR 0006).
 - **The forecast never guesses** — current balances + periodic rules only (ADR 0007).
-- **Closed accounts** are visible only in the account overview; closing requires zero
+- **Closed accounts** are visible only in the Dashboard Accounts panel; closing requires zero
   balance and no referencing `~` rule.
 - UI copy says **"currency"**, never "commodity" (code/domain keep `Commodity`).
 - UI copy says **"category"** for `expenses:*`/`income:*` and **"account"** for
@@ -632,6 +660,11 @@ The handoff (`design_handoff_hledger_tui/README.md`) is otherwise authoritative.
   override**; files come from a filepicker, dedup from the journal.
 - **ADR 0010** — **no Entry view in v1**: five tabs on `1`–`5`, no manual-account UI, no
   classify-on-open prompt; accounts are created by first import.
+- **ADR 0011** — **keyboard and chrome**: arrows not `j`/`k`; views on `1`–`5` only (no `:`
+  command line, no `g` prefix / which-key goto, no mode badge); no panel focus; EUR-only UI
+  (no `v`, no Market Prices panel); no Budget panel; no Dashboard Journal Checks panel or
+  stat card (check status lives in the status bar); no Reports drill-in; no `y` export; no
+  Recent `e` edit; `!` panel lists issues only (no `OK` rows); Reports period is `p`.
 
 New deviations get an ADR and a line here.
 
@@ -654,13 +687,12 @@ Test-first (`/tdd-loop`), each slice the smallest nameable behaviour:
 
 1. **Shell** — `cmd/konto` skeleton, `hledger` version preflight, empty root model, alt
    screen, quit. (ntcharts/v2 build check already passed — §1.)
-2. **Chrome** — tab bar (five tabs, active styling), horizontal rule, status bar (mode + view
-   name + hint + `? keys`), all responsive to `WindowSizeMsg`. `theme` package. `ui/layout` `Allocate` + `Panel` and
+2. **Chrome** — tab bar (five tabs, active styling), horizontal rule, status bar (view
+   name + hint + `n/total` + check status + `? keys`), all responsive to `WindowSizeMsg`. `theme` package. `ui/layout` `Allocate` + `Panel` and
 the too-small floor screen (§6.8).
-3. **Navigation** — number keys `1`–`5`, the `g` goto-prefix state machine, `:` command line
-   (typeahead over `CMDS`, Tab-complete, Enter navigates), over empty view stubs.
-4. **Overlays** — `lipgloss.Compositor` wrapper in `ui/layout`; which-key popup (`g` / `?`),
-   `!` checks panel shell.
+3. **Navigation** — number keys `1`–`5` over empty view stubs.
+4. **Overlays** — `lipgloss.Compositor` wrapper in `ui/layout`; `?` keys popup, `!` checks
+   panel shell.
 5. **Ledger load** — `internal/hledger` `run()` + `Client.Print`/`Balance`; `internal/ledger`
    `Loader`; first-run + parse-error `appMode`s; stale-while-revalidate; `r` refresh.
 6. **Dashboard first panel** — the flat Accounts list from `Ledger.Accounts` (source glyphs,
