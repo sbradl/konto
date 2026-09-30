@@ -53,7 +53,9 @@ type Model struct {
 	editor      func(file string, line int) *exec.Cmd
 	ledger      *domain.Ledger
 	loadErr     error
-	active      int // index into tabNames
+	refreshing  bool  // a reload is in flight; the held snapshot stays on screen
+	refreshErr  error // the last reload failed; the snapshot is stale
+	active      int   // index into tabNames
 	firstRun    bool
 	parseIssue  *domain.CheckIssue
 	createErr   error
@@ -95,9 +97,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width, m.height = size.Width, size.Height
 	}
 	if loaded, ok := msg.(ledgerLoadedMsg); ok {
-		m.ledger, m.loadErr = &loaded.ledger, loaded.err
-		m.firstRun = errors.Is(loaded.err, ledger.ErrNoJournal)
-		m.parseIssue = issueOf(loaded.err)
+		m = m.onLoaded(loaded)
 	}
 	if failed, ok := msg.(journalCreateFailedMsg); ok {
 		m.createErr = failed.err
@@ -109,6 +109,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.onKey(key)
 	}
 	return m, nil
+}
+
+// onLoaded takes a load result in. Once a good snapshot is held, a failed reload
+// keeps it (stale-while-revalidate) and only flags the error.
+func (m Model) onLoaded(loaded ledgerLoadedMsg) Model {
+	m.refreshing = false
+	if m.hasSnapshot() && loaded.err != nil {
+		m.refreshErr = loaded.err
+		return m
+	}
+	m.refreshErr = nil
+	m.ledger, m.loadErr = &loaded.ledger, loaded.err
+	m.firstRun = errors.Is(loaded.err, ledger.ErrNoJournal)
+	m.parseIssue = issueOf(loaded.err)
+	return m
+}
+
+// hasSnapshot reports whether a good ledger is on screen.
+func (m Model) hasSnapshot() bool {
+	return m.ledger != nil && m.loadErr == nil
 }
 
 func (m Model) onKey(key tea.KeyPressMsg) (Model, tea.Cmd) {
@@ -126,7 +146,7 @@ func (m Model) onKey(key tea.KeyPressMsg) (Model, tea.Cmd) {
 		return m, m.onParseErrorKey(key.String())
 	}
 	if m.ledger != nil {
-		return m.onViewKey(key.String()), nil
+		return m.onViewKey(key.String())
 	}
 	return m, nil
 }
@@ -148,12 +168,16 @@ func (m Model) onParseErrorKey(key string) tea.Cmd {
 	return nil
 }
 
-// onViewKey handles the global keys of the normal views: 1–5 switch the view.
-func (m Model) onViewKey(key string) Model {
+// onViewKey handles the global keys of the normal views: 1–5 switch the view, r reloads.
+func (m Model) onViewKey(key string) (Model, tea.Cmd) {
+	if key == "r" {
+		m.refreshing = true
+		return m, m.load
+	}
 	if number, err := strconv.Atoi(key); err == nil && number >= 1 && number <= tabCount {
 		m.active = number - 1
 	}
-	return m
+	return m, nil
 }
 
 // openEditor suspends konto while the user's editor shows the issue.

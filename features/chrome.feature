@@ -125,20 +125,17 @@ Feature: Chrome, navigation and global keys
 
   Rule: Refresh
 
-    @wip
     Scenario: r reloads the journal
       When I append a transaction to the journal externally
       And I press "r"
       Then the new transaction appears after refresh
 
-    @wip
     Scenario: stale-while-revalidate
       Given hledger is slowed by 1s
       When I press "r"
       Then the status bar shows a spinner
       And the current panels stay rendered
 
-    @wip
     Scenario: failed refresh keeps the stale snapshot
       Given hledger starts failing
       When I press "r"

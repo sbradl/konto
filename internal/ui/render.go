@@ -74,7 +74,7 @@ func (m Model) statusBar() string {
 	if hint := hints()[m.active]; hint != "" {
 		left += "   " + hint
 	}
-	right := "? keys "
+	right := m.indicator() + "? keys "
 	gap := max(1, m.width-lipgloss.Width(left)-lipgloss.Width(right))
 	return theme.StatusBar.Render(left + strings.Repeat(" ", gap) + right)
 }
@@ -89,6 +89,17 @@ func (m Model) firstRunText() string {
 
 func (m Model) centred(text string) string {
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, text)
+}
+
+// indicator is the in-flight spinner or the stale-snapshot error flag, if any.
+func (m Model) indicator() string {
+	if m.refreshing {
+		return "⣾ "
+	}
+	if m.refreshErr != nil {
+		return "✗ error   "
+	}
+	return ""
 }
 
 // tabBar puts the tabs on the left and the journal path, with the

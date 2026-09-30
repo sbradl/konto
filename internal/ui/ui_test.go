@@ -584,3 +584,99 @@ func TestStatusBarUsesTheBarStyle(t *testing.T) {
 		t.Errorf("status bar = %q, want it to start with the bar style %q", last, prefix)
 	}
 }
+
+// sequenceLoader returns its results one per Load call, repeating the last.
+type sequenceLoader struct {
+	results []fakeLoader
+	calls   *int
+}
+
+func (s sequenceLoader) Load(ctx context.Context) (domain.Ledger, error) {
+	i := min(*s.calls, len(s.results)-1)
+	*s.calls++
+	return s.results[i].Load(ctx)
+}
+
+func sequenceModel(t *testing.T, results ...fakeLoader) (ready Model, calls *int) {
+	t.Helper()
+	calls = new(int)
+	model := New(journalPath, sequenceLoader{results: results, calls: calls}, &fakeCreator{}, recordingEditor(nil))
+	updated, _ := model.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	updated, _ = updated.Update(model.Init()())
+	return updated.(Model), calls
+}
+
+func count(m Model) string {
+	_, after, _ := strings.Cut(firstLine(m), "· ")
+	return strings.TrimSpace(after)
+}
+
+// r reloads the journal: the new transaction count appears.
+func TestRReloadsTheJournal(t *testing.T) {
+	model, calls := sequenceModel(t, fakeLoader{ledger: ledgerWith(2)}, fakeLoader{ledger: ledgerWith(3)})
+
+	refreshing, cmd := press(model, "r")
+	if cmd == nil {
+		t.Fatal("r should start a reload")
+	}
+	updated, _ := refreshing.Update(cmd())
+
+	if *calls != 2 || count(updated.(Model)) != "3 txns" {
+		t.Errorf("calls=%d count=%q, want a second load showing 3 txns", *calls, count(updated.(Model)))
+	}
+}
+
+// While reloading, the held snapshot stays on screen and the status bar spins.
+func TestRefreshKeepsSnapshotAndShowsSpinner(t *testing.T) {
+	model, _ := sequenceModel(t, fakeLoader{ledger: ledgerWith(2)})
+
+	refreshing, _ := press(model, "r")
+
+	if count(refreshing) != "2 txns" {
+		t.Errorf("count = %q, want the stale 2 txns while refreshing", count(refreshing))
+	}
+	if !strings.ContainsAny(lastLine(refreshing), "⣾⣽⣻⢿⡿⣟⣯⣷") {
+		t.Errorf("status bar = %q, want a spinner", lastLine(refreshing))
+	}
+	if strings.ContainsAny(lastLine(model), "⣾⣽⣻⢿⡿⣟⣯⣷") {
+		t.Errorf("status bar = %q, want no spinner when idle", lastLine(model))
+	}
+}
+
+// A refresh that fails keeps the last good snapshot and flags an error; the
+// next good refresh clears it.
+func TestFailedRefreshKeepsSnapshotAndFlagsError(t *testing.T) {
+	model, _ := sequenceModel(t, fakeLoader{ledger: ledgerWith(2)}, fakeLoader{err: errors.New("boom")},
+		fakeLoader{ledger: ledgerWith(5)})
+
+	refreshing, cmd := press(model, "r")
+	failed, _ := refreshing.Update(cmd())
+
+	if got := count(failed.(Model)); got != "2 txns" {
+		t.Errorf("count = %q, want the stale 2 txns after a failed refresh", got)
+	}
+	if !strings.Contains(lastLine(failed.(Model)), "✗ error") {
+		t.Errorf("status bar = %q, want an error indicator", lastLine(failed.(Model)))
+	}
+	if strings.ContainsAny(lastLine(failed.(Model)), "⣾⣽⣻⢿⡿⣟⣯⣷") {
+		t.Error("the spinner should stop when the refresh fails")
+	}
+
+	again, cmd := press(failed.(Model), "r")
+	recovered, _ := again.Update(cmd())
+
+	if strings.Contains(lastLine(recovered.(Model)), "✗") || count(recovered.(Model)) != "5 txns" {
+		t.Errorf("status bar = %q, count = %q; want the error cleared and 5 txns",
+			lastLine(recovered.(Model)), count(recovered.(Model)))
+	}
+}
+
+// r only refreshes the normal views.
+func TestRDoesNothingOutsideTheNormalViews(t *testing.T) {
+	if _, cmd := press(firstRunModel(t, &fakeCreator{}), "r"); cmd != nil {
+		t.Error("r should do nothing on the first-run screen")
+	}
+	if _, cmd := press(resized(started(t, fakeLoader{}), 80, 20), "r"); cmd != nil {
+		t.Error("r should do nothing when the terminal is too small")
+	}
+}

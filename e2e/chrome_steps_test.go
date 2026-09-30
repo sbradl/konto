@@ -5,6 +5,7 @@ package e2e
 import (
 	"errors"
 	"fmt"
+	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -136,7 +137,32 @@ func registerChromeSteps(sc *godog.ScenarioContext, w *world) {
 	})
 }
 
+func registerRefreshSteps(sc *godog.ScenarioContext, w *world) {
+	sc.Step(`^I append a transaction to the journal externally$`, func() error {
+		f, err := os.OpenFile(w.journal, os.O_APPEND|os.O_WRONLY, 0o644)
+		if err != nil {
+			return err
+		}
+		const txn = "\n2026-09-30 Newly added\n    assets:checking    1,00 EUR\n    equity:opening-balances\n"
+		_, werr := f.WriteString(txn)
+		return errors.Join(werr, f.Close())
+	})
+	sc.Step(`^the new transaction appears after refresh$`, func() error {
+		return w.expectLine(0, "tab bar", "55 txns", strings.Contains)
+	})
+	sc.Step(`^the status bar shows a spinner$`, func() error {
+		return w.expectLine(-1, "status bar", "⣾", strings.Contains)
+	})
+	sc.Step(`^the status bar shows an error indicator$`, func() error {
+		return w.expectLine(-1, "status bar", "✗", strings.Contains)
+	})
+	sc.Step(`^(?:the current panels stay rendered|the previous balances are still shown)$`, func() error {
+		return w.expectLine(0, "tab bar", "54 txns", strings.Contains)
+	})
+}
+
 func registerStatusBarSteps(sc *godog.ScenarioContext, w *world) {
+	registerRefreshSteps(sc, w)
 	sc.Step(`^the status bar hint lists ((?:"[^"]*" ?)+)$`, func(list string) error {
 		for _, match := range quoted.FindAllStringSubmatch(list, -1) {
 			if err := w.expectLine(-1, "status bar", match[1], strings.Contains); err != nil {
