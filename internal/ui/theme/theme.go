@@ -12,4 +12,6 @@ var (
 	Dim = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 	// Selected styles the active tab and the selected row: bold bright-white on the selection background.
 	Selected = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15")).Background(lipgloss.Color("8"))
+	// StatusBar styles the bottom bar: bright white on the selection background.
+	StatusBar = lipgloss.NewStyle().Foreground(lipgloss.Color("15")).Background(lipgloss.Color("8"))
 )

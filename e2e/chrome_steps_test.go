@@ -5,6 +5,7 @@ package e2e
 import (
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -115,21 +116,12 @@ func registerLayoutSteps(sc *godog.ScenarioContext, w *world) {
 	sc.Step(`^the status bar is on the last line$`, func() error { return w.expectScreenLines(checkStatusBarLast) })
 }
 
+var quoted = regexp.MustCompile(`"([^"]*)"`)
+
 func registerChromeSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^no cell sets a background colour except the selected row and the popup$`, func() error {
-		s, err := w.session()
-		if err != nil {
-			return err
-		}
-		s.settle(w.suite.timeout)
-		for colour := range s.backgrounds() {
-			if colour != selectionBackground {
-				return fmt.Errorf("a cell has background %d; only the selection background %d is allowed", colour, selectionBackground)
-			}
-		}
-		return nil
-	})
 	registerLayoutSteps(sc, w)
+	registerStatusBarSteps(sc, w)
+	registerThemeSteps(sc, w)
 	sc.Step(`^the active tab is "([^"]*)"$`, w.expectActiveTab)
 	sc.Step(`^the active tab is unchanged$`, func() error { return w.expectActiveTab(w.tabAtBaseline) })
 	sc.Step(`^the tab bar shows the journal path and "(\d+)" transactions on the right$`, func(count string) error {
@@ -141,5 +133,33 @@ func registerChromeSteps(sc *godog.ScenarioContext, w *world) {
 	})
 	sc.Step(`^the tab bar does not show a check status$`, func() error {
 		return w.expectLine(0, "tab bar", "●", func(line, marker string) bool { return !strings.Contains(line, marker) })
+	})
+}
+
+func registerStatusBarSteps(sc *godog.ScenarioContext, w *world) {
+	sc.Step(`^the status bar hint lists ((?:"[^"]*" ?)+)$`, func(list string) error {
+		for _, match := range quoted.FindAllStringSubmatch(list, -1) {
+			if err := w.expectLine(-1, "status bar", match[1], strings.Contains); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+func registerThemeSteps(sc *godog.ScenarioContext, w *world) {
+	sc.Step(`^no cell sets a background colour except the selected row and the popup$`, func() error {
+		s, err := w.session()
+		if err != nil {
+			return err
+		}
+		s.settle(w.suite.timeout)
+		for colour := range s.backgrounds() {
+			if colour != selectionBackground {
+				return fmt.Errorf("a cell has background %d; only the selection background %d is allowed",
+					colour, selectionBackground)
+			}
+		}
+		return nil
 	})
 }

@@ -533,3 +533,54 @@ func TestOtherKeysDoNothingOnTheParseErrorScreen(t *testing.T) {
 		t.Errorf("x should do nothing (cmd=%v, calls=%v)", cmd != nil, calls)
 	}
 }
+
+// Each view names the keys it answers to in the status bar.
+func TestStatusBarHintIsPerView(t *testing.T) {
+	model := started(t, fakeLoader{})
+
+	for key, hints := range map[string][]string{
+		"1": {"c close", "o reopen"},
+		"2": {"n new file", "Enter categorise", "w write"},
+		"3": {"n new", "e edit", "d delete"},
+		"5": {"p period"},
+	} {
+		switched, _ := press(model, key)
+
+		for _, hint := range hints {
+			if got := lastLine(switched); !strings.Contains(got, hint) {
+				t.Errorf("view %s: status bar = %q, want it to contain %q", key, got, hint)
+			}
+		}
+	}
+}
+
+// Views without keys of their own show no hint beyond the global ones.
+func TestForecastHasNoHint(t *testing.T) {
+	model, _ := press(started(t, fakeLoader{}), "4")
+
+	if got := strings.Fields(lastLine(model)); !reflect.DeepEqual(got, []string{"forecast", "?", "keys"}) {
+		t.Errorf("status bar words = %v, want only the view name and ? keys", got)
+	}
+}
+
+// The status bar spans the screen, with "? keys" at the right edge.
+func TestStatusBarSpansTheWidthWithKeysAtTheRight(t *testing.T) {
+	line := lastLine(started(t, fakeLoader{}))
+
+	if width := lipgloss.Width(line); width != 120 {
+		t.Errorf("status bar width = %d, want 120", width)
+	}
+	if !strings.HasSuffix(line, "? keys ") {
+		t.Errorf("status bar = %q, want it to end with \"? keys \"", line)
+	}
+}
+
+// The status bar is drawn on the selection background.
+func TestStatusBarUsesTheBarStyle(t *testing.T) {
+	lines := strings.Split(started(t, fakeLoader{}).View().Content, "\n")
+	prefix, _, _ := strings.Cut(theme.StatusBar.Render("x"), "x")
+
+	if last := lines[len(lines)-1]; !strings.HasPrefix(last, prefix) {
+		t.Errorf("status bar = %q, want it to start with the bar style %q", last, prefix)
+	}
+}

@@ -55,7 +55,6 @@ Feature: Chrome, navigation and global keys
     Then the status bar shows the view name, a hint, the check status and "? keys"
     And the status bar does not show a mode badge
 
-  @wip
   Scenario: hint is per view
     When I press "3"
     Then the status bar hint lists "n new" "e edit" "d delete"

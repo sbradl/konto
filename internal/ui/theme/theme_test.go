@@ -28,3 +28,16 @@ func TestDimIsTheDimForegroundOnly(t *testing.T) {
 		t.Errorf("background = %v, want none", bg)
 	}
 }
+
+// StatusBar is bright white on the selection background, not bold (spec §7.2).
+func TestStatusBarIsBrightWhiteOnSelectionBackground(t *testing.T) {
+	if got := StatusBar.GetForeground(); got != lipgloss.Color("15") {
+		t.Errorf("foreground = %v, want ANSI 15", got)
+	}
+	if got := StatusBar.GetBackground(); got != lipgloss.Color("8") {
+		t.Errorf("background = %v, want ANSI 8", got)
+	}
+	if StatusBar.GetBold() {
+		t.Error("StatusBar should not be bold")
+	}
+}

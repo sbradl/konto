@@ -57,9 +57,26 @@ func (m Model) views() string {
 	return strings.Join([]string{m.tabBar(), rule, body, m.statusBar()}, "\n")
 }
 
-// statusBar shows the active view's name.
+// hints are the keys each view answers to, shown in the status bar.
+func hints() [tabCount]string {
+	return [tabCount]string{
+		"c close   o reopen",
+		"n new file   Enter categorise   w write",
+		"n new   e edit   d delete",
+		"",
+		"p period",
+	}
+}
+
+// statusBar shows the active view's name and key hint, with "? keys" at the right edge.
 func (m Model) statusBar() string {
-	return " " + tabNames()[m.active]
+	left := " " + tabNames()[m.active]
+	if hint := hints()[m.active]; hint != "" {
+		left += "   " + hint
+	}
+	right := "? keys "
+	gap := max(1, m.width-lipgloss.Width(left)-lipgloss.Width(right))
+	return theme.StatusBar.Render(left + strings.Repeat(" ", gap) + right)
 }
 
 func (m Model) firstRunText() string {
