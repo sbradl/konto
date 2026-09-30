@@ -123,7 +123,8 @@ _Avoid_: Dedup marker, Cursor, `.latest`
 
 **Bank format**:
 A konto-built-in hledger rules preamble describing one bank's CSV layout (e.g. Postbank).
-Assigned to an import-fed account by a `konto:format:<bank>` tag.
+Assigned to an import-fed account by a `konto:format:<bank>` tag; the account itself is
+recognised by its `konto:iban:<IBAN>` tag. v1 ships Postbank only.
 
 ## Forecast
 

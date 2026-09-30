@@ -6,8 +6,7 @@ session needs before writing code. It does not restate the UX — that lives in
 [`design_handoff_hledger_tui/README.md`](design_handoff_hledger_tui/README.md), which is
 authoritative and frozen (except the deviations in §11).
 
-Per-feature design (CSV import format details, responsive-layout details; periodic rules,
-import architecture and forecast
+Per-feature design (responsive-layout details; periodic rules, CSV import and forecast
 resolved into §4.8–§4.10)
 is **deliberately not in this spec** — it is grilled just-in-time as each view is built
 (§12).
@@ -161,7 +160,8 @@ The `internal/journal` adapter is a **targeted line-oriented reader/writer, not 
   indented postings + trailing comment/tags from journal text. Dates are never computed
   from this text — see §4.8.
 - **`account` directives and their tags** — the `konto:source:manual|import` tag
-  (§7), the `konto:closed:<date>` tag (§5.3) and the `konto:format:<bank>` tag (§4.9). `accounts --directives` drops tags; the tag *does* inherit onto that account's
+  (§7), the `konto:closed:<date>` tag (§5.3) and the `konto:format:<bank>` /
+  `konto:iban:<IBAN>` tags (§4.9). `accounts --directives` drops tags; the tag *does* inherit onto that account's
   postings in `print -O json`, but text parsing is the primary source.
 - **`categories.rules`** — append new `if` blocks, append a matcher line to an existing
   block (§4.9). No `.latest` files (ADR 0009).
@@ -257,14 +257,14 @@ jump-to-location and the `e` edit key on list views.
   next to the journal at startup (a second konto refuses to start). No compare-before-write.
 - Annual-impact total follows `v` (per currency at cost / EUR at market via `-V`).
 
-### 4.9 CSV import (ticket 08 — architecture; format details await samples, ADR 0009)
+### 4.9 CSV import (ticket 08, ADR 0009)
 
 - **hledger converts, konto owns the rest.** `hledger print -f <csv> --rules-file <tmp>
   -O json`, where `<tmp>` `include`s the embedded bank format (`go:embed`) +
   `categories.rules` (one shared file next to the journal) and sets `account1`. No
   `hledger import`, no `.latest`.
-- **Flow**: filepicker (XDG Downloads, `.csv`) → choose import-fed account (bank format asked
-  once, stored as `konto:format:<bank>`) → row table (`✓` rule id / `?`) + skipped list →
+- **Flow**: filepicker (XDG Downloads, `.csv`) → account detected by IBAN from the preamble
+  (`konto:iban:<IBAN>`; first import: user chooses, konto stores IBAN + `konto:format:<bank>`) → row table (`✓` rule id / `?`) + skipped list →
   categorise → Enter.
 - **Dedup**: journal is the watermark — D = the account's latest transaction date; `< D`
   skipped, `> D` new, `= D` compared by date+amount+description as a multiset.
@@ -279,9 +279,15 @@ jump-to-location and the `e` edit key on list views.
   Target file = the account's latest transaction's file (else main journal), date-ordered
   insert, payees declared.
 - **First import** into an empty account: konto derives an opening balance from the CSV
-  (first row's balance − its amount), writes it against `equity:opening-balances` with an
-  assertion, dated the day before the first row; confirmed in the preview. No balance
-  column → user enters it by hand first.
+  (trailer balance − sum of rows), writes it against `equity:opening-balances` with an
+  assertion, dated the day before the oldest row; confirmed in the preview.
+- **Postbank** (only bank at v1): UTF-8+BOM, `;`, `skip 7`, trailer `Kontostand;…` skipped via
+  `if ^Kontostand`; `%-d.%-m.%Y`; `decimal-mark ,`; newest first; no pending rows; no
+  per-row balance — the trailer is the period-end balance → `=` assertion on the newest
+  transaction. Mapping: booking date only; description = payee (else `Umsatzart`);
+  transaction comment = purpose; rule id as posting tag `konto-rule:<id>` (`comment2`,
+  kept, declared). Rules match payee, optionally `& %purpose …` (PayPal/Klarna). Nothing
+  else written. Full format notes: ticket 08.
 
 ### 4.10 Forecast (ticket 09, ADR 0007)
 
@@ -598,7 +604,6 @@ grilled immediately before the `tdd-loop` pass for its view:
 | Area | Ticket | Prerequisite |
 |---|---|---|
 | Responsive layout helper shape | 07 | done *in* the shell build; also runs the ntcharts/v2 check |
-| CSV import — Postbank format details (architecture resolved, §4.9) | 08 | **14** — user provides real Postbank CSV exports into `.scratch/konto-spec/samples/` |
 
 ---
 

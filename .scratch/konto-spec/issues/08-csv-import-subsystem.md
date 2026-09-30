@@ -1,7 +1,7 @@
 # 08 CSV import subsystem design
 
 Type: grilling
-Status: open
+Status: resolved
 Blocked by: 02, 03, 14
 
 ## Question
@@ -38,10 +38,10 @@ The Import view is konto's largest owned write-path. Decide its design:
 
 Feeds the "journal writes beyond CSV import" fog and **Assemble docs/spec.md**.
 
-## Answer (partial — architecture)
+## Answer
 
-Grilled 2026-09-30 without samples. **Status stays open**: the format-specific part waits on
-ticket 14 (see "Still open" below). Deviations from the handoff → ADR 0009.
+Grilled 2026-09-30 in two passes: architecture first, then the Postbank format once the
+samples (ticket 14) arrived. Deviations from the handoff → ADR 0009.
 
 ### Split: hledger converts, konto owns the rest
 
@@ -65,8 +65,9 @@ manual override.
 
 ### Account & bank format
 
-- After picking the file, the user **chooses the target account** from import-fed accounts.
-  (IBAN auto-detection = possible upgrade once samples show whether Postbank exports it.)
+- Account detected by **IBAN** from the CSV preamble, matched against a `konto:iban:<IBAN>`
+  tag. First import (unknown IBAN): the user chooses from import-fed accounts and konto
+  stores the tag.
 - Bank format stored on the account: `konto:format:<bank>` tag on its `account`
   directive, asked on the first import into that account.
 - Formats (the `.rules` preamble: `separator`, `encoding`, `skip`, `fields`, `date-format`,
@@ -114,8 +115,8 @@ manual override.
 ### First import — opening balance
 
 On the first import into an account with no transactions, konto derives the opening
-balance from the CSV (first row's running balance − its amount) and writes, dated the day
-before the first row:
+balance from the CSV (trailer balance − sum of all rows) and writes, dated the day before
+the oldest row:
 
 ```
 <date> opening balance
@@ -135,12 +136,59 @@ rule id / `?` needs category) + skipped-rows list → right column: category pic
 choice (new / add to existing / once) + posting preview → Enter. Left column is an info
 block (file, account, format, D) — **no file list with status dots**.
 
-### Still open — needs samples (ticket 14)
+### Postbank format (from samples, verified on hledger 1.52.1 with a synthetic file)
 
-- Postbank column layout, encoding, delimiter, preamble/sections, line endings.
-- Which column is the "description" (payee vs purpose text with changing reference
-  numbers) — decides whether the full-description default pattern is stable.
-- Running-balance column, sign convention, currency column.
-- Pending ("vorgemerkt") bookings, if exported.
-- Row order (newest-first?).
-- IBAN in the file → account auto-detection.
+- UTF-8 **with BOM**, `;` separator, LF, no quoting. 18 columns.
+- **Preamble**: 7 non-blank lines (title; account/IBAN/currency header + values; period
+  `d.m.yyyy - d.m.yyyy`; "Letzter Kontostand"; pending-bookings note) + one blank line,
+  then the header row. hledger `skip` does not count blank lines → `skip 7`.
+- **Trailer**: `Kontostand;<period end>;;;<balance>;EUR` — skipped via `if ^Kontostand` /
+  `skip`. Its balance is the **balance at period end** and is reliable (reconciled exactly
+  across the two overlapping exports). The preamble's "Letzter Kontostand" differs from it
+  and is **ignored**.
+- **Columns**: Buchungstag, Wert, Umsatzart, Begünstigter / Auftraggeber, Verwendungszweck,
+  IBAN / Kontonummer, BIC, Kundenreferenz, Mandatsreferenz, Gläubiger ID, Fremde Gebühren,
+  Betrag, Abweichender Empfänger, Anzahl der Aufträge, Anzahl der Schecks, Soll, Haben,
+  Währung. `Betrag` is signed; `Soll`/`Haben` redundant.
+- Dates `d.m.yyyy` without zero padding (`%-d.%-m.%Y`); amounts German (`1.023,45`,
+  `decimal-mark ,`); currency always EUR.
+- **Newest first.** Booking and value date differ on ~5% of rows.
+- **Pending bookings are not exported** ("nicht Bestandteil dieser Übersicht").
+- No per-row running balance.
+- Payee empty for `Auszahlung`, `Bargeldeinzahlung`, `Kontoabrechnung`. Payment providers
+  (PayPal, Klarna) appear as payee; the merchant is only in the purpose text.
+- Identical same-day rows (date + payee + amount) occur → multiset dedup confirmed.
+- Overlapping period across two exports: rows identical, same order.
+- Filename `Kontoumsaetze_<account number>_<timestamp>.csv` — changes per download.
+
+### Journal mapping
+
+- **Date**: booking date only (no secondary date).
+- **Description**: payee; if empty, the transaction type (`Umsatzart`).
+- **Transaction comment**: purpose text.
+- **Rule id**: on the category posting via `comment2 konto-rule:<id>` (a transaction-level
+  comment would overwrite the purpose); kept in the journal, `tag konto-rule` declared.
+- Nothing else (type, counterparty IBAN, references) is written.
+
+### Rules (refined)
+
+- Match on payee, optionally AND a purpose condition — verified syntax:
+  ```
+  if %payee PayPal
+  & %purpose Thalia
+    account2 expenses:books
+    comment2 konto-rule:7
+  ```
+  OR = further matcher lines / blocks. For empty-payee rows the rule matches the field that
+  supplied the description (`%type`). "New rule" default: payee (or type) only.
+
+### Balance
+
+- `= <balance>` assertion on the **newest** transaction, from the trailer.
+- Opening balance (first import) = trailer − sum of all rows.
+
+### Fixtures
+
+Synthetic Postbank-format CSVs under `testdata/` (invented names, IBANs, amounts; consistent
+balances): single export, overlapping pair, identical same-day rows, empty-payee rows,
+PayPal-with-purpose rows. Never copies of the real files (ticket 14).

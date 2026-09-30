@@ -1,7 +1,7 @@
 # 14 Obtain sample bank CSV files
 
 Type: task
-Status: open
+Status: resolved
 
 ## Question
 
@@ -32,3 +32,10 @@ preamble, columns, quirks) with invented names, IBANs, purposes and amounts — 
 balances kept internally consistent so assertions and opening-balance derivation are
 testable. The answer records the format
 findings; ticket 08 designs the abstraction from them.
+
+## Answer
+
+2026-09-30: two real Postbank Giro exports provided (a long period and a second, overlapping
+one). They stay local in the gitignored `samples/` directory. Format findings — structure
+only, no personal data — are recorded in ticket 08 ("Postbank format"). Only Postbank is
+supported at v1.
