@@ -37,3 +37,93 @@ The Import view is konto's largest owned write-path. Decide its design:
   file / include-chain it goes to.
 
 Feeds the "journal writes beyond CSV import" fog and **Assemble docs/spec.md**.
+
+## Answer (partial — architecture)
+
+Grilled 2026-09-30 without samples. **Status stays open**: the format-specific part waits on
+ticket 14 (see "Still open" below). Deviations from the handoff → ADR 0009.
+
+### Split: hledger converts, konto owns the rest
+
+- hledger turns CSV into transactions: `hledger print -f <csv> --rules-file <combined>
+  -O json` (no write). Its rules engine owns delimiter, encoding, date/decimal format and
+  category `if` matching.
+- konto owns dedup, the categorisation gate, the pre-write check and the write.
+  **`hledger import` and `.latest.<file>` are not used** — `.latest` is keyed by filename
+  and bank downloads get a new name each time; `import` appends to the main journal and
+  can't list skipped rows.
+- User directive: start here; switch to a konto-owned reader only if hledger proves
+  insufficient.
+
+### Dedup — the journal is the watermark
+
+An import-fed account only ever receives imported transactions, so per account:
+D = date of its latest transaction. Rows **< D** skipped; rows **> D** new; rows **= D**
+compared by date + amount + description as a **multiset** (2 identical coffees in the CSV
+vs 1 in the journal → 1 new). Skipped rows shown as a list. No state file, no `d`/`u`
+manual override.
+
+### Account & bank format
+
+- After picking the file, the user **chooses the target account** from import-fed accounts.
+  (IBAN auto-detection = possible upgrade once samples show whether Postbank exports it.)
+- Bank format stored on the account: `konto:format:<bank>` tag on its `account`
+  directive, asked on the first import into that account.
+- Formats (the `.rules` preamble: `separator`, `encoding`, `skip`, `fields`, `date-format`,
+  `decimal-mark`, …) are **built into konto via `go:embed`**; a new bank = code change.
+  Nothing written next to the journal for formats.
+
+### Categories & rules
+
+- **One shared `categories.rules`** next to the journal, for all import accounts. At import
+  konto passes a combined rules file (temp) that `include`s the embedded format +
+  `categories.rules` and sets `account1` to the chosen account.
+- Per `?` (unmatched) row, three choices:
+  1. **New rule** — pattern pre-filled with the **full description** (deliberately narrow;
+     escaped literal); optional shortening with a live match count.
+  2. **Add to existing rule** — pick a rule (filterable), konto appends the row's
+     description as another matcher line (hledger ORs `if` lines). This is how a rule
+     "widens" when a payee's name changes (user's KMyMoney pain point).
+  3. **Once** — category on this transaction only, no rule.
+- A `✓` row can be overridden with **once** (rule unchanged).
+- Each rule carries `comment konto-rule:<id>` → hledger tags the generated transaction,
+  so the table shows which rule matched.
+- **Overlap refused**: saving/extending a rule that would match rows another rule already
+  categorises (in the current file) is rejected, naming the rule. konto tests patterns
+  itself in Go (case-insensitive regexp over the description) — a contained exception to
+  "konto doesn't reimplement hledger", used only for this check; hledger stays the
+  authority for categorisation.
+- **Category picker**: type-to-filter over all categories; those matching the amount's
+  direction first (`expenses:*` for outflows, `income:*` for inflows), the other kind still
+  selectable (refunds). Typing an unknown name offers "+ create" — prefix pre-filled from
+  direction, `uniqueleafnames` checked, `account` directive written.
+- **Classification scope** (clarifies ticket 03): only **accounts** (`assets:*`,
+  `liabilities:*`) carry `konto:source:`; categories (`expenses:*`, `income:*`) and equity
+  are never classified, never WARN, usable from both Entry and Import.
+
+### Write
+
+- Enter writes only when **no `?` rows remain** (no skip — ticket 15).
+- **Pre-write check**: konto runs hledger over the journal + the candidate transactions
+  (stdin), without touching the file. A failing balance assertion **blocks** the import,
+  showing bank balance vs journal balance vs difference.
+- Target file: the file holding the account's latest transaction; first import → main
+  journal. Inserted at date position; new payees declared (ticket 15).
+- `= <balance>` assertion on the last transaction from the CSV's running-balance column.
+
+### View
+
+Filepicker (Downloads, `.csv`) → account (+ format on first import) → row table (`✓` by
+rule id / `?` needs category) + skipped-rows list → right column: category picker + rule
+choice (new / add to existing / once) + posting preview → Enter. Left column is an info
+block (file, account, format, D) — **no file list with status dots**.
+
+### Still open — needs samples (ticket 14)
+
+- Postbank column layout, encoding, delimiter, preamble/sections, line endings.
+- Which column is the "description" (payee vs purpose text with changing reference
+  numbers) — decides whether the full-description default pattern is stable.
+- Running-balance column, sign convention, currency column.
+- Pending ("vorgemerkt") bookings, if exported.
+- Row order (newest-first?).
+- IBAN in the file → account auto-detection.

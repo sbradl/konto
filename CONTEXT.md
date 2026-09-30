@@ -34,6 +34,7 @@ _Avoid_: Catch-all, Uncategorized
 
 **Account source**:
 Whether an account's entries come from manual entry (`Manual`) or CSV import (`Import`).
+Applies only to `assets:*` / `liabilities:*` — never to categories.
 An account is one or the other, never both — a hard product rule. Stored as a
 `konto:source:` tag on the account's `account` directive in the journal.
 _Avoid_: Account type (hledger's Asset/Liability/… classification)
@@ -100,26 +101,29 @@ _Avoid_: Scheduled transaction, Recurring transaction, Template
 
 ## Import
 
-**Import source**:
-A bank CSV/TSV file konto imports from, with its hledger rules file and its watermark.
-
 **CSV row**:
-One line of an import source, parsed into date, description, amount and running balance,
-plus konto's assessment of which rule (if any) matches it.
+One line of a bank CSV, converted by hledger into a candidate transaction, plus konto's
+assessment: matched (by which import rule), needs a category, or skipped as already
+imported.
 
 **Import rule**:
-An `if <pattern> … account2 <target>` block konto writes to a rules file to categorize
-matching rows. The exact text is shown before it is saved.
+An `if` block in `categories.rules` mapping one or more description patterns (ORed lines)
+to a category, tagged `konto-rule:<id>`. Starts narrow (the full description) and is widened
+by adding lines. Rules never overlap.
 
 **Rule match stats**:
-The counts konto shows for a candidate rule: matches in this file, matches across the whole
-journal, existing rule count, and rows still unmatched after saving.
+The live counts konto shows while building or widening a rule: rows it matches in this
+file, and rows it would take from another rule (which blocks saving).
 
 **Watermark**:
-The latest imported record date for an import source (hledger's `.latest.<file>`
-convention). Rows on or before it are skipped as already-imported; konto surfaces the
-skipped set as a list, not a bare count.
-_Avoid_: Dedup marker, Cursor
+Per import-fed account, the date of its latest transaction in the journal. CSV rows before
+it are skipped, after it are new, on it are compared by date + amount + description.
+Derived, never stored (ADR 0009).
+_Avoid_: Dedup marker, Cursor, `.latest`
+
+**Bank format**:
+A konto-built-in hledger rules preamble describing one bank's CSV layout (e.g. Postbank).
+Assigned to an import-fed account by a `konto:format:<bank>` tag.
 
 ## Forecast
 

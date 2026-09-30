@@ -6,13 +6,14 @@ session needs before writing code. It does not restate the UX — that lives in
 [`design_handoff_hledger_tui/README.md`](design_handoff_hledger_tui/README.md), which is
 authoritative and frozen (except the deviations in §11).
 
-Per-feature design (CSV import, responsive-layout details; periodic rules and forecast
-resolved into §4.8/§4.9)
+Per-feature design (CSV import format details, responsive-layout details; periodic rules,
+import architecture and forecast
+resolved into §4.8–§4.10)
 is **deliberately not in this spec** — it is grilled just-in-time as each view is built
 (§12).
 
 Sources: the wayfinder map and decision tickets under `.scratch/konto-spec/`, `CONTEXT.md`
-(domain glossary), `docs/adr/0001`–`0008`.
+(domain glossary), `docs/adr/0001`–`0009`.
 
 ---
 
@@ -101,14 +102,14 @@ internal/
 
   hledger/               ADAPTER. unexported run(ctx, args...) exec chokepoint + exported
                          Client (Balance, Print, Register, ARegister, Prices, Check,
-                         ImportDryRun, Version). hledger JSON/text ⇄ domain. No tea import.
+                         ConvertCSV, Version). hledger JSON/text ⇄ domain. No tea import.
   journal/               ADAPTER. targeted line reader/writer of journal text (~ blocks,
-                         account directives + tags, .latest files). NOT a parser.
+                         account directives + tags, categories.rules). NOT a parser.
 
   ledger/                USE CASE. Loader + the Ledger snapshot type; load/refresh by
                          composing hledger + journal.
   report/                USE CASE. Reports: native + market bs/is, diff for the FX footnote.
-  csvimport/             USE CASE. import staging, .rules generation, .latest replay. (t.08)
+  csvimport/             USE CASE. import staging, dedup, rule building, write. (t.08)
   periodic/              USE CASE. ~ rule parse/edit/post-occurrence. (ticket 13)
   forecast/              USE CASE. read-only projection. (ticket 09)
   entry/                 USE CASE. draft-entry validation, commit, account classification.
@@ -160,13 +161,13 @@ The `internal/journal` adapter is a **targeted line-oriented reader/writer, not 
   indented postings + trailing comment/tags from journal text. Dates are never computed
   from this text — see §4.8.
 - **`account` directives and their tags** — the `konto:source:manual|import` tag
-  (§7) and the `konto:closed:<date>` tag (§5.3). `accounts --directives` drops tags; the tag *does* inherit onto that account's
+  (§7), the `konto:closed:<date>` tag (§5.3) and the `konto:format:<bank>` tag (§4.9). `accounts --directives` drops tags; the tag *does* inherit onto that account's
   postings in `print -O json`, but text parsing is the primary source.
-- **`.latest.<file>` watermark files** — read and write (hledger's dedup convention;
-  ticket 08).
+- **`categories.rules`** — append new `if` blocks, append a matcher line to an existing
+  block (§4.9). No `.latest` files (ADR 0009).
 - **Writes**: append a new transaction, add/modify an `account`-directive tag (creating the
   directive if absent), append / replace-in-place / delete a `~` rule block (§4.8), write
-  `.rules` blocks.
+  `categories.rules` blocks.
 
 It gets the include-set file list from `hledger files` and works per file. It never needs to
 understand transactions, amounts, or include resolution.
@@ -256,7 +257,29 @@ jump-to-location and the `e` edit key on list views.
   next to the journal at startup (a second konto refuses to start). No compare-before-write.
 - Annual-impact total follows `v` (per currency at cost / EUR at market via `-V`).
 
-### 4.9 Forecast (ticket 09, ADR 0007)
+### 4.9 CSV import (ticket 08 — architecture; format details await samples, ADR 0009)
+
+- **hledger converts, konto owns the rest.** `hledger print -f <csv> --rules-file <tmp>
+  -O json`, where `<tmp>` `include`s the embedded bank format (`go:embed`) +
+  `categories.rules` (one shared file next to the journal) and sets `account1`. No
+  `hledger import`, no `.latest`.
+- **Flow**: filepicker (XDG Downloads, `.csv`) → choose import-fed account (bank format asked
+  once, stored as `konto:format:<bank>`) → row table (`✓` rule id / `?`) + skipped list →
+  categorise → Enter.
+- **Dedup**: journal is the watermark — D = the account's latest transaction date; `< D`
+  skipped, `> D` new, `= D` compared by date+amount+description as a multiset.
+- **Categorise** each `?` row: new rule (pattern = full description, optional shortening,
+  live count) / add to existing rule (appends an OR matcher line) / once. `✓` rows may be
+  overridden once. Rules carry `comment konto-rule:<id>`. **Overlapping rules refused**
+  (konto matches patterns in Go, case-insensitive, for this check only).
+- **Category picker**: all categories, amount's direction first; "+ create" (prefix from
+  direction, `uniqueleafnames` check, `account` directive).
+- **Write**: only when no `?` rows remain; pre-check journal + candidates via hledger on
+  stdin — a failing `= <balance>` assertion blocks with bank / journal / difference.
+  Target file = the account's latest transaction's file (else main journal), date-ordered
+  insert, payees declared.
+
+### 4.10 Forecast (ticket 09, ADR 0007)
 
 - **Current balances + scheduled transactions only.** No averages, no scenarios, no drivers.
 - **One call**: `bal assets liabilities -M -H --layout=bare -b <today−6m>
@@ -309,9 +332,11 @@ Glossary: `CONTEXT.md`. Full type sketch: ticket `03-domain-model-core-types`.
 ### 5.3 Account (ADR 0002)
 
 - **`[]Account` — flat list of postable accounts only.** No parent/aggregation entities.
-- **`Account.Source`** — optional `Manual | Import`, unset = unclassified. From the
+- **`Account.Source`** — optional `Manual | Import`, unset = unclassified. **Only
+  `assets:*` / `liabilities:*`** are classified; categories (`expenses:*`, `income:*`) and
+  equity never are, never WARN, and are usable from Entry and Import. From the
   `konto:source:` tag on the `account` directive (§4.2).
-- **Unclassified** (postable, no tag): excluded from Entry and import targets; a konto WARN;
+- **Unclassified** (asset/liability, no tag): excluded from Entry and import targets; a konto WARN;
   konto prompts manual/import on first open and writes the tag.
 - **`Account.Closed`** — optional date, from a `konto:closed:<date>` tag. Closing is refused
   unless balance is zero and no `~` rule references the account. Closed accounts appear only
@@ -320,7 +345,8 @@ Glossary: `CONTEXT.md`. Full type sketch: ticket `03-domain-model-core-types`.
 
 ### 5.4 konto-only entities (no hledger counterpart)
 
-`ImportSource`, `CsvRow`, `ImportRule`, `RuleMatchStats`, `Watermark` — ticket 08.
+`CsvRow`, `ImportRule`, `RuleMatchStats` — ticket 08 (§4.9). No `ImportSource` or
+`Watermark` entity: the source is the chosen file, the watermark is derived from the journal.
 (Forecast has none — `ForecastDriver` / `Scenario` dropped, ADR 0007.)
 
 ### 5.5 `Ledger` — the loaded snapshot (`internal/ledger`)
@@ -483,7 +509,7 @@ Ticket `11-test-seams-and-fixtures`. Three seam levels matching the layers:
 **Fixture journals** — hand-written, small, one concern each, committed under
 `testdata/journals/` (no separate task; building them is part of the build):
 `minimal`, `multicommodity` (EUR/PLN/CZK), `periodic` (`~` rules), `prices`,
-`broken-assertion`, `accounts` (tagged + untagged), `import/` (`.csv` + `.rules` + `.latest`).
+`broken-assertion`, `accounts` (tagged + untagged), `import/` (`.csv` + `categories.rules`).
 
 **TUI** — bulk = unit tests on each view's pure `Update` + `ui/widgets` render helpers
 (string in / string out at fixed width). Smoke = a few full-program `teatest` flows (launch
@@ -515,8 +541,9 @@ bar at fixed sizes only, not whole views during active development.
 - An account is **manual or import-fed, never both**.
 - **Forecast transactions are never written** to the journal — it is a read-only
   `hledger balance --forecast`-style projection.
-- **CSV dedup** uses hledger's `.latest.<file>` convention; konto surfaces skipped rows as a
-  **list**, not a count, with a manual override.
+- **CSV dedup** derives the watermark from the journal (ADR 0009); konto surfaces skipped
+  rows as a **list**, not a count.
+- **No overlapping import rules**; a failing import balance assertion blocks the write.
 - On CSV import, konto **writes a `= <balance>` assertion** on the last posting from the
   bank export's running-balance column — this is the reconciliation mechanism.
 - **Valuation**: "at cost" keeps multi-commodity totals as multiple amounts; `-V` collapses
@@ -552,6 +579,8 @@ The handoff (`design_handoff_hledger_tui/README.md`) is otherwise authoritative.
   table.
 - **ADR 0008** — **no `?` uncategorised marker and no `c` categorise key** on the Dashboard;
   transactions cannot be uncategorised.
+- **ADR 0009** — **Import has no watched-folder file list, no `.latest`, no `d`/`u`
+  override**; files come from a filepicker, dedup from the journal.
 
 New deviations get an ADR and a line here.
 
@@ -565,7 +594,7 @@ grilled immediately before the `tdd-loop` pass for its view:
 | Area | Ticket | Prerequisite |
 |---|---|---|
 | Responsive layout helper shape | 07 | done *in* the shell build; also runs the ntcharts/v2 check |
-| CSV import subsystem (Postbank + format-extensible) | 08 | **14** — user provides real Postbank CSV exports into `.scratch/konto-spec/samples/` |
+| CSV import — Postbank format details (architecture resolved, §4.9) | 08 | **14** — user provides real Postbank CSV exports into `.scratch/konto-spec/samples/` |
 
 ---
 
