@@ -653,6 +653,14 @@ Ticket `11-test-seams-and-fixtures`. Three seam levels matching the layers:
 3. **`internal/journal`** — pure text in/out. Table tests + golden output files under
    `internal/journal/testdata/`. No hledger needed.
 
+4. **Architecture** — `internal/archtest` (test-only package) parses every Go file and
+   enforces the design: the package → layer map and allowed layer dependencies (§2–§3, ADR
+   0003/0004/0012; an unlisted package fails, so a new package is a deliberate edit there),
+   Charm v2 as the only third-party code and only in `internal/ui` + `cmd`, no I/O in
+   `domain`, `os/exec` only in `hledger` / `cmd` / ui root, no `time.Now` in `domain` or use
+   cases (ADR 0012), `lipgloss.Color` only in `ui/theme` with a literal `"0"`–`"15"` and no
+   hex literals (ADR 0005). Each rule has a self-test proving it catches its violation.
+
 **Fixture journals** — hand-written, small, one concern each, committed under
 `testdata/journals/` (no separate task; building them is part of the build):
 `minimal`, `multicommodity` (EUR/PLN/CZK), `periodic` (`~` rules), `prices`,
