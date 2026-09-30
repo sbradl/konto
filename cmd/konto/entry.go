@@ -7,6 +7,7 @@ import (
 
 	"github.com/sbradl/konto/internal/config"
 	"github.com/sbradl/konto/internal/hledger"
+	"github.com/sbradl/konto/internal/ledger"
 	"github.com/sbradl/konto/internal/ui"
 )
 
@@ -25,6 +26,7 @@ func main() {
 }
 
 func runProgram(cfg config.Config) error {
-	_, err := tea.NewProgram(ui.New(cfg.JournalPath)).Run()
+	loader := ledger.NewLoader(hledger.New("hledger", cfg.JournalPath))
+	_, err := tea.NewProgram(ui.New(cfg.JournalPath, loader)).Run()
 	return err //nolint:wrapcheck // the program's own error is already self-describing
 }

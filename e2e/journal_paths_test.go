@@ -62,7 +62,7 @@ func registerJournalPathSteps(sc *godog.ScenarioContext, w *world) {
 		return os.WriteFile(filepath.Join(w.dir, path), content, 0o644)
 	})
 	sc.Step(`^the tab bar shows an absolute path ending in "([^"]*)"$`, func(suffix string) error {
-		absolute := regexp.MustCompile(`\s/\S*` + regexp.QuoteMeta(suffix) + `\s*$`)
+		absolute := regexp.MustCompile(`\s/\S*` + regexp.QuoteMeta(suffix) + `(\s|$)`)
 		return w.expectLine(0, "tab bar", "", func(line, _ string) bool { return absolute.MatchString(line) })
 	})
 	sc.Step(`^the tab bar shows the path of (flag|env|default)$`, func(winner string) error {

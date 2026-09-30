@@ -35,7 +35,6 @@ Feature: Startup, preflight and journal resolution
     When I start konto with "--file ./j.journal"
     Then the tab bar shows an absolute path ending in "/j.journal"
 
-  @wip
   Scenario: every hledger call gets the explicit -f path
     Given the journal "minimal"
     When I start konto
