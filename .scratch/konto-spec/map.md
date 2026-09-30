@@ -43,7 +43,7 @@ their views land.
   2026-09-10): the foundation is decided; remaining work is the `tdd-loop` build plus JIT
   grilling of per-feature tickets (08 import, 09 forecast, 13 periodic) when their view is
   built. 14 (bank CSV samples, user-supplied) is a prerequisite for 08. 07 (responsive
-  layout) is done *during* the shell build, not before it.
+  layout) was grilled 2026-09-30 ahead of the shell build; the shell build tunes numbers.
 - **Environment fact** (dev machine, 2026-09-10): `hledger 1.52.1` is now installed
   (`/usr/bin/hledger`, installed during ticket 01 research). No journal file exists yet —
   the test-seams ticket still owns fixture-journal strategy, but "install hledger" is done.
@@ -56,6 +56,12 @@ their views land.
 ## Decisions so far
 
 <!-- one line per closed ticket: gist of the answer, then the link for detail -->
+
+- [Responsive layout strategy](issues/07-responsive-layout-strategy.md) — floor ≈100×30
+  (too-small screen below); **priority drop** (shrink to mins, then hide low-priority
+  panels, per-view order; dim `N panels hidden` note); `ui/layout` = pure 1-D `Allocate`
+  nested by views + `Panel`; popups full width, height ≤ ½ screen, scroll/reflow. ntcharts/v2
+  builds against real bubbletea v2 — stack locked. Spec §6.8.
 
 - [Assemble docs/spec.md](issues/12-assemble-spec.md) — **`docs/spec.md`** written: the
   foundation spec synthesising tickets 01–06, 10, 11 + `CONTEXT.md` + ADRs 0001–0005, with
@@ -146,11 +152,6 @@ their views land.
 - **`CMDS` / `HINTS` tables** — transcribe the mock's inline-JS command list and per-view
   hint strings into the `internal/ui/keys` structures (shape decided in ticket 05); a
   mechanical build task, not a decision.
-- **`ntcharts` capability + v2 build check** — done in the shell/layout build (ticket 07):
-  confirm the braille line chart supports the dual-series actual+forecast join and
-  thousands-axis labelling, AND that `ntcharts/v2` compiles against the real
-  `charm.land/bubbletea/v2`. A build failure here is the one thing that could push konto
-  back to the Charm v1 stack.
 
 ## Out of scope
 

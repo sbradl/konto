@@ -6,9 +6,8 @@ session needs before writing code. It does not restate the UX — that lives in
 [`design_handoff_hledger_tui/README.md`](design_handoff_hledger_tui/README.md), which is
 authoritative and frozen (except the deviations in §11).
 
-Per-feature design (responsive-layout details; periodic rules, CSV import and forecast
-resolved into §4.8–§4.10)
-is **deliberately not in this spec** — it is grilled just-in-time as each view is built
+Per-feature design (periodic rules, CSV import and forecast resolved into §4.8–§4.10;
+responsive layout into §6.8) beyond that is **deliberately not in this spec** — it is grilled just-in-time as each view is built
 (§12).
 
 Sources: the wayfinder map and decision tickets under `.scratch/konto-spec/`, `CONTEXT.md`
@@ -32,11 +31,10 @@ v1 is frozen; do not use it. Rationale and the overlay-compositing consequence: 
 about layering; the stack choice is in ticket `06-overlay-popup-compositing` and
 `research/06-overlay-compositing.md`.
 
-**One build-time check before the stack is locked** (ticket 07): `ntcharts/v2`'s `go.mod`
-carries `replace charm.land/bubbletea/v2 => github.com/neomantra/bubbletea/v2 ...` which
-konto's build ignores. Build a trivial ntcharts chart against real `charm.land/bubbletea/v2`
-first. A failure is the only thing that would force the Charm v1 stack (fallback:
-`rmhubbert/bubbletea-overlay` for overlays).
+**Stack locked** (ticket 07, 2026-09-30): `ntcharts/v2`'s `go.mod` carries an ignored
+`replace charm.land/bubbletea/v2 => github.com/neomantra/bubbletea/v2 ...`; a trivial
+`timeserieslinechart` program built cleanly against real `charm.land/bubbletea/v2 v2.0.10`
++ `lipgloss/v2 v2.0.6` + `ntcharts/v2 v2.2.0`. The Charm v1 fallback is off the table.
 
 No external decimal, config, or CSV-framework dependency is planned. Keep the dependency
 tree minimal.
@@ -451,7 +449,11 @@ Details: `research/06-overlay-compositing.md`.
 | `ntcharts` | Dashboard trend + Forecast braille charts |
 | `bubbles/list` | evaluated, **not used** |
 
-Final fit confirmed by the layout prototype (ticket 07 / shell build).
+ntcharts API fit (ticket 07): `timeserieslinechart` has named datasets (`PushDataSet`,
+`SetDataSetStyle`, `DrawBrailleDataSets`) for one line per account, and
+`WithYLabelFormatter` for thousands labels. Visual check in the shell/Forecast build: the
+dim forecast-start vertical line, and colour where two series share a braille cell (one
+colour per cell).
 
 ### 6.7 Startup
 
@@ -459,6 +461,29 @@ Final fit confirmed by the layout prototype (ticket 07 / shell build).
 root model (inject ports + config) → `tea.NewProgram(root, tea.WithAltScreen())`. Root
 `Init()` returns `tea.Batch(initial ledger load, initial checks run)`; `appMode` starts from
 the load result.
+
+### 6.8 Responsive layout (ticket 07)
+
+- **Floor ≈ 100×30**, global. Below it the root renders only a full-screen
+  "terminal too small — need ≥W×H, have w×h" message; only `q` is live. Exact numbers tuned
+  in the shell build.
+- **Degradation = priority drop.** Panels shrink proportionally to their minimums, then the
+  lowest-priority panels are hidden — on both axes. Each view declares its own panel
+  priority order. No whole-view scroll, no stacking.
+- **Hidden-panel hint**: when a view drops panels, the status bar shows a dim
+  `N panels hidden · widen terminal`. No zoom key.
+- **`ui/layout` helper** — one pure 1-D primitive plus a frame:
+  - `Allocate(total int, slots []Slot{Weight, Min, Priority}) []int` — 0 = dropped. Views
+    nest it: one call for columns, one per column for panel heights.
+  - `Panel(title, w, h, body)` — rounded border, title inset 2 cells.
+  - Not a declarative layout tree; views own their structure.
+- **Popups** (§6.5): full width; height = content, capped at ½ screen height; each popup
+  reports its natural size and the root clamps it. Over the cap the checks list and the
+  command dropdown scroll (`j`/`k`); which-key reflows to `min(4, floor(w/minColW))`
+  columns.
+- **Deferred to the shell build** (implementation, not decisions): exact floor numbers,
+  per-view priority orders, inter-panel gap cells, `Allocate` leftover-cell distribution
+  and priority tie-break.
 
 ---
 
@@ -601,9 +626,8 @@ New deviations get an ADR and a line here.
 Not in this spec by design. Each is a wayfinder ticket under `.scratch/konto-spec/issues/`,
 grilled immediately before the `tdd-loop` pass for its view:
 
-| Area | Ticket | Prerequisite |
-|---|---|---|
-| Responsive layout helper shape | 07 | done *in* the shell build; also runs the ntcharts/v2 check |
+None open — 07 (responsive layout) resolved into §6.8, 08/09/13/15 into §4.8–§4.10 and §7.
+Dashboard, Entry, Reports have no ticket; grill inline if a question surfaces.
 
 ---
 
@@ -612,9 +636,10 @@ grilled immediately before the `tdd-loop` pass for its view:
 Test-first (`/tdd-loop`), each slice the smallest nameable behaviour:
 
 1. **Shell** — `cmd/konto` skeleton, `hledger` version preflight, empty root model, alt
-   screen, quit. Confirms the stack (run the ntcharts/v2 build check here).
+   screen, quit. (ntcharts/v2 build check already passed — §1.)
 2. **Chrome** — tab bar (six tabs, active styling), horizontal rule, status bar (mode + view
-   name + hint + `? keys`), all responsive to `WindowSizeMsg`. `theme` package.
+   name + hint + `? keys`), all responsive to `WindowSizeMsg`. `theme` package. `ui/layout` `Allocate` + `Panel` and
+the too-small floor screen (§6.8).
 3. **Navigation** — number keys `1`–`6`, the `g` goto-prefix state machine, `:` command line
    (typeahead over `CMDS`, Tab-complete, Enter navigates), over empty view stubs.
 4. **Overlays** — `lipgloss.Compositor` wrapper in `ui/layout`; which-key popup (`g` / `?`),
