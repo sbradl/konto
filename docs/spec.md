@@ -11,7 +11,7 @@ responsive layout into §6.8) beyond that is **deliberately not in this spec** �
 (§12).
 
 Sources: the wayfinder map and decision tickets under `.scratch/konto-spec/`, `CONTEXT.md`
-(domain glossary), `docs/adr/0001`–`0009`.
+(domain glossary), `docs/adr/0001`–`0010`.
 
 ---
 
@@ -109,7 +109,7 @@ internal/
   csvimport/             USE CASE. import staging, dedup, rule building, write. (t.08)
   periodic/              USE CASE. ~ rule parse/edit/post-occurrence. (ticket 13)
   forecast/              USE CASE. read-only projection. (ticket 09)
-  entry/                 USE CASE. draft-entry validation, commit, account classification.
+  entry/                 USE CASE. draft-entry validation, commit. NOT IN v1 (ADR 0010).
   config/                journal-path resolution (no config file in v1).
 
   ui/                    ui.go = root model, tab chrome, app-level keymap dispatch, wiring.
@@ -118,14 +118,14 @@ internal/
     keys/                key.Binding sets (global + per view); the CMDS / HINTS / goto tables.
     widgets/             shared render helpers (stat card, panel frame, selectable-list
                          styling, ntcharts wrapper).
-    dashboard/ imports/ entry/ scheduled/ forecast/ reports/
+    dashboard/ imports/ scheduled/ forecast/ reports/   (entry/ deferred, ADR 0010)
                          one package per view. Imports domain + the use-case service(s) it
                          needs + the ui leaves. NEVER imports hledger/journal. NEVER imports
                          another view.
 ```
 
 Naming: the Import view package is `imports` (avoids shadowing `import`); its use case stays
-`csvimport`. Two app/view name clashes (`forecast`, `entry`) — the view aliases its service
+`csvimport`. One app/view name clash (`forecast`; `entry` too once it returns) — the view aliases its service
 import (`forecastsvc "…/internal/forecast"`).
 
 ---
@@ -262,7 +262,9 @@ jump-to-location and the `e` edit key on list views.
   `categories.rules` (one shared file next to the journal) and sets `account1`. No
   `hledger import`, no `.latest`.
 - **Flow**: filepicker (XDG Downloads, `.csv`) → account detected by IBAN from the preamble
-  (`konto:iban:<IBAN>`; first import: user chooses, konto stores IBAN + `konto:format:<bank>`) → row table (`✓` rule id / `?`) + skipped list →
+  (`konto:iban:<IBAN>`; unknown IBAN → **create account**: suggested, editable name,
+  `uniqueleafnames`-checked, `account` directive with `konto:source:import`, `konto:iban:`,
+  `konto:format:<bank>` written to the main journal; no attach-to-existing, ADR 0010) → row table (`✓` rule id / `?`) + skipped list →
   categorise → Enter.
 - **Dedup**: journal is the watermark — D = the account's latest transaction date; `< D`
   skipped, `> D` new, `= D` compared by date+amount+description as a multiset.
@@ -342,10 +344,12 @@ Glossary: `CONTEXT.md`. Full type sketch: ticket `03-domain-model-core-types`.
 - **`[]Account` — flat list of postable accounts only.** No parent/aggregation entities.
 - **`Account.Source`** — optional `Manual | Import`, unset = unclassified. **Only
   `assets:*` / `liabilities:*`** are classified; categories (`expenses:*`, `income:*`) and
-  equity never are, never WARN, and are usable from Entry and Import. From the
+  equity never are, never WARN, and are usable from Import (and Entry, once it returns). From the
   `konto:source:` tag on the `account` directive (§4.2).
-- **Unclassified** (asset/liability, no tag): excluded from Entry and import targets; a konto WARN;
-  konto prompts manual/import on first open and writes the tag.
+- **Unclassified** (asset/liability, no tag): excluded from import targets; a konto WARN.
+  No classify prompt (ADR 0010): konto only runs on journals it created and every account is
+  created by first import, so the WARN is a safety net for hand edits in `$EDITOR`.
+- **Manual** accounts stay in the model but have no v1 UI (ADR 0010); import refuses them.
 - **`Account.Closed`** — optional date, from a `konto:closed:<date>` tag. Closing is refused
   unless balance is zero and no `~` rule references the account. Closed accounts appear only
   in the account overview; excluded from Forecast, Entry, import targets and the rule form.
@@ -377,7 +381,7 @@ The program's single `tea.Model`. Holds:
 
 - `appMode ∈ {firstRun, parseError, normal}` — first two render their own screen, not the
   tab UI, not a seventh view.
-- the **six view sub-models**, constructed at startup, alive for the whole run. Tab switch
+- the **five view sub-models** (six once Entry returns, ADR 0010), constructed at startup, alive for the whole run. Tab switch
   changes which one renders + receives input; cursor/scroll/draft state survives.
 - **app-global state**: `valuationMode`, `period`, terminal size, the read-only
   `*domain.Ledger`.
@@ -409,8 +413,8 @@ scroll, generation counter).
 | Message class | Routed to |
 |---|---|
 | `tea.KeyMsg`, `tea.MouseMsg` | open overlay if any, else the **active view only**. Global keys (`1`–`6`, `g`, `:`, `?`, `!`, `v`, `q`/`ctrl+c`) caught by root **first**; if the active view has a focused text input, only `Esc`/`Ctrl+C` are caught. |
-| `tea.WindowSizeMsg` | root computes the content rect (window − tab bar − rule − status bar), forwards a **content-dimension** `WindowSizeMsg` to **all six** views |
-| `ledgerLoadedMsg`, `valuationChangedMsg`, `checksLoadedMsg`, ticks | root updates its state, **broadcasts** to all six views |
+| `tea.WindowSizeMsg` | root computes the content rect (window − tab bar − rule − status bar), forwards a **content-dimension** `WindowSizeMsg` to **all** views |
+| `ledgerLoadedMsg`, `valuationChangedMsg`, `checksLoadedMsg`, ticks | root updates its state, **broadcasts** to all views |
 | view-specific async results (`reportLoadedMsg`, …) | root forwards to the **one owning view** |
 
 Shared-state changes are **messages, not shared pointers**. Async races: each request
@@ -443,7 +447,7 @@ Details: `research/06-overlay-compositing.md`.
 |---|---|
 | `bubbles/table` | Import CSV-row grid, Reports tables |
 | custom selectable-list widget (`ui/widgets`) | Dashboard panels (Recent, Upcoming, Accounts) |
-| `bubbles/textinput` | Entry form fields, command line, rule-editor target |
+| `bubbles/textinput` | command line, rule-editor target, import account-name, form fields |
 | `bubbles/viewport` | scrollable panels (journal preview, checks body) |
 | `bubbles/key`, `bubbles/help`, `bubbles/spinner` | bindings, `?` render, refresh indicator |
 | `ntcharts` | Dashboard trend + Forecast braille charts |
@@ -594,7 +598,7 @@ bar at fixed sizes only, not whole views during active development.
 - UI copy says **"category"** for `expenses:*`/`income:*` and **"account"** for
   `assets:*`/`liabilities:*`; code and journal say "account" for both.
 - **Every transaction is categorised** — no catch-all account; import writes only once all
-  rows have a category (no skip); entry requires one (ADR 0008).
+  rows have a category (no skip); entry (once it returns) requires one (ADR 0008).
 - **Every hledger check passes** after every konto write (§4.6).
 
 ---
@@ -616,6 +620,8 @@ The handoff (`design_handoff_hledger_tui/README.md`) is otherwise authoritative.
   transactions cannot be uncategorised.
 - **ADR 0009** — **Import has no watched-folder file list, no `.latest`, no `d`/`u`
   override**; files come from a filepicker, dedup from the journal.
+- **ADR 0010** — **no Entry view in v1**: five tabs on `1`–`5`, no manual-account UI, no
+  classify-on-open prompt; accounts are created by first import.
 
 New deviations get an ADR and a line here.
 
@@ -627,7 +633,8 @@ Not in this spec by design. Each is a wayfinder ticket under `.scratch/konto-spe
 grilled immediately before the `tdd-loop` pass for its view:
 
 None open — 07 (responsive layout) resolved into §6.8, 08/09/13/15 into §4.8–§4.10 and §7.
-Dashboard, Entry, Reports have no ticket; grill inline if a question surfaces.
+Dashboard, Reports have no ticket; grill inline if a question surfaces. Entry is out of v1
+(ADR 0010).
 
 ---
 
@@ -637,10 +644,10 @@ Test-first (`/tdd-loop`), each slice the smallest nameable behaviour:
 
 1. **Shell** — `cmd/konto` skeleton, `hledger` version preflight, empty root model, alt
    screen, quit. (ntcharts/v2 build check already passed — §1.)
-2. **Chrome** — tab bar (six tabs, active styling), horizontal rule, status bar (mode + view
+2. **Chrome** — tab bar (five tabs, active styling), horizontal rule, status bar (mode + view
    name + hint + `? keys`), all responsive to `WindowSizeMsg`. `theme` package. `ui/layout` `Allocate` + `Panel` and
 the too-small floor screen (§6.8).
-3. **Navigation** — number keys `1`–`6`, the `g` goto-prefix state machine, `:` command line
+3. **Navigation** — number keys `1`–`5`, the `g` goto-prefix state machine, `:` command line
    (typeahead over `CMDS`, Tab-complete, Enter navigates), over empty view stubs.
 4. **Overlays** — `lipgloss.Compositor` wrapper in `ui/layout`; which-key popup (`g` / `?`),
    `!` checks panel shell.
@@ -648,7 +655,7 @@ the too-small floor screen (§6.8).
    `Loader`; first-run + parse-error `appMode`s; stale-while-revalidate; `r` refresh.
 6. **Dashboard first panel** — the flat Accounts list from `Ledger.Accounts` (source glyphs,
    negative-in-red), `internal/journal` `account`-directive tag reading, the
-   unclassified-account prompt + WARN.
+   unclassified-account WARN (no prompt, ADR 0010).
 7. Then per view — grill its ticket, build it.
 
 ---

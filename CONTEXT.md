@@ -36,13 +36,14 @@ _Avoid_: Catch-all, Uncategorized
 Whether an account's entries come from manual entry (`Manual`) or CSV import (`Import`).
 Applies only to `assets:*` / `liabilities:*` — never to categories.
 An account is one or the other, never both — a hard product rule. Stored as a
-`konto:source:` tag on the account's `account` directive in the journal.
+`konto:source:` tag on the account's `account` directive in the journal. v1 has no
+manual-entry UI (ADR 0010): import creates `Import` accounts; `Manual` exists only in the model.
 _Avoid_: Account type (hledger's Asset/Liability/… classification)
 
 **Unclassified account**:
-A postable account with no account-source tag yet. Excluded from manual entry and from
-import targets, and surfaced as a warning; konto asks the user to classify it the first
-time the account is opened.
+A postable account with no account-source tag. Excluded from manual entry and from
+import targets, and surfaced as a warning. Only arises from hand edits — konto creates
+every account tagged (ADR 0010).
 
 **Closed account**:
 An account the user has retired, marked by a `konto:closed:<date>` tag on its `account`

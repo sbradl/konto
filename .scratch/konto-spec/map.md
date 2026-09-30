@@ -57,6 +57,13 @@ their views land.
 
 <!-- one line per closed ticket: gist of the answer, then the link for detail -->
 
+- *Journal write targets + v1 scope* (grilled inline 2026-09-30, no ticket) — **no Entry
+  view / manual-account UI in v1** (ADR 0010): five tabs `1`–`5`; model keeps
+  `Manual | Import`. konto never runs on a preexisting ledger → no classify prompt;
+  accounts are created by **first import** (unknown IBAN → create, directive in main
+  journal; no attach-to-existing). Future Entry commit target = file of the account's
+  latest transaction, else main journal, date-ordered. Spec §4.9, §5.3, §11.
+
 - [Responsive layout strategy](issues/07-responsive-layout-strategy.md) — floor ≈100×30
   (too-small screen below); **priority drop** (shrink to mins, then hide low-priority
   panels, per-view order; dim `N panels hidden` note); `ui/layout` = pure 1-D `Allocate`
@@ -131,8 +138,8 @@ their views land.
   JSON. `Amount` = hand-rolled fixed-point `{Commodity, Mantissa int64, Scale int32}`, no
   deps; `MultiAmount []Amount` carries the "+ N cur" case. `[]Account` is a **flat list of
   postable accounts** (ADR 0002), `Account.Source` optional `Manual | Import` read from a
-  `konto:source:` tag on the `account` directive — unclassified accounts prompt on open and
-  WARN. `ValuationMode` is a gateway query param (re-fetch with `-V`). `Ledger` is a
+  `konto:source:` tag on the `account` directive — unclassified accounts WARN (prompt
+  dropped by ADR 0010). `ValuationMode` is a gateway query param (re-fetch with `-V`). `Ledger` is a
   snapshot of independently-refreshable slices, not a monolithic type. Glossary in
   `CONTEXT.md`. Graduated the *Periodic transaction subsystem design* ticket.
 
@@ -140,15 +147,10 @@ their views land.
 
 <!-- in-scope fog, too dim to ticket precisely; graduates as the frontier advances -->
 
-- **Per-view build + JIT design** — each of the six views is built in its own `tdd-loop`
+- **Per-view build + JIT design** — each of the five v1 views is built in its own `tdd-loop`
   pass; the views with real subsystem logic carry a grilling ticket done just before that
-  pass: Import (08), Scheduled (13), Forecast (09) and config (15) all resolved 2026-09-30. Dashboard, Entry, Reports have
+  pass: Import (08), Scheduled (13), Forecast (09) and config (15) all resolved 2026-09-30. Dashboard, Reports have
   no open design ticket — grill inline if a question surfaces during the build.
-- **Journal write targets** — write *mechanism* is settled (`internal/journal` owns
-  line-oriented mutation; full `Ledger` refresh after each write). Still dim: *which* file
-  in an include chain each construct is appended to, and the Entry-view commit specifics.
-  Periodic rules never post (ticket 13, ADR 0006); the Entry commit path graduates when
-  the Entry view is built.
 - **`CMDS` / `HINTS` tables** — transcribe the mock's inline-JS command list and per-view
   hint strings into the `internal/ui/keys` structures (shape decided in ticket 05); a
   mechanical build task, not a decision.
@@ -157,6 +159,8 @@ their views land.
 
 <!-- work consciously ruled beyond the destination; never graduates -->
 
+- **Entry view / manual-account UI in v1** (ADR 0010) — the model keeps manual accounts;
+  the view returns after v1 over the unchanged model.
 - **Revising the design handoff's UX** — views, navigation model, feature scope are frozen
   (except the recorded deviations under Notes).
 

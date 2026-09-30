@@ -4,7 +4,7 @@ The design handoff's Scheduled view lets Enter "post the next occurrence into th
 journal now", plus a `p` pause state. konto drops both. hledger `~` periodic rules only feed
 projections — Forecast, Dashboard Upcoming, the Scheduled view's next-occurrences and annual
 impact. konto never writes an occurrence into the journal; real transactions arrive only via
-CSV import or the Entry view.
+CSV import (and the Entry view, once it returns — ADR 0010).
 
 Posting occurrences would double-count against CSV import for any rule touching an
 import-fed account (most of them — rent, salary, subscriptions go through the bank), and
