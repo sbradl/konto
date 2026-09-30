@@ -23,6 +23,7 @@ func registerSteps(sc *godog.ScenarioContext, w *world) {
 	registerScreenSteps(sc, w)
 	registerProcessSteps(sc, w)
 	registerFileSteps(sc, w)
+	registerJournalPathSteps(sc, w)
 }
 
 func registerGivenSteps(sc *godog.ScenarioContext, w *world) {

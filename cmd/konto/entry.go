@@ -5,6 +5,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/sbradl/konto/internal/config"
 	"github.com/sbradl/konto/internal/hledger"
 	"github.com/sbradl/konto/internal/ui"
 )
@@ -13,14 +14,17 @@ import (
 // app, so it is excluded from coverage (see the cover task in mise.toml).
 func main() {
 	app{
-		stderr:    os.Stderr,
+		stderr: os.Stderr,
+		resolve: func() (config.Config, error) {
+			return resolveConfig(os.Args[1:], sysEnv{getenv: os.Getenv, userHomeDir: os.UserHomeDir, getwd: os.Getwd})
+		},
 		preflight: hledger.PreflightOnPath,
 		program:   runProgram,
 		exit:      os.Exit,
 	}.run()
 }
 
-func runProgram() error {
-	_, err := tea.NewProgram(ui.New()).Run()
+func runProgram(cfg config.Config) error {
+	_, err := tea.NewProgram(ui.New(cfg.JournalPath)).Run()
 	return err //nolint:wrapcheck // the program's own error is already self-describing
 }

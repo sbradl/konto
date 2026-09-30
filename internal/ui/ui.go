@@ -3,22 +3,31 @@
 package ui
 
 import (
+	"strings"
+
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
-const tabBar = " 1 dash │ 2 import │ 3 sched │ 4 forecast │ 5 reports "
+const tabs = " 1 dash │ 2 import │ 3 sched │ 4 forecast │ 5 reports "
 
 // Model is konto's single tea.Model.
-type Model struct{}
+type Model struct {
+	journalPath string
+	width       int
+}
 
-// New returns the root model.
-func New() Model { return Model{} }
+// New returns the root model for the journal at journalPath.
+func New(journalPath string) Model { return Model{journalPath: journalPath} }
 
 // Init has nothing to load yet.
 func (Model) Init() tea.Cmd { return nil }
 
 // Update handles app-level input.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if size, ok := msg.(tea.WindowSizeMsg); ok {
+		m.width = size.Width
+	}
 	if key, ok := msg.(tea.KeyPressMsg); ok && isQuit(key) {
 		return m, tea.Quit
 	}
@@ -30,8 +39,15 @@ func isQuit(key tea.KeyPressMsg) bool {
 }
 
 // View renders the tab bar.
-func (Model) View() tea.View {
-	view := tea.NewView(tabBar)
+func (m Model) View() tea.View {
+	view := tea.NewView(m.tabBar())
 	view.AltScreen = true
 	return view
+}
+
+// tabBar puts the tabs on the left and the journal path at the right edge.
+func (m Model) tabBar() string {
+	path := m.journalPath + " "
+	gap := max(0, m.width-lipgloss.Width(tabs)-lipgloss.Width(path))
+	return tabs + strings.Repeat(" ", gap) + path
 }

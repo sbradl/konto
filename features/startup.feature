@@ -19,7 +19,6 @@ Feature: Startup, preflight and journal resolution
     When I start konto
     Then I see the tab bar
 
-  @wip
   Scenario Outline: journal path precedence
     Given journals exist at <sources>
     When I start konto with <invocation>
@@ -31,7 +30,6 @@ Feature: Startup, preflight and journal resolution
       | env, home default              | only $LEDGER_FILE set              | env      |
       | home default                   | nothing set                        | default  |
 
-  @wip
   Scenario: relative --file is resolved to an absolute path
     Given a journal "minimal" at "./j.journal"
     When I start konto with "--file ./j.journal"
