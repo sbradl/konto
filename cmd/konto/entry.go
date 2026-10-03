@@ -13,6 +13,7 @@ import (
 	"github.com/sbradl/konto/internal/hledger"
 	"github.com/sbradl/konto/internal/journal"
 	"github.com/sbradl/konto/internal/ledger"
+	"github.com/sbradl/konto/internal/report"
 	"github.com/sbradl/konto/internal/ui"
 )
 
@@ -38,7 +39,7 @@ func runProgram(cfg config.Config) error {
 	loader := ledger.NewLoader(client, file, today)
 	_, err := tea.NewProgram(ui.New(cfg.JournalPath, ui.Ports{
 		Loader: loader, Checker: checks.NewRunner(client), Creator: file, Editor: openInEditor,
-		Accounts: accounts.NewService(file, today), Writer: file,
+		Accounts: accounts.NewService(file, today), Writer: file, Reports: report.NewService(client, today),
 	})).Run()
 	return err //nolint:wrapcheck // the program's own error is already self-describing
 }

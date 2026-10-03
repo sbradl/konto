@@ -147,3 +147,12 @@ func (m MultiAmount) Negated() MultiAmount {
 	}
 	return negated
 }
+
+// Zeroed is the same commodities and styles with nothing in them.
+func (m MultiAmount) Zeroed() MultiAmount {
+	zero := make(MultiAmount, len(m))
+	for i, amount := range m {
+		zero[i] = Amount{Commodity: amount.Commodity, Places: amount.Places, Style: amount.Style}
+	}
+	return zero
+}

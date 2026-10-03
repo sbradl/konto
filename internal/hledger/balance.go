@@ -96,8 +96,21 @@ func (c *Client) Balances(ctx context.Context) ([]domain.Account, error) {
 
 // PeriodActivity returns the change in each income and expense account from first through last (inclusive).
 func (c *Client) PeriodActivity(ctx context.Context, first, last time.Time) ([]domain.Account, error) {
-	return c.flatBalances(ctx,
-		"-b", first.Format(time.DateOnly), "-e", last.AddDate(0, 0, 1).Format(time.DateOnly), "^expenses:", "^income:")
+	return c.Activity(ctx, first, last, "^expenses:", "^income:")
+}
+
+// Activity returns the change in the accounts the queries match (all when there are none) from
+// first through last (inclusive).
+func (c *Client) Activity(ctx context.Context, first, last time.Time, queries ...string) ([]domain.Account, error) {
+	return c.flatBalances(ctx, append([]string{
+		"-b", first.Format(time.DateOnly), "-e", last.AddDate(0, 0, 1).Format(time.DateOnly),
+	}, queries...)...)
+}
+
+// BalancesUntil returns the balances of the accounts the queries match, counting everything
+// dated up to and including last; zero balances are left out.
+func (c *Client) BalancesUntil(ctx context.Context, last time.Time, queries ...string) ([]domain.Account, error) {
+	return c.flatBalances(ctx, append([]string{"-e", last.AddDate(0, 0, 1).Format(time.DateOnly)}, queries...)...)
 }
 
 // flatBalances runs `hledger bal` as a flat JSON report with the given extra arguments.

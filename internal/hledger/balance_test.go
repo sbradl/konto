@@ -113,3 +113,34 @@ func TestPeriodActivityAsksForIncomeAndExpensesOverTheInclusivePeriod(t *testing
 		t.Errorf("accounts = %+v, want expenses:rent", got)
 	}
 }
+
+func TestActivityAsksForTheGivenQueriesOverTheInclusivePeriod(t *testing.T) {
+	var calls []call
+	client := newClient(recording(balanceReport(), nil, &calls), "/data/main.journal")
+
+	_, err := client.Activity(context.Background(),
+		time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC), "^assets:", "^liabilities:")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	want := []string{"-f", "/data/main.journal", "bal", "--flat", "-O", "json", "-b", "2026-07-01", "-e", "2026-10-01", "^assets:", "^liabilities:"}
+	if len(calls) != 1 || !reflect.DeepEqual(calls[0].args, want) {
+		t.Errorf("calls = %+v, want one call with %v", calls, want)
+	}
+}
+
+func TestBalancesUntilCountsEverythingUpToAndIncludingTheDay(t *testing.T) {
+	var calls []call
+	client := newClient(recording(balanceReport(row("assets:a", amountJSON("EUR", 100, eurStyle))), nil, &calls), "/data/main.journal")
+
+	got, err := client.BalancesUntil(context.Background(), time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC), "^assets:")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	want := []string{"-f", "/data/main.journal", "bal", "--flat", "-O", "json", "-e", "2026-10-01", "^assets:"}
+	if len(calls) != 1 || !reflect.DeepEqual(calls[0].args, want) || len(got) != 1 {
+		t.Errorf("calls = %+v, got %+v, want one call with %v", calls, got, want)
+	}
+}

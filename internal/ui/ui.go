@@ -13,6 +13,7 @@ import (
 	"github.com/sbradl/konto/internal/domain"
 	"github.com/sbradl/konto/internal/ledger"
 	"github.com/sbradl/konto/internal/ui/dashboard"
+	"github.com/sbradl/konto/internal/ui/reports"
 )
 
 // The smallest terminal konto lays its views out in (spec §6.8).
@@ -43,6 +44,11 @@ type accountPlanner interface {
 	Reopen(account domain.Account) (domain.Changeset, error)
 }
 
+// reportBuilder builds the Reports view's tables for a period.
+type reportBuilder interface {
+	Report(ctx context.Context, period domain.Period) (domain.Report, error)
+}
+
 // journalWriter applies a changeset to the journal.
 type journalWriter interface {
 	Apply(changeset domain.Changeset) error
@@ -69,6 +75,8 @@ type Model struct {
 	checker     checkRunner
 	accounts    accountPlanner
 	writer      journalWriter
+	reporter    reportBuilder
+	reports     reports.Model
 	prompt      *prompt          // the y/n question awaiting an answer
 	notice      string           // a one-line message shown until the next key
 	run         *domain.CheckRun // the latest check run; nil until the first one lands
@@ -90,6 +98,13 @@ type Model struct {
 	height      int
 }
 
+// reportLoadedMsg carries a built report for the period it was asked for.
+type reportLoadedMsg struct {
+	period domain.Period
+	report domain.Report
+	err    error
+}
+
 // writtenMsg reports that a changeset was applied (or why it was not).
 type writtenMsg struct{ err error }
 
@@ -103,6 +118,7 @@ type Ports struct {
 	Creator  journalCreator // writes the first-run journal
 	Accounts accountPlanner // plans closing and reopening accounts
 	Writer   journalWriter  // applies planned changes to the journal
+	Reports  reportBuilder  // builds the Reports view's tables
 	// Editor builds the command that opens a file at a line.
 	Editor func(file string, line int) *exec.Cmd
 }
@@ -112,6 +128,7 @@ func New(journalPath string, ports Ports) Model {
 	return Model{
 		journalPath: journalPath, loader: ports.Loader, checker: ports.Checker, creator: ports.Creator,
 		editor: ports.Editor, accounts: ports.Accounts, writer: ports.Writer, dash: dashboard.New(),
+		reporter: ports.Reports, reports: reports.New(),
 	}
 }
 
@@ -143,9 +160,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if size, ok := msg.(tea.WindowSizeMsg); ok {
 		m.width, m.height = size.Width, size.Height
 		m.dash = m.dash.Resize(m.width, max(0, m.height-chromeRows))
+		m.reports = m.reports.Resize(m.width, max(0, m.height-chromeRows))
 	}
 	if loaded, ok := msg.(ledgerLoadedMsg); ok {
 		m = m.onLoaded(loaded)
+		return m, m.loadReport(loaded.err)
+	}
+	if report, ok := msg.(reportLoadedMsg); ok {
+		return m.onReport(report), nil
 	}
 	if failed, ok := msg.(journalCreateFailedMsg); ok {
 		m.createErr = failed.err
@@ -180,6 +202,31 @@ func (m Model) onLoaded(loaded ledgerLoadedMsg) Model {
 	}
 	m.firstRun = errors.Is(loaded.err, ledger.ErrNoJournal)
 	m.parseIssue = issueOf(loaded.err)
+	return m
+}
+
+// loadReport builds the Reports view's report for its current period, once the journal has loaded.
+func (m Model) loadReport(loadErr error) tea.Cmd {
+	if m.reporter == nil || loadErr != nil {
+		return nil
+	}
+	period := m.reports.Period()
+	return func() tea.Msg {
+		report, err := m.reporter.Report(context.Background(), period)
+		return reportLoadedMsg{period: period, report: report, err: err}
+	}
+}
+
+// onReport takes a built report in; one for a period no longer shown is dropped, and a failed one
+// leaves the old report on screen with the error flagged.
+func (m Model) onReport(loaded reportLoadedMsg) Model {
+	switch {
+	case loaded.period != m.reports.Period():
+	case loaded.err != nil:
+		m.refreshErr = loaded.err
+	default:
+		m.reports = m.reports.WithReport(loaded.report)
+	}
 	return m
 }
 
@@ -244,13 +291,35 @@ func (m Model) onViewKey(key string) (Model, tea.Cmd) {
 	case "!":
 		m.popup = popupChecks
 	}
-	if m.active == 0 {
-		m = m.onDashboardKey(key)
-	}
+	m, cmd := m.onActiveViewKey(key)
 	if number, err := strconv.Atoi(key); err == nil && number >= 1 && number <= tabCount {
 		m.active = number - 1
 	}
+	return m, cmd
+}
+
+// onActiveViewKey hands a key to the view on screen.
+func (m Model) onActiveViewKey(key string) (Model, tea.Cmd) {
+	switch m.active {
+	case 0:
+		return m.onDashboardKey(key), nil
+	case reportsTab:
+		return m.onReportsKey(key)
+	}
 	return m, nil
+}
+
+// reportsTab is the index of the Reports view.
+const reportsTab = 4
+
+// onReportsKey scrolls the tables, or on p moves to the next period and builds its report.
+func (m Model) onReportsKey(key string) (Model, tea.Cmd) {
+	if key != "p" {
+		m.reports = m.reports.Move(key)
+		return m, nil
+	}
+	m.reports = m.reports.NextPeriod()
+	return m, m.loadReport(nil)
 }
 
 // openEditor suspends konto while the user's editor shows the issue.

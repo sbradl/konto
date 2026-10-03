@@ -12,6 +12,8 @@ var (
 	Dim = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 	// Bold styles figures that stand out.
 	Bold = lipgloss.NewStyle().Bold(true)
+	// Emphasis styles grand totals: bold bright white.
+	Emphasis = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15"))
 	// Negative styles negative amounts: ANSI red.
 	Negative = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
 	// Ok styles a passing result: ANSI green.

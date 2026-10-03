@@ -59,8 +59,11 @@ func (m Model) body() string {
 	if m.loadErr != nil {
 		return m.loadErr.Error()
 	}
-	if m.active == 0 {
+	switch m.active {
+	case 0:
 		return m.dash.View()
+	case reportsTab:
+		return m.reports.View()
 	}
 	return ""
 }

@@ -133,3 +133,11 @@ func TestMultiAmountNegatedFlipsEveryAmount(t *testing.T) {
 		t.Errorf("Negated = %+v", got)
 	}
 }
+
+func TestZeroedKeepsCommoditiesAndStylesButNotQuantities(t *testing.T) {
+	got := MultiAmount{{Commodity: "EUR", Mantissa: 1234, Places: 2, Style: AmountStyle{Spaced: true}}}.Zeroed()
+
+	if len(got) != 1 || got[0].Mantissa != 0 || got[0].Commodity != "EUR" || got[0].Places != 2 || !got[0].Style.Spaced {
+		t.Errorf("Zeroed = %+v", got)
+	}
+}

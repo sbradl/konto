@@ -12,11 +12,9 @@ Feature: Reports — balance sheet and income statement
 
   Rule: Period cycling
 
-    @wip
     Scenario: starts on month to date
       Then the report period reads "month to date"
 
-    @wip
     Scenario: p cycles month → quarter → year → all time → month
       When I press "p"
       Then the report period reads "quarter to date"
@@ -27,23 +25,19 @@ Feature: Reports — balance sheet and income statement
       When I press "p"
       Then the report period reads "month to date"
 
-    @wip
     Scenario: the period is Reports-local state and survives view switches
       Given I press "p"
       When I press "3"
       And I press "5"
       Then the report period reads "quarter to date"
 
-    @wip
     Scenario: every period ends today
       Then I see no figure dated after "2026-09-30"
 
-    @wip
     Scenario: hint shows the period key, no position counter
       Then the status bar hint lists "p period"
       And the status bar does not show "n/total"
 
-    @wip
     Scenario Outline: other period keys do not exist
       When I press "<key>"
       Then the screen is unchanged
@@ -58,7 +52,6 @@ Feature: Reports — balance sheet and income statement
 
   Rule: Balance sheet
 
-    @wip
     Scenario: balance is at today and Δ is the change within the period (month)
       Then the balance sheet shows
         | account                | balance        | Δ period     |
@@ -66,7 +59,6 @@ Feature: Reports — balance sheet and income statement
         | assets:savings         | 13.500,00 EUR  | 500,00 EUR   |
         | liabilities:creditcard | -140,00 EUR    | -35,00 EUR   |
 
-    @wip
     Scenario: quarter to date
       When I press "p"
       Then the balance sheet shows
@@ -75,7 +67,6 @@ Feature: Reports — balance sheet and income statement
         | assets:savings         | 13.500,00 EUR  | 1.500,00 EUR |
         | liabilities:creditcard | -140,00 EUR    | -70,00 EUR   |
 
-    @wip
     Scenario: year to date
       When I press "p"
       And I press "p"
@@ -85,23 +76,21 @@ Feature: Reports — balance sheet and income statement
         | assets:savings         | 13.500,00 EUR  | 13.500,00 EUR |
         | liabilities:creditcard | -140,00 EUR    | -140,00 EUR   |
 
-    @wip
     Scenario: the balance does not change with the period
       When I press "p"
       Then "assets:checking" shows the balance "13.240,00 EUR"
 
-    @wip
     Scenario: Δ column is hidden under all time
       When I press "p" 3 times
       Then the balance sheet has no "Δ period" column
       And the balance sheet shows "assets:checking" with "13.240,00 EUR"
 
-    @proposed @wip
+    @proposed
     Scenario: Δ colours — positive green, negative red, zero dim
       Then "1.350,00 EUR" in the Δ column of "assets:checking" is coloured 2
       And "-35,00 EUR" in the Δ column of "liabilities:creditcard" is coloured 1
 
-    @proposed @wip
+    @proposed
     Scenario: a zero Δ is a dim 0
       Given today is 2026-10-01
       And I start konto
@@ -109,21 +98,17 @@ Feature: Reports — balance sheet and income statement
       Then the Δ of "assets:savings" is "0" coloured 8
       And the balance of "assets:savings" is "13.500,00 EUR"
 
-    @wip
     Scenario: row kinds are styled
       Then the section header "Assets" is coloured 6 and bold
       And the liability balance "-140,00 EUR" is coloured 1
       And the grand total is bright white
 
-    @wip
     Scenario: net worth grand total
       Then the balance sheet's grand total shows "26.600,00 EUR"
 
-    @wip
     Scenario: accounts with zero balance are not listed
       Then the balance sheet does not list "assets:old-account"
 
-    @wip
     Scenario: the clearing account appears when it has a balance
       Given the journal "household" with a one-sided transfer leg of 200,00 EUR on the clearing account
       And I start konto
@@ -132,7 +117,6 @@ Feature: Reports — balance sheet and income statement
 
   Rule: Income statement
 
-    @wip
     Scenario: month to date
       Then the income statement shows
         | account            | amount       |
@@ -144,7 +128,6 @@ Feature: Reports — balance sheet and income statement
       And the income statement total expenses is "1.185,00 EUR"
       And the income statement net is "1.815,00 EUR"
 
-    @wip
     Scenario: quarter to date
       When I press "p"
       Then the income statement shows
@@ -155,7 +138,6 @@ Feature: Reports — balance sheet and income statement
         | expenses:books     | 70,00 EUR    |
       And the income statement net is "5.480,00 EUR"
 
-    @wip
     Scenario: year to date and all time
       When I press "p"
       And I press "p"
@@ -163,23 +145,19 @@ Feature: Reports — balance sheet and income statement
       When I press "p"
       Then the income statement net is "16.600,00 EUR"
 
-    @wip
     Scenario: only account and amount, no share column
       Then the income statement has exactly 2 columns
       And I do not see "%" in the income statement
 
-    @wip
     Scenario: transfers are not income or expense
       Then the income statement does not list "assets:transfers" or "assets:savings"
 
-    @wip
     Scenario: opening balances are not income
       When I press "p" 3 times
       Then the income statement does not list "equity:opening-balances"
 
   Rule: Period boundaries
 
-    @wip
     Scenario Outline: boundaries follow today
       Given today is <today>
       And I start konto
@@ -196,7 +174,7 @@ Feature: Reports — balance sheet and income statement
         | 2026-02-28 | 0       | 1.870,00 EUR |
         | 2026-01-01 | 2       | 0,00 EUR     |
 
-    @proposed @wip
+    @proposed
     Scenario: an empty period shows empty tables, not an error
       Given today is 2026-10-01
       And I start konto
@@ -206,7 +184,7 @@ Feature: Reports — balance sheet and income statement
 
   Rule: Scrolling and layout
 
-    @proposed @wip
+    @proposed
     Scenario: both tables scroll together
       Given the journal "household" with 40 expense categories used this month
       And the terminal is 100×30
@@ -215,7 +193,7 @@ Feature: Reports — balance sheet and income statement
       When I press "↓" 3 times
       Then both tables have scrolled by 3 rows
 
-    @proposed @wip
+    @proposed
     Scenario: overflow is announced
       Given the journal "household" with 40 expense categories used this month
       And the terminal is 100×30
@@ -223,7 +201,6 @@ Feature: Reports — balance sheet and income statement
       And I press "5"
       Then the tables end with "… N more" where N > 0
 
-    @wip
     Scenario: paging and ends
       Given the journal "household" with 40 expense categories used this month
       And the terminal is 100×30
@@ -234,11 +211,9 @@ Feature: Reports — balance sheet and income statement
       When I press "Home"
       Then the first row of each table is visible
 
-    @wip
     Scenario: no cursor, nothing is selectable
       Then no row is highlighted with background 8
 
-    @wip
     Scenario Outline: layout fits the terminal
       Given the terminal is <w>×<h>
       Then the layout has no line wider than <w> cells
@@ -249,17 +224,14 @@ Feature: Reports — balance sheet and income statement
         | 120 | 40 |
         | 180 | 60 |
 
-    @wip
     Scenario: two panels side by side on a wide terminal
       Then I see "BALANCE SHEET" and "INCOME STATEMENT" on the same screen row
 
   Rule: EUR only
 
-    @wip
     Scenario: no valuation copy
       Then I do not see "at cost" or "-V" or "market" or "unrealized"
 
-    @wip
     Scenario: a stray foreign currency renders as + N cur
       Given the journal "multicommodity"
       And I start konto
@@ -269,7 +241,6 @@ Feature: Reports — balance sheet and income statement
 
   Rule: Refresh
 
-    @wip
     Scenario: r updates the reports
       When I append this to the journal externally:
         """
