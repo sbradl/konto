@@ -3,13 +3,15 @@ description: Installs the mise-pinned toolchain (go, golangci-lint, gotestsum, g
 runs:
   using: composite
   steps:
-    - uses: jdx/mise-action@v3
-      with:
-        cache: true
-    - uses: actions/cache@v4
+    # Restore the Go caches before mise installs tools: tools built with `go install`
+    # write into the module cache, and restoring on top of them fails with "File exists".
+    - uses: actions/cache@v6
       with:
         path: |
           ~/go/pkg/mod
           ~/.cache/go-build
         key: go-${{ runner.os }}-${{ hashFiles('go.sum', 'mise.toml') }}
         restore-keys: go-${{ runner.os }}-
+    - uses: jdx/mise-action@v5
+      with:
+        cache: true
