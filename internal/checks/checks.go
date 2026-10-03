@@ -48,3 +48,39 @@ func (r *Runner) Run(ctx context.Context, ledger domain.Ledger) (domain.CheckRun
 	run.Issues = append(run.Issues, ledger.UnclassifiedIssues()...)
 	return run, nil
 }
+
+type renderer interface {
+	Render(changeset domain.Changeset) (string, error)
+}
+
+type textChecker interface {
+	CheckText(ctx context.Context, text string, names []string) error
+}
+
+// Verifier checks a changeset before it is written: the journal as it would read afterwards goes to
+// hledger on standard input, and only the checks that make a journal wrong (errors, not warnings) count.
+type Verifier struct {
+	render renderer
+	gw     textChecker
+}
+
+// NewVerifier returns a Verifier that renders changesets through render and checks them through gw.
+func NewVerifier(render renderer, gw textChecker) *Verifier { return &Verifier{render: render, gw: gw} }
+
+// Verify returns why the journal would be wrong after the changeset, or nil.
+func (v *Verifier) Verify(ctx context.Context, changeset domain.Changeset) error {
+	text, err := v.render.Render(changeset)
+	if err != nil {
+		return fmt.Errorf("preparing the write: %w", err)
+	}
+	var blocking []string
+	for _, name := range hledgerChecks() {
+		if domain.SeverityOf(name) == domain.SeverityErr {
+			blocking = append(blocking, name)
+		}
+	}
+	if err := v.gw.CheckText(ctx, text, blocking); err != nil {
+		return fmt.Errorf("the journal would fail its checks: %w", err)
+	}
+	return nil
+}

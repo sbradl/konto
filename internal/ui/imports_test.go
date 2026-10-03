@@ -212,14 +212,13 @@ func TestAnOpenDialogTakesEveryKeyAsTextSoViewKeysAndQuitDoNotLeakThrough(t *tes
 	}
 }
 
-func TestCtrlCQuitsEvenWhileADialogIsOpen(t *testing.T) {
+func TestCtrlCWhileADialogIsOpenAsksBeforeDiscardingTheStagedImport(t *testing.T) {
 	model := categorisingModel(t)
-	_, cmd := model.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
-	if cmd == nil {
-		t.Fatal("ctrl+c did nothing")
-	}
-	if _, ok := cmd().(tea.QuitMsg); !ok {
-		t.Errorf("ctrl+c returned %T, want a quit", cmd())
+
+	asked, cmd := model.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
+
+	if cmd != nil || asked.(Model).prompt == nil || !asked.(Model).prompt.quit {
+		t.Errorf("ctrl+c over a dialog should ask, got cmd %v and prompt %v", cmd, asked.(Model).prompt)
 	}
 }
 

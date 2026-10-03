@@ -63,6 +63,11 @@ type journalWriter interface {
 	Apply(changeset domain.Changeset) error
 }
 
+// changeVerifier checks a changeset before it is written and says why the journal would be wrong after it.
+type changeVerifier interface {
+	Verify(ctx context.Context, changeset domain.Changeset) error
+}
+
 type journalCreator interface {
 	Create() error
 }
@@ -84,12 +89,14 @@ type Model struct {
 	checker     checkRunner
 	accounts    accountPlanner
 	writer      journalWriter
+	verifier    changeVerifier
 	reporter    reportBuilder
 	reports     reports.Model
 	scheduled   scheduled.Model
 	importer    csvImporter
 	imports     imports.Model
 	prompt      *prompt          // the y/n question awaiting an answer
+	previewTop  int              // the first line of the prompt's preview on screen
 	notice      string           // a one-line message shown until the next key
 	run         *domain.CheckRun // the latest check run; nil until the first one lands
 	checkCursor int              // the selected issue in the checks panel
@@ -117,10 +124,12 @@ type browsedMsg struct {
 	err     error
 }
 
-// openedMsg carries an export read against the journal.
+// openedMsg carries an export read against the journal. When the staged import was read again after the
+// journal changed, earlier is what had been staged.
 type openedMsg struct {
-	staged csvimport.Staged
-	err    error
+	staged  csvimport.Staged
+	err     error
+	earlier *csvimport.Staged
 }
 
 // reportLoadedMsg carries a built report for the period it was asked for.
@@ -130,8 +139,12 @@ type reportLoadedMsg struct {
 	err    error
 }
 
-// writtenMsg reports that a changeset was applied (or why it was not).
-type writtenMsg struct{ err error }
+// writtenMsg reports that a changeset was applied (or why it was not); imported is the confirmation of an
+// import's write.
+type writtenMsg struct {
+	err      error
+	imported string
+}
 
 // editorClosedMsg reports that the user's editor has exited.
 type editorClosedMsg struct{}
@@ -143,6 +156,7 @@ type Ports struct {
 	Creator  journalCreator // writes the first-run journal
 	Accounts accountPlanner // plans closing and reopening accounts
 	Writer   journalWriter  // applies planned changes to the journal
+	Verifier changeVerifier // checks an import's changes before they are written; none skips the check
 	Reports  reportBuilder  // builds the Reports view's tables
 	Importer csvImporter    // lists folders and reads bank exports
 	// DownloadDir is where the file picker starts.
@@ -155,7 +169,8 @@ type Ports struct {
 func New(journalPath string, ports Ports) Model {
 	return Model{
 		journalPath: journalPath, loader: ports.Loader, checker: ports.Checker, creator: ports.Creator,
-		editor: ports.Editor, accounts: ports.Accounts, writer: ports.Writer, dash: dashboard.New(),
+		editor: ports.Editor, accounts: ports.Accounts, writer: ports.Writer, verifier: ports.Verifier,
+		dash:     dashboard.New(),
 		reporter: ports.Reports, reports: reports.New(), scheduled: scheduled.New(),
 		importer: ports.Importer, imports: imports.New(ports.DownloadDir),
 	}
@@ -195,7 +210,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	if loaded, ok := msg.(ledgerLoadedMsg); ok {
 		m = m.onLoaded(loaded)
-		return m, m.loadReport(loaded.err)
+		return m, tea.Batch(m.loadReport(loaded.err), m.reopen(loaded))
 	}
 	if report, ok := msg.(reportLoadedMsg); ok {
 		return m.onReport(report), nil
@@ -276,15 +291,12 @@ func (m Model) hasSnapshot() bool {
 
 func (m Model) onKey(key tea.KeyPressMsg) (Model, tea.Cmd) {
 	name := keyName(key)
-	if m.capturing() {
-		if name == "ctrl+c" {
-			return m, tea.Quit
-		}
+	if m.capturing() && name != "ctrl+c" {
 		return m.onImportKey(name)
 	}
 	switch name {
 	case "q", "ctrl+c":
-		return m, tea.Quit
+		return m.quit()
 	}
 	if m.tooSmall() {
 		return m, nil
@@ -299,6 +311,16 @@ func (m Model) onKey(key tea.KeyPressMsg) (Model, tea.Cmd) {
 		return m.onViewKey(name)
 	}
 	return m, nil
+}
+
+// quit leaves konto, asking first when an import is staged that leaving would discard. A second q while
+// the question is open, or a terminal too small to answer it in, quits at once.
+func (m Model) quit() (Model, tea.Cmd) {
+	if _, staged := m.imports.Staged(); staged && !m.tooSmall() && (m.prompt == nil || !m.prompt.quit) {
+		m.prompt = &prompt{question: "discard the staged import?", quit: true}
+		return m, nil
+	}
+	return m, tea.Quit
 }
 
 // keyName is the key as the views name it; a space is typed text, not a word.

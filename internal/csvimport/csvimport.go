@@ -81,11 +81,13 @@ func (r Row) NeedsCategory() bool { return r.Target == "" }
 
 // Staged is an export read against the journal, held in memory until it is written.
 type Staged struct {
+	Path        string // where the export was read from, to read it again when the journal changes
 	File        string // the export's file name
 	IBAN        string
 	Format      string
 	Account     domain.Account // the account the IBAN belongs to; zero for a new one
 	NewAccount  bool           // the IBAN is unknown: the account has yet to be created
+	Named       string         // the name given to the new account; empty until it has one
 	Watermark   time.Time      // the account's latest transaction; zero for a fresh account
 	Rows        []Row          // new rows, newest first
 	Skipped     []Row          // rows the journal already has, newest first
@@ -115,7 +117,7 @@ func (s *Service) Open(ctx context.Context, path string, ledger domain.Ledger) (
 		return Staged{}, err
 	}
 	staged := Staged{
-		File: filepath.Base(path), IBAN: preamble.iban, Format: FormatPostbank, Closing: preamble.closing,
+		Path: path, File: filepath.Base(path), IBAN: preamble.iban, Format: FormatPostbank, Closing: preamble.closing,
 		Known: ledger.Accounts, Zero: ledger.Zero(),
 	}
 	staged.Rules = s.readRules()

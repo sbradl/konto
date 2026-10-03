@@ -147,6 +147,7 @@ type world struct {
 	focusedCard    statCard  // the stat card a step last looked at
 	focusedRecent  recentRow // the Recent row a step last looked at
 	focusedRow     string    // the checks panel row a step last looked at
+	leftRow        string    // the Import row the cursor was last moved to
 }
 
 func newWorld(s *suite) (*world, error) {

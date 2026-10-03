@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"errors"
+	"strconv"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -12,10 +13,14 @@ import (
 	"github.com/sbradl/konto/internal/ui/imports"
 )
 
-// prompt is a y/n question about a planned write; y applies the changeset.
+// prompt is a y/n question about a planned write; y applies the changeset. An import's prompt also shows
+// what will be written, and is checked before it is applied.
 type prompt struct {
 	question  string
 	changeset domain.Changeset
+	preview   []string
+	imported  string // the confirmation shown once an import is written
+	quit      bool   // y leaves konto: the question is about discarding the staged import
 }
 
 // onDashboardKey moves the Accounts cursor, or starts closing (c) or reopening (o) the selected account.
@@ -55,20 +60,42 @@ func (m Model) planAccountChange(key string) Model {
 func (m Model) onPromptKey(key string) (Model, tea.Cmd) {
 	switch key {
 	case "y":
-		changeset := m.prompt.changeset
+		pending := *m.prompt
 		m.prompt = nil
-		return m, func() tea.Msg { return writtenMsg{err: m.writer.Apply(changeset)} }
+		if pending.quit {
+			return m, tea.Quit
+		}
+		return m, func() tea.Msg { return m.write(pending) }
 	case "n", "esc":
 		m.prompt = nil
+	case "up":
+		m.previewTop = max(0, m.previewTop-1)
+	case "down":
+		m.previewTop++
 	}
 	return m, nil
 }
 
-// onWritten refreshes after a successful write and reports a failed one.
+// write applies the prompt's changeset; an import's is checked first, so a journal that would fail its
+// checks is never written.
+func (m Model) write(pending prompt) tea.Msg {
+	if pending.imported != "" && m.verifier != nil {
+		if err := m.verifier.Verify(context.Background(), pending.changeset); err != nil {
+			return writtenMsg{err: err}
+		}
+	}
+	return writtenMsg{err: m.writer.Apply(pending.changeset), imported: pending.imported}
+}
+
+// onWritten refreshes after a successful write and reports a failed one. A written import is confirmed and
+// leaves the Import view empty.
 func (m Model) onWritten(written writtenMsg) (Model, tea.Cmd) {
 	if written.err != nil {
 		m.notice = "write failed: " + written.err.Error()
 		return m, nil
+	}
+	if written.imported != "" {
+		m.notice, m.imports = written.imported, m.imports.Cleared()
 	}
 	m.refreshing = true
 	return m, m.load
@@ -96,18 +123,78 @@ func (m Model) onImportKey(key string) (Model, tea.Cmd) {
 			entries, err := m.importer.Browse(action.Browse)
 			return browsedMsg{dir: action.Browse, entries: entries, err: err}
 		}
+	case action.Open != "" && m.refreshing:
+		m.imports = m.imports.WithMessage("still reloading the journal — open the file again in a moment")
+		return m, nil
 	case action.Open != "":
 		return m, func() tea.Msg {
 			staged, err := m.importer.Open(context.Background(), action.Open, *m.ledger)
 			return openedMsg{staged: staged, err: err}
 		}
+	case action.Write:
+		return m.planImport(), nil
 	}
 	return m, nil
+}
+
+// planImport asks y/n before writing the staged import, showing what will be written; what keeps it from
+// being written (rows without a category, a balance the bank does not share) is a message in the view.
+func (m Model) planImport() Model {
+	staged, _ := m.imports.Staged() // the view asks to write only with an import staged
+	plan, err := staged.Plan(*m.ledger)
+	if err != nil {
+		m.imports = m.imports.WithMessage(err.Error())
+		return m
+	}
+	transactions := plural(plan.Count, "transaction")
+	m.prompt = &prompt{
+		question: "write " + transactions + " into " + plan.Account + "?", changeset: plan.Changeset,
+		preview: plan.Preview, imported: "imported " + transactions + " into " + plan.Account,
+	}
+	m.previewTop = 0
+	return m
+}
+
+func plural(n int, noun string) string {
+	if n == 1 {
+		return "1 " + noun
+	}
+	return strconv.Itoa(n) + " " + noun + "s"
+}
+
+// reopen reads the staged export again against the reloaded journal, so what is skipped follows the journal.
+func (m Model) reopen(loaded ledgerLoadedMsg) tea.Cmd {
+	staged, ok := m.imports.Staged()
+	if !ok || m.importer == nil || loaded.err != nil || staged.Path == "" {
+		return nil
+	}
+	return func() tea.Msg {
+		fresh, err := m.importer.Open(context.Background(), staged.Path, loaded.ledger)
+		return openedMsg{staged: fresh, err: err, earlier: &staged}
+	}
+}
+
+// onReopened takes the staged export read again in: what was staged carries over. An export read again
+// after the import was written or replaced is dropped, and one that cannot be read leaves the import as it
+// was, with the error flagged.
+func (m Model) onReopened(opened openedMsg) Model {
+	current, ok := m.imports.Staged()
+	switch {
+	case !ok || current.Path != opened.earlier.Path:
+	case opened.err != nil:
+		m.refreshErr = opened.err
+	default:
+		m.imports = m.imports.WithRefreshed(opened.staged.Carry(*opened.earlier))
+	}
+	return m
 }
 
 // onOpened stages the export, or says why it cannot be: a file konto cannot use is a message in the Import
 // view; hledger failing on it also flags the error, so its words are in the checks panel.
 func (m Model) onOpened(opened openedMsg) Model {
+	if opened.earlier != nil {
+		return m.onReopened(opened)
+	}
 	var convertErr csvimport.ConvertError
 	switch {
 	case opened.err == nil:

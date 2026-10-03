@@ -1,7 +1,9 @@
 package journal
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"slices"
 	"strings"
@@ -9,38 +11,111 @@ import (
 	"github.com/sbradl/konto/internal/domain"
 )
 
-// Apply writes a changeset into the journal's files. Each touched file is replaced in one go
-// (temp file, then rename), so a failed write never leaves a half-edited journal; lines the
-// edits do not name stay byte for byte as they were.
-func (f File) Apply(changeset domain.Changeset) error {
+// workspace is the journal's files as edits change them, and the categories.rules file beside the journal.
+type workspace struct {
+	sources   []*source
+	rulesPath string
+	rules     *source // read when an edit first needs it
+}
+
+// plan makes the edits in memory; nothing is written.
+func (f File) plan(changeset domain.Changeset) (*workspace, error) {
 	sources, err := f.sources()
+	if err != nil {
+		return nil, err
+	}
+	work := &workspace{sources: sources, rulesPath: f.rulesPath()}
+	for _, edit := range changeset.Edits {
+		if err := work.apply(edit); err != nil {
+			return nil, err
+		}
+	}
+	return work, nil
+}
+
+// files are the sources the edits changed.
+func (w *workspace) dirty() []*source {
+	changed := slices.DeleteFunc(slices.Clone(w.sources), func(s *source) bool { return !s.dirty })
+	if w.rules != nil && w.rules.dirty {
+		changed = append(changed, w.rules)
+	}
+	return changed
+}
+
+// Apply writes a changeset into the journal's files and categories.rules. Each touched file is replaced in
+// one go (temp file, then rename), so a failed write never leaves a half-edited file; lines the edits do
+// not name stay byte for byte as they were.
+func (f File) Apply(changeset domain.Changeset) error {
+	work, err := f.plan(changeset)
 	if err != nil {
 		return err
 	}
-	for _, edit := range changeset.Edits {
-		if err := applyEdit(sources, edit); err != nil {
+	for _, source := range work.dirty() {
+		if err := writeSource(source); err != nil {
 			return err
-		}
-	}
-	for _, source := range sources {
-		if source.dirty {
-			if err := replaceFile(source.path, strings.Join(source.lines, "\n")); err != nil {
-				return err
-			}
 		}
 	}
 	return nil
 }
 
-// applyEdit makes one edit in the sources; nothing is written until every edit has gone through.
-func applyEdit(sources []*source, edit domain.Edit) error {
-	switch e := edit.(type) {
+// Render is the journal as it would read after the changeset, its included files spliced in where they are
+// included, so hledger can check it from standard input without anything being written.
+func (f File) Render(changeset domain.Changeset) (string, error) {
+	work, err := f.plan(changeset)
+	if err != nil {
+		return "", err
+	}
+	byPath := make(map[string]*source, len(work.sources))
+	for _, file := range work.sources {
+		byPath[file.path] = file
+	}
+	return flatten(byPath, work.sources[0], map[string]bool{}), nil
+}
+
+// flatten is the file's text with each `include` line replaced by the text of the files it names. Every
+// included file was read with the journal, so byPath has them all.
+func flatten(byPath map[string]*source, file *source, seen map[string]bool) string {
+	seen[file.path] = true
+	var lines []string
+	for _, line := range file.lines {
+		if !strings.HasPrefix(line, "include ") {
+			lines = append(lines, line)
+			continue
+		}
+		matches, _ := includedFiles(file.path, line) // the files were read before, so the pattern is good
+		for _, match := range matches {
+			if !seen[match] {
+				lines = append(lines, flatten(byPath, byPath[match], seen))
+			}
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+// writeSource replaces the file, or creates it when it is not there yet.
+func writeSource(file *source) error {
+	content := strings.Join(file.lines, "\n")
+	if _, err := os.Stat(file.path); errors.Is(err, fs.ErrNotExist) {
+		return writeNew(file.path, content)
+	}
+	return replaceFile(file.path, content)
+}
+
+// apply makes one edit in the workspace; nothing is written until every edit has gone through.
+func (w *workspace) apply(edit domain.Edit) error {
+	switch change := edit.(type) {
 	case domain.SetAccountTag:
-		setTag(sources, e)
+		setTag(w.sources, change)
 	case domain.RemoveAccountTag:
-		editDirective(sources, e.Account, func(tags []string) []string { return withoutTag(tags, e.Key) })
+		editDirective(w.sources, change.Account, func(tags []string) []string { return withoutTag(tags, change.Key) })
 	case domain.DeleteRule:
-		return deleteRule(sources, e.Pos)
+		return deleteRule(w.sources, change.Pos)
+	case domain.Declare:
+		declare(w.sources, change)
+	case domain.AddTransactions:
+		return addTransactions(w.sources, change)
+	case domain.SetCategoryRule:
+		return w.setCategoryRule(change)
 	}
 	return nil
 }
@@ -89,14 +164,7 @@ func setTag(sources []*source, edit domain.SetAccountTag) {
 	if editDirective(sources, edit.Account, update) {
 		return
 	}
-	main := sources[0]
-	line := "account " + edit.Account + "  ; " + tag
-	if last := len(main.lines) - 1; main.lines[last] == "" { // keep the file's final newline last
-		main.lines = slices.Insert(main.lines, last, line)
-	} else {
-		main.lines = append(main.lines, line)
-	}
-	main.dirty = true
+	appendLine(sources[0], "account "+edit.Account+"  ; "+tag)
 }
 
 // editDirective rewrites the tags of the account's directive; false when no file declares it.

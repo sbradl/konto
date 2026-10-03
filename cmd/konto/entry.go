@@ -44,7 +44,8 @@ func runProgram(cfg config.Config) error {
 	home, _ := os.UserHomeDir() // without a home the picker falls back to a relative Downloads
 	_, err := tea.NewProgram(ui.New(cfg.JournalPath, ui.Ports{
 		Loader: loader, Checker: checks.NewRunner(client), Creator: file, Editor: openInEditor,
-		Accounts: accounts.NewService(file, today), Writer: file, Reports: report.NewService(client, today),
+		Accounts: accounts.NewService(file, today), Writer: file, Verifier: checks.NewVerifier(file, client),
+		Reports:  report.NewService(client, today),
 		Importer: csvimport.NewService(files.System{}, client, rulesPath), DownloadDir: downloadDir(os.Getenv, home),
 	})).Run()
 	return err //nolint:wrapcheck // the program's own error is already self-describing

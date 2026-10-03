@@ -4,7 +4,6 @@ package imports
 
 import (
 	"fmt"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -25,7 +24,7 @@ const (
 	columnGap    = 2
 	ruleIDWidth  = 4
 	targetWidth  = 24
-	amountWidth  = 14
+	amountWidth  = 18
 	dateWidth    = len("2026-09-30")
 	parentEntry  = ".."
 	needsARule   = "needs a rule"
@@ -39,10 +38,12 @@ const (
 	transferMark = " ⇄"
 )
 
-// Action is what the view asks the root to do: list a directory or open a file. At most one is set.
+// Action is what the view asks the root to do: list a directory, open a file or write the import. At most
+// one is set.
 type Action struct {
 	Browse string
 	Open   string
+	Write  bool
 }
 
 // Model is the Import view's state: nothing, the file picker, or a staged import.
@@ -79,6 +80,36 @@ func (m Model) WithStaged(staged csvimport.Staged) Model {
 	next := m
 	next.staged, next.picking, next.message = &staged, false, ""
 	next.dlg, next.parent = dialog{}, dialog{}
+	next.cursor, next.offset = 0, 0
+	if staged.NewAccount && staged.Named == "" {
+		next.dlg = dialog{kind: dialogAccount, filter: csvimport.SuggestAccountName(staged.IBAN)}
+	}
+	return next
+}
+
+// WithRefreshed swaps the staged import for the same export read again against a changed journal. The
+// cursor stays where it was, as near as the new rows allow; a dialog that points at a row is closed.
+func (m Model) WithRefreshed(staged csvimport.Staged) Model {
+	next := m
+	next.staged = &staged
+	if next.dlg.kind != dialogAccount {
+		next.dlg, next.parent = dialog{}, dialog{}
+	}
+	return next.rowsTo(m.cursor)
+}
+
+// Staged is the import being worked on; false when there is none.
+func (m Model) Staged() (csvimport.Staged, bool) {
+	if m.staged == nil {
+		return csvimport.Staged{}, false
+	}
+	return *m.staged, true
+}
+
+// Cleared drops the staged import and shows the empty start state.
+func (m Model) Cleared() Model {
+	next := m
+	next.staged, next.dlg, next.parent = nil, dialog{}, dialog{}
 	next.cursor, next.offset = 0, 0
 	return next
 }
@@ -123,6 +154,8 @@ func (m Model) Key(key string) (Model, Action) {
 		return next, Action{Browse: m.downloadDir}
 	case keyEnter:
 		return next.openChoice(), Action{}
+	case "w":
+		return next, Action{Write: next.staged != nil}
 	default:
 		return next.moveRows(key), Action{}
 	}
@@ -193,67 +226,6 @@ func (m Model) bannerRows() int {
 	return 1
 }
 
-// pickerRows are the picker's entries: the parent folder first, unless the folder is the root.
-func (m Model) pickerRows() []domain.FileEntry {
-	if filepath.Dir(m.dir) == m.dir {
-		return m.entries
-	}
-	return append([]domain.FileEntry{{Name: parentEntry, IsDir: true}}, m.entries...)
-}
-
-func (m Model) pickerPage() int { return max(1, m.height-panelChrome-1) }
-
-func (m Model) pickerKey(key string) (Model, Action) {
-	rows := m.pickerRows()
-	switch key {
-	case keyEsc:
-		m.picking = false
-	case keyUp:
-		m = m.pickerTo(m.pickCursor - 1)
-	case keyDown:
-		m = m.pickerTo(m.pickCursor + 1)
-	case keyHome:
-		m = m.pickerTo(0)
-	case keyEnd:
-		m = m.pickerTo(len(rows))
-	case "pgup":
-		m = m.pickerTo(m.pickCursor - m.pickerPage())
-	case "pgdown":
-		m = m.pickerTo(m.pickCursor + m.pickerPage())
-	case keyEnter:
-		if len(rows) > 0 {
-			return m, m.activate(rows[m.pickCursor])
-		}
-	}
-	return m, Action{}
-}
-
-// activate is what Enter does on an entry: go into a folder, or open a file.
-func (m Model) activate(entry domain.FileEntry) Action {
-	switch {
-	case entry.Name == parentEntry:
-		return Action{Browse: filepath.Dir(m.dir)}
-	case entry.IsDir:
-		return Action{Browse: filepath.Join(m.dir, entry.Name)}
-	}
-	return Action{Open: filepath.Join(m.dir, entry.Name)}
-}
-
-func (m Model) pickerTo(row int) Model {
-	next := m
-	next.pickCursor = max(0, min(row, len(m.pickerRows())-1))
-	return next.scrollPicker()
-}
-
-func (m Model) scrollPicker() Model {
-	next := m
-	next.pickOffset = max(0, min(m.pickOffset, m.pickCursor))
-	if m.pickCursor >= next.pickOffset+m.pickerPage() {
-		next.pickOffset = m.pickCursor - m.pickerPage() + 1
-	}
-	return next
-}
-
 // View draws the picker, or the staged import, or the empty start state; a message sits above them.
 func (m Model) View() string {
 	body := m.body()
@@ -274,28 +246,6 @@ func (m Model) body() string {
 	return m.overlay(m.stagedView(height))
 }
 
-// picker is the file picker: the directory, then its folders and CSV files with the cursor.
-func (m Model) picker(height int) string {
-	lines := []string{" " + theme.Bold.Render(m.dir)}
-	if m.listErr != nil {
-		lines = append(lines, " "+theme.Negative.Render(m.listErr.Error()))
-		return layout.Panel(pickerTitle, m.width, height, strings.Join(lines, "\n"))
-	}
-	rows := m.pickerRows()
-	for i := m.pickOffset; i < min(len(rows), m.pickOffset+m.pickerPage()); i++ {
-		name := rows[i].Name
-		if rows[i].IsDir && name != parentEntry {
-			name += "/"
-		}
-		line := " " + name
-		if i == m.pickCursor {
-			line = theme.Selected.Render(fit(line, m.width-panelChrome))
-		}
-		lines = append(lines, line)
-	}
-	return layout.Panel(pickerTitle, m.width, height, strings.Join(lines, "\n"))
-}
-
 // stagedView is the info block above the row table and the skipped list.
 func (m Model) stagedView(height int) string {
 	rowsHeight, skippedHeight := m.layoutHeights()
@@ -311,6 +261,9 @@ func (m Model) info() string {
 	account := staged.Account.Name
 	if staged.NewAccount {
 		account = theme.Warn.Render(createHint) + theme.Dim.Render(" for "+staged.IBAN)
+		if staged.Named != "" {
+			account = staged.Named + theme.Dim.Render(" (new)")
+		}
 	}
 	watermark := noWatermark
 	if !staged.Watermark.IsZero() {
@@ -332,7 +285,10 @@ func (m Model) info() string {
 // new accounts, and what the categories do to net income.
 func (m Model) stagedSummary() string {
 	rules := m.staged.StagedRules()
-	items := make([]string, 0, len(rules)+len(m.staged.NewAccounts))
+	items := make([]string, 0, len(rules)+len(m.staged.NewAccounts)+1)
+	if m.staged.Named != "" {
+		items = append(items, "account "+m.staged.Named)
+	}
 	for _, rule := range rules {
 		items = append(items, "rule "+rule.ID)
 	}

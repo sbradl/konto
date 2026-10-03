@@ -222,7 +222,6 @@ Feature: Import — picking a file, the row table, skipped rows
       Then the row table has no row "Acme GmbH"
       And the row table has no row "Vermieter Mueller"
 
-    @wip
     Scenario: skipped rows need no category and never block the write
       Then "w" is blocked only by the 4 new rows that need a category
 
@@ -305,6 +304,7 @@ Feature: Import — picking a file, the row table, skipped rows
         | 15.9.2026 | Kontoabrechnung |       | Zinsen  | 12,34  |
         | 20.8.2026 | Auszahlung      |       | Geld    | -100,00 |
       When I open "new.csv" in Import
+      And I create the account "assets:holiday"
       Then the info block shows no watermark
       And the row table has exactly 2 rows
       And the skipped panel is empty

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -72,5 +73,56 @@ func TestRunStopsOnAFailureToRunACheck(t *testing.T) {
 	}
 	if got := gw.ran[len(gw.ran)-1]; got != "tags" {
 		t.Errorf("last check run = %s, want the run to stop at tags", got)
+	}
+}
+
+type fakeRender struct {
+	text string
+	err  error
+}
+
+func (f fakeRender) Render(domain.Changeset) (string, error) { return f.text, f.err }
+
+type fakeTextChecker struct {
+	err   error
+	text  string
+	names []string
+}
+
+func (f *fakeTextChecker) CheckText(_ context.Context, text string, names []string) error {
+	f.text, f.names = text, names
+	return f.err
+}
+
+func TestVerifyChecksTheRenderedJournalForErrorsOnly(t *testing.T) {
+	gw := &fakeTextChecker{}
+
+	err := NewVerifier(fakeRender{text: "journal"}, gw).Verify(context.Background(), domain.Changeset{})
+
+	if err != nil || gw.text != "journal" {
+		t.Errorf("err = %v, text = %q", err, gw.text)
+	}
+	if want := []string{"parseable", "autobalanced", "assertions", "balanced"}; !slices.Equal(gw.names, want) {
+		t.Errorf("checks = %v, want %v", gw.names, want)
+	}
+}
+
+func TestVerifyReportsAFailedCheck(t *testing.T) {
+	gw := &fakeTextChecker{err: errors.New("balance assertion")}
+
+	err := NewVerifier(fakeRender{}, gw).Verify(context.Background(), domain.Changeset{})
+
+	if err == nil || !strings.Contains(err.Error(), "balance assertion") {
+		t.Errorf("error = %v", err)
+	}
+}
+
+func TestVerifyReportsAChangesetThatCannotBeRendered(t *testing.T) {
+	gw := &fakeTextChecker{}
+
+	err := NewVerifier(fakeRender{err: errors.New("no such file")}, gw).Verify(context.Background(), domain.Changeset{})
+
+	if err == nil || gw.names != nil {
+		t.Errorf("error = %v, checked = %v; want an error and no check", err, gw.names)
 	}
 }

@@ -19,6 +19,7 @@ const (
 	dialogRuleList
 	dialogAddForm
 	dialogPicker
+	dialogAccount // naming the account a new IBAN stands for
 )
 
 // Key names the view reacts to.
@@ -93,7 +94,7 @@ func (m Model) dialogKey(key string) Model {
 	}
 	handlers := map[dialogKind]func(Model, string) Model{
 		dialogChoice: Model.choiceKey, dialogRuleForm: Model.formKey, dialogRuleList: Model.ruleListKey,
-		dialogAddForm: Model.addFormKey, dialogPicker: Model.pickerDialogKey,
+		dialogAddForm: Model.addFormKey, dialogPicker: Model.pickerDialogKey, dialogAccount: Model.accountKey,
 	}
 	return handlers[m.dlg.kind](m, key)
 }
@@ -101,6 +102,9 @@ func (m Model) dialogKey(key string) Model {
 // close shuts the open dialog: a picker over the rule form goes back to the form, anything else is
 // abandoned along with what was typed.
 func (m Model) close() Model {
+	if m.dlg.kind == dialogAccount {
+		return m.Cleared()
+	}
 	if m.dlg.kind == dialogPicker && m.parent.kind != dialogNone {
 		m.dlg, m.parent = m.parent, dialog{}
 		return m
@@ -232,6 +236,22 @@ func (m Model) addFormKey(key string) Model {
 	}
 	m.dlg.refusal = ""
 	m.dlg.matcher, _ = edit(m.dlg.matcher, key)
+	return m
+}
+
+// accountKey edits the new account's name; Enter gives the account the name, or shows why it cannot have it.
+func (m Model) accountKey(key string) Model {
+	if key != keyEnter {
+		m.dlg.filter, _ = edit(m.dlg.filter, key)
+		m.dlg.refusal = ""
+		return m
+	}
+	named, err := m.staged.Name(m.dlg.filter)
+	if err != nil {
+		m.dlg.refusal = err.Error()
+		return m
+	}
+	m.staged, m.dlg = &named, dialog{}
 	return m
 }
 

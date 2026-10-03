@@ -30,6 +30,10 @@ var opts = godog.Options{
 // `go test -tags e2e ./e2e -args -godog.tags=@spec-4.5 -godog.format=progress`.
 func init() {
 	flag.StringVar(&opts.Tags, "godog.tags", opts.Tags, "godog tag expression")
+	flag.Func("godog.paths", "a feature file or folder to run instead of all features", func(path string) error {
+		opts.Paths = []string{path}
+		return nil
+	})
 	flag.StringVar(&opts.Format, "godog.format", opts.Format, "godog formatter: pretty, progress, junit:<file>, …")
 	flag.IntVar(&opts.Concurrency, "godog.concurrency", opts.Concurrency, "scenarios run in parallel")
 	flag.Int64Var(&opts.Randomize, "godog.random", opts.Randomize, "scenario order seed; -1 picks one, 0 keeps file order")

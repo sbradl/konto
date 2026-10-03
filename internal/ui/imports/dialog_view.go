@@ -71,6 +71,7 @@ func (m Model) dialogBody() (title string, body []string) {
 		dialogRuleList: func(m Model) (string, []string) { return "add to rule", m.ruleListLines() },
 		dialogAddForm:  func(m Model) (string, []string) { return "widen rule " + m.dlg.ruleID, m.addFormLines() },
 		dialogPicker:   func(m Model) (string, []string) { return "category", m.pickerLines() },
+		dialogAccount:  func(m Model) (string, []string) { return "create account", m.accountLines() },
 	}
 	return bodies[m.dlg.kind](m)
 }
@@ -200,4 +201,13 @@ func (m Model) pickerLines() []string {
 		lines = append(lines, listLine(strings.TrimSpace(text), len(candidates), m.dlg.cursor, m.width))
 	}
 	return append(lines, m.refusalLines()...)
+}
+
+// accountLines is the name input for the account a new IBAN stands for.
+func (m Model) accountLines() []string {
+	refusal := m.refusalLines()
+	lines := make([]string, 0, 2+len(refusal))
+	lines = append(lines, field("name", m.dlg.filter, 0, 0),
+		" "+theme.Dim.Render("for "+m.staged.IBAN+" · Enter creates · Esc abandons"))
+	return append(lines, refusal...)
 }

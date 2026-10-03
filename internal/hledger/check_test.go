@@ -3,6 +3,8 @@ package hledger
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -81,5 +83,54 @@ func TestFirstParagraphJoinsTheMessageUpToTheNextBlankLine(t *testing.T) {
 		if got := firstParagraph(tc.text); got != tc.want {
 			t.Errorf("%s: firstParagraph = %q, want %q", name, got, tc.want)
 		}
+	}
+}
+
+func TestCheckTextPipesTheTextToTheNamedChecks(t *testing.T) {
+	var gotInput string
+	var gotArgs []string
+	client := &Client{runInput: func(_ context.Context, input string, args ...string) (string, error) {
+		gotInput, gotArgs = input, args
+		return "", nil
+	}}
+
+	err := client.CheckText(context.Background(), "journal text", []string{"balanced", "assertions"})
+
+	if err != nil || gotInput != "journal text" {
+		t.Errorf("err = %v, input = %q", err, gotInput)
+	}
+	if want := []string{"-f", "-", "check", "balanced", "assertions"}; !reflect.DeepEqual(gotArgs, want) {
+		t.Errorf("args = %v, want %v", gotArgs, want)
+	}
+}
+
+func TestCheckTextReportsTheFirstFailureInHledgersWords(t *testing.T) {
+	client := &Client{runInput: func(context.Context, string, ...string) (string, error) {
+		return "hledger: Error: -:5:\n5 | x\n\nbalance assertion: assets:checking\nthe asserted balance is 1\n", errors.New("exit 1")
+	}}
+
+	err := client.CheckText(context.Background(), "", nil)
+
+	if err == nil || !strings.Contains(err.Error(), "balance assertion: assets:checking") {
+		t.Errorf("error = %v", err)
+	}
+}
+
+func TestNewChecksTextThroughTheBinary(t *testing.T) {
+	dir := t.TempDir()
+	seen := filepath.Join(dir, "stdin")
+	script := "#!/bin/sh\n/bin/cat > " + seen + "\necho 'where' >&2\necho 'broken' >&2\nexit 1\n"
+	if err := os.WriteFile(filepath.Join(dir, "hledger"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir)
+
+	err := New("hledger", "/j").CheckText(context.Background(), "the text", []string{"balanced"})
+
+	if err == nil || err.Error() != "broken" {
+		t.Errorf("error = %v, want hledger's stderr", err)
+	}
+	if got, _ := os.ReadFile(seen); string(got) != "the text" {
+		t.Errorf("hledger read %q from stdin", got)
 	}
 }

@@ -20,7 +20,7 @@ Feature: Import — writing, assertions, opening balance, staging and quitting
 
   Rule: w is gated on categorisation (ADR 0008)
 
-    @proposed @wip
+    @proposed
     Scenario: w is blocked while ? rows remain
       Given I open "sept.csv" in Import
       When I press "w"
@@ -28,19 +28,17 @@ Feature: Import — writing, assertions, opening balance, staging and quitting
       And no y/n prompt is shown
       And the journal is unchanged
 
-    @proposed @wip
+    @proposed
     Scenario: rows cannot be skipped
       Given I open "sept.csv" in Import
       Then no key skips or dismisses a "?" row
       And I do not see "skip" in the key hints
 
-    @wip
     Scenario: there is no catch-all account
       Given I open "sept.csv" in Import and categorise every row
       When I write the import
       Then the journal contains no "unknown" or "uncategorized" account
 
-    @wip
     Scenario: w asks y/n and shows what will be written
       Given I open "sept.csv" in Import and categorise every row
       When I press "w"
@@ -48,7 +46,6 @@ Feature: Import — writing, assertions, opening balance, staging and quitting
       And I see a preview containing "2026-09-30 REWE Markt"
       And the journal is unchanged
 
-    @wip
     Scenario Outline: n, Esc cancel the write; the staged import survives
       Given I open "sept.csv" in Import and categorise every row
       And I press "w"
@@ -73,7 +70,6 @@ Feature: Import — writing, assertions, opening balance, staging and quitting
       And I press "w"
       And I press "y"
 
-    @wip
     Scenario: transactions land in the journal with purpose as comment and rule id on the category posting
       Then the journal contains
         """
@@ -88,49 +84,39 @@ Feature: Import — writing, assertions, opening balance, staging and quitting
             assets:checking
         """
 
-    @wip
     Scenario: a once-categorised row carries no rule tag
       Then the journal's "Kiosk" transaction on "2026-09-26" has no "konto-rule" tag
 
-    @wip
     Scenario: only the newest imported transaction carries the closing-balance assertion
       Then the "2026-09-30 REWE Markt" transaction has the assertion "= 13.182,03 EUR" on "assets:checking"
       And no other imported transaction has an assertion
 
-    @wip
     Scenario: booking date only, no secondary date
       Then no imported transaction has a secondary date
 
-    @wip
     Scenario: nothing but date, payee, purpose and rule id is written
       Then the imported transactions contain no IBAN, BIC, reference or transaction type
 
-    @wip
     Scenario: skipped rows are not written again
       Then the journal has exactly 1 "Acme GmbH" transaction on "2026-09-25"
       And the journal has exactly 1 "Sparen" checking transaction on "2026-09-26"
 
-    @wip
     Scenario: the journal stays date-ordered and every check passes
       Then every hledger check passes
       And the journal balance of "assets:checking" is 13.182,03 EUR
 
-    @wip
     Scenario: new payees are declared, known payees are not redeclared
       Then the journal declares "payee Kaffeehaus"
       And the journal declares "payee Bäckerei Schmidt"
       And the journal declares "payee REWE Markt"
       And "payee REWE" is declared exactly once
 
-    @wip
     Scenario: new categories are declared
       Then the journal declares "account expenses:cafe"
 
-    @wip
     Scenario: konto-rule tag is declared
       Then the journal declares "tag konto-rule"
 
-    @wip
     Scenario: rules are written to categories.rules in the same unit
       Then categories.rules contains
         """
@@ -145,7 +131,6 @@ Feature: Import — writing, assertions, opening balance, staging and quitting
       And categories.rules still contains rules 1 to 5 unchanged
       And categories.rules does not mention "Kiosk"
 
-    @wip
     Scenario: no other files are created
       Then no ".latest" file exists
       And no temporary rules file is left behind
@@ -153,7 +138,6 @@ Feature: Import — writing, assertions, opening balance, staging and quitting
 
   Rule: Write target and ordering
 
-    @wip
     Scenario: the account's latest transaction's file receives the rows
       Given the journal "household" where every "assets:checking" transaction lives in included file "sub/checking.journal"
       And I start konto
@@ -161,14 +145,12 @@ Feature: Import — writing, assertions, opening balance, staging and quitting
       Then the new transactions are in "sub/checking.journal"
       And the main journal has no new transaction
 
-    @wip
     Scenario: new directives go to the main journal even when rows go to an include
       Given the journal "household" where every "assets:checking" transaction lives in included file "sub/checking.journal"
       And I start konto
       When I import "sept.csv" creating the category "expenses:cafe" for "Kaffeehaus"
       Then the main journal contains "account expenses:cafe"
 
-    @wip
     Scenario: rows are inserted at their date position, not appended
       Given the journal "household" with an unrelated transaction dated 2026-09-29 as the last entry of the file
       And I start konto
@@ -176,14 +158,12 @@ Feature: Import — writing, assertions, opening balance, staging and quitting
       Then the "2026-09-28 Kaffeehaus" transaction is above the unrelated "2026-09-29" transaction
       And hledger check ordereddates passes
 
-    @wip
     Scenario: a transaction dated after every existing one is appended at the end
       When I import "sept.csv" categorising every row
       Then the last transaction of the file is dated "2026-09-30"
 
   Rule: Balance assertion blocks a wrong import
 
-    @wip
     Scenario: a CSV with missing rows is blocked, showing bank, journal and difference
       Given a Postbank CSV "gap.csv" for IBAN "DE89370400440532013000" with closing balance 13.182,03 EUR:
         | date      | type          | payee      | purpose | amount |
@@ -196,7 +176,6 @@ Feature: Import — writing, assertions, opening balance, staging and quitting
       And the journal is unchanged
       And categories.rules is unchanged
 
-    @wip
     Scenario: the staged import survives a blocked write
       Given a Postbank CSV "gap.csv" for IBAN "DE89370400440532013000" with closing balance 13.182,03 EUR:
         | date      | type          | payee      | purpose | amount |
@@ -204,7 +183,6 @@ Feature: Import — writing, assertions, opening balance, staging and quitting
       When I import "gap.csv" categorising every row
       Then the row table is still shown
 
-    @wip
     Scenario: the pre-check runs on stdin, never on a half-written file
       Given a Postbank CSV "gap.csv" for IBAN "DE89370400440532013000" with closing balance 13.182,03 EUR:
         | date      | type          | payee      | purpose | amount |
@@ -212,12 +190,11 @@ Feature: Import — writing, assertions, opening balance, staging and quitting
       When I import "gap.csv" categorising every row
       Then the journal file was never modified during the attempt
 
-    @wip
     Scenario: a correct CSV passes the assertion
       When I import "sept.csv" categorising every row
       Then the write succeeds
 
-    @proposed @wip
+    @proposed
     Scenario: a journal with a failing assertion never reaches Import
       Given the journal "household" with a wrong assertion "= 99,00 EUR" on the last "assets:checking" posting
       When I start konto
@@ -225,14 +202,12 @@ Feature: Import — writing, assertions, opening balance, staging and quitting
 
   Rule: After the write
 
-    @wip
     Scenario: confirmation, empty start state, refreshed views
       When I import "sept.csv" categorising every row
       Then the status bar shows "imported 5 transactions into assets:checking"
       And I see the empty Import
       And the status bar shows "● clean"
 
-    @wip
     Scenario: the dashboard reflects the import
       When I import "sept.csv" categorising every row
       And I press "1"
@@ -240,20 +215,17 @@ Feature: Import — writing, assertions, opening balance, staging and quitting
       And the Recent panel's first row is dated "2026-09-30"
       And the tab bar shows "59" transactions
 
-    @wip
     Scenario: n picks the next file
       Given I import "sept.csv" categorising every row
       When I press "n"
       Then I see a file picker
 
-    @wip
     Scenario: importing the same file again finds nothing new
       Given I import "sept.csv" categorising every row
       When I open "sept.csv" in Import
       Then the row table has no rows
       And the skipped list has 9 rows
 
-    @wip
     Scenario: an overlapping second export imports only the new rows
       Given I import "sept.csv" categorising every row
       And a Postbank CSV "later.csv" for IBAN "DE89370400440532013000" with closing balance 13.171,03 EUR:
@@ -275,42 +247,38 @@ Feature: Import — writing, assertions, opening balance, staging and quitting
         | 20.8.2026 | Auszahlung      |                | Geldautomat         | -100,00 |
       And I open "new.csv" in Import
 
-    @proposed @wip
+    @proposed
     Scenario: a suggested editable account name is offered
       Then I see the account name input
       And the suggested name is not empty
       And the suggested name starts with "assets:" or "liabilities:"
 
-    @proposed @wip
+    @proposed
     Scenario: the name is checked with uniqueleafnames
       When I set the account name to "assets:checking"
-      Then I see a refusal mentioning "checking"
+      Then I see a name refusal mentioning "checking"
       When I set the account name to "assets:giro:checking"
-      Then I see a refusal mentioning "checking"
+      Then I see a name refusal mentioning "checking"
 
-    @wip
     Scenario: a fresh leaf name is accepted
       When I set the account name to "assets:holiday"
       Then I see no refusal
 
-    @proposed @wip
+    @proposed
     Scenario: an empty name is refused
       When I set the account name to ""
       Then I cannot continue
 
-    @wip
     Scenario: Esc abandons account creation
       When I press "Esc"
       Then I see the empty Import
       And the journal is unchanged
 
-    @wip
     Scenario: the new account is staged, not written
       When I create the account "assets:holiday"
       Then the journal is unchanged
       And the staged unit contains the directive "account assets:holiday"
 
-    @wip
     Scenario: opening balance is derived and shown for confirmation
       When I create the account "assets:holiday"
       And I categorise the rows
@@ -326,7 +294,6 @@ Feature: Import — writing, assertions, opening balance, staging and quitting
             equity:opening-balances
         """
 
-    @wip
     Scenario: the written unit
       Given I create the account "assets:holiday"
       And I categorise the rows
@@ -349,7 +316,6 @@ Feature: Import — writing, assertions, opening balance, staging and quitting
       And every hledger check passes
       And the journal balance of "assets:holiday" is 4.412,34 EUR
 
-    @wip
     Scenario: the dashboard shows the new account as import-fed
       Given I create the account "assets:holiday" and import every row
       When I press "1"
@@ -357,7 +323,6 @@ Feature: Import — writing, assertions, opening balance, staging and quitting
       And the row "assets:holiday" shows the glyph "↓"
       And I see a "NET WORTH" card showing "30.512,34 EUR"
 
-    @wip
     Scenario: a zero opening balance is still written
       Given a Postbank CSV "zero.csv" for IBAN "DE91100000000123456789" with closing balance 10,00 EUR:
         | date      | type       | payee | purpose | amount |
@@ -365,7 +330,6 @@ Feature: Import — writing, assertions, opening balance, staging and quitting
       When I create the account "assets:wallet" from "zero.csv" and import every row
       Then the journal's "opening balance" on "2026-09-14" posts 0,00 EUR to "assets:wallet" with assertion "= 0,00 EUR"
 
-    @wip
     Scenario: the opening balance is the day before the oldest row
       Given a Postbank CSV "x.csv" for IBAN "DE91100000000123456789" with closing balance 5,00 EUR:
         | date      | type       | payee | purpose | amount |
@@ -373,7 +337,7 @@ Feature: Import — writing, assertions, opening balance, staging and quitting
       When I create the account "assets:wallet" from "x.csv" and import every row
       Then the journal's "opening balance" is dated "2025-12-31"
 
-    @proposed @wip
+    @proposed
     Scenario: the opening balance is written to the main journal even when other accounts live in includes
       Given the journal "household" where every transaction lives in included file "sub/all.journal"
       And I start konto
@@ -381,7 +345,6 @@ Feature: Import — writing, assertions, opening balance, staging and quitting
       Then the main journal contains "account assets:holiday"
       And the main journal contains the opening balance for "assets:holiday"
 
-    @wip
     Scenario: a later CSV for the new account dedups against the first import
       Given I create the account "assets:holiday" and import every row
       When I open "new.csv" in Import

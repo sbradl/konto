@@ -42,7 +42,7 @@ func (m Model) content() string {
 	if m.ledger == nil {
 		return m.centred("loading journal…")
 	}
-	return m.withPopup(m.views())
+	return m.withPreview(m.withPopup(m.views()))
 }
 
 // views is the normal screen: tab bar, rule, the active view, status bar.

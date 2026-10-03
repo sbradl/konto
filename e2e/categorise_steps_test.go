@@ -12,7 +12,7 @@ import (
 )
 
 // dialogTitle is the top edge of a categorising dialog: a rule with the title inset, like a popup.
-var dialogTitle = regexp.MustCompile(`^─ (categorise|new rule|add to rule|widen rule \d+|category) `)
+var dialogTitle = regexp.MustCompile(`^─ (categorise|new rule|add to rule|widen rule \d+|category|create account|write) `)
 
 // dialog is the categorising dialog as drawn: its title and the rows below it down to the status bar.
 type dialog struct {
@@ -93,6 +93,7 @@ func (d dialog) listRows() []string {
 
 // selectRow moves the cursor of the table to the row of the description (and date, when given).
 func (w *world) selectRow(description, date string) error {
+	w.leftRow = description
 	if err := w.press("Home"); err != nil {
 		return err
 	}

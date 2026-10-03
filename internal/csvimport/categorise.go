@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/sbradl/konto/internal/domain"
 )
@@ -15,7 +16,7 @@ const ClearingAccount = "assets:transfers"
 // field is what the row says in the named export column.
 func (r Row) field(name string) string {
 	switch name {
-	case "payee":
+	case payeeKey:
 		return r.Payee
 	case "type":
 		return r.Type
@@ -30,7 +31,7 @@ func (r Row) MatchField() string {
 	if r.Payee == "" {
 		return "type"
 	}
-	return "payee"
+	return payeeKey
 }
 
 // IsTransfer reports a row posted against an asset or liability account instead of a category.
@@ -154,16 +155,46 @@ func (s Staged) Create(name string) (Staged, Candidate, error) {
 	if name == "" {
 		return s, Candidate{}, domain.RefusalError{Reason: "the category needs a name"}
 	}
-	for _, existing := range s.allNames() {
-		if leaf(existing) == leaf(name) {
-			return s, Candidate{}, domain.RefusalError{
-				Reason: "the name " + leaf(name) + " is already used by " + existing,
-			}
-		}
+	if err := s.checkLeaf(name); err != nil {
+		return s, Candidate{}, err
 	}
 	next := s
 	next.NewAccounts = append(slices.Clone(s.NewAccounts), name)
 	return next, Candidate{Name: name, Target: name}, nil
+}
+
+// checkLeaf refuses a name whose last part some account already ends in.
+func (s Staged) checkLeaf(name string) error {
+	for _, existing := range s.allNames() {
+		if leaf(existing) == leaf(name) {
+			return domain.RefusalError{Reason: "the name " + leaf(name) + " is already used by " + existing}
+		}
+	}
+	return nil
+}
+
+// SuggestAccountName is the name offered for the account a new IBAN stands for.
+func SuggestAccountName(iban string) string {
+	return "assets:account-" + iban[max(0, len(iban)-suffixDigits):]
+}
+
+const suffixDigits = 4
+
+// Name gives the account a new IBAN stands for its name: an asset or a liability, with a leaf no other
+// account has.
+func (s Staged) Name(name string) (Staged, error) {
+	switch {
+	case name == "":
+		return s, domain.RefusalError{Reason: "the account needs a name"}
+	case !isBalanceAccount(name):
+		return s, domain.RefusalError{Reason: "the account must be an assets: or liabilities: account"}
+	}
+	if err := s.checkLeaf(name); err != nil {
+		return s, err
+	}
+	next := s
+	next.Named = name
+	return next, nil
 }
 
 func (s Staged) allNames() []string {
@@ -338,4 +369,46 @@ func (s Staged) NetIncomeChange() domain.MultiAmount {
 // StagedRules are the rules this import adds or changes.
 func (s Staged) StagedRules() []Rule {
 	return slices.DeleteFunc(slices.Clone(s.Rules), func(r Rule) bool { return !r.Staged })
+}
+
+// identity is what makes a row the same row when the export is read again.
+func (r Row) identity() string {
+	return r.Date.Format(time.DateOnly) + "|" + r.Description + "|" + r.Amount.Format() + "|" + r.Purpose
+}
+
+// Carry brings what was staged in the earlier reading of this export over to this one, read again against a
+// journal that has since changed: the rules this import staged, the categories it created, the name it
+// gave the new account and the choices made for single rows. Rows the staged rules now match are
+// categorised by them.
+func (s Staged) Carry(earlier Staged) Staged {
+	next := s
+	next.NewAccounts = earlier.NewAccounts
+	if next.NewAccount {
+		next.Named = earlier.Named
+	}
+	next.Rules = slices.Clone(s.Rules)
+	for _, rule := range earlier.StagedRules() {
+		if i := slices.IndexFunc(next.Rules, func(r Rule) bool { return r.ID == rule.ID }); i >= 0 {
+			next.Rules[i] = rule
+		} else {
+			next.Rules = append(next.Rules, rule)
+		}
+	}
+	next.Rows = slices.Clone(s.Rows)
+	choices := map[string][]Row{}
+	for i := range earlier.Rows {
+		if row := earlier.Rows[i]; row.Once {
+			choices[row.identity()] = append(choices[row.identity()], row)
+		}
+	}
+	for i := range next.Rows {
+		if chosen := choices[next.Rows[i].identity()]; len(chosen) > 0 {
+			next.Rows[i].Target, next.Rows[i].RuleID, next.Rows[i].Once = chosen[0].Target, "", true
+			choices[next.Rows[i].identity()] = chosen[1:]
+		}
+	}
+	for _, rule := range earlier.StagedRules() {
+		next = next.apply(rule)
+	}
+	return next
 }

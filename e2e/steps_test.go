@@ -230,11 +230,17 @@ func (w *world) expectEditorCall(want string) error {
 }
 
 func registerFileSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^the journal contains$`, func(doc *godog.DocString) error { return expectFileBlock(w.journal, doc.Content) })
-	sc.Step(`^categories.rules contains$`, func(doc *godog.DocString) error { return expectFileBlock(w.rules, doc.Content) })
+	sc.Step(`^the journal contains$`, func(doc *godog.DocString) error {
+		return w.eventually(func() error { return expectFileBlock(w.journal, doc.Content) })
+	})
+	sc.Step(`^categories.rules contains$`, func(doc *godog.DocString) error {
+		return w.eventually(func() error { return expectFileBlock(w.rules, doc.Content) })
+	})
 	sc.Step(`^the journal is unchanged$`, w.expectJournalFilesUnchanged)
 	sc.Step(`^categories.rules is unchanged$`, func() error { return expectUnchanged(w.rules, w.rulesAtStart) })
-	sc.Step(`^(?:every )?hledger check passes$`, func() error { return runChecks(w.suite.realHledger, w.journal, false) })
+	sc.Step(`^(?:every )?hledger check passes$`, func() error {
+		return w.eventually(func() error { return runChecks(w.suite.realHledger, w.journal, false) })
+	})
 	sc.Step(`^every hledger check passes individually$`, func() error { return runChecks(w.suite.realHledger, w.journal, true) })
 }
 

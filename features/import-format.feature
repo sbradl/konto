@@ -12,8 +12,7 @@ Feature: Import — Postbank CSV format mechanics
 
   Rule: Raw file layout
 
-    @wip
-    Scenario: preamble, trailer and value dates are ignored; booking date and trailer balance are used
+    Background:
       Given the download directory contains "raw.csv" with these exact bytes (UTF-8 BOM first, LF line ends):
         """
         Umsätze
@@ -28,7 +27,8 @@ Feature: Import — Postbank CSV format mechanics
         29.9.2026;29.9.2026;Gutschrift;Oma;Geburtstag;DE00000000000000000002;ABCDEFGH;ref2;;;;1.023,45;;;;;1.023,45;EUR
         Kontostand;30.9.2026;;;14.261,45;EUR
         """
-      And I start konto
+    Scenario: preamble, trailer and value dates are ignored; booking date and trailer balance are used
+      Given I start konto
       When I press "2"
       And I open "raw.csv" in Import
       Then the row table has exactly 2 rows
@@ -37,23 +37,18 @@ Feature: Import — Postbank CSV format mechanics
       And the info block shows account "assets:checking"
       And no row is dated "2026-10-01"
       And no row is named "Kontostand"
-
-    @wip
     Scenario: the trailer balance, not "Letzter Kontostand", becomes the assertion
-      Given the download directory contains "raw.csv" with the exact bytes of the previous scenario
-      And I start konto
+      Given I start konto
       When I import "raw.csv" categorising every row
       Then the newest imported transaction has the assertion "= 14.261,45 EUR" on "assets:checking"
       And no assertion in the journal mentions "99.999,99"
-
-    @wip
     Scenario Outline: German amounts
       Given a Postbank CSV "a.csv" for IBAN "DE89370400440532013000" with closing balance 13.240,00 EUR:
         | date      | type          | payee | purpose | amount   |
         | 29.9.2026 | Kartenzahlung | Kiosk | x       | <amount> |
       And I start konto
       When I open "a.csv" in Import
-      Then the row "Kiosk" shows "<shown>"
+      Then the table row "Kiosk" shows "<shown>"
 
       Examples:
         | amount      | shown          |
@@ -62,8 +57,6 @@ Feature: Import — Postbank CSV format mechanics
         | 1.000.000,00| 1.000.000,00 EUR |
         | 0,01        | 0,01 EUR       |
         | -0,01       | -0,01 EUR      |
-
-    @wip
     Scenario Outline: dates without zero padding
       Given a Postbank CSV "d.csv" for IBAN "DE89370400440532013000" with closing balance 13.240,00 EUR:
         | date   | type          | payee | purpose | amount |
@@ -80,8 +73,6 @@ Feature: Import — Postbank CSV format mechanics
         | 31.12.2026 | 2026-12-31 |
         | 1.1.2027   | 2027-01-01 |
         | 29.2.2028  | 2028-02-29 |
-
-    @wip
     Scenario: umlauts and symbols survive
       Given a Postbank CSV "u.csv" for IBAN "DE89370400440532013000" with closing balance 13.239,00 EUR:
         | date      | type          | payee              | purpose | amount |
@@ -89,8 +80,6 @@ Feature: Import — Postbank CSV format mechanics
       And I start konto
       When I open "u.csv" in Import
       Then the row "Bäckerei Müller & Söhne" is shown unmangled
-
-    @wip
     Scenario: the purpose is the transaction comment
       Given a Postbank CSV "p.csv" for IBAN "DE89370400440532013000" with closing balance 13.239,00 EUR:
         | date      | type          | payee | purpose      | amount |
@@ -101,8 +90,6 @@ Feature: Import — Postbank CSV format mechanics
         """
         2026-09-29 Kiosk  ; Zeitung vom Montag
         """
-
-    @wip
     Scenario: an empty payee falls back to the transaction type as description
       Given a Postbank CSV "e.csv" for IBAN "DE89370400440532013000" with closing balance 13.140,00 EUR:
         | date      | type       | payee | purpose     | amount  |
@@ -113,8 +100,6 @@ Feature: Import — Postbank CSV format mechanics
         """
         2026-09-29 Auszahlung  ; Geldautomat
         """
-
-    @wip
     Scenario: identical same-day rows are both imported
       Given a Postbank CSV "i.csv" for IBAN "DE89370400440532013000" with closing balance 13.233,60 EUR:
         | date      | type          | payee      | purpose | amount |
@@ -123,8 +108,6 @@ Feature: Import — Postbank CSV format mechanics
       And I start konto
       When I import "i.csv" categorising every row
       Then the journal has exactly 2 "Kaffeehaus" transactions on "2026-09-28"
-
-    @wip
     Scenario: rows are written oldest-first although the CSV is newest-first
       Given a Postbank CSV "o.csv" for IBAN "DE89370400440532013000" with closing balance 13.237,00 EUR:
         | date      | type          | payee | purpose | amount |
@@ -133,8 +116,6 @@ Feature: Import — Postbank CSV format mechanics
       And I start konto
       When I import "o.csv" categorising every row
       Then in the journal "A" on "2026-09-29" is above "B" on "2026-09-30"
-
-    @wip
     Scenario: two exports with an overlapping period import cleanly one after the other
       Given a Postbank CSV "first.csv" for IBAN "DE89370400440532013000" with closing balance 13.238,00 EUR:
         | date      | type          | payee | purpose | amount |
@@ -149,8 +130,6 @@ Feature: Import — Postbank CSV format mechanics
       Then the journal has exactly 1 "A" transaction on "2026-09-28"
       And the journal has exactly 1 "B" transaction on "2026-09-29"
       And the journal balance of "assets:checking" is 13.236,00 EUR
-
-    @wip
     Scenario: the currency column is EUR
       Given a Postbank CSV "a.csv" for IBAN "DE89370400440532013000" with closing balance 13.239,00 EUR:
         | date      | type          | payee | purpose | amount |
@@ -161,7 +140,7 @@ Feature: Import — Postbank CSV format mechanics
 
   Rule: Malformed content
 
-    @proposed @wip
+    @proposed
     Scenario Outline: a broken row is reported, never written, never a crash
       Given a Postbank CSV "m.csv" for IBAN "DE89370400440532013000" with closing balance 13.239,00 EUR and a broken row "<row>"
       And I start konto
@@ -176,7 +155,7 @@ Feature: Import — Postbank CSV format mechanics
         | 29.9.2026;;Kartenzahlung;X;y;;;;;;;abc;;;;;;EUR    |
         | 29.9.2026                                |
 
-    @proposed @wip
+    @proposed
     Scenario: a trailing empty line is harmless
       Given a Postbank CSV "t.csv" for IBAN "DE89370400440532013000" with closing balance 13.239,00 EUR and a trailing blank line:
         | date      | type          | payee | purpose | amount |
@@ -185,7 +164,7 @@ Feature: Import — Postbank CSV format mechanics
       When I open "t.csv" in Import
       Then the row table has exactly 1 row
 
-    @proposed @wip
+    @proposed
     Scenario: CRLF line endings are tolerated
       Given a Postbank CSV "crlf.csv" for IBAN "DE89370400440532013000" with closing balance 13.239,00 EUR and CRLF line endings:
         | date      | type          | payee | purpose | amount |
