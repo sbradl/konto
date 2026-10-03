@@ -10,6 +10,8 @@ import "charm.land/lipgloss/v2"
 var (
 	// Dim styles labels, borders and secondary text.
 	Dim = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+	// Bold styles figures that stand out.
+	Bold = lipgloss.NewStyle().Bold(true)
 	// Negative styles negative amounts: ANSI red.
 	Negative = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
 	// Ok styles a passing result: ANSI green.

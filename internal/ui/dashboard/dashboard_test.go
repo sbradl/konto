@@ -39,7 +39,7 @@ var escapes = regexp.MustCompile(`\x1b\[[0-9;:]*m`)
 
 func plain(s string) string { return escapes.ReplaceAllString(s, "") }
 
-func lines(m Model) []string { return strings.Split(plain(m.View()), "\n") }
+func lines(m Model) []string { return strings.Split(plain(m.accountsPanel()), "\n") }
 
 func TestAccountsListsAssetsAndLiabilitiesOpenFirstThenClosedEachByName(t *testing.T) {
 	got := lines(loaded(20))
@@ -107,7 +107,7 @@ func TestClosedAccountsShowTheirClosedDate(t *testing.T) {
 }
 
 func TestStylesCarryTheAnsiColours(t *testing.T) {
-	raw := strings.Split(loaded(20).View(), "\n")
+	raw := strings.Split(loaded(20).accountsPanel(), "\n")
 
 	if !strings.Contains(raw[6], "\x1b[31m") { // creditcard is negative: ANSI red
 		t.Errorf("negative balance is not red: %q", raw[6])
@@ -178,7 +178,7 @@ func TestTheCursorRowStaysVisibleWhenTheListScrolls(t *testing.T) {
 	if !strings.Contains(got[1], "assets:savings") || !strings.Contains(got[3], "liabilities:creditcard") {
 		t.Errorf("scrolled panel:\n%s", strings.Join(got, "\n"))
 	}
-	if raw := strings.Split(m.View(), "\n"); !strings.Contains(raw[3], ";100m") {
+	if raw := strings.Split(m.accountsPanel(), "\n"); !strings.Contains(raw[3], ";100m") {
 		t.Errorf("the cursor row should be highlighted after scrolling: %q", raw[3])
 	}
 	if m = m.Move("home"); !strings.Contains(lines(m)[1], "assets:cash") {
@@ -252,5 +252,114 @@ func TestSelectedIsTheAccountUnderTheCursor(t *testing.T) {
 	}
 	if _, ok := New().Selected(); ok {
 		t.Error("an empty panel selects nothing")
+	}
+}
+
+func ledgerFigures() domain.Ledger {
+	return domain.Ledger{
+		Accounts: accounts(),
+		Month: domain.MonthSummary{
+			Month: time.September, Income: eur(300000), Expenses: eur(118500),
+		},
+	}
+}
+
+func viewLines(m Model) []string { return strings.Split(plain(m.View()), "\n") }
+
+func TestStatCardsShowNetWorthAndTheMonthsNetIncome(t *testing.T) {
+	m := New().Resize(180, 20).WithLedger(ledgerFigures())
+
+	got := strings.Join(viewLines(m), "\n")
+
+	for _, want := range []string{
+		"╭─ NET WORTH ", "╭─ SEPTEMBER NET INCOME ", "1.815,00 EUR", "3.000,00 in / 1.185,00 out", "open assets + liabilities",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("view lacks %q:\n%s", want, got)
+		}
+	}
+	// open assets and liabilities: 50,00 + 13.240,00 + 1,00 + 13.500,00 + 0 - 140,00
+	if !strings.Contains(got, "26.651,00 EUR") {
+		t.Errorf("net worth should sum the open assets and liabilities:\n%s", got)
+	}
+}
+
+func TestCardsSitRightOfTheAccountsPanelAndTheViewFillsTheHeight(t *testing.T) {
+	got := viewLines(New().Resize(180, 20).WithLedger(ledgerFigures()))
+
+	if len(got) != 20 {
+		t.Errorf("view has %d rows, want 20", len(got))
+	}
+	if !strings.HasPrefix(got[0], "╭─ ACCOUNTS ") || !strings.Contains(got[0], "╮╭─ NET WORTH ") {
+		t.Errorf("first row = %q, want the Accounts panel then the cards", got[0])
+	}
+	for _, line := range got {
+		if w := lipgloss.Width(line); w > 180 {
+			t.Errorf("line is %d wide, want at most 180: %q", w, line)
+		}
+	}
+	if !strings.HasPrefix(got[cardHeight], "│ ") || strings.Contains(got[cardHeight], "╭") {
+		t.Errorf("row under the cards = %q, want the panel continuing alone", got[cardHeight])
+	}
+}
+
+func TestNetIncomeIsGreenOrRedBySign(t *testing.T) {
+	positive := New().Resize(180, 20).WithLedger(ledgerFigures()).View()
+	negativeLedger := ledgerFigures()
+	negativeLedger.Month.Income = eur(0)
+	negative := New().Resize(180, 20).WithLedger(negativeLedger).View()
+
+	if !strings.Contains(positive, "\x1b[32m1.815,00 EUR") {
+		t.Errorf("positive net income should be green: %q", strings.Split(positive, "\n")[1])
+	}
+	if !strings.Contains(negative, "\x1b[31m-1.185,00 EUR") {
+		t.Errorf("negative net income should be red: %q", strings.Split(negative, "\n")[1])
+	}
+}
+
+func TestCardsGiveWayOnANarrowScreen(t *testing.T) {
+	m := New().Resize(100, 20).WithLedger(ledgerFigures())
+
+	if got := strings.Join(viewLines(m), "\n"); strings.Contains(got, "NET WORTH") {
+		t.Errorf("a screen too narrow for two cards should show the Accounts panel alone:\n%s", got)
+	}
+}
+
+func TestAMonthWithoutActivityShowsZeros(t *testing.T) {
+	ledger := domain.Ledger{Accounts: accounts(), Month: domain.MonthSummary{Month: time.October}}
+
+	got := strings.Join(viewLines(New().Resize(180, 20).WithLedger(ledger)), "\n")
+
+	if !strings.Contains(got, "OCTOBER NET INCOME") || !strings.Contains(got, "0,00 EUR") || !strings.Contains(got, "0,00 in / 0,00 out") {
+		t.Errorf("view should show zeros for an empty month:\n%s", got)
+	}
+}
+
+func TestSeveralCommoditiesShowAsExtraCounts(t *testing.T) {
+	pln := domain.MultiAmount{{Commodity: "PLN", Mantissa: 100, Places: 2, Style: euro}}
+	ledger := ledgerFigures()
+	ledger.Month.Income = ledger.Month.Income.Plus(pln)
+
+	if got := strings.Join(viewLines(New().Resize(180, 20).WithLedger(ledger)), "\n"); !strings.Contains(got, "3.000,00 EUR + 1 cur in") {
+		t.Errorf("a multi-commodity figure should read + N cur:\n%s", got)
+	}
+}
+
+func TestCardsAppearOnceTwoMinimumWidthsFitBesideThePanel(t *testing.T) {
+	// The Accounts panel is 50 wide at these sizes, so the cards get what is left.
+	for width, want := range map[int]bool{105: false, 106: true} {
+		got := strings.Contains(strings.Join(viewLines(New().Resize(width, 20).WithLedger(ledgerFigures())), "\n"), "NET WORTH")
+
+		if got != want {
+			t.Errorf("width %d: cards shown = %v, want %v", width, got, want)
+		}
+	}
+}
+
+func TestACardWithoutAnyFigureStillRenders(t *testing.T) {
+	ledger := domain.Ledger{Accounts: []domain.Account{{Name: "assets:new"}}, Month: domain.MonthSummary{Month: time.June}}
+
+	if got := strings.Join(viewLines(New().Resize(180, 20).WithLedger(ledger)), "\n"); !strings.Contains(got, "JUNE NET INCOME") {
+		t.Errorf("view should still show the cards:\n%s", got)
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/cucumber/godog"
@@ -289,12 +290,12 @@ func (w *world) expectColour(text string, want int) error {
 	if !s.waitFor(w.suite.timeout, func(screen string) bool { return strings.Contains(screen, text) }) {
 		return fmt.Errorf("%q is not on screen:\n%s", text, s.screenText())
 	}
-	x, y, found := s.find(text)
-	if !found {
+	seen := s.colours(text)
+	if len(seen) == 0 {
 		return fmt.Errorf("%q left the screen before its colour was read", text)
 	}
-	if got := s.cellColour(x, y); got != want {
-		return fmt.Errorf("%q is coloured %d, want %d", text, got, want)
+	if !slices.Contains(seen, want) {
+		return fmt.Errorf("%q is coloured %v, want %d", text, seen, want)
 	}
 	return nil
 }

@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sbradl/konto/internal/domain"
 )
@@ -59,7 +60,7 @@ func TestBalancesAsksForAFlatReportIncludingEmptyAccounts(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	want := []string{"-f", "/data/main.journal", "bal", "--flat", "-E", "-O", "json"}
+	want := []string{"-f", "/data/main.journal", "bal", "--flat", "-O", "json", "-E"}
 	if len(calls) != 1 || !reflect.DeepEqual(calls[0].args, want) {
 		t.Errorf("calls = %+v, want one call with %v", calls, want)
 	}
@@ -91,5 +92,24 @@ func TestBalancesRejectsGarbage(t *testing.T) {
 		if _, err := client.Balances(context.Background()); err == nil {
 			t.Errorf("%s: expected an error, got nil", name)
 		}
+	}
+}
+
+func TestPeriodActivityAsksForIncomeAndExpensesOverTheInclusivePeriod(t *testing.T) {
+	var calls []call
+	client := newClient(recording(balanceReport(row("expenses:rent", amountJSON("EUR", 90000, eurStyle))), nil, &calls), "/data/main.journal")
+
+	got, err := client.PeriodActivity(context.Background(),
+		time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	want := []string{"-f", "/data/main.journal", "bal", "--flat", "-O", "json", "-b", "2026-09-01", "-e", "2026-10-01", "^expenses:", "^income:"}
+	if len(calls) != 1 || !reflect.DeepEqual(calls[0].args, want) {
+		t.Errorf("calls = %+v, want one call with %v", calls, want)
+	}
+	if len(got) != 1 || got[0].Name != "expenses:rent" {
+		t.Errorf("accounts = %+v, want expenses:rent", got)
 	}
 }

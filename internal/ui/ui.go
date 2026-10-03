@@ -172,7 +172,7 @@ func (m Model) onLoaded(loaded ledgerLoadedMsg) Model {
 	}
 	m.refreshErr = nil
 	m.ledger, m.loadErr = &loaded.ledger, loaded.err
-	m.dash = m.dash.WithAccounts(loaded.ledger.Accounts)
+	m.dash = m.dash.WithLedger(loaded.ledger)
 	if loaded.err == nil {
 		m.run = &loaded.run
 		m.checkCursor = max(0, min(m.checkCursor, len(loaded.run.Issues)-1))

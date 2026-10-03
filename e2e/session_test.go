@@ -257,6 +257,23 @@ func (s *session) backgrounds() map[int]bool {
 	return seen
 }
 
+// colours are the foreground colours of every occurrence of text on screen (-1 where not ANSI-16).
+func (s *session) colours(text string) []int {
+	var seen []int
+	for y, line := range s.screenLines() {
+		for offset := 0; ; {
+			before, _, found := strings.Cut(line[offset:], text)
+			if !found {
+				break
+			}
+			x := ansi.StringWidth(line[:offset+len(before)])
+			seen = append(seen, s.cellColour(x, y))
+			offset += len(before) + len(text)
+		}
+	}
+	return seen
+}
+
 // find returns the cell position of the first occurrence of text on screen.
 func (s *session) find(text string) (x, y int, ok bool) {
 	for y, line := range s.screenLines() {

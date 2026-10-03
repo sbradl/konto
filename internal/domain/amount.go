@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -27,7 +28,7 @@ func (a Amount) IsNegative() bool { return a.Mantissa < 0 }
 
 // Format renders the amount the way hledger would, e.g. "-13.240,00 EUR".
 func (a Amount) Format() string {
-	number := a.formatNumber()
+	number := a.digits()
 	if a.Commodity == "" {
 		return number
 	}
@@ -41,7 +42,7 @@ func (a Amount) Format() string {
 	return number + gap + a.Commodity
 }
 
-func (a Amount) formatNumber() string {
+func (a Amount) digits() string {
 	magnitude := a.Mantissa
 	sign := ""
 	if magnitude < 0 {
@@ -99,4 +100,50 @@ func (m MultiAmount) Format() string {
 		text += " + " + strconv.Itoa(extra) + " cur"
 	}
 	return text
+}
+
+// FormatNumber renders the quantity alone, without the commodity symbol: "13.240,00".
+func (a Amount) FormatNumber() string { return a.digits() }
+
+// Negated is the amount with its sign flipped.
+func (a Amount) Negated() Amount {
+	a.Mantissa = -a.Mantissa
+	return a
+}
+
+// plus adds an amount of the same commodity, keeping the finer precision of the two.
+func (a Amount) plus(b Amount) Amount {
+	for a.Places < b.Places {
+		a.Mantissa, a.Places = a.Mantissa*decimalBase, a.Places+1
+	}
+	for b.Places < a.Places {
+		b.Mantissa, b.Places = b.Mantissa*decimalBase, b.Places+1
+	}
+	a.Mantissa += b.Mantissa
+	return a
+}
+
+const decimalBase = 10
+
+// Plus is the commodity-wise sum of two multi-amounts, in the order commodities first appear.
+func (m MultiAmount) Plus(other MultiAmount) MultiAmount {
+	sum := slices.Clone(m)
+	for _, amount := range other {
+		i := slices.IndexFunc(sum, func(have Amount) bool { return have.Commodity == amount.Commodity })
+		if i < 0 {
+			sum = append(sum, amount)
+			continue
+		}
+		sum[i] = sum[i].plus(amount)
+	}
+	return sum
+}
+
+// Negated flips the sign of every amount.
+func (m MultiAmount) Negated() MultiAmount {
+	negated := make(MultiAmount, len(m))
+	for i, amount := range m {
+		negated[i] = amount.Negated()
+	}
+	return negated
 }

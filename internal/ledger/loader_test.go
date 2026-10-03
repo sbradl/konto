@@ -16,11 +16,30 @@ type fakeGateway struct {
 	accounts     []domain.Account
 	err          error
 	balancesErr  error
+	activity     []domain.Account
+	activityErr  error
 }
 
 func (f fakeGateway) Print(context.Context) ([]domain.Transaction, error) {
 	return f.transactions, f.err
 }
+
+func (f fakeGateway) PeriodActivity(context.Context, time.Time, time.Time) ([]domain.Account, error) {
+	return f.activity, f.activityErr
+}
+
+// periodRecorder notes the period the loader asked for.
+type periodRecorder struct {
+	fakeGateway
+	first, last time.Time
+}
+
+func (p *periodRecorder) PeriodActivity(_ context.Context, first, last time.Time) ([]domain.Account, error) {
+	p.first, p.last = first, last
+	return p.activity, nil
+}
+
+var sept30 = func() time.Time { return time.Date(2026, 9, 30, 15, 0, 0, 0, time.UTC) }
 
 func (f fakeGateway) Balances(context.Context) ([]domain.Account, error) {
 	return f.accounts, f.balancesErr
@@ -45,7 +64,7 @@ var present = fakeFile{exists: true}
 func TestLoadReturnsSnapshotOfTheJournal(t *testing.T) {
 	transactions := []domain.Transaction{{Description: "Rent"}, {Description: "Salary"}}
 
-	got, err := NewLoader(fakeGateway{transactions: transactions}, present).Load(context.Background())
+	got, err := NewLoader(fakeGateway{transactions: transactions}, present, sept30).Load(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -56,7 +75,7 @@ func TestLoadReturnsSnapshotOfTheJournal(t *testing.T) {
 
 // A failing hledger call fails the load, with context.
 func TestLoadReportsGatewayFailure(t *testing.T) {
-	_, err := NewLoader(fakeGateway{err: errors.New("exit status 1")}, present).Load(context.Background())
+	_, err := NewLoader(fakeGateway{err: errors.New("exit status 1")}, present, sept30).Load(context.Background())
 
 	if err == nil || !strings.Contains(err.Error(), "exit status 1") {
 		t.Errorf("expected an error carrying the cause, got: %v", err)
@@ -67,7 +86,7 @@ func TestLoadReportsGatewayFailure(t *testing.T) {
 func TestLoadReportsMissingJournal(t *testing.T) {
 	gw := fakeGateway{err: errors.New("hledger must not be called")}
 
-	_, err := NewLoader(gw, fakeFile{exists: false}).Load(context.Background())
+	_, err := NewLoader(gw, fakeFile{exists: false}, sept30).Load(context.Background())
 
 	if !errors.Is(err, ErrNoJournal) {
 		t.Errorf("error = %v, want ErrNoJournal", err)
@@ -76,7 +95,7 @@ func TestLoadReportsMissingJournal(t *testing.T) {
 
 // A journal file that cannot be inspected fails the load.
 func TestLoadReportsUnreadableJournal(t *testing.T) {
-	_, err := NewLoader(fakeGateway{}, fakeFile{err: errors.New("permission denied")}).Load(context.Background())
+	_, err := NewLoader(fakeGateway{}, fakeFile{err: errors.New("permission denied")}, sept30).Load(context.Background())
 
 	if err == nil || errors.Is(err, ErrNoJournal) || !strings.Contains(err.Error(), "permission denied") {
 		t.Errorf("expected an error carrying the cause, got: %v", err)
@@ -87,7 +106,7 @@ func TestLoadReportsUnreadableJournal(t *testing.T) {
 func TestLoadKeepsTheJournalError(t *testing.T) {
 	issue := domain.CheckIssue{Check: "parseable", Severity: domain.SeverityErr, File: "j", Line: 1, Col: 1}
 
-	_, err := NewLoader(fakeGateway{err: domain.JournalError{Issue: issue}}, present).Load(context.Background())
+	_, err := NewLoader(fakeGateway{err: domain.JournalError{Issue: issue}}, present, sept30).Load(context.Background())
 
 	var got domain.JournalError
 	if !errors.As(err, &got) || got.Issue != issue {
@@ -106,7 +125,7 @@ func TestLoadDeclaresAccountsFromTheirDirectives(t *testing.T) {
 		{Name: "assets:new", Source: domain.SourceManual}, // a repeated directive adds nothing
 	}}
 
-	got, err := NewLoader(gw, file).Load(context.Background())
+	got, err := NewLoader(gw, file, sept30).Load(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -124,11 +143,48 @@ func TestLoadDeclaresAccountsFromTheirDirectives(t *testing.T) {
 
 func TestLoadReportsBalanceAndDirectiveFailures(t *testing.T) {
 	for name, loader := range map[string]*Loader{
-		"balances":   NewLoader(fakeGateway{balancesErr: errors.New("bal failed")}, present),
-		"directives": NewLoader(fakeGateway{}, fakeFile{exists: true, declareErr: errors.New("read failed")}),
+		"balances":   NewLoader(fakeGateway{balancesErr: errors.New("bal failed")}, present, sept30),
+		"directives": NewLoader(fakeGateway{}, fakeFile{exists: true, declareErr: errors.New("read failed")}, sept30),
 	} {
 		if _, err := loader.Load(context.Background()); err == nil || !strings.Contains(err.Error(), "failed") {
 			t.Errorf("%s: expected an error carrying the cause, got: %v", name, err)
 		}
+	}
+}
+
+func eur(mantissa int64) domain.MultiAmount {
+	style := domain.AmountStyle{Spaced: true, DecimalMark: ",", GroupMark: ".", GroupSize: 3}
+	return domain.MultiAmount{{Commodity: "EUR", Mantissa: mantissa, Places: 2, Style: style}}
+}
+
+// The month to date runs from the first of today's month through today; income is shown as a positive figure.
+func TestLoadSummarisesTheMonthToDate(t *testing.T) {
+	gw := &periodRecorder{}
+	gw.activity = []domain.Account{
+		{Name: "income:salary", Balance: eur(-300000)},
+		{Name: "expenses:rent", Balance: eur(90000)},
+		{Name: "expenses:groceries", Balance: eur(25000)},
+		{Name: "assets:odd", Balance: eur(1)},
+	}
+
+	got, err := NewLoader(gw, present, sept30).Load(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if want := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC); !gw.first.Equal(want) || gw.last.Day() != 30 {
+		t.Errorf("period = %v to %v, want 2026-09-01 through 2026-09-30", gw.first, gw.last)
+	}
+	month := got.Month
+	if month.Month != time.September || month.Income[0].Mantissa != 300000 || month.Expenses[0].Mantissa != 115000 {
+		t.Errorf("month = %+v, want September, 3.000,00 in and 1.150,00 out", month)
+	}
+}
+
+func TestLoadReportsAFailureToSummariseTheMonth(t *testing.T) {
+	_, err := NewLoader(fakeGateway{activityErr: errors.New("period failed")}, present, sept30).Load(context.Background())
+
+	if err == nil || !strings.Contains(err.Error(), "period failed") {
+		t.Errorf("expected an error carrying the cause, got: %v", err)
 	}
 }

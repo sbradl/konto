@@ -143,7 +143,8 @@ type world struct {
 	baseline       string
 	tabAtBaseline  string
 	lastStepType   string
-	focusedRow     string // the checks panel row a step last looked at
+	focusedCard    statCard // the stat card a step last looked at
+	focusedRow     string   // the checks panel row a step last looked at
 }
 
 func newWorld(s *suite) (*world, error) {

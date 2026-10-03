@@ -1,6 +1,9 @@
 package domain
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
 
 var euro = AmountStyle{Spaced: true, DecimalMark: ",", GroupMark: ".", GroupSize: 3}
 
@@ -81,5 +84,52 @@ func TestMultiAmountIsAllNegative(t *testing.T) {
 func TestAmountFormatPadsAFractionOnlyQuantity(t *testing.T) {
 	if got := eur(50).Format(); got != "0,50 EUR" {
 		t.Errorf("Format() = %q, want 0,50 EUR", got)
+	}
+}
+
+func TestAmountFormatNumberOmitsTheCommodity(t *testing.T) {
+	if got := eur(-1324000).FormatNumber(); got != "-13.240,00" {
+		t.Errorf("FormatNumber() = %q, want -13.240,00", got)
+	}
+}
+
+func TestAmountNegatedFlipsTheSign(t *testing.T) {
+	if got := eur(5).Negated(); got.Mantissa != -5 || got.Commodity != "EUR" {
+		t.Errorf("Negated() = %+v", got)
+	}
+}
+
+func TestMultiAmountPlusAddsCommodityWise(t *testing.T) {
+	pln := Amount{Commodity: "PLN", Mantissa: 100, Places: 2, Style: euro}
+
+	got := MultiAmount{eur(100)}.Plus(MultiAmount{pln, eur(250)})
+
+	if want := (MultiAmount{eur(350), pln}); !reflect.DeepEqual(got, want) {
+		t.Errorf("Plus = %+v, want %+v", got, want)
+	}
+	if got := MultiAmount(nil).Plus(MultiAmount{eur(1)}); !reflect.DeepEqual(got, MultiAmount{eur(1)}) {
+		t.Errorf("nil.Plus = %+v", got)
+	}
+}
+
+func TestMultiAmountPlusAlignsThePrecision(t *testing.T) {
+	coarse := Amount{Commodity: "EUR", Mantissa: 5, Places: 0, Style: euro} // 5
+	fine := Amount{Commodity: "EUR", Mantissa: 125, Places: 2, Style: euro} // 1,25
+
+	for name, got := range map[string]MultiAmount{
+		"coarse first": MultiAmount{coarse}.Plus(MultiAmount{fine}),
+		"fine first":   MultiAmount{fine}.Plus(MultiAmount{coarse}),
+	} {
+		if len(got) != 1 || got[0].Mantissa != 625 || got[0].Places != 2 {
+			t.Errorf("%s: sum = %+v, want 6,25", name, got)
+		}
+	}
+}
+
+func TestMultiAmountNegatedFlipsEveryAmount(t *testing.T) {
+	got := MultiAmount{eur(1), eur(-2)}.Negated()
+
+	if got[0].Mantissa != -1 || got[1].Mantissa != 2 {
+		t.Errorf("Negated = %+v", got)
 	}
 }

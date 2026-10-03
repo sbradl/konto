@@ -34,10 +34,11 @@ func main() {
 func runProgram(cfg config.Config) error {
 	file := journal.NewFile(cfg.JournalPath)
 	client := hledger.New("hledger", cfg.JournalPath)
-	loader := ledger.NewLoader(client, file)
+	today := todayFunc(os.Getenv, time.Now)
+	loader := ledger.NewLoader(client, file, today)
 	_, err := tea.NewProgram(ui.New(cfg.JournalPath, ui.Ports{
 		Loader: loader, Checker: checks.NewRunner(client), Creator: file, Editor: openInEditor,
-		Accounts: accounts.NewService(file, todayFunc(os.Getenv, time.Now)), Writer: file,
+		Accounts: accounts.NewService(file, today), Writer: file,
 	})).Run()
 	return err //nolint:wrapcheck // the program's own error is already self-describing
 }

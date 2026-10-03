@@ -17,15 +17,38 @@ const (
 	minAccountsWidth = 50 // the Accounts column is a third of the screen, but never narrower than this
 	columnDivisor    = 3
 	panelChrome      = 2 // border rows or columns around the panel body
+	cardHeight       = 4 // a stat card: border, figure, note, border
+	cardCount        = 2
+	minCardWidth     = 28 // narrower than this the cards give way
 )
 
 // Model is the Dashboard's view-local state; the ledger is replaced wholesale on refresh.
 type Model struct {
 	accounts []domain.Account
+	figures  figures
 	cursor   int
 	offset   int // the first visible row
 	width    int
 	height   int
+}
+
+// figures are the numbers the stat cards show.
+type figures struct {
+	netWorth domain.MultiAmount
+	month    time.Month
+	net      domain.MultiAmount
+	income   domain.MultiAmount
+	expenses domain.MultiAmount
+}
+
+// WithLedger shows a fresh snapshot: its accounts and the stat cards' figures.
+func (m Model) WithLedger(ledger domain.Ledger) Model {
+	next := m
+	next.figures = figures{
+		netWorth: ledger.NetWorth(), month: ledger.Month.Month,
+		net: ledger.MonthNet(), income: ledger.MonthIncome(), expenses: ledger.MonthExpenses(),
+	}
+	return next.WithAccounts(ledger.Accounts)
 }
 
 // New returns an empty Dashboard.
@@ -114,8 +137,51 @@ func (m Model) Selected() (domain.Account, bool) {
 	return m.accounts[m.cursor], true
 }
 
-// View draws the Accounts panel in the left column.
+// View draws the Accounts panel in the left column and the stat cards above whatever fills the right.
 func (m Model) View() string {
+	left := m.accountsPanel()
+	width := lipgloss.Width(left)
+	if m.width-width < 2*minCardWidth {
+		return left
+	}
+	cards := lipgloss.JoinHorizontal(lipgloss.Top, m.cards(m.width-width)...)
+	filler := strings.Repeat("\n", max(0, m.height-cardHeight-1))
+	return lipgloss.JoinHorizontal(lipgloss.Top, left, cards+filler)
+}
+
+// cards are the two stat cards sharing width between them.
+func (m Model) cards(width int) []string {
+	half := width / cardCount
+	net := m.figures.net
+	style := theme.Ok
+	if len(net) > 0 && net[0].IsNegative() {
+		style = theme.Negative
+	}
+	worthValue := theme.Bold.Render(m.figures.netWorth.Format())
+	worthNote := theme.Dim.Render("open assets + liabilities")
+	incomeNote := number(m.figures.income) + " in / " + number(m.figures.expenses) + " out"
+	incomeTitle := strings.ToUpper(m.figures.month.String()) + " NET INCOME"
+	return []string{
+		card("NET WORTH", half, worthValue, worthNote),
+		card(incomeTitle, width-half, style.Render(net.Format()), theme.Dim.Render(incomeNote)),
+	}
+}
+
+// card is a bordered figure with a note under it.
+func card(title string, width int, value, note string) string {
+	return layout.Panel(title, width, cardHeight, " "+value+"\n "+note)
+}
+
+// number is the amount without its commodity when there is just one, else as Format shows it.
+func number(amounts domain.MultiAmount) string {
+	if len(amounts) == 1 {
+		return amounts[0].FormatNumber()
+	}
+	return amounts.Format()
+}
+
+// accountsPanel is the Accounts panel, a third of the screen wide.
+func (m Model) accountsPanel() string {
 	width := min(m.width, max(minAccountsWidth, m.width/columnDivisor))
 	inner := max(0, width-panelChrome)
 	last := min(len(m.accounts), m.offset+m.pageSize())

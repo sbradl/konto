@@ -13,17 +13,14 @@ Feature: Dashboard
 
   Rule: Stat cards
 
-    @wip
     Scenario: net worth is the sum of open assets and liabilities
       Then I see a "NET WORTH" card showing "26.600,00 EUR"
 
-    @wip
     Scenario: net income card is the calendar month to date
       Then I see a "SEPTEMBER NET INCOME" card showing "1.815,00 EUR"
       And the card note reads "3.000,00 in / 1.185,00 out"
       And "1.815,00 EUR" is coloured 2
 
-    @wip
     Scenario: negative net income is red
       Given the journal "minimal" with appended text "\npayee Kiosk\naccount expenses:x\n2026-09-05 Kiosk\n    expenses:x  40,00 EUR\n    assets:transfers\n"
       And I start konto
@@ -31,40 +28,33 @@ Feature: Dashboard
       And "-40,00 EUR" is coloured 1
       And the card note reads "0,00 in / 40,00 out"
 
-    @wip
     Scenario: transfers are neither income nor expense
       Then the "SEPTEMBER NET INCOME" figure does not include the 500,00 EUR transfer to savings
 
-    @wip
     Scenario: month label follows today
       Given today is 2026-10-01
       And I start konto
       Then I see a "OCTOBER NET INCOME" card showing "0,00 EUR"
       And the card note reads "0,00 in / 0,00 out"
 
-    @wip
     Scenario: first day of the month excludes last month's transactions
       Given today is 2026-10-01
       And I start konto
       Then the "OCTOBER NET INCOME" figure does not include any September transaction
 
-    @wip
     Scenario: last day of a short month
       Given today is 2026-02-28
       And I start konto
       Then I see a "FEBRUARY NET INCOME" card showing "1.870,00 EUR"
 
-    @wip
     Scenario: there are exactly two stat cards
       Then I see exactly 2 stat cards
       And I do not see "JOURNAL CHECKS"
       And I do not see "CASH FLOW"
 
-    @wip
     Scenario: the card is not hledger's cashflow
       Then "SEPTEMBER NET INCOME" equals income minus expenses, not the change in asset accounts
 
-    @wip
     Scenario: net worth counts the clearing account
       # checking -200 is imported, the savings leg is not yet: clearing +200 keeps net worth whole
       Given the journal "household" with a one-sided transfer leg of 200,00 EUR on the clearing account
@@ -72,13 +62,12 @@ Feature: Dashboard
       Then the row "assets:transfers" shows "200,00 EUR"
       And I see a "NET WORTH" card showing "26.600,00 EUR"
 
-    @wip
     Scenario: net worth excludes closed accounts even with a stray balance
       Given the journal "household" where closed account "assets:old-account" holds 50,00 EUR
       And I start konto
       Then I see a "NET WORTH" card showing "26.600,00 EUR"
 
-    @proposed @wip
+    @proposed
     Scenario: a foreign-currency balance renders as "+ N cur"
       Given the journal "household" where "assets:spare" holds 100,00 PLN
       And I start konto
@@ -130,7 +119,6 @@ Feature: Dashboard
       And it shows "closed 2026-03-01" in the balance column
       And the row is coloured 8
 
-    @wip
     Scenario: closed accounts do not count toward any total or stat card
       Then I see a "NET WORTH" card showing "26.600,00 EUR"
 

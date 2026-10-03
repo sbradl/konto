@@ -6,6 +6,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/sbradl/konto/internal/domain"
 )
@@ -13,6 +15,7 @@ import (
 type gateway interface {
 	Print(ctx context.Context) ([]domain.Transaction, error)
 	Balances(ctx context.Context) ([]domain.Account, error)
+	PeriodActivity(ctx context.Context, first, last time.Time) ([]domain.Account, error)
 }
 
 type journalFile interface {
@@ -25,12 +28,15 @@ var ErrNoJournal = errors.New("no journal file")
 
 // Loader builds Ledger snapshots.
 type Loader struct {
-	gw   gateway
-	file journalFile
+	gw    gateway
+	file  journalFile
+	today func() time.Time
 }
 
-// NewLoader returns a Loader that reads through gw once file exists.
-func NewLoader(gw gateway, file journalFile) *Loader { return &Loader{gw: gw, file: file} }
+// NewLoader returns a Loader that reads through gw once file exists; today anchors the month to date.
+func NewLoader(gw gateway, file journalFile, today func() time.Time) *Loader {
+	return &Loader{gw: gw, file: file, today: today}
+}
 
 // Load reads the journal into a fresh snapshot.
 func (l *Loader) Load(ctx context.Context) (domain.Ledger, error) {
@@ -53,9 +59,14 @@ func (l *Loader) Load(ctx context.Context) (domain.Ledger, error) {
 	if err != nil {
 		return domain.Ledger{}, fmt.Errorf("loading ledger: %w", err)
 	}
+	month, err := l.monthToDate(ctx)
+	if err != nil {
+		return domain.Ledger{}, fmt.Errorf("loading ledger: %w", err)
+	}
 	return domain.Ledger{
 		Accounts:     declare(accounts, declarations),
 		Transactions: transactions,
+		Month:        month,
 	}, nil
 }
 
@@ -83,4 +94,24 @@ func declare(accounts []domain.Account, declarations []domain.Declaration) []dom
 		}
 	}
 	return accounts
+}
+
+// monthToDate sums the calendar month so far: income (as a positive figure) and expenses.
+func (l *Loader) monthToDate(ctx context.Context) (domain.MonthSummary, error) {
+	today := l.today()
+	first := time.Date(today.Year(), today.Month(), 1, 0, 0, 0, 0, today.Location())
+	activity, err := l.gw.PeriodActivity(ctx, first, today)
+	if err != nil {
+		return domain.MonthSummary{}, err //nolint:wrapcheck // Load adds the context
+	}
+	summary := domain.MonthSummary{Month: today.Month()}
+	for _, account := range activity {
+		switch {
+		case strings.HasPrefix(account.Name, "income:"):
+			summary.Income = summary.Income.Plus(account.Balance.Negated())
+		case strings.HasPrefix(account.Name, "expenses:"):
+			summary.Expenses = summary.Expenses.Plus(account.Balance)
+		}
+	}
+	return summary, nil
 }

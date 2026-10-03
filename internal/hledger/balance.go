@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/sbradl/konto/internal/domain"
 )
@@ -90,7 +91,18 @@ func (r *balanceRow) UnmarshalJSON(data []byte) error {
 
 // Balances returns every account's current balance, empty ones included, as a flat list.
 func (c *Client) Balances(ctx context.Context) ([]domain.Account, error) {
-	out, err := c.query(ctx, "bal", "--flat", "-E", "-O", "json")
+	return c.flatBalances(ctx, "-E")
+}
+
+// PeriodActivity returns the change in each income and expense account from first through last (inclusive).
+func (c *Client) PeriodActivity(ctx context.Context, first, last time.Time) ([]domain.Account, error) {
+	return c.flatBalances(ctx,
+		"-b", first.Format(time.DateOnly), "-e", last.AddDate(0, 0, 1).Format(time.DateOnly), "^expenses:", "^income:")
+}
+
+// flatBalances runs `hledger bal` as a flat JSON report with the given extra arguments.
+func (c *Client) flatBalances(ctx context.Context, extra ...string) ([]domain.Account, error) {
+	out, err := c.query(ctx, append([]string{"bal", "--flat", "-O", "json"}, extra...)...)
 	if err != nil {
 		return nil, err
 	}
