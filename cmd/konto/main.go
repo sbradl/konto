@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -110,4 +111,12 @@ func todayFunc(getenv func(string) string, now func() time.Time) func() time.Tim
 		}
 		return now()
 	}
+}
+
+// downloadDir is where the file picker starts: $XDG_DOWNLOAD_DIR, else ~/Downloads.
+func downloadDir(getenv func(string) string, home string) string {
+	if dir := strings.TrimSpace(getenv("XDG_DOWNLOAD_DIR")); dir != "" {
+		return dir
+	}
+	return filepath.Join(home, "Downloads")
 }

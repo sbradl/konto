@@ -253,3 +253,133 @@ func TestUpcomingReportsFailureAndGarbage(t *testing.T) {
 		}
 	}
 }
+
+// hasConvertArgs reports the shape of a CSV conversion: print -f <csv> --rules-file <rules> -O json.
+func hasConvertArgs(args []string) bool {
+	return len(args) == 7 && args[0] == "print" && args[1] == "-f" && args[2] == "/downloads/sept.csv" &&
+		args[3] == "--rules-file" && args[5] == "-O"
+}
+
+func TestConvertCSVRunsHledgerOnTheFileWithTheRulesAndReadsComments(t *testing.T) {
+	out := `[{"tdate": "2026-09-30", "tdescription": "REWE", "tcomment": " Einkauf\n", "tpostings": [
+	  {"paccount": "expenses:groceries", "pamount": [` + amountJSON("EUR", 4217, eurStyle) + `], "ptags": [["konto-rule", "2"]]},
+	  {"paccount": "assets:checking", "pamount": [` + amountJSON("EUR", -4217, eurStyle) + `], "ptags": []}]}]`
+	var rulesSeen string
+	run := func(_ context.Context, args ...string) ([]byte, string, error) {
+		if !hasConvertArgs(args) {
+			t.Errorf("args = %v", args)
+		}
+		b, _ := os.ReadFile(args[4])
+		rulesSeen = string(b)
+		return []byte(out), "", nil
+	}
+
+	got, err := newClient(run, "/data/main.journal").ConvertCSV(context.Background(), "/downloads/sept.csv", "skip 7\n")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if rulesSeen != "skip 7\n" {
+		t.Errorf("rules file held %q", rulesSeen)
+	}
+	if len(got) != 1 || got[0].Comment != "Einkauf" || got[0].Postings[0].Tags["konto-rule"] != "2" || got[0].Postings[1].Tags != nil {
+		t.Errorf("transactions = %+v, want the comment and the rule tag", got)
+	}
+}
+
+type fakeTemp struct {
+	name     string
+	writeErr error
+	closeErr error
+	content  strings.Builder
+}
+
+func (f *fakeTemp) Write(p []byte) (int, error) {
+	f.content.Write(p)
+	return len(p), f.writeErr
+}
+func (f *fakeTemp) Close() error { return f.closeErr }
+func (f *fakeTemp) Name() string { return f.name }
+
+func TestWriteRulesReportsEachWayTheFileCanFail(t *testing.T) {
+	create := func(file *fakeTemp, err error) func() (tempFile, error) {
+		return func() (tempFile, error) { return file, err }
+	}
+	for name, tc := range map[string]struct {
+		file *fakeTemp
+		err  error
+	}{
+		"create": {&fakeTemp{}, errors.New("no space")},
+		"write":  {&fakeTemp{name: "/tmp/gone", writeErr: errors.New("disk full")}, nil},
+		"close":  {&fakeTemp{name: "/tmp/gone", closeErr: errors.New("close failed")}, nil},
+	} {
+		if _, err := writeRules(create(tc.file, tc.err), "x"); err == nil || !strings.Contains(err.Error(), "writing CSV rules") {
+			t.Errorf("%s: expected an error, got %v", name, err)
+		}
+	}
+	file := &fakeTemp{name: "/tmp/ok"}
+	if path, err := writeRules(create(file, nil), "rules"); err != nil || path != "/tmp/ok" || file.content.String() != "rules" {
+		t.Errorf("path = %q, err = %v, content = %q", path, err, file.content.String())
+	}
+}
+
+func TestOsRulesWritesARealFileAndFailsWithoutATempDirectory(t *testing.T) {
+	path, err := osRules("skip 7\n")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if b, _ := os.ReadFile(path); string(b) != "skip 7\n" {
+		t.Errorf("file holds %q", b)
+	}
+	_ = os.Remove(path)
+
+	t.Setenv("TMPDIR", "/nonexistent/dir")
+	if _, err := osRules("x"); err == nil {
+		t.Errorf("expected an error without a temp directory")
+	}
+}
+
+func TestConvertCSVReportsARulesFileThatCannotBeWritten(t *testing.T) {
+	client := newClient(recording("[]", nil, new([]call)), "j")
+	client.tempRules = func(string) (string, error) { return "", errors.New("no temp") }
+
+	if _, err := client.ConvertCSV(context.Background(), "x.csv", ""); err == nil {
+		t.Errorf("expected an error")
+	}
+}
+
+func TestConvertCSVRemovesItsRulesFile(t *testing.T) {
+	var path string
+	run := func(_ context.Context, args ...string) ([]byte, string, error) {
+		path = args[4]
+		return []byte("[]"), "", nil
+	}
+
+	if _, err := newClient(run, "j").ConvertCSV(context.Background(), "x.csv", ""); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("the temporary rules file %s should be gone, stat gave %v", path, err)
+	}
+}
+
+func TestConvertCSVReportsHledgersFailureAndGarbage(t *testing.T) {
+	failing := newClient(recordingStderr("", "bad rules", errors.New("exit status 1"), new([]call)), "j")
+	if _, err := failing.ConvertCSV(context.Background(), "x.csv", ""); err == nil || !strings.Contains(err.Error(), "bad rules") {
+		t.Errorf("expected hledger's own words, got %v", err)
+	}
+	garbage := newClient(recording("not json", nil, new([]call)), "j")
+	if _, err := garbage.ConvertCSV(context.Background(), "x.csv", ""); err == nil {
+		t.Errorf("expected an error for unreadable output")
+	}
+}
+
+func TestTagMapSkipsMalformedTagsAndIsNilWithoutAny(t *testing.T) {
+	if got := tagMap([][]string{{"only-a-key"}, {}}); got != nil {
+		t.Errorf("malformed tags give %v, want nil", got)
+	}
+	if got := tagMap([][]string{{"konto-rule", "2"}, {"broken"}}); len(got) != 1 || got["konto-rule"] != "2" {
+		t.Errorf("tags = %v", got)
+	}
+}

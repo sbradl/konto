@@ -4,7 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
+	"os"
 	"os/exec"
 	"slices"
 	"strings"
@@ -19,8 +22,9 @@ type runner func(ctx context.Context, args ...string) (stdout []byte, stderr str
 
 // Client asks hledger about one journal. Every call names the journal with -f.
 type Client struct {
-	run     runner
-	journal string
+	run       runner
+	journal   string
+	tempRules func(rules string) (path string, err error) // the seam for the CSV rules file
 }
 
 // New returns a Client that runs the hledger binary bin on the journal at journalPath.
@@ -29,7 +33,7 @@ func New(bin, journalPath string) *Client {
 }
 
 func newClient(run runner, journalPath string) *Client {
-	return &Client{run: run, journal: journalPath}
+	return &Client{run: run, journal: journalPath, tempRules: osRules}
 }
 
 func execRunner(bin string) runner {
@@ -64,6 +68,7 @@ func (c *Client) queryMessage(ctx context.Context, messageOf func(string) string
 type jsonTransaction struct {
 	Date        string     `json:"tdate"`
 	Description string     `json:"tdescription"`
+	Comment     string     `json:"tcomment"`
 	Tags        [][]string `json:"ttags"`
 	SourcePos   []struct {
 		Name string `json:"sourceName"`
@@ -72,6 +77,7 @@ type jsonTransaction struct {
 	Postings []struct {
 		Account string       `json:"paccount"`
 		Amounts []jsonAmount `json:"pamount"`
+		Tags    [][]string   `json:"ptags"`
 	} `json:"tpostings"`
 }
 
@@ -102,6 +108,11 @@ func (c *Client) transactions(
 	if err != nil {
 		return nil, err
 	}
+	return readTransactions(out, keep)
+}
+
+// readTransactions maps `hledger print -O json` to transactions, only those keep accepts when it is given.
+func readTransactions(out []byte, keep func(jsonTransaction) bool) ([]domain.Transaction, error) {
 	var raw []jsonTransaction
 	if err := json.Unmarshal(out, &raw); err != nil {
 		return nil, fmt.Errorf("reading hledger print output: %w", err)
@@ -119,13 +130,56 @@ func (c *Client) transactions(
 		if err != nil {
 			return nil, fmt.Errorf("reading hledger print output: %w", err)
 		}
-		transaction := domain.Transaction{Date: date, Description: entry.Description, Postings: postings}
+		transaction := domain.Transaction{
+			Date: date, Description: entry.Description, Comment: strings.TrimSpace(entry.Comment), Postings: postings,
+		}
 		if len(entry.SourcePos) > 0 {
 			transaction.Source = domain.SourcePos{File: entry.SourcePos[0].Name, Line: entry.SourcePos[0].Line}
 		}
 		transactions = append(transactions, transaction)
 	}
 	return transactions, nil
+}
+
+// ConvertCSV converts the bank export at csvPath to transactions with the given CSV rules, as hledger
+// reads them: the rules decide every field, the account of each side and the comments.
+func (c *Client) ConvertCSV(ctx context.Context, csvPath, rules string) ([]domain.Transaction, error) {
+	rulesPath, err := c.tempRules(rules)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = os.Remove(rulesPath) }()
+	out, stderr, err := c.run(ctx, "print", "-f", csvPath, "--rules-file", rulesPath, "-O", "json")
+	if err != nil {
+		return nil, fmt.Errorf("hledger converting %s: %w: %s", csvPath, err, strings.TrimSpace(stderr))
+	}
+	return readTransactions(out, nil)
+}
+
+// tempFile is a file just created for the CSV rules.
+type tempFile interface {
+	io.WriteCloser
+	Name() string
+}
+
+// writeRules puts the rules in a new temporary file, whose path it returns; a file it could not
+// fill is removed again.
+func writeRules(create func() (tempFile, error), rules string) (string, error) {
+	file, err := create()
+	if err != nil {
+		return "", fmt.Errorf("writing CSV rules: %w", err)
+	}
+	_, writeErr := io.WriteString(file, rules)
+	if err := errors.Join(writeErr, file.Close()); err != nil {
+		_ = os.Remove(file.Name())
+		return "", fmt.Errorf("writing CSV rules: %w", err)
+	}
+	return file.Name(), nil
+}
+
+// osRules writes the CSV rules to a temporary file on disk.
+func osRules(rules string) (string, error) {
+	return writeRules(func() (tempFile, error) { return os.CreateTemp("", "konto-*.rules") }, rules)
 }
 
 // postings are the transaction's postings with their amounts.
@@ -139,7 +193,24 @@ func (raw jsonTransaction) postings() ([]domain.Posting, error) {
 				return nil, err
 			}
 		}
-		postings[i] = domain.Posting{Account: posting.Account, Amounts: amounts}
+		postings[i] = domain.Posting{Account: posting.Account, Amounts: amounts, Tags: tagMap(posting.Tags)}
 	}
 	return postings, nil
 }
+
+// tagMap is hledger's [[key, value], …] as a map; nil when there are no tags.
+func tagMap(tags [][]string) map[string]string {
+	var named map[string]string
+	for _, tag := range tags {
+		if len(tag) != tagCells {
+			continue
+		}
+		if named == nil {
+			named = map[string]string{}
+		}
+		named[tag[0]] = tag[1]
+	}
+	return named
+}
+
+const tagCells = 2 // [key, value]

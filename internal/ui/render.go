@@ -62,6 +62,8 @@ func (m Model) body() string {
 	switch m.active {
 	case 0:
 		return m.dash.View()
+	case importTab:
+		return m.imports.View()
 	case scheduledTab:
 		return m.scheduled.View()
 	case reportsTab:
@@ -189,6 +191,8 @@ func (m Model) position() (row, total int) {
 	switch m.active {
 	case 0:
 		return m.dash.Position()
+	case importTab:
+		return m.imports.Position()
 	case scheduledTab:
 		return m.scheduled.Position()
 	}

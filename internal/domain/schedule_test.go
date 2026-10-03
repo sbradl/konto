@@ -95,3 +95,21 @@ func TestDeletingARuleRemovesTheBlockAtItsPosition(t *testing.T) {
 		t.Errorf("changeset = %+v, want one DeleteRule at j:7", got)
 	}
 }
+
+func TestCompareNextPutsRulesWithoutAnOccurrenceLast(t *testing.T) {
+	soon := RuleSchedule{Occurrences: []Transaction{{Date: day(1)}}}
+	later := RuleSchedule{Occurrences: []Transaction{{Date: day(9)}}}
+	never := RuleSchedule{}
+
+	for name, tc := range map[string]struct {
+		a, b RuleSchedule
+		want int
+	}{
+		"earlier first": {soon, later, -1}, "later after": {later, soon, 1}, "equal": {soon, soon, 0},
+		"with before without": {soon, never, -1}, "without after with": {never, soon, 1}, "neither": {never, never, 0},
+	} {
+		if got := compareNext(tc.a, tc.b); got != tc.want {
+			t.Errorf("%s: compareNext = %d, want %d", name, got, tc.want)
+		}
+	}
+}

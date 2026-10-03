@@ -75,7 +75,7 @@ func registerGivenSteps(sc *godog.ScenarioContext, w *world) {
 		func(file string, doc *godog.DocString) error {
 			return os.WriteFile(filepath.Join(w.downloads, file), []byte("\xef\xbb\xbf"+doc.Content+"\n"), 0o644)
 		})
-	sc.Step(`^a file "([^"]*)" in the download directory containing "(.*)"$`, func(file, content string) error {
+	sc.Step(`^a file "([^"]*)" in the download directory containing "((?s:.*))"$`, func(file, content string) error {
 		return os.WriteFile(filepath.Join(w.downloads, file), []byte(unescape(content)), 0o644)
 	})
 	registerHledgerShimSteps(sc, w)

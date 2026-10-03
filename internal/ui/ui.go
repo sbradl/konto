@@ -10,9 +10,11 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/sbradl/konto/internal/csvimport"
 	"github.com/sbradl/konto/internal/domain"
 	"github.com/sbradl/konto/internal/ledger"
 	"github.com/sbradl/konto/internal/ui/dashboard"
+	"github.com/sbradl/konto/internal/ui/imports"
 	"github.com/sbradl/konto/internal/ui/reports"
 	"github.com/sbradl/konto/internal/ui/scheduled"
 )
@@ -50,6 +52,12 @@ type reportBuilder interface {
 	Report(ctx context.Context, period domain.Period) (domain.Report, error)
 }
 
+// csvImporter lists folders for the file picker and reads a bank export against the journal.
+type csvImporter interface {
+	Browse(dir string) ([]domain.FileEntry, error)
+	Open(ctx context.Context, path string, snapshot domain.Ledger) (csvimport.Staged, error)
+}
+
 // journalWriter applies a changeset to the journal.
 type journalWriter interface {
 	Apply(changeset domain.Changeset) error
@@ -79,6 +87,8 @@ type Model struct {
 	reporter    reportBuilder
 	reports     reports.Model
 	scheduled   scheduled.Model
+	importer    csvImporter
+	imports     imports.Model
 	prompt      *prompt          // the y/n question awaiting an answer
 	notice      string           // a one-line message shown until the next key
 	run         *domain.CheckRun // the latest check run; nil until the first one lands
@@ -98,6 +108,19 @@ type Model struct {
 	createErr   error
 	width       int
 	height      int
+}
+
+// browsedMsg carries a folder's listing for the file picker.
+type browsedMsg struct {
+	dir     string
+	entries []domain.FileEntry
+	err     error
+}
+
+// openedMsg carries an export read against the journal.
+type openedMsg struct {
+	staged csvimport.Staged
+	err    error
 }
 
 // reportLoadedMsg carries a built report for the period it was asked for.
@@ -121,6 +144,9 @@ type Ports struct {
 	Accounts accountPlanner // plans closing and reopening accounts
 	Writer   journalWriter  // applies planned changes to the journal
 	Reports  reportBuilder  // builds the Reports view's tables
+	Importer csvImporter    // lists folders and reads bank exports
+	// DownloadDir is where the file picker starts.
+	DownloadDir string
 	// Editor builds the command that opens a file at a line.
 	Editor func(file string, line int) *exec.Cmd
 }
@@ -131,6 +157,7 @@ func New(journalPath string, ports Ports) Model {
 		journalPath: journalPath, loader: ports.Loader, checker: ports.Checker, creator: ports.Creator,
 		editor: ports.Editor, accounts: ports.Accounts, writer: ports.Writer, dash: dashboard.New(),
 		reporter: ports.Reports, reports: reports.New(), scheduled: scheduled.New(),
+		importer: ports.Importer, imports: imports.New(ports.DownloadDir),
 	}
 }
 
@@ -164,6 +191,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.dash = m.dash.Resize(m.width, max(0, m.height-chromeRows))
 		m.reports = m.reports.Resize(m.width, max(0, m.height-chromeRows))
 		m.scheduled = m.scheduled.Resize(m.width, max(0, m.height-chromeRows))
+		m.imports = m.imports.Resize(m.width, max(0, m.height-chromeRows))
 	}
 	if loaded, ok := msg.(ledgerLoadedMsg); ok {
 		m = m.onLoaded(loaded)
@@ -171,6 +199,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	if report, ok := msg.(reportLoadedMsg); ok {
 		return m.onReport(report), nil
+	}
+	if browsed, ok := msg.(browsedMsg); ok {
+		m.imports = m.imports.WithListing(browsed.dir, browsed.entries, browsed.err)
+		return m, nil
+	}
+	if opened, ok := msg.(openedMsg); ok {
+		return m.onOpened(opened), nil
 	}
 	if failed, ok := msg.(journalCreateFailedMsg); ok {
 		m.createErr = failed.err
@@ -307,6 +342,8 @@ func (m Model) onActiveViewKey(key string) (Model, tea.Cmd) {
 	switch m.active {
 	case 0:
 		return m.onDashboardKey(key), nil
+	case importTab:
+		return m.onImportKey(key)
 	case scheduledTab:
 		return m.onScheduledKey(key), nil
 	case reportsTab:
@@ -317,6 +354,7 @@ func (m Model) onActiveViewKey(key string) (Model, tea.Cmd) {
 
 // Tab indices of the views.
 const (
+	importTab    = 1
 	scheduledTab = 2
 	reportsTab   = 4
 )

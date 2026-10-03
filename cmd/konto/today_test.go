@@ -22,3 +22,23 @@ func TestTodayFollowsTheEnvironmentOverrideElseTheClock(t *testing.T) {
 		}
 	}
 }
+
+func TestDownloadDirIsTheXDGOneElseDownloadsInHome(t *testing.T) {
+	env := func(value string) func(string) string {
+		return func(key string) string {
+			if key == "XDG_DOWNLOAD_DIR" {
+				return value
+			}
+			return ""
+		}
+	}
+
+	if got := downloadDir(env("/data/dl"), "/home/me"); got != "/data/dl" {
+		t.Errorf("downloadDir = %q, want the XDG one", got)
+	}
+	for _, unset := range []string{"", "  "} {
+		if got := downloadDir(env(unset), "/home/me"); got != "/home/me/Downloads" {
+			t.Errorf("downloadDir(%q) = %q, want ~/Downloads", unset, got)
+		}
+	}
+}

@@ -62,19 +62,7 @@ func (l Ledger) Schedules() []RuleSchedule {
 		}
 		slices.SortStableFunc(schedules[i].Occurrences, func(a, b Transaction) int { return a.Date.Compare(b.Date) })
 	}
-	slices.SortStableFunc(schedules, func(a, b RuleSchedule) int {
-		nextA, hasA := a.Next()
-		nextB, hasB := b.Next()
-		switch {
-		case hasA && hasB:
-			return nextA.Compare(nextB)
-		case hasA:
-			return -1
-		case hasB:
-			return 1
-		}
-		return 0
-	})
+	slices.SortStableFunc(schedules, compareNext)
 	return schedules
 }
 
@@ -94,4 +82,19 @@ func (r PeriodicRule) Entry() string { return strings.Join(r.Lines, "\n") }
 // whether or not the form could have edited it.
 func (r PeriodicRule) Delete() Changeset {
 	return Changeset{Edits: []Edit{DeleteRule{Pos: r.Pos}}}
+}
+
+// compareNext orders schedules by their next occurrence; those without one sort after those with.
+func compareNext(a, b RuleSchedule) int {
+	nextA, hasA := a.Next()
+	nextB, hasB := b.Next()
+	switch {
+	case hasA && hasB:
+		return nextA.Compare(nextB)
+	case hasA:
+		return -1
+	case hasB:
+		return 1
+	}
+	return 0
 }

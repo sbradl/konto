@@ -30,6 +30,7 @@ type config struct {
 	DelayMs    int      `json:"delayMs,omitempty"`    // sleep before every call
 	Fail       string   `json:"fail,omitempty"`       // print to stderr and exit 1 (except --version)
 	GarbageFor []string `json:"garbageFor,omitempty"` // print garbage for calls naming these commands
+	FailCSV    string   `json:"failCsv,omitempty"`    // print to stderr and exit 1 for CSV conversions only
 }
 
 func main() {
@@ -50,6 +51,9 @@ func main() {
 		return
 	case cfg.Fail != "" && !isVersion:
 		fmt.Fprintln(os.Stderr, cfg.Fail)
+		os.Exit(1)
+	case cfg.FailCSV != "" && slices.Contains(args, "--rules-file"):
+		fmt.Fprintln(os.Stderr, cfg.FailCSV)
 		os.Exit(1)
 	case slices.ContainsFunc(cfg.GarbageFor, func(c string) bool { return slices.Contains(args, c) }):
 		fmt.Println("}{ not json, not hledger ]]")

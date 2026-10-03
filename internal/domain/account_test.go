@@ -162,3 +162,36 @@ func TestMultiAmountIsZero(t *testing.T) {
 		}
 	}
 }
+
+func TestNormalizeIBANRemovesSpacesAndFoldsCase(t *testing.T) {
+	for in, want := range map[string]string{
+		"DE89370400440532013000":      "DE89370400440532013000",
+		"DE89 3704 0044 0532 0130 00": "DE89370400440532013000",
+		" de89370400440532013000 ":    "DE89370400440532013000",
+	} {
+		if got := NormalizeIBAN(in); got != want {
+			t.Errorf("NormalizeIBAN(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestImportRefusalNamesWhyAnAccountCannotBeImportedInto(t *testing.T) {
+	closed := Account{Name: "assets:old", Source: SourceImport, Closed: time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)}
+	for name, tc := range map[string]struct {
+		account Account
+		want    string
+	}{
+		"closed":       {closed, "account closed — reopen with o"},
+		"clearing":     {Account{Name: "assets:transfers", Source: SourceClearing}, "assets:transfers is the transfer clearing account"},
+		"manual":       {Account{Name: "assets:cash", Source: SourceManual}, "assets:cash is a manual account"},
+		"unclassified": {Account{Name: "assets:odd"}, "assets:odd is unclassified"},
+	} {
+		err := tc.account.ImportRefusal()
+		if err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: refusal = %v, want it to say %q", name, err, tc.want)
+		}
+	}
+	if err := (Account{Name: "assets:checking", Source: SourceImport}).ImportRefusal(); err != nil {
+		t.Errorf("an open import-fed account is a target, got %v", err)
+	}
+}

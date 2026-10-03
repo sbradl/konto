@@ -113,6 +113,7 @@ type shimConfig struct {
 	DelayMs    int      `json:"delayMs,omitempty"`
 	Fail       string   `json:"fail,omitempty"`
 	GarbageFor []string `json:"garbageFor,omitempty"`
+	FailCSV    string   `json:"failCsv,omitempty"`
 }
 
 // world is one scenario's sandbox: its own HOME, journal, PATH and terminal.

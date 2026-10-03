@@ -9,12 +9,14 @@ import (
 type Posting struct {
 	Account string
 	Amounts MultiAmount
+	Tags    map[string]string // the posting's `key:value` tags; nil when it has none
 }
 
 // Transaction is one journal entry as hledger reports it.
 type Transaction struct {
 	Date        time.Time
 	Description string
+	Comment     string    // the transaction's own comment, without the semicolon
 	Source      SourcePos // where the entry is written; a projected occurrence points at its `~` line
 	Postings    []Posting
 }

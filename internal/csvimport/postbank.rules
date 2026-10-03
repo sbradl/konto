@@ -1,0 +1,16 @@
+skip 7
+separator ;
+decimal-mark ,
+date-format %-d.%-m.%Y
+newest-first
+fields date, , umsatzart, payee, purpose, , , , , , , betrag, , , , , , waehrung
+if ^Buchungstag
+ skip
+if ^Kontostand
+ skip
+description %payee
+if %payee ^$
+ description %umsatzart
+comment %purpose
+amount %betrag EUR
+account2 konto:uncategorised

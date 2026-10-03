@@ -125,3 +125,30 @@ func (a Account) Reopen() (Changeset, error) {
 	}
 	return Changeset{Edits: []Edit{RemoveAccountTag{Account: a.Name, Key: ClosedTagKey}}}, nil
 }
+
+// NormalizeIBAN is an IBAN as konto compares it: upper case, without the spaces banks print.
+func NormalizeIBAN(iban string) string {
+	return strings.ToUpper(strings.ReplaceAll(strings.TrimSpace(iban), " ", ""))
+}
+
+// ImportRefusal is why the account cannot be the target of a CSV import, or nil when it can
+// (spec §5.3): closed, manual and unclassified accounts and the clearing account are refused.
+func (a Account) ImportRefusal() error {
+	switch {
+	case a.IsClosed():
+		return RefusalError{"account closed — reopen with o"}
+	case a.Source == SourceClearing:
+		return RefusalError{a.Name + " is the transfer clearing account — it is never an import target"}
+	case a.Source == SourceManual:
+		return RefusalError{a.Name + " is a manual account — only import-fed accounts can be imported into"}
+	case a.Source == SourceNone:
+		return RefusalError{a.Name + " is unclassified (no konto:source tag) — it cannot be an import target"}
+	}
+	return nil
+}
+
+// FileEntry is one item of a directory listing.
+type FileEntry struct {
+	Name  string
+	IsDir bool
+}

@@ -56,6 +56,7 @@ var layers = map[string]layer{
 
 	"internal/hledger": layerAdapter,
 	"internal/journal": layerAdapter,
+	"internal/files":   layerAdapter,
 
 	"internal/config": layerConfig,
 

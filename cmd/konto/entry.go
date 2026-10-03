@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"os/exec"
+	"path/filepath"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -10,6 +11,8 @@ import (
 	"github.com/sbradl/konto/internal/accounts"
 	"github.com/sbradl/konto/internal/checks"
 	"github.com/sbradl/konto/internal/config"
+	"github.com/sbradl/konto/internal/csvimport"
+	"github.com/sbradl/konto/internal/files"
 	"github.com/sbradl/konto/internal/hledger"
 	"github.com/sbradl/konto/internal/journal"
 	"github.com/sbradl/konto/internal/ledger"
@@ -34,12 +37,15 @@ func main() {
 
 func runProgram(cfg config.Config) error {
 	file := journal.NewFile(cfg.JournalPath)
+	rulesPath := filepath.Join(filepath.Dir(cfg.JournalPath), "categories.rules")
 	client := hledger.New("hledger", cfg.JournalPath)
 	today := todayFunc(os.Getenv, time.Now)
 	loader := ledger.NewLoader(client, file, today)
+	home, _ := os.UserHomeDir() // without a home the picker falls back to a relative Downloads
 	_, err := tea.NewProgram(ui.New(cfg.JournalPath, ui.Ports{
 		Loader: loader, Checker: checks.NewRunner(client), Creator: file, Editor: openInEditor,
 		Accounts: accounts.NewService(file, today), Writer: file, Reports: report.NewService(client, today),
+		Importer: csvimport.NewService(files.System{}, client, rulesPath), DownloadDir: downloadDir(os.Getenv, home),
 	})).Run()
 	return err //nolint:wrapcheck // the program's own error is already self-describing
 }
