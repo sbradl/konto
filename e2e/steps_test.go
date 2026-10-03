@@ -231,7 +231,7 @@ func (w *world) expectEditorCall(want string) error {
 func registerFileSteps(sc *godog.ScenarioContext, w *world) {
 	sc.Step(`^the journal contains$`, func(doc *godog.DocString) error { return expectFileBlock(w.journal, doc.Content) })
 	sc.Step(`^categories.rules contains$`, func(doc *godog.DocString) error { return expectFileBlock(w.rules, doc.Content) })
-	sc.Step(`^the journal is unchanged$`, func() error { return expectUnchanged(w.journal, w.journalAtStart) })
+	sc.Step(`^the journal is unchanged$`, w.expectJournalFilesUnchanged)
 	sc.Step(`^categories.rules is unchanged$`, func() error { return expectUnchanged(w.rules, w.rulesAtStart) })
 	sc.Step(`^(?:every )?hledger check passes$`, func() error { return runChecks(w.suite.realHledger, w.journal, false) })
 	sc.Step(`^every hledger check passes individually$`, func() error { return runChecks(w.suite.realHledger, w.journal, true) })
@@ -451,6 +451,20 @@ func expectAbsent(path string) error {
 func removeIfExists(path string) error {
 	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 		return err
+	}
+	return nil
+}
+
+// expectJournalFilesUnchanged compares every journal file of the sandbox with its state at start.
+func (w *world) expectJournalFilesUnchanged() error {
+	now := w.journalFiles()
+	for path, before := range w.filesAtStart {
+		if err := expectUnchanged(path, before); err != nil {
+			return err
+		}
+	}
+	if len(now) != len(w.filesAtStart) {
+		return errors.New("the set of journal files changed")
 	}
 	return nil
 }

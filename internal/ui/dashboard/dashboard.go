@@ -106,6 +106,14 @@ func (m Model) Position() (row, total int) {
 	return m.cursor + 1, len(m.accounts)
 }
 
+// Selected is the account under the cursor; false when the panel is empty.
+func (m Model) Selected() (domain.Account, bool) {
+	if len(m.accounts) == 0 {
+		return domain.Account{}, false
+	}
+	return m.accounts[m.cursor], true
+}
+
 // View draws the Accounts panel in the left column.
 func (m Model) View() string {
 	width := min(m.width, max(minAccountsWidth, m.width/columnDivisor))

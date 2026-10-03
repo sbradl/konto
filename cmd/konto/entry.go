@@ -3,9 +3,11 @@ package main
 import (
 	"os"
 	"os/exec"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/sbradl/konto/internal/accounts"
 	"github.com/sbradl/konto/internal/checks"
 	"github.com/sbradl/konto/internal/config"
 	"github.com/sbradl/konto/internal/hledger"
@@ -35,6 +37,7 @@ func runProgram(cfg config.Config) error {
 	loader := ledger.NewLoader(client, file)
 	_, err := tea.NewProgram(ui.New(cfg.JournalPath, ui.Ports{
 		Loader: loader, Checker: checks.NewRunner(client), Creator: file, Editor: openInEditor,
+		Accounts: accounts.NewService(file, todayFunc(os.Getenv, time.Now)), Writer: file,
 	})).Run()
 	return err //nolint:wrapcheck // the program's own error is already self-describing
 }

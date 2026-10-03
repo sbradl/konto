@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/sbradl/konto/internal/config"
 	"github.com/sbradl/konto/internal/domain"
@@ -98,4 +99,15 @@ func editorCommand(getenv func(string) string, file string, line int) *exec.Cmd 
 	args := slices.Concat(words[1:], []string{"+" + strconv.Itoa(line), file})
 	//nolint:gosec // the user's own editor, by design
 	return exec.CommandContext(context.Background(), words[0], args...)
+}
+
+// todayFunc is konto's "today": the local date now, or the day $KONTO_TODAY names (a test seam
+// for the e2e suite). A value that is not a date falls back to the clock.
+func todayFunc(getenv func(string) string, now func() time.Time) func() time.Time {
+	return func() time.Time {
+		if day, err := time.Parse(time.DateOnly, getenv("KONTO_TODAY")); err == nil {
+			return day
+		}
+		return now()
+	}
 }

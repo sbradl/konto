@@ -1,6 +1,9 @@
 package domain
 
 import (
+	"errors"
+	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -69,5 +72,93 @@ func TestDeclarationIgnoresAnInvalidClosedDate(t *testing.T) {
 
 	if !d.Closed.IsZero() {
 		t.Errorf("Closed = %v, want zero", d.Closed)
+	}
+}
+
+var today = time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC)
+
+func spare() Account {
+	return Account{Name: "assets:spare", Source: SourceImport, Balance: MultiAmount{eur(0)}}
+}
+
+func TestCloseWritesTheClosedTagWithTodaysDate(t *testing.T) {
+	got, err := spare().Close(today, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	want := Changeset{Edits: []Edit{SetAccountTag{Account: "assets:spare", Key: "konto:closed", Value: "2026-09-30"}}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("changeset = %+v, want %+v", got, want)
+	}
+}
+
+func TestCloseIsRefusedWithTheReason(t *testing.T) {
+	closed := spare()
+	closed.Closed = today
+	checking := spare()
+	checking.Balance = MultiAmount{eur(1324000)}
+	clearing := spare()
+	clearing.Source = SourceClearing
+
+	for name, tc := range map[string]struct {
+		account Account
+		rules   []string
+		want    string
+	}{
+		"clearing":      {clearing, nil, "clearing"},
+		"already":       {closed, nil, ErrAlreadyClosed.Reason},
+		"balance":       {checking, nil, "balance is 13.240,00 EUR"},
+		"negative":      {Account{Name: "liabilities:card", Balance: MultiAmount{eur(-14000)}}, nil, "balance is -140,00 EUR"},
+		"rules":         {spare(), []string{"Top-up", "Alpha"}, "still used by: Top-up, Alpha"},
+		"clearing wins": {Account{Name: "assets:transfers", Source: SourceClearing, Balance: MultiAmount{eur(5)}}, nil, "clearing"},
+	} {
+		_, err := tc.account.Close(today, tc.rules)
+
+		var refusal RefusalError
+		if !errors.As(err, &refusal) || !strings.Contains(refusal.Error(), tc.want) {
+			t.Errorf("%s: error = %v, want a refusal containing %q", name, err, tc.want)
+		}
+	}
+}
+
+func TestAnAccountWithoutPostingsHasAZeroBalance(t *testing.T) {
+	if _, err := (Account{Name: "assets:new"}).Close(today, nil); err != nil {
+		t.Errorf("an account with no balance entries should close: %v", err)
+	}
+}
+
+func TestReopenRemovesTheClosedTag(t *testing.T) {
+	account := spare()
+	account.Closed = today
+
+	got, err := account.Reopen()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	want := Changeset{Edits: []Edit{RemoveAccountTag{Account: "assets:spare", Key: "konto:closed"}}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("changeset = %+v, want %+v", got, want)
+	}
+}
+
+func TestReopenOfAnOpenAccountIsRefused(t *testing.T) {
+	if _, err := spare().Reopen(); !errors.Is(err, ErrNotClosed) {
+		t.Errorf("error = %v, want ErrNotClosed", err)
+	}
+}
+
+func TestMultiAmountIsZero(t *testing.T) {
+	for name, tc := range map[string]struct {
+		amounts MultiAmount
+		want    bool
+	}{
+		"empty": {nil, true}, "zero": {MultiAmount{eur(0)}, true}, "non-zero": {MultiAmount{eur(0), eur(1)}, false},
+		"negative": {MultiAmount{eur(-1)}, false},
+	} {
+		if got := tc.amounts.IsZero(); got != tc.want {
+			t.Errorf("%s: IsZero() = %v, want %v", name, got, tc.want)
+		}
 	}
 }

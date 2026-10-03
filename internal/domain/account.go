@@ -72,3 +72,56 @@ func (d *Declaration) ApplyTag(tag string) {
 		}
 	}
 }
+
+// ClosedTagKey is the directive tag that records when an account was closed.
+const ClosedTagKey = "konto:closed"
+
+// RefusalError is why an account invariant forbids a change; its text is for the user.
+type RefusalError struct{ Reason string }
+
+func (r RefusalError) Error() string { return r.Reason }
+
+// The refusals that mean "nothing to do" rather than "not allowed": the UI stays quiet about them.
+var (
+	ErrAlreadyClosed = RefusalError{"the account is already closed"}
+	ErrNotClosed     = RefusalError{"the account is not closed"}
+)
+
+// IsZero reports whether every commodity balance is zero.
+func (m MultiAmount) IsZero() bool {
+	for _, amount := range m {
+		if amount.Mantissa != 0 {
+			return false
+		}
+	}
+	return true
+}
+
+// Close returns the changeset that closes the account on the given day. It refuses the clearing
+// account, an account that is already closed, one with a balance, and one a periodic rule still
+// references (rules lists their descriptions).
+func (a Account) Close(today time.Time, rules []string) (Changeset, error) {
+	if a.Source == SourceClearing {
+		return Changeset{}, RefusalError{"the transfer clearing account can never be closed"}
+	}
+	if a.IsClosed() {
+		return Changeset{}, ErrAlreadyClosed
+	}
+	if !a.Balance.IsZero() {
+		return Changeset{}, RefusalError{"balance is " + a.Balance.Format() + " — only a zero balance can be closed"}
+	}
+	if len(rules) > 0 {
+		return Changeset{}, RefusalError{"still used by: " + strings.Join(rules, ", ")}
+	}
+	return Changeset{Edits: []Edit{SetAccountTag{
+		Account: a.Name, Key: ClosedTagKey, Value: today.Format(time.DateOnly),
+	}}}, nil
+}
+
+// Reopen returns the changeset that reopens a closed account.
+func (a Account) Reopen() (Changeset, error) {
+	if !a.IsClosed() {
+		return Changeset{}, ErrNotClosed
+	}
+	return Changeset{Edits: []Edit{RemoveAccountTag{Account: a.Name, Key: ClosedTagKey}}}, nil
+}

@@ -240,3 +240,17 @@ func TestEveryLineFillsThePanelInside(t *testing.T) {
 		t.Errorf("closed line is %d wide, want %d", got, inside-1)
 	}
 }
+
+func TestSelectedIsTheAccountUnderTheCursor(t *testing.T) {
+	m := loaded(20)
+
+	if account, ok := m.Selected(); !ok || account.Name != "assets:cash" {
+		t.Errorf("Selected() = %q, %v; want assets:cash", account.Name, ok)
+	}
+	if account, _ := m.Move("end").Selected(); account.Name != "assets:old-account" {
+		t.Errorf("after End: Selected() = %q, want assets:old-account", account.Name)
+	}
+	if _, ok := New().Selected(); ok {
+		t.Error("an empty panel selects nothing")
+	}
+}

@@ -138,6 +138,7 @@ type world struct {
 	s              *session
 	earlier        []*session // instances started before the current one
 	journalAtStart []byte
+	filesAtStart   map[string][]byte // every journal file of the sandbox at start
 	rulesAtStart   []byte
 	baseline       string
 	tabAtBaseline  string
@@ -262,6 +263,7 @@ func (w *world) start(args ...string) error {
 		return err
 	}
 	w.journalAtStart, _ = os.ReadFile(w.journal)
+	w.filesAtStart = w.journalFiles()
 	w.rulesAtStart, _ = os.ReadFile(w.rules)
 	for i, a := range args {
 		args[i] = w.expand(a)
@@ -355,4 +357,16 @@ func (w *world) copyIncludes(journal []byte) error {
 		}
 	}
 	return nil
+}
+
+// journalFiles reads every journal file of the sandbox: the main journal and the files beside it.
+func (w *world) journalFiles() map[string][]byte {
+	files := map[string][]byte{}
+	for _, pattern := range []string{"*.journal", "*/*.journal"} {
+		paths, _ := filepath.Glob(filepath.Join(filepath.Dir(w.journal), pattern))
+		for _, path := range paths {
+			files[path], _ = os.ReadFile(path)
+		}
+	}
+	return files
 }

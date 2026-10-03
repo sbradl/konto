@@ -37,6 +37,17 @@ type checkRunner interface {
 	Run(ctx context.Context, snapshot domain.Ledger) (domain.CheckRun, error)
 }
 
+// accountPlanner decides account changes and returns the changeset to write.
+type accountPlanner interface {
+	Close(account domain.Account) (domain.Changeset, error)
+	Reopen(account domain.Account) (domain.Changeset, error)
+}
+
+// journalWriter applies a changeset to the journal.
+type journalWriter interface {
+	Apply(changeset domain.Changeset) error
+}
+
 type journalCreator interface {
 	Create() error
 }
@@ -56,6 +67,10 @@ type Model struct {
 	journalPath string
 	loader      ledgerLoader
 	checker     checkRunner
+	accounts    accountPlanner
+	writer      journalWriter
+	prompt      *prompt          // the y/n question awaiting an answer
+	notice      string           // a one-line message shown until the next key
 	run         *domain.CheckRun // the latest check run; nil until the first one lands
 	checkCursor int              // the selected issue in the checks panel
 	checkOffset int              // the first visible issue in the checks panel
@@ -75,14 +90,19 @@ type Model struct {
 	height      int
 }
 
+// writtenMsg reports that a changeset was applied (or why it was not).
+type writtenMsg struct{ err error }
+
 // editorClosedMsg reports that the user's editor has exited.
 type editorClosedMsg struct{}
 
 // Ports are the use cases and adapters the root model drives.
 type Ports struct {
-	Loader  ledgerLoader   // reads the journal into a snapshot
-	Checker checkRunner    // checks the journal and the snapshot
-	Creator journalCreator // writes the first-run journal
+	Loader   ledgerLoader   // reads the journal into a snapshot
+	Checker  checkRunner    // checks the journal and the snapshot
+	Creator  journalCreator // writes the first-run journal
+	Accounts accountPlanner // plans closing and reopening accounts
+	Writer   journalWriter  // applies planned changes to the journal
 	// Editor builds the command that opens a file at a line.
 	Editor func(file string, line int) *exec.Cmd
 }
@@ -91,7 +111,7 @@ type Ports struct {
 func New(journalPath string, ports Ports) Model {
 	return Model{
 		journalPath: journalPath, loader: ports.Loader, checker: ports.Checker, creator: ports.Creator,
-		editor: ports.Editor, dash: dashboard.New(),
+		editor: ports.Editor, accounts: ports.Accounts, writer: ports.Writer, dash: dashboard.New(),
 	}
 }
 
@@ -132,6 +152,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	if _, ok := msg.(editorClosedMsg); ok {
 		return m, m.load
+	}
+	if written, ok := msg.(writtenMsg); ok {
+		return m.onWritten(written)
 	}
 	if key, ok := msg.(tea.KeyPressMsg); ok {
 		return m.onKey(key)
@@ -204,6 +227,10 @@ func (m Model) onParseErrorKey(key string) tea.Cmd {
 
 // onViewKey handles the global keys of the normal views: 1–5 switch the view, r reloads, ? and ! open the popups.
 func (m Model) onViewKey(key string) (Model, tea.Cmd) {
+	if m.prompt != nil {
+		return m.onPromptKey(key)
+	}
+	m.notice = ""
 	if key == "r" {
 		m.refreshing = true
 		return m, m.load
@@ -218,7 +245,7 @@ func (m Model) onViewKey(key string) (Model, tea.Cmd) {
 		m.popup = popupChecks
 	}
 	if m.active == 0 {
-		m.dash = m.dash.Move(key)
+		m = m.onDashboardKey(key)
 	}
 	if number, err := strconv.Atoi(key); err == nil && number >= 1 && number <= tabCount {
 		m.active = number - 1

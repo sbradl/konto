@@ -12,7 +12,12 @@ import (
 
 func journalWith(t *testing.T, text string) File {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "main.journal")
+	return writeJournal(t, t.TempDir(), "main.journal", text)
+}
+
+func writeJournal(t *testing.T, dir, name, text string) File {
+	t.Helper()
+	path := filepath.Join(dir, name)
 	if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
 		t.Fatal(err)
 	}

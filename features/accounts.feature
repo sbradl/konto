@@ -13,7 +13,6 @@ Feature: Closing and reopening accounts (Dashboard Accounts panel)
 
   Rule: Closing
 
-    @wip
     Scenario: a zero-balance account closes after y
       Given I select "assets:spare"
       When I press "c"
@@ -26,14 +25,12 @@ Feature: Closing and reopening accounts (Dashboard Accounts panel)
       And the row is coloured 8
       And every hledger check passes
 
-    @wip
     Scenario: only the one directive line changes
       Given I select "assets:spare"
       When I press "c"
       And I press "y"
       Then exactly 1 line of the journal changed
 
-    @wip
     Scenario Outline: n, Esc and any other key do not close
       Given I select "assets:spare"
       And I press "c"
@@ -45,7 +42,6 @@ Feature: Closing and reopening accounts (Dashboard Accounts panel)
         | n   |
         | Esc |
 
-    @wip
     Scenario: the prompt stays open on unrelated keys
       Given I select "assets:spare"
       And I press "c"
@@ -53,7 +49,6 @@ Feature: Closing and reopening accounts (Dashboard Accounts panel)
       Then the y/n prompt is still open
       And the journal is unchanged
 
-    @wip
     Scenario: closing refreshes everything
       Given I select "assets:spare"
       When I press "c"
@@ -95,7 +90,6 @@ Feature: Closing and reopening accounts (Dashboard Accounts panel)
 
   Rule: Refusals
 
-    @wip
     Scenario: non-zero balance refuses with the reason
       Given I select "assets:checking"
       When I press "c"
@@ -103,13 +97,11 @@ Feature: Closing and reopening accounts (Dashboard Accounts panel)
       And no y/n prompt is shown
       And the journal is unchanged
 
-    @wip
     Scenario: a negative balance also refuses
       Given I select "liabilities:creditcard"
       When I press "c"
       Then I see a refusal mentioning "balance"
 
-    @wip
     Scenario: a periodic rule that references the account refuses
       Given the journal "household-scheduled" with a rule "~ monthly from 2026-11-01  Top-up\n    assets:spare  10,00 EUR\n    assets:checking\n"
       And I start konto
@@ -118,7 +110,6 @@ Feature: Closing and reopening accounts (Dashboard Accounts panel)
       Then I see a refusal "still used by: Top-up"
       And the journal is unchanged
 
-    @wip
     Scenario: an ended rule still blocks closing
       Given the journal "household-scheduled" with a rule "~ monthly from 2026-01-01 to 2026-03-01  Old top-up\n    assets:spare  10,00 EUR\n    assets:checking\n"
       And I start konto
@@ -126,7 +117,6 @@ Feature: Closing and reopening accounts (Dashboard Accounts panel)
       When I press "c"
       Then I see a refusal "still used by: Old top-up"
 
-    @wip
     Scenario: a once rule from the past still blocks closing
       Given the journal "household-scheduled" with a rule "~ 2026-01-05  Once-off\n    assets:spare  10,00 EUR\n    assets:checking\n"
       And I start konto
@@ -134,7 +124,6 @@ Feature: Closing and reopening accounts (Dashboard Accounts panel)
       When I press "c"
       Then I see a refusal "still used by: Once-off"
 
-    @wip
     Scenario: all referencing rules are named
       Given the journal "household-scheduled" with two rules "Alpha" and "Beta" referencing "assets:spare"
       And I start konto
@@ -151,14 +140,14 @@ Feature: Closing and reopening accounts (Dashboard Accounts panel)
       When I press "c"
       Then I see a y/n prompt naming "assets:spare"
 
-    @proposed @wip
+    @proposed
     Scenario: the clearing account can never be closed
       Given I select "assets:transfers"
       When I press "c"
       Then I see a refusal mentioning "clearing" or "transfer"
       And the journal is unchanged
 
-    @proposed @wip
+    @proposed
     Scenario: closing an already closed account does nothing
       Given I select "assets:old-account"
       When I press "c"
@@ -167,7 +156,6 @@ Feature: Closing and reopening accounts (Dashboard Accounts panel)
 
   Rule: Reopening
 
-    @wip
     Scenario: o reopens a closed account after y
       Given I select "assets:old-account"
       When I press "o"
@@ -179,14 +167,13 @@ Feature: Closing and reopening accounts (Dashboard Accounts panel)
       And it shows "0,00 EUR" and is not coloured 8
       And every hledger check passes
 
-    @wip
     Scenario: n cancels the reopen
       Given I select "assets:old-account"
       And I press "o"
       When I press "n"
       Then the journal is unchanged
 
-    @proposed @wip
+    @proposed
     Scenario: o on an open account does nothing
       Given I select "assets:checking"
       When I press "o"
@@ -213,7 +200,6 @@ Feature: Closing and reopening accounts (Dashboard Accounts panel)
       And I open "old.csv" in Import
       Then I see the row table with 1 new row
 
-    @wip
     Scenario: close then reopen restores the original directive
       Given I select "assets:spare"
       When I press "c"
@@ -241,7 +227,6 @@ Feature: Closing and reopening accounts (Dashboard Accounts panel)
       Then "accounts.journal" contains "konto:closed:2026-09-30"
       And the main journal is unchanged
 
-    @wip
     Scenario: the date is today's date
       Given today is 2027-02-03
       And I start konto
@@ -250,7 +235,6 @@ Feature: Closing and reopening accounts (Dashboard Accounts panel)
 
   Rule: Keys are scoped to the Accounts panel
 
-    @wip
     Scenario Outline: c and o do nothing outside the dashboard
       When I press "<view>"
       And I press "<key>"

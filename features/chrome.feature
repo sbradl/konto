@@ -194,7 +194,6 @@ Feature: Chrome, navigation and global keys
       Then konto exits with code 0
       And the journal is unchanged
 
-    @wip
     Scenario Outline: global keys are ignored while a y/n prompt is open
       Given I am on "1"
       And I select "assets:spare" and press "c"

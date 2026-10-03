@@ -76,13 +76,7 @@ func (m Model) hint() string {
 
 // statusBar shows the active view's name and key hint, with "? keys" at the right edge.
 func (m Model) statusBar() string {
-	left := " " + tabNames()[m.active]
-	if hint := m.hint(); hint != "" {
-		left += "   " + hint
-	}
-	if row, total := m.dash.Position(); m.active == 0 && total > 0 {
-		left += fmt.Sprintf("   %d/%d", row, total)
-	}
+	left := m.statusLeft()
 	status, statusStyle := m.checkStatus()
 	right := m.indicator() + "? keys "
 	gap := max(1, m.width-lipgloss.Width(left)-lipgloss.Width(status)-lipgloss.Width(right))
@@ -153,4 +147,23 @@ func issueOf(err error) *domain.CheckIssue {
 func parseErrorText(issue domain.CheckIssue) string {
 	return issue.Severity.String() + " " + issue.Check + "  " + issue.Location() + "\n\n" +
 		issue.Message + "\n\nEnter to jump to the editor · q to quit"
+}
+
+// statusLeft is the left of the status bar: a pending question or a notice, else the view's name,
+// its key hint and its cursor position.
+func (m Model) statusLeft() string {
+	if m.prompt != nil {
+		return " " + m.prompt.question + " (y/n)"
+	}
+	if m.notice != "" {
+		return " " + m.notice
+	}
+	left := " " + tabNames()[m.active]
+	if hint := m.hint(); hint != "" {
+		left += "   " + hint
+	}
+	if row, total := m.dash.Position(); m.active == 0 && total > 0 {
+		left += fmt.Sprintf("   %d/%d", row, total)
+	}
+	return left
 }
