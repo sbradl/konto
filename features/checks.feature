@@ -125,9 +125,9 @@ Feature: Journal checks — status bar indicator and the ! panel
       When I press "!"
       Then I do not see "assets:transfers" in the checks panel
 
-    @proposed @wip
+    @proposed
     Scenario: an unclassified account is never offered as an import target
-      Given the journal "household" with the tag removed from "assets:checking"
+      Given the journal "household" where "assets:checking" has no source tag
       And a Postbank CSV "x.csv" for IBAN "DE89370400440532013000" with closing balance 13.240,00 EUR:
         | date      | type  | payee | purpose | amount |
         | 26.9.2026 | Gutschrift | Acme | x   | 1,00   |

@@ -317,3 +317,42 @@ func TestBrowseReportsAMissingDirectory(t *testing.T) {
 		t.Errorf("err = %v, want it to name the directory", err)
 	}
 }
+
+func TestOpenReadsTheIBANFromTheFirstFieldsOfAShortLine(t *testing.T) {
+	header := "Buchungstag;Wert\n"
+	for name, content := range map[string]string{
+		"two fields":    "a\nb\nPostbank;123\n" + header,
+		"three fields":  "a\nb\nPostbank;123;DE89 3704 0044 0532 0130 00\n" + header,
+		"no third line": header,
+	} {
+		_, err := service(fakeFiles{data: map[string][]byte{"/x.csv": []byte(content)}}, &fakeConverter{}).Open(context.Background(), "/x.csv", domain.Ledger{})
+
+		if name == "three fields" && err != nil {
+			t.Errorf("%s: err = %v, want the IBAN read", name, err)
+		}
+		if name != "three fields" && !errors.Is(err, ErrNoIBAN) {
+			t.Errorf("%s: err = %v, want ErrNoIBAN", name, err)
+		}
+	}
+}
+
+func TestOpenToleratesAShortClosingBalanceLine(t *testing.T) {
+	for _, line := range []string{"Kontostand;30.9.2026;;", "Kontostand;30.9.2026;;;", "Kontostand"} {
+		content := strings.Replace(string(export("DE89370400440532013000")), "Kontostand;30.9.2026;;;14.261,45;EUR", line, 1)
+
+		_, err := service(fakeFiles{data: map[string][]byte{"/x.csv": []byte(content)}}, &fakeConverter{}).Open(context.Background(), "/x.csv", domain.Ledger{})
+		if err != nil {
+			t.Errorf("%q: err = %v", line, err)
+		}
+	}
+}
+
+func TestColumnIsEmptyBeyondTheLastField(t *testing.T) {
+	fields := []string{"a", "b"}
+	if got := column(fields, 1); got != "b" {
+		t.Errorf("column 1 = %q", got)
+	}
+	if got := column(fields, 2); got != "" {
+		t.Errorf("column 2 = %q, want empty", got)
+	}
+}

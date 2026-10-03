@@ -195,3 +195,25 @@ func TestImportRefusalNamesWhyAnAccountCannotBeImportedInto(t *testing.T) {
 		t.Errorf("an open import-fed account is a target, got %v", err)
 	}
 }
+
+func TestImportRefusalNamesWhyAnAccountIsNoImportTarget(t *testing.T) {
+	closed := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	for name, tc := range map[string]struct {
+		account Account
+		want    string
+	}{
+		"closed":       {Account{Name: "assets:a", Source: SourceImport, Closed: closed}, "account closed — reopen with o"},
+		"clearing":     {Account{Name: "assets:a", Source: SourceClearing}, "assets:a is the transfer clearing account — it is never an import target"},
+		"manual":       {Account{Name: "assets:a", Source: SourceManual}, "assets:a is a manual account — only import-fed accounts can be imported into"},
+		"unclassified": {Account{Name: "assets:a"}, "assets:a is unclassified (no konto:source tag) — it cannot be an import target"},
+		"import-fed":   {Account{Name: "assets:a", Source: SourceImport}, ""},
+	} {
+		err := tc.account.ImportRefusal()
+		switch {
+		case tc.want == "" && err != nil:
+			t.Errorf("%s: unexpected refusal %v", name, err)
+		case tc.want != "" && (err == nil || err.Error() != tc.want):
+			t.Errorf("%s: refusal = %v, want %q", name, err, tc.want)
+		}
+	}
+}
