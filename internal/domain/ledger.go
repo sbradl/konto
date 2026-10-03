@@ -26,6 +26,7 @@ type Ledger struct {
 	Upcoming     []Transaction // the periodic rules' occurrences for the next year, soonest first; never in the journal
 	Month        MonthSummary
 	Rules        []PeriodicRule // every `~` block of the journal, in file order
+	Commodities  []string       // the currencies the journal declares, in order
 	Spend        []MonthSpend   // the last six complete months, oldest first
 }
 
@@ -98,4 +99,21 @@ func (l Ledger) Watermark(account string) (time.Time, bool) {
 		}
 	}
 	return latest, found
+}
+
+const defaultGroupSize = 3 // digits per group of thousands
+
+// AmountLike is a zero in the commodity written the way the journal shows it: the style and the places of an
+// account holding it, else the plain comma-decimal style with two places.
+func (l Ledger) AmountLike(commodity string) Amount {
+	for _, account := range l.Accounts {
+		for _, amount := range account.Balance {
+			if amount.Commodity == commodity {
+				return Amount{Commodity: commodity, Places: amount.Places, Style: amount.Style}
+			}
+		}
+	}
+	return Amount{Commodity: commodity, Places: 2, Style: AmountStyle{
+		Spaced: true, DecimalMark: ",", GroupMark: ".", GroupSize: defaultGroupSize,
+	}}
 }

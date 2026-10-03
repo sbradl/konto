@@ -104,3 +104,25 @@ func TestWatermarkOfAnAccountWhoseOnlyTransactionIsDatedTheZeroTime(t *testing.T
 		t.Error("a transaction counts whatever its date")
 	}
 }
+
+func TestAmountLikeTakesTheStyleOfAnAccountHoldingTheCommodity(t *testing.T) {
+	style := AmountStyle{SymbolLeft: true, DecimalMark: ".", GroupMark: ",", GroupSize: 3}
+	ledger := Ledger{Accounts: []Account{
+		{Name: "assets:a", Balance: MultiAmount{{Commodity: "EUR", Mantissa: 100, Places: 2}}},
+		{Name: "assets:b", Balance: MultiAmount{{Commodity: "USD", Mantissa: 5, Places: 3, Style: style}}},
+	}}
+
+	got := ledger.AmountLike("USD")
+
+	if got.Commodity != "USD" || got.Places != 3 || got.Style != style || got.Mantissa != 0 {
+		t.Errorf("like = %+v", got)
+	}
+}
+
+func TestAmountLikeFallsBackToTheCommaStyle(t *testing.T) {
+	got := Ledger{}.AmountLike("EUR")
+
+	if got.Format() != "0,00 EUR" || got.Style.GroupMark != "." {
+		t.Errorf("like = %+v (%s)", got, got.Format())
+	}
+}

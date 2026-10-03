@@ -28,6 +28,8 @@ const (
 
 // Model is the Scheduled view's state: the rules with their projections and the cursor.
 type Model struct {
+	ledger    domain.Ledger
+	form      *form // the open new-rule or edit-rule form
 	schedules []domain.RuleSchedule
 	total     domain.MultiAmount
 	cursor    int
@@ -42,6 +44,7 @@ func New() Model { return Model{} }
 // WithLedger shows a fresh snapshot's rules; the cursor stays on its row number, or on the last row.
 func (m Model) WithLedger(ledger domain.Ledger) Model {
 	next := m
+	next.ledger = ledger
 	next.schedules = ledger.Schedules()
 	next.total = ledger.AnnualImpact()
 	return next.moveTo(next.cursor)
@@ -110,7 +113,7 @@ func (m Model) View() string {
 	column := layout.Panel("OCCURRENCES", right, occurrencesHeight, m.occurrences()) + "\n" +
 		layout.Panel("ANNUAL IMPACT", right, impactHeight, m.impact(right-panelChrome, impactHeight-panelChrome))
 	lower := lipgloss.JoinHorizontal(lipgloss.Top, layout.Panel("ENTRY", entryWidth, bottom, m.entry()), column)
-	return m.list(listHeight) + "\n" + lower
+	return m.withForm(m.list(listHeight) + "\n" + lower)
 }
 
 // list is the RULES panel: next date, description, raw cadence and status of each rule.

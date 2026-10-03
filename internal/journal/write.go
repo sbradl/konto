@@ -68,17 +68,35 @@ func declares(line, directive, name string) bool {
 
 // addTransactions writes each transaction into the file at its date position.
 func addTransactions(sources []*source, edit domain.AddTransactions) error {
-	target := sources[0]
-	if edit.File != "" {
-		i := slices.IndexFunc(sources, func(s *source) bool { return samePath(s.path, edit.File) })
-		if i < 0 {
-			return fmt.Errorf("%s is not part of the journal", edit.File)
-		}
-		target = sources[i]
+	target, err := fileNamed(sources, edit.File)
+	if err != nil {
+		return err
 	}
 	for _, transaction := range edit.Transactions {
 		insertTransaction(target, transaction)
 	}
+	return nil
+}
+
+// fileNamed is the journal file at the path; the main journal when the path is empty.
+func fileNamed(sources []*source, path string) (*source, error) {
+	if path == "" {
+		return sources[0], nil
+	}
+	i := slices.IndexFunc(sources, func(s *source) bool { return samePath(s.path, path) })
+	if i < 0 {
+		return nil, fmt.Errorf("%s is not part of the journal", path)
+	}
+	return sources[i], nil
+}
+
+// addRule appends the `~` block to the file after a blank line.
+func addRule(sources []*source, edit domain.AddRule) error {
+	target, err := fileNamed(sources, edit.File)
+	if err != nil {
+		return err
+	}
+	appendBlock(target, edit.Lines)
 	return nil
 }
 

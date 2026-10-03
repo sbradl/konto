@@ -17,6 +17,7 @@ import (
 	"github.com/sbradl/konto/internal/hledger"
 	"github.com/sbradl/konto/internal/journal"
 	"github.com/sbradl/konto/internal/ledger"
+	"github.com/sbradl/konto/internal/periodic"
 	"github.com/sbradl/konto/internal/report"
 	"github.com/sbradl/konto/internal/ui"
 )
@@ -47,6 +48,7 @@ func runProgram(cfg config.Config) error {
 		Loader: loader, Checker: checks.NewRunner(client), Creator: file, Editor: openInEditor,
 		Accounts: accounts.NewService(file, today), Writer: file, Verifier: checks.NewVerifier(file, client),
 		Reports: report.NewService(client, today), Forecast: forecast.NewService(client, today),
+		Rules:    periodic.NewService(client, today),
 		Importer: csvimport.NewService(files.System{}, client, rulesPath), DownloadDir: downloadDir(os.Getenv, home),
 	})).Run()
 	return err //nolint:wrapcheck // the program's own error is already self-describing

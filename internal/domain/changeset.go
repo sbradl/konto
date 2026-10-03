@@ -23,12 +23,5 @@ type RemoveAccountTag struct {
 	Key     string
 }
 
-// DeleteRule removes the `~` block that starts at Pos: its line and the indented lines under it,
-// comments within the block included. Comment lines above it stay.
-type DeleteRule struct {
-	Pos SourcePos
-}
-
 func (SetAccountTag) isEdit()    {}
 func (RemoveAccountTag) isEdit() {}
-func (DeleteRule) isEdit()       {}

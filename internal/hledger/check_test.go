@@ -89,9 +89,9 @@ func TestFirstParagraphJoinsTheMessageUpToTheNextBlankLine(t *testing.T) {
 func TestCheckTextPipesTheTextToTheNamedChecks(t *testing.T) {
 	var gotInput string
 	var gotArgs []string
-	client := &Client{runInput: func(_ context.Context, input string, args ...string) (string, error) {
+	client := &Client{runInput: func(_ context.Context, input string, args ...string) ([]byte, string, error) {
 		gotInput, gotArgs = input, args
-		return "", nil
+		return nil, "", nil
 	}}
 
 	err := client.CheckText(context.Background(), "journal text", []string{"balanced", "assertions"})
@@ -105,8 +105,8 @@ func TestCheckTextPipesTheTextToTheNamedChecks(t *testing.T) {
 }
 
 func TestCheckTextReportsTheFirstFailureInHledgersWords(t *testing.T) {
-	client := &Client{runInput: func(context.Context, string, ...string) (string, error) {
-		return "hledger: Error: -:5:\n5 | x\n\nbalance assertion: assets:checking\nthe asserted balance is 1\n", errors.New("exit 1")
+	client := &Client{runInput: func(context.Context, string, ...string) ([]byte, string, error) {
+		return nil, "hledger: Error: -:5:\n5 | x\n\nbalance assertion: assets:checking\nthe asserted balance is 1\n", errors.New("exit 1")
 	}}
 
 	err := client.CheckText(context.Background(), "", nil)

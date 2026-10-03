@@ -23,6 +23,13 @@ type prompt struct {
 	quit      bool   // y leaves konto: the question is about discarding the staged import
 }
 
+// pendingWrite is a changeset on its way to the journal and what to say once it is there.
+type pendingWrite struct {
+	changeset domain.Changeset
+	imported  string // the confirmation of an import: it also empties the Import view
+	rule      string // the confirmation of a saved rule
+}
+
 // onDashboardKey moves the Accounts cursor, or starts closing (c) or reopening (o) the selected account.
 func (m Model) onDashboardKey(key string) Model {
 	m.dash = m.dash.Move(key)
@@ -65,7 +72,7 @@ func (m Model) onPromptKey(key string) (Model, tea.Cmd) {
 		if pending.quit {
 			return m, tea.Quit
 		}
-		return m, func() tea.Msg { return m.write(pending) }
+		return m, m.writeCmd(pendingWrite{changeset: pending.changeset, imported: pending.imported})
 	case "n", "esc":
 		m.prompt = nil
 	case "up":
@@ -76,15 +83,17 @@ func (m Model) onPromptKey(key string) (Model, tea.Cmd) {
 	return m, nil
 }
 
-// write applies the prompt's changeset; an import's is checked first, so a journal that would fail its
+// writeCmd writes the changeset; an import's and a rule's is checked first, so a journal that would fail its
 // checks is never written.
-func (m Model) write(pending prompt) tea.Msg {
-	if pending.imported != "" && m.verifier != nil {
-		if err := m.verifier.Verify(context.Background(), pending.changeset); err != nil {
-			return writtenMsg{err: err}
+func (m Model) writeCmd(pending pendingWrite) tea.Cmd {
+	return func() tea.Msg {
+		if (pending.imported != "" || pending.rule != "") && m.verifier != nil {
+			if err := m.verifier.Verify(context.Background(), pending.changeset); err != nil {
+				return writtenMsg{err: err}
+			}
 		}
+		return writtenMsg{err: m.writer.Apply(pending.changeset), imported: pending.imported, rule: pending.rule}
 	}
-	return writtenMsg{err: m.writer.Apply(pending.changeset), imported: pending.imported}
 }
 
 // onWritten refreshes after a successful write and reports a failed one. A written import is confirmed and
@@ -97,17 +106,11 @@ func (m Model) onWritten(written writtenMsg) (Model, tea.Cmd) {
 	if written.imported != "" {
 		m.notice, m.imports = written.imported, m.imports.Cleared()
 	}
+	if written.rule != "" {
+		m.notice = written.rule
+	}
 	m.refreshing = true
 	return m, m.load
-}
-
-// onScheduledKey moves the rule cursor, or on d asks whether to delete the selected rule.
-func (m Model) onScheduledKey(key string) Model {
-	m.scheduled = m.scheduled.Move(key)
-	if rule, ok := m.scheduled.Selected(); ok && key == "d" {
-		m.prompt = &prompt{question: `delete rule "` + rule.Description + `"?`, changeset: rule.Delete()}
-	}
-	return m
 }
 
 // onImportKey hands a key to the Import view and runs what it asks for: listing a folder or opening a file.

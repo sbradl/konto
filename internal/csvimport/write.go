@@ -1,7 +1,6 @@
 package csvimport
 
 import (
-	"errors"
 	"fmt"
 	"slices"
 	"strconv"
@@ -107,18 +106,9 @@ func euroStyle() domain.AmountStyle {
 
 // parseAmount reads the German-formatted number the bank prints (13.182,03) in the commodity and style of like.
 func parseAmount(like domain.Amount, text string) (domain.Amount, error) {
-	number, negative := strings.CutPrefix(strings.TrimSpace(text), "-")
-	whole, fraction, _ := strings.Cut(strings.ReplaceAll(number, ".", ""), ",")
-	if len(fraction) > like.Places {
-		return domain.Amount{}, errors.New("too many decimals")
-	}
-	fraction += strings.Repeat("0", like.Places-len(fraction))
-	mantissa, err := strconv.ParseInt(whole+fraction, 10, 64)
-	if err != nil || whole == "" {
-		return domain.Amount{}, errors.New("not a number")
-	}
-	if negative {
-		mantissa = -mantissa
+	mantissa, err := domain.ParseNumber(text, ",", ".", like.Places)
+	if err != nil {
+		return domain.Amount{}, err //nolint:wrapcheck // the number's own words are the answer
 	}
 	like.Mantissa = mantissa
 	return like, nil

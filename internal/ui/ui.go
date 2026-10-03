@@ -99,6 +99,7 @@ type Model struct {
 	verifier    changeVerifier
 	reporter    reportBuilder
 	forecaster  forecaster
+	rules       rulePlanner
 	forecasts   forecastview.Model
 	reports     reports.Model
 	scheduled   scheduled.Model
@@ -159,6 +160,7 @@ type reportLoadedMsg struct {
 type writtenMsg struct {
 	err      error
 	imported string
+	rule     string
 }
 
 // editorClosedMsg reports that the user's editor has exited.
@@ -174,6 +176,7 @@ type Ports struct {
 	Verifier changeVerifier // checks an import's changes before they are written; none skips the check
 	Reports  reportBuilder  // builds the Reports view's tables
 	Forecast forecaster     // projects the Forecast view's balances
+	Rules    rulePlanner    // plans the Scheduled form's writes
 	Importer csvImporter    // lists folders and reads bank exports
 	// DownloadDir is where the file picker starts.
 	DownloadDir string
@@ -188,7 +191,7 @@ func New(journalPath string, ports Ports) Model {
 		editor: ports.Editor, accounts: ports.Accounts, writer: ports.Writer, verifier: ports.Verifier,
 		dash:     dashboard.New(),
 		reporter: ports.Reports, reports: reports.New(), scheduled: scheduled.New(),
-		forecaster: ports.Forecast, forecasts: forecastview.New(),
+		forecaster: ports.Forecast, forecasts: forecastview.New(), rules: ports.Rules,
 		importer: ports.Importer, imports: imports.New(ports.DownloadDir),
 	}
 }
@@ -231,6 +234,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if _, ok := msg.(editorClosedMsg); ok {
 		return m, m.load
 	}
+	if saved, ok := msg.(ruleSavedMsg); ok {
+		return m.onRuleSaved(saved)
+	}
 	if written, ok := msg.(writtenMsg); ok {
 		return m.onWritten(written)
 	}
@@ -258,6 +264,8 @@ func (m Model) onResult(msg tea.Msg) (updated Model, handled bool) {
 	switch result := msg.(type) {
 	case forecastLoadedMsg:
 		return m.onForecast(result), true
+	case formReadyMsg:
+		return m.onFormReady(result), true
 	case reportLoadedMsg:
 		return m.onReport(result), true
 	case browsedMsg:
@@ -348,7 +356,7 @@ func (m Model) hasSnapshot() bool {
 func (m Model) onKey(key tea.KeyPressMsg) (Model, tea.Cmd) {
 	name := keyName(key)
 	if m.capturing() && name != "ctrl+c" {
-		return m.onImportKey(name)
+		return m.onCapturedKey(name)
 	}
 	switch name {
 	case "q", "ctrl+c":
@@ -387,10 +395,14 @@ func keyName(key tea.KeyPressMsg) string {
 	return " "
 }
 
-// capturing reports whether the Import view's dialog has the keyboard: every key is then text for it.
+// capturing reports whether the Import view's dialog or the Scheduled form has the keyboard: every key is then
+// text for it.
 func (m Model) capturing() bool {
-	return m.ledger != nil && m.importer != nil && m.prompt == nil && m.popup == popupNone &&
-		m.active == importTab && m.imports.Capturing() && !m.tooSmall()
+	if m.ledger == nil || m.prompt != nil || m.popup != popupNone || m.tooSmall() {
+		return false
+	}
+	importing := m.active == importTab && m.importer != nil && m.imports.Capturing()
+	return importing || m.active == scheduledTab && m.scheduled.Capturing()
 }
 
 func (m Model) onFirstRunKey(key string) tea.Cmd {
@@ -444,7 +456,7 @@ func (m Model) onActiveViewKey(key string) (Model, tea.Cmd) {
 	case importTab:
 		return m.onImportKey(key)
 	case scheduledTab:
-		return m.onScheduledKey(key), nil
+		return m.onScheduledKey(key)
 	case reportsTab:
 		return m.onReportsKey(key)
 	}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/sbradl/konto/internal/domain"
@@ -69,4 +70,23 @@ func periodEnd(text string) (time.Time, error) {
 		return time.Time{}, fmt.Errorf("reading hledger bal output: %w", err)
 	}
 	return end, nil
+}
+
+// Occurrences are the dates the periodic rules in the journal text give rise to from first through last,
+// as hledger projects them. The text goes to hledger on standard input; no file is read or written.
+func (c *Client) Occurrences(ctx context.Context, text string, first, last time.Time) ([]time.Time, error) {
+	out, stderr, err := c.runInput(ctx, text, "-f", "-", "print",
+		"--forecast="+first.Format(time.DateOnly)+".."+last.Format(time.DateOnly), "-O", "json")
+	if err != nil {
+		return nil, fmt.Errorf("hledger projecting the rule: %w: %s", err, strings.TrimSpace(stderr))
+	}
+	transactions, err := readTransactions(out, jsonTransaction.isGenerated)
+	if err != nil {
+		return nil, err
+	}
+	dates := make([]time.Time, len(transactions))
+	for i, transaction := range transactions {
+		dates[i] = transaction.Date
+	}
+	return dates, nil
 }

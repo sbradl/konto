@@ -351,3 +351,63 @@ func TestSetCategoryRuleReplacesTheFirstAndTheLastBlockOfSeveral(t *testing.T) {
 		t.Errorf("rules = %q, want %q", got, want)
 	}
 }
+
+const rulesAndTransaction = "account a\n\n~ monthly from 2026-10-01  A\n    expenses:x  1,00 EUR\n    assets:checking\n\n; note\n~ monthly from 2026-10-02  B\n    expenses:x  2,00 EUR\n    assets:checking\n\n2026-09-01 T\n    expenses:x  3,00 EUR\n    assets:checking\n"
+
+func TestAddRuleAppendsTheBlockAtTheEndOfTheMainJournal(t *testing.T) {
+	file := journalWith(t, rulesAndTransaction)
+
+	apply(t, file, domain.AddRule{Lines: []string{"~ yearly from 2026-11-01  C", "    expenses:x  4,00 EUR", "    assets:checking"}})
+
+	if got := readFile(t, file.path); !strings.HasSuffix(got, "    assets:checking\n\n~ yearly from 2026-11-01  C\n    expenses:x  4,00 EUR\n    assets:checking\n") {
+		t.Errorf("journal = %q", got)
+	}
+}
+
+func TestAddRuleGoesIntoTheNamedFileAndRefusesAStrangerFile(t *testing.T) {
+	dir := t.TempDir()
+	sub := filepath.Join(dir, "rules.journal")
+	if err := os.WriteFile(sub, []byte("~ monthly from 2026-10-01  A\n    expenses:x  1,00 EUR\n    assets:checking\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	file := writeJournal(t, dir, "main.journal", "include rules.journal\n")
+
+	apply(t, file, domain.AddRule{File: sub, Lines: []string{"~ weekly from 2026-11-01  C"}})
+
+	if got := readFile(t, sub); !strings.HasSuffix(got, "\n\n~ weekly from 2026-11-01  C\n") {
+		t.Errorf("rules.journal = %q", got)
+	}
+	if got := readFile(t, file.path); got != "include rules.journal\n" {
+		t.Errorf("main journal = %q, want it untouched", got)
+	}
+	if err := file.Apply(domain.Changeset{Edits: []domain.Edit{domain.AddRule{File: "/elsewhere"}}}); err == nil {
+		t.Error("expected an error for a file outside the journal")
+	}
+}
+
+func TestReplaceRuleSwapsTheBlockInPlaceAndKeepsTheCommentAbove(t *testing.T) {
+	file := journalWith(t, rulesAndTransaction)
+
+	apply(t, file, domain.ReplaceRule{
+		Pos:   domain.SourcePos{File: file.path, Line: 8},
+		Lines: []string{"~ weekly from 2026-10-09  B2", "    expenses:y  9,00 EUR", "    assets:checking"},
+	})
+
+	want := strings.Replace(rulesAndTransaction, "~ monthly from 2026-10-02  B\n    expenses:x  2,00 EUR\n    assets:checking",
+		"~ weekly from 2026-10-09  B2\n    expenses:y  9,00 EUR\n    assets:checking", 1)
+	if got := readFile(t, file.path); got != want {
+		t.Errorf("journal =\n%s\nwant\n%s", got, want)
+	}
+}
+
+func TestReplaceRuleRefusesALineThatIsNoRuleAnymore(t *testing.T) {
+	file := journalWith(t, rulesAndTransaction)
+
+	for _, pos := range []domain.SourcePos{{File: file.path, Line: 1}, {File: "/elsewhere", Line: 3}} {
+		err := file.Apply(domain.Changeset{Edits: []domain.Edit{domain.ReplaceRule{Pos: pos}}})
+
+		if err == nil {
+			t.Errorf("%+v: expected an error", pos)
+		}
+	}
+}

@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"testing"
 	"time"
 
@@ -110,5 +111,26 @@ func TestAccountDeclarationsReportsAnUnreadableInclude(t *testing.T) {
 
 	if _, err := NewFile(main).AccountDeclarations(); err == nil {
 		t.Error("expected an error for an include that cannot be read")
+	}
+}
+
+func TestCommoditiesAreTheDeclaredCurrenciesOnceEachInOrder(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "sub.journal"), []byte("commodity PLN\ncommodity EUR  ; again\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	file := writeJournal(t, dir, "main.journal",
+		"commodity 1.000,00 EUR\ncommodity $1,000.00\ncommodity CZK 1.000,00\ncommodity \"ABC\"\ncommodity 1.000\n  commodity XXX\ninclude sub.journal\n")
+
+	got, err := file.Commodities()
+
+	if want := []string{"EUR", "$", "CZK", "ABC", "PLN"}; err != nil || !slices.Equal(got, want) {
+		t.Errorf("commodities = %v, %v; want %v", got, err, want)
+	}
+}
+
+func TestCommoditiesReportAnUnreadableJournal(t *testing.T) {
+	if _, err := NewFile(filepath.Join(t.TempDir(), "missing.journal")).Commodities(); err == nil {
+		t.Error("expected an error")
 	}
 }

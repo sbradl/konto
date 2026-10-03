@@ -23,6 +23,7 @@ type journalFile interface {
 	Exists() (bool, error)
 	AccountDeclarations() ([]domain.Declaration, error)
 	PeriodicRules() ([]domain.PeriodicRule, error)
+	Commodities() ([]string, error)
 }
 
 // ErrNoJournal means there is no journal file to load yet (first run).
@@ -58,6 +59,9 @@ func (l *Loader) Load(ctx context.Context) (domain.Ledger, error) {
 		return domain.Ledger{}, fmt.Errorf("loading ledger: %w", err)
 	}
 	if snapshot.Rules, err = l.file.PeriodicRules(); err != nil {
+		return domain.Ledger{}, fmt.Errorf("loading ledger: %w", err)
+	}
+	if snapshot.Commodities, err = l.file.Commodities(); err != nil {
 		return domain.Ledger{}, fmt.Errorf("loading ledger: %w", err)
 	}
 	snapshot.Accounts = declare(accounts, declarations)

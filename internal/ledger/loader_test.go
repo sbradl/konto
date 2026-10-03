@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -62,7 +63,11 @@ type fakeFile struct {
 	declareErr   error
 	rules        []domain.PeriodicRule
 	rulesErr     error
+	commodities  []string
+	commodityErr error
 }
+
+func (f fakeFile) Commodities() ([]string, error) { return f.commodities, f.commodityErr }
 
 func (f fakeFile) PeriodicRules() ([]domain.PeriodicRule, error) { return f.rules, f.rulesErr }
 
@@ -326,6 +331,26 @@ func TestLoadReportsAFailureToReadTheRules(t *testing.T) {
 	_, err := NewLoader(fakeGateway{}, file, sept30).Load(context.Background())
 
 	if err == nil || !strings.Contains(err.Error(), "rules failed") {
+		t.Errorf("expected an error carrying the cause, got: %v", err)
+	}
+}
+
+func TestLoadReadsTheDeclaredCommodities(t *testing.T) {
+	file := fakeFile{exists: true, commodities: []string{"EUR", "PLN"}}
+
+	got, err := NewLoader(fakeGateway{}, file, sept30).Load(context.Background())
+
+	if err != nil || !slices.Equal(got.Commodities, []string{"EUR", "PLN"}) {
+		t.Errorf("Commodities = %v, %v", got.Commodities, err)
+	}
+}
+
+func TestLoadReportsAFailureToReadTheCommodities(t *testing.T) {
+	file := fakeFile{exists: true, commodityErr: errors.New("commodities failed")}
+
+	_, err := NewLoader(fakeGateway{}, file, sept30).Load(context.Background())
+
+	if err == nil || !strings.Contains(err.Error(), "commodities failed") {
 		t.Errorf("expected an error carrying the cause, got: %v", err)
 	}
 }

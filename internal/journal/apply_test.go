@@ -332,3 +332,22 @@ func TestApplyRefusesTheLineJustPastTheEnd(t *testing.T) {
 		t.Error("expected an error")
 	}
 }
+
+func TestApplyRefusesAReadOnlyJournalAndLeavesItAlone(t *testing.T) {
+	file := journalWith(t, directive+"\n")
+	if err := os.Chmod(file.path, 0o444); err != nil {
+		t.Fatal(err)
+	}
+
+	err := file.Apply(closeEdit())
+
+	if err == nil || !strings.Contains(err.Error(), file.path) {
+		if err == nil {
+			t.Skip("running as a user that ignores file permissions")
+		}
+		t.Errorf("error = %v, want it to name the file", err)
+	}
+	if got := readFile(t, file.path); got != directive+"\n" {
+		t.Errorf("journal = %q, want it untouched", got)
+	}
+}

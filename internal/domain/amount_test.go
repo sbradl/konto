@@ -141,3 +141,35 @@ func TestZeroedKeepsCommoditiesAndStylesButNotQuantities(t *testing.T) {
 		t.Errorf("Zeroed = %+v", got)
 	}
 }
+
+func TestParseNumberReadsThePlacesTheStyleHas(t *testing.T) {
+	for text, want := range map[string]int64{
+		"1.234,5": 123450, "12": 1200, "-0,07": -7, "3.100,00": 310000, "0,5": 50, "1,234": 0,
+	} {
+		got, err := ParseNumber(text, ",", ".", 2)
+
+		if text == "1,234" {
+			if err == nil {
+				t.Errorf("ParseNumber(%q) = %d, want too many decimals", text, got)
+			}
+			continue
+		}
+		if err != nil || got != want {
+			t.Errorf("ParseNumber(%q) = %d, %v; want %d", text, got, err, want)
+		}
+	}
+}
+
+func TestParseNumberWithDotAsDecimalMarkAndNoGroups(t *testing.T) {
+	if got, err := ParseNumber("12.5", ".", "", 2); err != nil || got != 1250 {
+		t.Errorf("got %d, %v", got, err)
+	}
+}
+
+func TestParseNumberRefusesWhatIsNoNumber(t *testing.T) {
+	for _, text := range []string{"", "abc", ",5", "1-2", "--3", "1,2x", "+5"} {
+		if got, err := ParseNumber(text, ",", ".", 2); err == nil {
+			t.Errorf("ParseNumber(%q) = %d, want an error", text, got)
+		}
+	}
+}

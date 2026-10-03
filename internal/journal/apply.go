@@ -116,27 +116,51 @@ func (w *workspace) apply(edit domain.Edit) error {
 		return addTransactions(w.sources, change)
 	case domain.SetCategoryRule:
 		return w.setCategoryRule(change)
+	case domain.AddRule:
+		return addRule(w.sources, change)
+	case domain.ReplaceRule:
+		return replaceRule(w.sources, change)
 	}
 	return nil
 }
 
-// deleteRule removes the `~` block that starts at pos. The line there must be a rule line, or the
-// journal changed under konto and nothing is deleted.
-func deleteRule(sources []*source, pos domain.SourcePos) error {
+// ruleAt is the file and the first line index of the `~` block that starts at pos. The line there must be a
+// rule line, or the journal changed under konto.
+func ruleAt(sources []*source, pos domain.SourcePos) (file *source, first int, err error) {
 	for _, source := range sources {
 		if source.path != pos.File {
 			continue
 		}
-		first := pos.Line - 1
+		first = pos.Line - 1
 		if first < 0 || first >= len(source.lines) || !strings.HasPrefix(source.lines[first], "~") {
-			return fmt.Errorf("%s:%d is no longer a periodic rule: reload and try again", pos.File, pos.Line)
+			return nil, 0, fmt.Errorf("%s:%d is no longer a periodic rule: reload and try again", pos.File, pos.Line)
 		}
-		source.lines = slices.Delete(source.lines, first, blockEnd(source.lines, first))
-		source.lines = withoutDoubleBlank(source.lines, first)
-		source.dirty = true
-		return nil
+		return source, first, nil
 	}
-	return fmt.Errorf("%s is not part of the journal", pos.File)
+	return nil, 0, fmt.Errorf("%s is not part of the journal", pos.File)
+}
+
+// deleteRule removes the `~` block that starts at pos.
+func deleteRule(sources []*source, pos domain.SourcePos) error {
+	file, first, err := ruleAt(sources, pos)
+	if err != nil {
+		return err
+	}
+	file.lines = slices.Delete(file.lines, first, blockEnd(file.lines, first))
+	file.lines = withoutDoubleBlank(file.lines, first)
+	file.dirty = true
+	return nil
+}
+
+// replaceRule puts the lines in place of the `~` block that starts at pos.
+func replaceRule(sources []*source, edit domain.ReplaceRule) error {
+	file, first, err := ruleAt(sources, edit.Pos)
+	if err != nil {
+		return err
+	}
+	file.lines = slices.Replace(file.lines, first, blockEnd(file.lines, first), edit.Lines...)
+	file.dirty = true
+	return nil
 }
 
 // blockEnd is the index after the block that starts at first: its line and the indented lines under it.
@@ -213,11 +237,17 @@ func withoutTag(tags []string, key string) []string {
 	return slices.DeleteFunc(slices.Clone(tags), func(tag string) bool { return strings.HasPrefix(tag, key+":") })
 }
 
+// ownerWrite is the permission bit that lets the owner write a file.
+const ownerWrite = 0o200
+
 // replaceFile writes content to path through a temp file beside it, keeping its mode.
 func replaceFile(path, content string) error {
 	info, err := os.Stat(path)
 	if err != nil {
 		return fmt.Errorf("writing %s: %w", path, err)
+	}
+	if info.Mode().Perm()&ownerWrite == 0 { // the rename below would replace even a read-only file
+		return fmt.Errorf("writing %s: %w", path, fs.ErrPermission)
 	}
 	temp := path + ".konto-tmp"
 	if err := os.WriteFile(temp, []byte(content), info.Mode().Perm()); err != nil {

@@ -21,7 +21,7 @@ import (
 type runner func(ctx context.Context, args ...string) (stdout []byte, stderr string, err error)
 
 // inputRunner is the seam for hledger reading journal text from standard input.
-type inputRunner func(ctx context.Context, input string, args ...string) (stderr string, err error)
+type inputRunner func(ctx context.Context, input string, args ...string) (stdout []byte, stderr string, err error)
 
 // Client asks hledger about one journal. Every call names the journal with -f.
 type Client struct {
@@ -54,12 +54,12 @@ func execRunner(bin string) runner {
 }
 
 func execInputRunner(bin string) inputRunner {
-	return func(ctx context.Context, input string, args ...string) (string, error) {
+	return func(ctx context.Context, input string, args ...string) ([]byte, string, error) {
 		var stderr bytes.Buffer
 		cmd := exec.CommandContext(ctx, bin, args...) //nolint:gosec // see execRunner
 		cmd.Stdin, cmd.Stderr = strings.NewReader(input), &stderr
-		err := cmd.Run()
-		return stderr.String(), err
+		out, err := cmd.Output()
+		return out, stderr.String(), err
 	}
 }
 

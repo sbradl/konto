@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"errors"
 	"slices"
 	"strconv"
 	"strings"
@@ -72,6 +73,28 @@ func (a Amount) group(whole string) string {
 		whole = whole[:len(whole)-size]
 	}
 	return strings.Join(append([]string{whole}, groups...), a.Style.GroupMark)
+}
+
+// ParseNumber reads a decimal number as the given separators write it, with at most places decimals, into
+// the mantissa of that many places: ParseNumber("1.234,5", ",", ".", 2) is 123450. An empty text, a sign
+// anywhere but the front and anything but digits are errors.
+func ParseNumber(text, decimalMark, groupMark string, places int) (int64, error) {
+	number, negative := strings.CutPrefix(strings.TrimSpace(text), "-")
+	if groupMark != "" {
+		number = strings.ReplaceAll(number, groupMark, "")
+	}
+	whole, fraction, _ := strings.Cut(number, decimalMark)
+	if len(fraction) > places {
+		return 0, errors.New("too many decimals")
+	}
+	mantissa, err := strconv.ParseInt(whole+fraction+strings.Repeat("0", places-len(fraction)), 10, 64)
+	if err != nil || whole == "" || strings.ContainsAny(whole+fraction, "+-") {
+		return 0, errors.New("not a number")
+	}
+	if negative {
+		mantissa = -mantissa
+	}
+	return mantissa, nil
 }
 
 // MultiAmount holds one Amount per commodity, in hledger's order.

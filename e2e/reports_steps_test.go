@@ -196,6 +196,9 @@ func (w *world) expectLastRowsVisible() error {
 
 func (w *world) expectTablesOverflow() error {
 	return w.expectTable(statementTitle, func(rows []recentRow) error {
+		if len(rows) == 0 {
+			return errors.New("the statement has no rows yet")
+		}
 		last := strings.TrimSpace(rows[len(rows)-1].text)
 		var hidden int
 		if _, err := fmt.Sscanf(last, "… %d more", &hidden); err != nil || hidden <= 0 {
