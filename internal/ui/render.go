@@ -66,10 +66,11 @@ func (m Model) body() string {
 		return m.imports.View()
 	case scheduledTab:
 		return m.scheduled.View()
-	case reportsTab:
+	case forecastTab:
+		return m.forecasts.View()
+	default: // reportsTab
 		return m.reports.View()
 	}
-	return ""
 }
 
 // hint is the active view's keys as the status bar shows them.
@@ -172,10 +173,21 @@ func (m Model) statusLeft() string {
 	if row, total := m.position(); total > 0 {
 		left += fmt.Sprintf("   %d/%d", row, total)
 	}
-	if hidden := m.dash.HiddenPanels(); m.active == 0 && hidden > 0 {
+	if hidden := m.hiddenPanels(); hidden > 0 {
 		left += "   " + hiddenNotice(hidden)
 	}
 	return left
+}
+
+// hiddenPanels is how many panels of the active view the terminal is too small to show.
+func (m Model) hiddenPanels() int {
+	switch m.active {
+	case 0:
+		return m.dash.HiddenPanels()
+	case forecastTab:
+		return m.forecasts.HiddenPanels()
+	}
+	return 0
 }
 
 // hiddenNotice says how many Dashboard panels did not fit.

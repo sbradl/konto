@@ -36,3 +36,14 @@ var (
 	StatusWarn = StatusBar.Foreground(lipgloss.Color("3"))
 	StatusErr  = StatusBar.Foreground(lipgloss.Color("1"))
 )
+
+// Line styles a chart line by the rank of its account: green, blue, magenta, cyan, yellow, red, and round
+// again (spec §4.10).
+func Line(rank int) lipgloss.Style {
+	palette := [...]lipgloss.Style{
+		lipgloss.NewStyle().Foreground(lipgloss.Color("2")), lipgloss.NewStyle().Foreground(lipgloss.Color("4")),
+		lipgloss.NewStyle().Foreground(lipgloss.Color("5")), lipgloss.NewStyle().Foreground(lipgloss.Color("6")),
+		lipgloss.NewStyle().Foreground(lipgloss.Color("3")), lipgloss.NewStyle().Foreground(lipgloss.Color("1")),
+	}
+	return palette[rank%len(palette)]
+}

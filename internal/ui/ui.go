@@ -12,8 +12,10 @@ import (
 
 	"github.com/sbradl/konto/internal/csvimport"
 	"github.com/sbradl/konto/internal/domain"
+	forecastsvc "github.com/sbradl/konto/internal/forecast"
 	"github.com/sbradl/konto/internal/ledger"
 	"github.com/sbradl/konto/internal/ui/dashboard"
+	forecastview "github.com/sbradl/konto/internal/ui/forecast"
 	"github.com/sbradl/konto/internal/ui/imports"
 	"github.com/sbradl/konto/internal/ui/reports"
 	"github.com/sbradl/konto/internal/ui/scheduled"
@@ -50,6 +52,11 @@ type accountPlanner interface {
 // reportBuilder builds the Reports view's tables for a period.
 type reportBuilder interface {
 	Report(ctx context.Context, period domain.Period) (domain.Report, error)
+}
+
+// forecaster builds the Forecast view's projection of the loaded ledger.
+type forecaster interface {
+	Forecast(ctx context.Context, snapshot domain.Ledger) (forecastsvc.Forecast, error)
 }
 
 // csvImporter lists folders for the file picker and reads a bank export against the journal.
@@ -91,6 +98,8 @@ type Model struct {
 	writer      journalWriter
 	verifier    changeVerifier
 	reporter    reportBuilder
+	forecaster  forecaster
+	forecasts   forecastview.Model
 	reports     reports.Model
 	scheduled   scheduled.Model
 	importer    csvImporter
@@ -132,6 +141,12 @@ type openedMsg struct {
 	earlier *csvimport.Staged
 }
 
+// forecastLoadedMsg carries a built forecast, or why it could not be built.
+type forecastLoadedMsg struct {
+	forecast forecastsvc.Forecast
+	err      error
+}
+
 // reportLoadedMsg carries a built report for the period it was asked for.
 type reportLoadedMsg struct {
 	period domain.Period
@@ -158,6 +173,7 @@ type Ports struct {
 	Writer   journalWriter  // applies planned changes to the journal
 	Verifier changeVerifier // checks an import's changes before they are written; none skips the check
 	Reports  reportBuilder  // builds the Reports view's tables
+	Forecast forecaster     // projects the Forecast view's balances
 	Importer csvImporter    // lists folders and reads bank exports
 	// DownloadDir is where the file picker starts.
 	DownloadDir string
@@ -172,6 +188,7 @@ func New(journalPath string, ports Ports) Model {
 		editor: ports.Editor, accounts: ports.Accounts, writer: ports.Writer, verifier: ports.Verifier,
 		dash:     dashboard.New(),
 		reporter: ports.Reports, reports: reports.New(), scheduled: scheduled.New(),
+		forecaster: ports.Forecast, forecasts: forecastview.New(),
 		importer: ports.Importer, imports: imports.New(ports.DownloadDir),
 	}
 }
@@ -202,28 +219,14 @@ func (m Model) create() tea.Msg {
 // Update handles app-level input.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if size, ok := msg.(tea.WindowSizeMsg); ok {
-		m.width, m.height = size.Width, size.Height
-		m.dash = m.dash.Resize(m.width, max(0, m.height-chromeRows))
-		m.reports = m.reports.Resize(m.width, max(0, m.height-chromeRows))
-		m.scheduled = m.scheduled.Resize(m.width, max(0, m.height-chromeRows))
-		m.imports = m.imports.Resize(m.width, max(0, m.height-chromeRows))
+		m = m.resize(size)
 	}
 	if loaded, ok := msg.(ledgerLoadedMsg); ok {
 		m = m.onLoaded(loaded)
-		return m, tea.Batch(m.loadReport(loaded.err), m.reopen(loaded))
+		return m, tea.Batch(m.loadReport(loaded.err), m.reopen(loaded), m.loadForecast(loaded))
 	}
-	if report, ok := msg.(reportLoadedMsg); ok {
-		return m.onReport(report), nil
-	}
-	if browsed, ok := msg.(browsedMsg); ok {
-		m.imports = m.imports.WithListing(browsed.dir, browsed.entries, browsed.err)
-		return m, nil
-	}
-	if opened, ok := msg.(openedMsg); ok {
-		return m.onOpened(opened), nil
-	}
-	if failed, ok := msg.(journalCreateFailedMsg); ok {
-		m.createErr = failed.err
+	if updated, handled := m.onResult(msg); handled {
+		return updated, nil
 	}
 	if _, ok := msg.(editorClosedMsg); ok {
 		return m, m.load
@@ -235,6 +238,38 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.onKey(key)
 	}
 	return m, nil
+}
+
+// resize hands every view the content area below the tab bar and above the status bar.
+func (m Model) resize(size tea.WindowSizeMsg) Model {
+	m.width, m.height = size.Width, size.Height
+	content := max(0, m.height-chromeRows)
+	m.dash = m.dash.Resize(m.width, content)
+	m.reports = m.reports.Resize(m.width, content)
+	m.scheduled = m.scheduled.Resize(m.width, content)
+	m.imports = m.imports.Resize(m.width, content)
+	m.forecasts = m.forecasts.Resize(m.width, content)
+	return m
+}
+
+// onResult takes in what a command found out: a forecast, a report, a folder listing, an export, a failure
+// to create the journal. handled is false for any other message.
+func (m Model) onResult(msg tea.Msg) (updated Model, handled bool) {
+	switch result := msg.(type) {
+	case forecastLoadedMsg:
+		return m.onForecast(result), true
+	case reportLoadedMsg:
+		return m.onReport(result), true
+	case browsedMsg:
+		m.imports = m.imports.WithListing(result.dir, result.entries, result.err)
+		return m, true
+	case openedMsg:
+		return m.onOpened(result), true
+	case journalCreateFailedMsg:
+		m.createErr = result.err
+		return m, true
+	}
+	return m, false
 }
 
 // onLoaded takes a load result in. Once a good snapshot is held, a failed reload
@@ -281,6 +316,27 @@ func (m Model) onReport(loaded reportLoadedMsg) Model {
 	default:
 		m.reports = m.reports.WithReport(loaded.report)
 	}
+	return m
+}
+
+// loadForecast projects the freshly loaded journal for the Forecast view.
+func (m Model) loadForecast(loaded ledgerLoadedMsg) tea.Cmd {
+	if m.forecaster == nil || loaded.err != nil {
+		return nil
+	}
+	return func() tea.Msg {
+		built, err := m.forecaster.Forecast(context.Background(), loaded.ledger)
+		return forecastLoadedMsg{forecast: built, err: err}
+	}
+}
+
+// onForecast takes a built forecast in; a failed one leaves the last projection on screen with the error flagged.
+func (m Model) onForecast(built forecastLoadedMsg) Model {
+	if built.err != nil {
+		m.refreshErr = built.err
+		return m
+	}
+	m.forecasts = m.forecasts.WithForecast(built.forecast)
 	return m
 }
 
@@ -399,6 +455,7 @@ func (m Model) onActiveViewKey(key string) (Model, tea.Cmd) {
 const (
 	importTab    = 1
 	scheduledTab = 2
+	forecastTab  = 3
 	reportsTab   = 4
 )
 

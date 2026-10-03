@@ -85,3 +85,17 @@ func (l Ledger) UnclassifiedIssues() []CheckIssue {
 	}
 	return issues
 }
+
+// Watermark is the date of the account's latest transaction (ADR 0009); false when it has none.
+func (l Ledger) Watermark(account string) (time.Time, bool) {
+	var latest time.Time
+	found := false
+	for i := range l.Transactions {
+		for _, posting := range l.Transactions[i].Postings {
+			if posting.Account == account && !l.Transactions[i].Date.Before(latest) {
+				latest, found = l.Transactions[i].Date, true
+			}
+		}
+	}
+	return latest, found
+}

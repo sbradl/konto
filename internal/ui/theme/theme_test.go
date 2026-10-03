@@ -79,3 +79,12 @@ func TestOkIsAForegroundOnlyGreen(t *testing.T) {
 		t.Errorf("background = %v, want none", bg)
 	}
 }
+
+func TestLineColoursFollowGreenBlueMagentaCyanYellowRedAndWrap(t *testing.T) {
+	want := []string{"2", "4", "5", "6", "3", "1", "2", "4"}
+	for rank, colour := range want {
+		if got := Line(rank).GetForeground(); got != lipgloss.Color(colour) {
+			t.Errorf("rank %d is coloured %v, want ANSI %s", rank, got, colour)
+		}
+	}
+}

@@ -13,6 +13,7 @@ import (
 	"github.com/sbradl/konto/internal/config"
 	"github.com/sbradl/konto/internal/csvimport"
 	"github.com/sbradl/konto/internal/files"
+	"github.com/sbradl/konto/internal/forecast"
 	"github.com/sbradl/konto/internal/hledger"
 	"github.com/sbradl/konto/internal/journal"
 	"github.com/sbradl/konto/internal/ledger"
@@ -45,7 +46,7 @@ func runProgram(cfg config.Config) error {
 	_, err := tea.NewProgram(ui.New(cfg.JournalPath, ui.Ports{
 		Loader: loader, Checker: checks.NewRunner(client), Creator: file, Editor: openInEditor,
 		Accounts: accounts.NewService(file, today), Writer: file, Verifier: checks.NewVerifier(file, client),
-		Reports:  report.NewService(client, today),
+		Reports: report.NewService(client, today), Forecast: forecast.NewService(client, today),
 		Importer: csvimport.NewService(files.System{}, client, rulesPath), DownloadDir: downloadDir(os.Getenv, home),
 	})).Run()
 	return err //nolint:wrapcheck // the program's own error is already self-describing

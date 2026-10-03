@@ -77,3 +77,30 @@ func TestZeroIsNilWithoutBalances(t *testing.T) {
 		t.Errorf("Zero = %+v, want nil", got)
 	}
 }
+
+func TestWatermarkIsTheLatestTransactionDateOfTheAccount(t *testing.T) {
+	day := func(d int) time.Time { return time.Date(2026, 9, d, 0, 0, 0, 0, time.UTC) }
+	ledger := Ledger{Transactions: []Transaction{
+		{Date: day(10), Postings: []Posting{{Account: "assets:checking"}}},
+		{Date: day(26), Postings: []Posting{{Account: "assets:savings"}, {Account: "assets:checking"}}},
+		{Date: day(29), Postings: []Posting{{Account: "assets:savings"}}},
+		{Date: day(5), Postings: []Posting{{Account: "assets:checking"}}},
+	}}
+
+	got, ok := ledger.Watermark("assets:checking")
+
+	if !ok || !got.Equal(day(26)) {
+		t.Errorf("watermark = %v, %v; want 2026-09-26", got, ok)
+	}
+	if _, ok := ledger.Watermark("assets:none"); ok {
+		t.Error("an account without transactions has no watermark")
+	}
+}
+
+func TestWatermarkOfAnAccountWhoseOnlyTransactionIsDatedTheZeroTime(t *testing.T) {
+	ledger := Ledger{Transactions: []Transaction{{Postings: []Posting{{Account: "assets:x"}}}}}
+
+	if _, ok := ledger.Watermark("assets:x"); !ok {
+		t.Error("a transaction counts whatever its date")
+	}
+}

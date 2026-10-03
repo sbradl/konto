@@ -144,3 +144,88 @@ func TestBalancesUntilCountsEverythingUpToAndIncludingTheDay(t *testing.T) {
 		t.Errorf("calls = %+v, got %+v, want one call with %v", calls, got, want)
 	}
 }
+
+func periodReport(ends []string, rows ...string) string {
+	dates := make([]string, len(ends))
+	for i, end := range ends {
+		dates[i] = `[{"contents": "2026-01-01", "tag": "Exact"}, {"contents": "` + end + `", "tag": "Exact"}]`
+	}
+	return `{"prDates": [` + strings.Join(dates, ",") + `], "prRows": [` + strings.Join(rows, ",") + `]}`
+}
+
+func periodRow(periods ...[]string) string {
+	cells := make([]string, len(periods))
+	for i, amounts := range periods {
+		cells[i] = "[" + strings.Join(amounts, ",") + "]"
+	}
+	return `{"prrName": "assets:wallet", "prrAmounts": [` + strings.Join(cells, ",") + `]}`
+}
+
+func TestProjectionReadsTheMonthEndBalancesOfOneAccount(t *testing.T) {
+	var calls []call
+	out := periodReport([]string{"2026-09-30", "2026-10-30"}, periodRow(
+		nil,
+		[]string{amountJSON("EUR", 5000, eurStyle), amountJSON("PLN", 40000, eurStyle)},
+	))
+	client := newClient(recording(out, nil, &calls), "/data/main.journal")
+
+	got, err := client.Projection(context.Background(), domain.ProjectionQuery{
+		Account: "assets:wallet", Begin: time.Date(2026, 3, 30, 0, 0, 0, 0, time.UTC),
+		ForecastFrom: time.Date(2026, 9, 27, 0, 0, 0, 0, time.UTC), ForecastTo: time.Date(2027, 9, 30, 0, 0, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	wantEnds := []time.Time{time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC), time.Date(2026, 10, 30, 0, 0, 0, 0, time.UTC)}
+	if !reflect.DeepEqual(got.Ends, wantEnds) {
+		t.Errorf("ends = %v, want %v", got.Ends, wantEnds)
+	}
+	if len(got.Balances[0]) != 0 || len(got.Balances[1]) != 2 || got.Balances[1][1].Commodity != "PLN" ||
+		got.Balances[1][1].Mantissa != 40000 {
+		t.Errorf("balances = %+v", got.Balances)
+	}
+	want := []string{
+		"-f", "/data/main.journal", "bal", `acct:^assets:wallet$`, "-M", "-H", "-E", "-I", "--layout=bare", "-b", "2026-03-30",
+		"--forecast=2026-09-27..2027-09-30", "-O", "json",
+	}
+	if !reflect.DeepEqual(calls[0].args, want) {
+		t.Errorf("args = %v, want %v", calls[0].args, want)
+	}
+}
+
+func TestProjectionEscapesTheAccountNameInTheQuery(t *testing.T) {
+	var calls []call
+	client := newClient(recording(periodReport(nil), nil, &calls), "/data/main.journal")
+
+	if _, err := client.Projection(context.Background(), domain.ProjectionQuery{Account: "assets:a.b"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got := calls[0].args[3]; got != `acct:^assets:a\.b$` {
+		t.Errorf("query = %q", got)
+	}
+}
+
+func TestProjectionOfAnAccountWithoutPostingsHasPeriodsButNoBalances(t *testing.T) {
+	client := newClient(recording(periodReport([]string{"2026-09-30"}), nil, new([]call)), "j")
+
+	got, err := client.Projection(context.Background(), domain.ProjectionQuery{Account: "assets:none"})
+
+	if err != nil || len(got.Ends) != 1 || len(got.Balances) != 1 || len(got.Balances[0]) != 0 {
+		t.Errorf("got %+v, %v", got, err)
+	}
+}
+
+func TestProjectionReportsWhatItCannotRead(t *testing.T) {
+	badAmount := `{"acommodity": "EUR", "aquantity": {"decimalMantissa": 1, "decimalPlaces": 2}, "astyle": {"asdigitgroups": [".", []]}}`
+	for name, client := range map[string]*Client{
+		"hledger fails": newClient(recording("", errors.New("exit status 1"), new([]call)), "j"),
+		"not json":      newClient(recording("oops", nil, new([]call)), "j"),
+		"bad date":      newClient(recording(periodReport([]string{"soon"}), nil, new([]call)), "j"),
+		"bad amount":    newClient(recording(periodReport([]string{"2026-09-30"}, periodRow([]string{badAmount})), nil, new([]call)), "j"),
+	} {
+		if _, err := client.Projection(context.Background(), domain.ProjectionQuery{Account: "assets:x"}); err == nil {
+			t.Errorf("%s: expected an error", name)
+		}
+	}
+}

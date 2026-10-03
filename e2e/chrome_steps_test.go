@@ -101,10 +101,13 @@ func checkHeight(height int) func(lines []string) error {
 }
 
 func checkStatusBarLast(lines []string) error {
-	if last := lines[len(lines)-1]; !strings.HasPrefix(strings.TrimSpace(last), "dash") {
-		return fmt.Errorf("last line is %q, want the status bar", last)
+	last := strings.TrimSpace(lines[len(lines)-1])
+	for _, tab := range tabNames {
+		if strings.HasPrefix(last, tab.name) {
+			return nil
+		}
 	}
-	return nil
+	return fmt.Errorf("last line is %q, want the status bar", last)
 }
 
 func registerLayoutSteps(sc *godog.ScenarioContext, w *world) {
@@ -141,6 +144,7 @@ func registerChromeSteps(sc *godog.ScenarioContext, w *world) {
 	registerImportWriteSteps(sc, w)
 	registerStagingSteps(sc, w)
 	registerFormatSteps(sc, w)
+	registerForecastSteps(sc, w)
 	sc.Step(`^the active tab is "([^"]*)"$`, w.expectActiveTab)
 	sc.Step(`^the active tab is unchanged$`, func() error { return w.expectActiveTab(w.tabAtBaseline) })
 	sc.Step(`^the tab bar shows the journal path and "(\d+)" transactions on the right$`, func(count string) error {

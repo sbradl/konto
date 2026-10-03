@@ -113,7 +113,7 @@ func (w *world) categoriseRows(table *godog.Table) error {
 }
 
 // writeImport asks to write and confirms; a write that is blocked has no question to answer. A confirmed write
-// is waited for until the views have reloaded, as the next import reads the journal as it is then.
+// is waited for, and then for the views to reload, as the next import reads the journal as it is then.
 func (w *world) writeImport() error {
 	if err := w.press("w"); err != nil {
 		return err
@@ -122,6 +122,9 @@ func (w *world) writeImport() error {
 		return err
 	}
 	if err := w.press("y"); err != nil {
+		return err
+	}
+	if err := w.expectLine(-1, "status bar", "imported ", strings.Contains); err != nil {
 		return err
 	}
 	return w.eventually(func() error {
