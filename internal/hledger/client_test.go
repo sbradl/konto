@@ -209,3 +209,43 @@ func TestPrintToleratesMissingMessage(t *testing.T) {
 		t.Errorf("error = %v, want a located JournalError with an empty message", err)
 	}
 }
+
+var forecastJSON = `[
+  {"tdate": "2026-09-14", "tdescription": "Rent", "ttags": [[]], "tpostings": []},
+  {"tdate": "2026-10-01", "tdescription": "Vermieter Mueller", "ttags": [["_generated-transaction", "~ monthly from 2026-10-01"]], "tpostings": [
+    {"paccount": "expenses:rent", "pamount": [` + amountJSON("EUR", 90000, eurStyle) + `]}
+  ]}
+]`
+
+// Upcoming asks for the forecast over an explicit period and keeps only the generated occurrences.
+func TestUpcomingReturnsOnlyGeneratedOccurrencesInThePeriod(t *testing.T) {
+	var calls []call
+	client := newClient(recording(forecastJSON, nil, &calls), "/data/main.journal")
+	from, to := time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC), time.Date(2027, 9, 30, 0, 0, 0, 0, time.UTC)
+
+	got, err := client.Upcoming(context.Background(), from, to)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	wantArgs := []string{"-f", "/data/main.journal", "print", "--forecast=2026-09-30..2027-09-30", "-O", "json"}
+	if len(calls) != 1 || !reflect.DeepEqual(calls[0].args, wantArgs) {
+		t.Errorf("calls = %+v, want one call with %v", calls, wantArgs)
+	}
+	if len(got) != 1 || got[0].Description != "Vermieter Mueller" || got[0].Date != time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC) {
+		t.Errorf("occurrences = %+v, want only the generated Vermieter Mueller", got)
+	}
+}
+
+func TestUpcomingReportsFailureAndGarbage(t *testing.T) {
+	when := time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC)
+	for name, client := range map[string]*Client{
+		"hledger fails": newClient(recording("", errors.New("exit status 1"), new([]call)), "j"),
+		"not json":      newClient(recording("oops", nil, new([]call)), "j"),
+		"bad date":      newClient(recording(`[{"tdate": "x", "ttags": [["_generated-transaction", ""]]}]`, nil, new([]call)), "j"),
+	} {
+		if _, err := client.Upcoming(context.Background(), when, when); err == nil {
+			t.Errorf("%s: expected an error", name)
+		}
+	}
+}

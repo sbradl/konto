@@ -17,6 +17,7 @@ func (s MonthSummary) Net() MultiAmount { return s.Income.Plus(s.Expenses.Negate
 type Ledger struct {
 	Accounts     []Account
 	Transactions []Transaction
+	Upcoming     []Transaction // the periodic rules' occurrences for the next year, soonest first; never in the journal
 	Month        MonthSummary
 }
 

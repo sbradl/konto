@@ -203,7 +203,6 @@ Feature: Dashboard
 
   Rule: Upcoming panel
 
-    @wip
     Scenario: next occurrences from periodic rules, soonest first
       Then the Upcoming panel lists in order
         | 2026-10-01 | Vermieter Mueller |
@@ -211,17 +210,16 @@ Feature: Dashboard
         | 2026-10-25 | Acme GmbH         |
         | 2026-10-26 | Sparen            |
 
-    @proposed @wip
+    @proposed
     Scenario: rows are not selectable
       When I press "↓"
       Then no Upcoming row is highlighted with background 8
 
-    @wip
     Scenario: upcoming items are not journal transactions
       Then the journal is unchanged
       And the transaction count in the tab bar is still 54
 
-    @proposed @wip
+    @proposed
     Scenario: no rules means an empty panel, not an error
       Given the journal "household"
       And I start konto

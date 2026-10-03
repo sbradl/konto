@@ -18,6 +18,12 @@ type fakeGateway struct {
 	balancesErr  error
 	activity     []domain.Account
 	activityErr  error
+	upcoming     []domain.Transaction
+	upcomingErr  error
+}
+
+func (f fakeGateway) Upcoming(context.Context, time.Time, time.Time) ([]domain.Transaction, error) {
+	return f.upcoming, f.upcomingErr
 }
 
 func (f fakeGateway) Print(context.Context) ([]domain.Transaction, error) {
@@ -187,4 +193,38 @@ func TestLoadReportsAFailureToSummariseTheMonth(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "period failed") {
 		t.Errorf("expected an error carrying the cause, got: %v", err)
 	}
+}
+
+// The upcoming occurrences are the next year of the periodic rules, counted from today.
+func TestLoadProjectsTheNextYearOfPeriodicRules(t *testing.T) {
+	gw := &upcomingRecorder{fakeGateway{upcoming: []domain.Transaction{{Description: "Rent"}}}, time.Time{}, time.Time{}}
+
+	got, err := NewLoader(gw, present, sept30).Load(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if first, last := gw.first.Format(time.DateOnly), gw.last.Format(time.DateOnly); first != "2026-09-30" || last != "2027-09-30" {
+		t.Errorf("projected %s..%s, want 2026-09-30..2027-09-30", first, last)
+	}
+	if len(got.Upcoming) != 1 || got.Upcoming[0].Description != "Rent" {
+		t.Errorf("Upcoming = %+v, want the projected Rent", got.Upcoming)
+	}
+}
+
+func TestLoadReportsAFailureToProjectTheRules(t *testing.T) {
+	_, err := NewLoader(fakeGateway{upcomingErr: errors.New("forecast failed")}, present, sept30).Load(context.Background())
+
+	if err == nil || !strings.Contains(err.Error(), "forecast failed") {
+		t.Errorf("expected an error carrying the cause, got: %v", err)
+	}
+}
+
+type upcomingRecorder struct {
+	fakeGateway
+	first, last time.Time
+}
+
+func (u *upcomingRecorder) Upcoming(_ context.Context, first, last time.Time) ([]domain.Transaction, error) {
+	u.first, u.last = first, last
+	return u.upcoming, nil
 }

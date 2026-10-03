@@ -18,7 +18,10 @@ type recentRow struct {
 }
 
 // recentPanel reads the Recent panel's rows: those between its title and its bottom border.
-func (w *world) recentPanel() ([]recentRow, error) {
+func (w *world) recentPanel() ([]recentRow, error) { return w.listPanel("RECENT") }
+
+// listPanel reads the rows of the panel titled title.
+func (w *world) listPanel(title string) ([]recentRow, error) {
 	s, err := w.session()
 	if err != nil {
 		return nil, err
@@ -28,7 +31,7 @@ func (w *world) recentPanel() ([]recentRow, error) {
 	left, inside := 0, false
 	for y, line := range lines {
 		runes := []rune(line)
-		if before, _, found := strings.Cut(line, "╭─ RECENT "); found {
+		if before, _, found := strings.Cut(line, "╭─ "+title+" "); found {
 			left, inside = len([]rune(before)), true
 			continue
 		}
@@ -43,7 +46,7 @@ func (w *world) recentPanel() ([]recentRow, error) {
 			rows = append(rows, recentRow{y: y, x: left, text: text})
 		}
 	}
-	return nil, errors.New("no Recent panel on screen:\n" + s.screenText())
+	return nil, errors.New("no " + title + " panel on screen:\n" + s.screenText())
 }
 
 // expectRecent waits until check accepts the panel's non-empty rows.
@@ -229,5 +232,86 @@ func registerRecentSteps(sc *godog.ScenarioContext, w *world) {
 			fmt.Fprintf(&b, "\n2026-09-%02d Bulk %03d\n    expenses:groceries  1,00 EUR\n    equity:opening-balances\n", 1+i%28, i)
 		}
 		return w.useJournal(name, b.String())
+	})
+}
+
+// expectUpcoming waits until check accepts the Upcoming panel's non-empty rows.
+func (w *world) expectUpcoming(check func(rows []recentRow) error) error {
+	s, err := w.session()
+	if err != nil {
+		return err
+	}
+	var failure error
+	s.waitFor(w.suite.timeout, func(string) bool {
+		rows, perr := w.listPanel("UPCOMING")
+		if perr != nil {
+			failure = perr
+			return false
+		}
+		var filled []recentRow
+		for _, row := range rows {
+			if strings.TrimSpace(row.text) != "" {
+				filled = append(filled, row)
+			}
+		}
+		failure = check(filled)
+		return failure == nil
+	})
+	if failure != nil {
+		return fmt.Errorf("%w\n%s", failure, s.screenText())
+	}
+	return nil
+}
+
+func (w *world) expectUpcomingOrder(table *godog.Table) error {
+	return w.expectUpcoming(func(rows []recentRow) error {
+		for i, want := range table.Rows {
+			if i >= len(rows) {
+				return fmt.Errorf("Upcoming has %d rows, want at least %d", len(rows), len(table.Rows))
+			}
+			for _, cell := range want.Cells {
+				if !strings.Contains(rows[i].text, cell.Value) {
+					return fmt.Errorf("Upcoming row %d is %q, want it to hold %q", i+1, rows[i].text, cell.Value)
+				}
+			}
+		}
+		return nil
+	})
+}
+
+func (w *world) expectUpcomingEmpty() error {
+	return w.expectUpcoming(func(rows []recentRow) error {
+		if len(rows) != 0 {
+			return fmt.Errorf("Upcoming has %d rows, want none", len(rows))
+		}
+		return nil
+	})
+}
+
+func (w *world) expectNoUpcomingHighlight() error {
+	w.s.settle(w.suite.timeout)
+	rows, err := w.listPanel("UPCOMING")
+	if err != nil {
+		return err
+	}
+	for _, row := range rows {
+		for i := range []rune(row.text) {
+			if w.s.cellBackground(row.x+1+i, row.y) == selectionBackground {
+				return fmt.Errorf("Upcoming row %q is highlighted", row.text)
+			}
+		}
+	}
+	return nil
+}
+
+func registerUpcomingSteps(sc *godog.ScenarioContext, w *world) {
+	sc.Step(`^the Upcoming panel lists in order$`, w.expectUpcomingOrder)
+	sc.Step(`^the Upcoming panel is empty$`, w.expectUpcomingEmpty)
+	sc.Step(`^no Upcoming row is highlighted with background (\d+)$`, func(int) error { return w.expectNoUpcomingHighlight() })
+	sc.Step(`^the transaction count in the tab bar is still (\d+)$`, func(count string) error {
+		return w.expectLine(0, "tab bar", count+" txns", strings.Contains)
+	})
+	sc.Step(`^the status bar shows no error indicator$`, func() error {
+		return w.expectLine(-1, "status bar", "✗", func(line, marker string) bool { return !strings.Contains(line, marker) })
 	})
 }

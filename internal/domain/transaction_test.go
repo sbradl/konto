@@ -84,3 +84,22 @@ func TestRecentOfASinglePostingHasNoCategory(t *testing.T) {
 		t.Errorf("category = %q, want none", got.Category)
 	}
 }
+
+func TestUpcomingListsTheProjectedOccurrencesSoonestFirstSeenFromTheirOwnAccount(t *testing.T) {
+	ledger := recentLedger()
+	ledger.Upcoming = []Transaction{
+		{Date: day(26), Description: "Sparen", Postings: []Posting{posting("assets:savings", 50000), posting("assets:checking", -50000)}},
+		{Date: day(25), Description: "Acme", Postings: []Posting{posting("assets:checking", 300000), posting("income:salary", -300000)}},
+	}
+
+	got := ledger.UpcomingEntries()
+
+	order := make([]string, len(got))
+	for i, entry := range got {
+		order[i] = entry.Date.Format("01-02") + " " + entry.Description + " " + entry.Category
+	}
+	want := []string{"09-25 Acme income:salary", "09-26 Sparen assets:checking"}
+	if !reflect.DeepEqual(order, want) {
+		t.Errorf("upcoming = %v, want %v", order, want)
+	}
+}

@@ -26,12 +26,15 @@ const (
 	descriptionShare    = 45 // percent of the room beside the date and amount that description takes
 	recentGap           = 2
 	recentFixed         = 16 // a Recent row's edges, its date and the gaps around the middle columns
+	upcomingHeight      = 7  // the Upcoming panel: border, four occurrences and a "more" row, border
+	minRecentHeight     = 5  // Upcoming gives way rather than squeeze Recent below this
 )
 
 // Model is the Dashboard's view-local state; the ledger is replaced wholesale on refresh.
 type Model struct {
 	accounts []domain.Account
 	recent   []domain.RecentEntry
+	upcoming []domain.RecentEntry
 	figures  figures
 	cursor   int
 	offset   int // the first visible row
@@ -56,6 +59,7 @@ func (m Model) WithLedger(ledger domain.Ledger) Model {
 		net: ledger.MonthNet(), income: ledger.MonthIncome(), expenses: ledger.MonthExpenses(),
 	}
 	next.recent = ledger.Recent()
+	next.upcoming = ledger.UpcomingEntries()
 	return next.WithAccounts(ledger.Accounts)
 }
 
@@ -154,15 +158,24 @@ func (m Model) View() string {
 	}
 	right := m.width - width
 	cards := lipgloss.JoinHorizontal(lipgloss.Top, m.cards(right)...)
-	column := cards + "\n" + m.recentPanel(right, m.height-cardHeight)
+	column := cards + "\n" + m.listPanels(right, m.height-cardHeight)
 	return lipgloss.JoinHorizontal(lipgloss.Top, left, column)
 }
 
-// recentPanel lists the newest transactions, one per row: date, description, category, amount. When
-// they do not all fit, the last row says how many more there are. Rows are not selectable.
-func (m Model) recentPanel(width, height int) string {
+// listPanels stacks Recent over Upcoming; Upcoming is left out when there is no room for both.
+func (m Model) listPanels(width, height int) string {
+	if height < upcomingHeight+minRecentHeight {
+		return entriesPanel("RECENT", m.recent, width, height)
+	}
+	recent := entriesPanel("RECENT", m.recent, width, height-upcomingHeight)
+	return recent + "\n" + entriesPanel("UPCOMING", m.upcoming, width, upcomingHeight)
+}
+
+// entriesPanel lists transactions one per row: date, description, category, amount. When they do not
+// all fit, the last row says how many more there are. Rows are not selectable.
+func entriesPanel(title string, entries []domain.RecentEntry, width, height int) string {
 	inner, capacity := max(0, width-panelChrome), max(0, height-panelChrome)
-	shown := m.recent
+	shown := entries
 	if len(shown) > capacity {
 		shown = shown[:max(0, capacity-1)]
 	}
@@ -171,10 +184,10 @@ func (m Model) recentPanel(width, height int) string {
 	for _, entry := range shown {
 		rows = append(rows, columns.line(entry))
 	}
-	if hidden := len(m.recent) - len(shown); hidden > 0 {
+	if hidden := len(entries) - len(shown); hidden > 0 {
 		rows = append(rows, theme.Dim.Render(fmt.Sprintf(" … %d more", hidden)))
 	}
-	return layout.Panel("RECENT", width, height, strings.Join(rows, "\n"))
+	return layout.Panel(title, width, height, strings.Join(rows, "\n"))
 }
 
 // recent column widths for one panel width: what is left of the row after the date and the widest amount

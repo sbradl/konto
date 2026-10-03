@@ -31,16 +31,32 @@ type RecentEntry struct {
 // its own asset or liability account: the first such posting that is not the transfer clearing
 // account gives the amount, and the posting beside it the category.
 func (l Ledger) Recent() []RecentEntry {
-	clearing := map[string]bool{}
-	for _, account := range l.Accounts {
-		clearing[account.Name] = account.Source == SourceClearing
-	}
+	clearing := l.clearingAccounts()
 	entries := make([]RecentEntry, 0, len(l.Transactions))
 	for _, transaction := range slices.Backward(l.Transactions) {
 		entries = append(entries, transaction.recentEntry(clearing))
 	}
 	slices.SortStableFunc(entries, func(a, b RecentEntry) int { return b.Date.Compare(a.Date) })
 	return entries
+}
+
+// UpcomingEntries lists the periodic rules' projected occurrences soonest first, shaped like Recent's.
+func (l Ledger) UpcomingEntries() []RecentEntry {
+	clearing := l.clearingAccounts()
+	entries := make([]RecentEntry, 0, len(l.Upcoming))
+	for _, transaction := range l.Upcoming {
+		entries = append(entries, transaction.recentEntry(clearing))
+	}
+	slices.SortStableFunc(entries, func(a, b RecentEntry) int { return a.Date.Compare(b.Date) })
+	return entries
+}
+
+func (l Ledger) clearingAccounts() map[string]bool {
+	clearing := map[string]bool{}
+	for _, account := range l.Accounts {
+		clearing[account.Name] = account.Source == SourceClearing
+	}
+	return clearing
 }
 
 func (t Transaction) recentEntry(clearing map[string]bool) RecentEntry {

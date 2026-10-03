@@ -432,7 +432,7 @@ func TestRecentAmountsAreGreenOrRed(t *testing.T) {
 var day1 = time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
 
 func TestRecentSaysHowManyRowsDontFit(t *testing.T) {
-	rows := recentRows(New().Resize(180, 14).WithLedger(withTransactions(200))) // 10 rows tall: 8 inside
+	rows := recentRows(New().Resize(180, 21).WithLedger(withTransactions(200))) // Recent is 10 rows tall: 8 inside
 
 	if len(rows) != 8 {
 		t.Fatalf("panel has %d rows, want 8", len(rows))
@@ -443,7 +443,7 @@ func TestRecentSaysHowManyRowsDontFit(t *testing.T) {
 }
 
 func TestRecentShowsExactlyAsManyAsFitWithoutAMoreRow(t *testing.T) {
-	rows := recentRows(New().Resize(180, 14).WithLedger(withTransactions(8))) // exactly 8 inside
+	rows := recentRows(New().Resize(180, 21).WithLedger(withTransactions(8))) // exactly 8 inside
 
 	if text := strings.Join(rows, "\n"); strings.Contains(text, "more") || !strings.Contains(text, "Shop 07") {
 		t.Errorf("all 8 fit, so no … more row:\n%s", text)
@@ -451,7 +451,7 @@ func TestRecentShowsExactlyAsManyAsFitWithoutAMoreRow(t *testing.T) {
 }
 
 func TestRecentShowsEverythingThatFitsWithoutAMoreRow(t *testing.T) {
-	rows := recentRows(New().Resize(180, 14).WithLedger(withTransactions(3)))
+	rows := recentRows(New().Resize(180, 21).WithLedger(withTransactions(3)))
 
 	if strings.Contains(strings.Join(rows, "\n"), "more") {
 		t.Errorf("all 8 fit, so no … more row:\n%s", strings.Join(rows, "\n"))
@@ -459,7 +459,7 @@ func TestRecentShowsEverythingThatFitsWithoutAMoreRow(t *testing.T) {
 }
 
 func TestRecentRowsFillThePanelWidth(t *testing.T) {
-	for _, line := range recentRows(New().Resize(180, 14).WithLedger(withTransactions(3)))[:3] {
+	for _, line := range recentRows(New().Resize(180, 21).WithLedger(withTransactions(3)))[:3] {
 		if w := lipgloss.Width(line); w != 180 {
 			t.Errorf("row is %d wide, want 180: %q", w, line)
 		}
@@ -470,7 +470,7 @@ func TestRecentCutsLongDescriptionsToKeepTheColumns(t *testing.T) {
 	ledger := withTransactions(1)
 	ledger.Transactions[0].Description = strings.Repeat("long ", 40)
 
-	row := recentRows(New().Resize(110, 14).WithLedger(ledger))[0]
+	row := recentRows(New().Resize(110, 21).WithLedger(ledger))[0]
 
 	if lipgloss.Width(row) != 110 || !strings.HasSuffix(strings.TrimRight(row, " │"), "-10,00 EUR") {
 		t.Errorf("row = %q, want it cut to the width with the amount kept", row)
@@ -478,7 +478,7 @@ func TestRecentCutsLongDescriptionsToKeepTheColumns(t *testing.T) {
 }
 
 func TestRecentIsNotSelectable(t *testing.T) {
-	view := New().Resize(180, 14).WithLedger(withTransactions(3)).Move("down").View()
+	view := New().Resize(180, 21).WithLedger(withTransactions(3)).Move("down").View()
 
 	for line := range strings.SplitSeq(view, "\n") {
 		// Each row is the Accounts panel's border-to-border run, then the right column.
@@ -488,5 +488,89 @@ func TestRecentIsNotSelectable(t *testing.T) {
 		if _, right, found := strings.Cut(line, "││"); found && strings.Contains(right, "100m") {
 			t.Errorf("a Recent row is highlighted: %q", line)
 		}
+	}
+}
+
+func upcomingRows(m Model) []string {
+	var rows []string
+	inside := false
+	for _, line := range viewLines(m) {
+		switch {
+		case strings.Contains(line, "╭─ UPCOMING "):
+			inside = true
+		case inside && strings.Contains(line, "╰"):
+			return rows
+		case inside:
+			rows = append(rows, line)
+		}
+	}
+	return rows
+}
+
+func withUpcoming(descriptions ...string) domain.Ledger {
+	ledger := ledgerFigures()
+	for i, description := range descriptions {
+		ledger.Upcoming = append(ledger.Upcoming, domain.Transaction{
+			Date: time.Date(2026, 10, 1+i, 0, 0, 0, 0, time.UTC), Description: description,
+			Postings: []domain.Posting{
+				{Account: "expenses:rent", Amounts: eur(90000)},
+				{Account: "assets:cash", Amounts: eur(-90000)},
+			},
+		})
+	}
+	return ledger
+}
+
+func TestUpcomingListsTheNextOccurrencesSoonestFirstUnderRecent(t *testing.T) {
+	rows := upcomingRows(New().Resize(180, 20).WithLedger(withUpcoming("Vermieter Mueller", "Streaming")))
+
+	if !strings.Contains(rows[0], "2026-10-01  Vermieter Mueller") || !strings.Contains(rows[1], "2026-10-02  Streaming") {
+		t.Errorf("rows = %q, want the occurrences in date order", rows)
+	}
+	if !strings.Contains(rows[0], "-900,00 EUR") {
+		t.Errorf("first row = %q, want the amount seen from the account", rows[0])
+	}
+}
+
+func TestUpcomingWithoutRulesIsAnEmptyPanel(t *testing.T) {
+	rows := upcomingRows(New().Resize(180, 20).WithLedger(withUpcoming()))
+
+	_, panel, _ := strings.Cut(strings.Join(rows, ""), "││")
+	if len(rows) != upcomingHeight-panelChrome || strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(panel, "││", ""), "│", "")) != "" {
+		t.Errorf("rows = %q, want an empty panel", rows)
+	}
+}
+
+func TestUpcomingSaysHowManyOccurrencesDontFit(t *testing.T) {
+	rows := upcomingRows(New().Resize(180, 20).WithLedger(withUpcoming("a", "b", "c", "d", "e", "f", "g", "h")))
+
+	if !strings.Contains(rows[4], "… 4 more") {
+		t.Errorf("last row = %q, want four listed then … 4 more", rows[3])
+	}
+}
+
+func TestUpcomingGivesWayWhenThereIsNoRoomForBothPanels(t *testing.T) {
+	view := strings.Join(viewLines(New().Resize(180, 14).WithLedger(withUpcoming("a"))), "\n")
+
+	if strings.Contains(view, "UPCOMING") || !strings.Contains(view, "RECENT") {
+		t.Errorf("a short screen keeps Recent only:\n%s", view)
+	}
+}
+
+func TestUpcomingIsNotSelectable(t *testing.T) {
+	view := New().Resize(180, 20).WithLedger(withUpcoming("a", "b")).Move("down").View()
+
+	for line := range strings.SplitSeq(view, "\n") {
+		if _, right, found := strings.Cut(line, "││"); found && strings.Contains(right, "100m") {
+			t.Errorf("a right-column row is highlighted: %q", line)
+		}
+	}
+}
+
+func TestUpcomingFitsWhenRecentKeepsItsMinimum(t *testing.T) {
+	view := strings.Join(viewLines(New().Resize(180, cardHeight+upcomingHeight+minRecentHeight).WithLedger(withUpcoming("a"))), "\n")
+
+	if !strings.Contains(view, "UPCOMING") || !strings.Contains(view, "RECENT") {
+		t.Errorf("exactly enough room for both panels should show both:\n%s", view)
 	}
 }

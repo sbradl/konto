@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"slices"
 	"strings"
 	"time"
 
@@ -61,8 +62,9 @@ func (c *Client) queryMessage(ctx context.Context, messageOf func(string) string
 
 // jsonTransaction is the part of `hledger print -O json` konto reads.
 type jsonTransaction struct {
-	Date        string `json:"tdate"`
-	Description string `json:"tdescription"`
+	Date        string     `json:"tdate"`
+	Description string     `json:"tdescription"`
+	Tags        [][]string `json:"ttags"`
 	Postings    []struct {
 		Account string       `json:"paccount"`
 		Amounts []jsonAmount `json:"pamount"`
@@ -71,7 +73,28 @@ type jsonTransaction struct {
 
 // Print returns every transaction in the journal.
 func (c *Client) Print(ctx context.Context) ([]domain.Transaction, error) {
-	out, err := c.query(ctx, "print", "-O", "json")
+	return c.transactions(ctx, nil, "print", "-O", "json")
+}
+
+// generatedTag marks the transactions hledger projects from periodic rules.
+const generatedTag = "_generated-transaction"
+
+// Upcoming returns the occurrences of the periodic rules from first through last, as hledger projects them.
+// The forecast period is always explicit: its default starts after the latest regular transaction.
+func (c *Client) Upcoming(ctx context.Context, first, last time.Time) ([]domain.Transaction, error) {
+	period := first.Format(time.DateOnly) + ".." + last.Format(time.DateOnly)
+	return c.transactions(ctx, jsonTransaction.isGenerated, "print", "--forecast="+period, "-O", "json")
+}
+
+func (raw jsonTransaction) isGenerated() bool {
+	return slices.ContainsFunc(raw.Tags, func(tag []string) bool { return len(tag) > 0 && tag[0] == generatedTag })
+}
+
+// transactions runs a `print` and reads its transactions, only those keep accepts when it is given.
+func (c *Client) transactions(
+	ctx context.Context, keep func(jsonTransaction) bool, args ...string,
+) ([]domain.Transaction, error) {
+	out, err := c.query(ctx, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -79,8 +102,11 @@ func (c *Client) Print(ctx context.Context) ([]domain.Transaction, error) {
 	if err := json.Unmarshal(out, &raw); err != nil {
 		return nil, fmt.Errorf("reading hledger print output: %w", err)
 	}
-	transactions := make([]domain.Transaction, len(raw))
-	for i, entry := range raw {
+	transactions := make([]domain.Transaction, 0, len(raw))
+	for _, entry := range raw {
+		if keep != nil && !keep(entry) {
+			continue
+		}
 		date, err := time.Parse(time.DateOnly, entry.Date)
 		if err != nil {
 			return nil, fmt.Errorf("reading hledger print output: %w", err)
@@ -89,7 +115,8 @@ func (c *Client) Print(ctx context.Context) ([]domain.Transaction, error) {
 		if err != nil {
 			return nil, fmt.Errorf("reading hledger print output: %w", err)
 		}
-		transactions[i] = domain.Transaction{Date: date, Description: entry.Description, Postings: postings}
+		transactions = append(transactions,
+			domain.Transaction{Date: date, Description: entry.Description, Postings: postings})
 	}
 	return transactions, nil
 }

@@ -16,6 +16,7 @@ type gateway interface {
 	Print(ctx context.Context) ([]domain.Transaction, error)
 	Balances(ctx context.Context) ([]domain.Account, error)
 	PeriodActivity(ctx context.Context, first, last time.Time) ([]domain.Account, error)
+	Upcoming(ctx context.Context, first, last time.Time) ([]domain.Transaction, error)
 }
 
 type journalFile interface {
@@ -63,9 +64,15 @@ func (l *Loader) Load(ctx context.Context) (domain.Ledger, error) {
 	if err != nil {
 		return domain.Ledger{}, fmt.Errorf("loading ledger: %w", err)
 	}
+	today := l.today()
+	upcoming, err := l.gw.Upcoming(ctx, today, today.AddDate(1, 0, 0))
+	if err != nil {
+		return domain.Ledger{}, fmt.Errorf("loading ledger: %w", err)
+	}
 	return domain.Ledger{
 		Accounts:     declare(accounts, declarations),
 		Transactions: transactions,
+		Upcoming:     upcoming,
 		Month:        month,
 	}, nil
 }
