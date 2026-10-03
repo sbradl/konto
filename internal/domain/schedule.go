@@ -89,3 +89,9 @@ func (l Ledger) AnnualImpact() MultiAmount {
 
 // Entry is the rule as written in the journal.
 func (r PeriodicRule) Entry() string { return strings.Join(r.Lines, "\n") }
+
+// Delete is the changeset that removes the rule from the journal. Any rule can be deleted,
+// whether or not the form could have edited it.
+func (r PeriodicRule) Delete() Changeset {
+	return Changeset{Edits: []Edit{DeleteRule{Pos: r.Pos}}}
+}

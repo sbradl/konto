@@ -85,3 +85,13 @@ func TestAnEntryIsTheBlockAsWritten(t *testing.T) {
 		t.Errorf("entry = %q", got)
 	}
 }
+
+func TestDeletingARuleRemovesTheBlockAtItsPosition(t *testing.T) {
+	rule := PeriodicRule{Pos: SourcePos{File: "j", Line: 7}}
+
+	got := rule.Delete()
+
+	if len(got.Edits) != 1 || got.Edits[0] != (DeleteRule{Pos: SourcePos{File: "j", Line: 7}}) {
+		t.Errorf("changeset = %+v, want one DeleteRule at j:7", got)
+	}
+}

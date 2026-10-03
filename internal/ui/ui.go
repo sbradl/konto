@@ -308,7 +308,7 @@ func (m Model) onActiveViewKey(key string) (Model, tea.Cmd) {
 	case 0:
 		return m.onDashboardKey(key), nil
 	case scheduledTab:
-		m.scheduled = m.scheduled.Move(key)
+		return m.onScheduledKey(key), nil
 	case reportsTab:
 		return m.onReportsKey(key)
 	}

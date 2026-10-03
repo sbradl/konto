@@ -216,3 +216,119 @@ func TestApplyWritesEveryFileItTouches(t *testing.T) {
 		}
 	}
 }
+
+const ruleJournal = `; keep me
+~ monthly from 2026-10-20  Gym
+    expenses:rent  25,00 EUR  ; posting note
+    ; own line
+    assets:checking
+
+~ monthly from 2026-11-01  Rent
+    expenses:rent  900,00 EUR
+    assets:checking
+account assets:checking
+`
+
+func deleteAt(file File, line int) error {
+	return file.Apply(domain.PeriodicRule{Pos: domain.SourcePos{File: file.path, Line: line}}.Delete())
+}
+
+func TestApplyDeletesTheWholeBlockAndKeepsCommentsAboveIt(t *testing.T) {
+	file := journalWith(t, ruleJournal)
+
+	if err := deleteAt(file, 2); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	want := "; keep me\n\n~ monthly from 2026-11-01  Rent\n    expenses:rent  900,00 EUR\n    assets:checking\naccount assets:checking\n"
+	if got := readFile(t, file.path); got != want {
+		t.Errorf("journal = %q, want %q", got, want)
+	}
+}
+
+func TestApplyDeletesTheLastBlockOfAFileWithoutLeavingBlankLines(t *testing.T) {
+	file := journalWith(t, "a\n\n~ monthly  X\n    p  1,00 EUR\n    q\n")
+
+	if err := deleteAt(file, 3); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got := readFile(t, file.path); got != "a\n" {
+		t.Errorf("journal = %q, want a\\n", got)
+	}
+}
+
+func TestApplyDeletesBetweenBlankLinesLeavingOne(t *testing.T) {
+	file := journalWith(t, "a\n\n~ monthly  X\n    p  1,00 EUR\n    q\n\nb\n")
+
+	if err := deleteAt(file, 3); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got := readFile(t, file.path); got != "a\n\nb\n" {
+		t.Errorf("journal = %q", got)
+	}
+}
+
+func TestApplyDeletesTheFirstLineOfAFile(t *testing.T) {
+	file := journalWith(t, "~ monthly  X\n    p  1,00 EUR\n    q\nb\n")
+
+	if err := deleteAt(file, 1); err != nil || readFile(t, file.path) != "b\n" {
+		t.Errorf("journal = %q, %v", readFile(t, file.path), err)
+	}
+}
+
+func TestApplyDeletesARuleInAnIncludedFileAndLeavesTheMainOneAlone(t *testing.T) {
+	dir := t.TempDir()
+	main := writeJournal(t, dir, "main.journal", "include rules.journal\n")
+	rules := filepath.Join(dir, "rules.journal")
+	writeJournal(t, dir, "rules.journal", "~ monthly  X\n    p  1,00 EUR\n    q\n")
+
+	err := main.Apply(domain.PeriodicRule{Pos: domain.SourcePos{File: rules, Line: 1}}.Delete())
+
+	if err != nil || readFile(t, rules) != "" || readFile(t, main.path) != "include rules.journal\n" {
+		t.Errorf("rules = %q, main = %q, %v", readFile(t, rules), readFile(t, main.path), err)
+	}
+}
+
+func TestApplyRefusesToDeleteWhatIsNoLongerARule(t *testing.T) {
+	file := journalWith(t, ruleJournal)
+
+	for name, pos := range map[string]domain.SourcePos{
+		"a line that moved":   {File: file.path, Line: 4},
+		"before the file":     {File: file.path, Line: 0},
+		"past the file":       {File: file.path, Line: 99},
+		"a file not included": {File: "/elsewhere.journal", Line: 1},
+	} {
+		if err := file.Apply(domain.PeriodicRule{Pos: pos}.Delete()); err == nil {
+			t.Errorf("%s: expected an error", name)
+		}
+	}
+	if got := readFile(t, file.path); got != ruleJournal {
+		t.Errorf("a refused delete must not touch the journal, got %q", got)
+	}
+}
+
+func TestApplyDeletesABlockThatEndsTheFileWithoutANewline(t *testing.T) {
+	file := journalWith(t, "a\n~ monthly  X\n    p  1,00 EUR\n    q")
+
+	if err := deleteAt(file, 2); err != nil || readFile(t, file.path) != "a" {
+		t.Errorf("journal = %q, %v", readFile(t, file.path), err)
+	}
+}
+
+func TestApplyDeletesAfterABlankLineAtTheEndOfAFileWithoutANewline(t *testing.T) {
+	file := journalWith(t, "a\n\n~ monthly  X\n    p  1,00 EUR\n    q")
+
+	if err := deleteAt(file, 3); err != nil || readFile(t, file.path) != "a\n" {
+		t.Errorf("journal = %q, %v", readFile(t, file.path), err)
+	}
+}
+
+func TestApplyRefusesTheLineJustPastTheEnd(t *testing.T) {
+	file := journalWith(t, "a\n~ monthly  X\n    p\n")
+
+	if err := deleteAt(file, 5); err == nil { // lines: a, ~, p, "" — index 4 is past them
+		t.Error("expected an error")
+	}
+}

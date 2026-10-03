@@ -540,7 +540,6 @@ Feature: Scheduled — periodic rules (forecast-only)
 
   Rule: Delete
 
-    @wip
     Scenario: d asks y/n and removes the block
       Given I select the rule "Streaming"
       When I press "d"
@@ -551,14 +550,12 @@ Feature: Scheduled — periodic rules (forecast-only)
       And the other four rules are byte-identical
       And every hledger check passes
 
-    @wip
     Scenario: a rule that does not fit the form can still be deleted
       Given I select the rule "Streaming"
       When I press "d"
       And I press "y"
       Then the rule list has 4 rules
 
-    @wip
     Scenario Outline: n, Esc cancel
       Given I select the rule "Acme GmbH"
       And I press "d"
@@ -571,7 +568,6 @@ Feature: Scheduled — periodic rules (forecast-only)
         | n   |
         | Esc |
 
-    @wip
     Scenario: comment lines above the rule stay
       Given the journal "household-scheduled" with a rule "; keep me\n~ monthly from 2026-10-20  Gym\n    expenses:rent  25,00 EUR\n    assets:checking\n"
       And I start konto
@@ -580,9 +576,8 @@ Feature: Scheduled — periodic rules (forecast-only)
       When I press "d"
       And I press "y"
       Then the journal still contains "; keep me"
-      And the journal no longer contains "Gym"
+      And the journal no longer contains "Gym" as a rule
 
-    @wip
     Scenario: postings and posting comments go with the rule
       Given the journal "household-scheduled" with a rule "~ monthly from 2026-10-20  Gym\n    expenses:rent  25,00 EUR  ; posting note\n    ; own line\n    assets:checking\n"
       And I start konto
@@ -592,14 +587,12 @@ Feature: Scheduled — periodic rules (forecast-only)
       And I press "y"
       Then the journal does not contain "posting note" or "own line"
 
-    @wip
     Scenario: the line after the block is untouched
       Given I select the rule "Sparen"
       When I press "d"
       And I press "y"
       Then the rule "Car insurance" is intact
 
-    @wip
     Scenario: deleting the last rule leaves an empty state
       Given the journal "household" with a rule in included file "rules.journal"
       And I start konto
@@ -608,7 +601,6 @@ Feature: Scheduled — periodic rules (forecast-only)
       And I press "y"
       Then the rule list is empty
 
-    @wip
     Scenario: delete in an included file edits that file
       Given the journal "household" with a rule in included file "rules.journal"
       And I start konto
@@ -618,7 +610,6 @@ Feature: Scheduled — periodic rules (forecast-only)
       Then "rules.journal" no longer contains the rule
       And the main journal is unchanged
 
-    @wip
     Scenario: the dashboard and forecast drop the deleted rule
       Given I select the rule "Vermieter Mueller"
       And I press "d"
@@ -626,7 +617,6 @@ Feature: Scheduled — periodic rules (forecast-only)
       When I press "1"
       Then the Upcoming panel does not list "Vermieter Mueller"
 
-    @wip
     Scenario: the cursor stays in range after deleting the last row
       Given I press "End"
       And I press "d"

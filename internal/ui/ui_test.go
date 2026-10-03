@@ -772,3 +772,66 @@ func TestSchedViewFollowsTheTerminalSize(t *testing.T) {
 		t.Errorf("view has %d rows; the panels should end just above the status bar, got %q", len(rows), rows[len(rows)-2])
 	}
 }
+
+func withRules(t *testing.T, writer *fakeWriter) Model {
+	t.Helper()
+	model := New(journalPath, Ports{
+		Loader: fakeLoader{ledger: scheduledLedger()}, Checker: fakeChecker{}, Creator: &fakeCreator{},
+		Editor: recordingEditor(nil), Writer: writer,
+	})
+	updated, _ := model.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	updated, _ = updated.Update(model.load())
+	opened, _ := press(updated.(Model), "3")
+	return opened
+}
+
+func TestDOnASelectedRuleAsksAndYDeletesItsBlock(t *testing.T) {
+	writer := &fakeWriter{}
+	model, _ := press(withRules(t, writer), "d")
+
+	if model.prompt == nil || !strings.Contains(lastLine(model), `delete rule "Rent"?`) {
+		t.Fatalf("status bar = %q, want the question naming the rule", lastLine(model))
+	}
+	if len(writer.applied) != 0 {
+		t.Errorf("nothing is written before the answer")
+	}
+
+	_, cmd := press(model, "y")
+	_ = cmd()
+
+	want := domain.DeleteRule{Pos: domain.SourcePos{File: "j", Line: 3}}
+	if len(writer.applied) != 1 || writer.applied[0].Edits[0] != want {
+		t.Errorf("applied = %+v, want a DeleteRule at j:3", writer.applied)
+	}
+}
+
+func TestNAndEscKeepTheRule(t *testing.T) {
+	for _, answer := range []string{"n", "esc"} {
+		writer := &fakeWriter{}
+		model, _ := press(withRules(t, writer), "d")
+
+		answered, cmd := model.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+		if answer == "n" {
+			answered, cmd = model.Update(tea.KeyPressMsg{Code: 'n', Text: "n"})
+		}
+
+		if answered.(Model).prompt != nil || cmd != nil || len(writer.applied) != 0 {
+			t.Errorf("%s must close the prompt without writing", answer)
+		}
+	}
+}
+
+func TestDWithoutRulesOrOutsideSchedDoesNothing(t *testing.T) {
+	empty := New(journalPath, Ports{Loader: fakeLoader{}, Checker: fakeChecker{}, Creator: &fakeCreator{}, Editor: recordingEditor(nil)})
+	updated, _ := empty.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	updated, _ = updated.Update(empty.load())
+	noRules, _ := press(updated.(Model), "3")
+
+	if got, _ := press(noRules, "d"); got.prompt != nil {
+		t.Errorf("there is no rule to delete")
+	}
+	dash, _ := press(withRules(t, &fakeWriter{}), "1")
+	if got, _ := press(dash, "d"); got.prompt != nil {
+		t.Errorf("d only deletes in Scheduled")
+	}
+}

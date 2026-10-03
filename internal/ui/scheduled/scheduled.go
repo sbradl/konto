@@ -154,6 +154,12 @@ func ruleLine(schedule domain.RuleSchedule, width int) listRow {
 	return listRow{prefix: prefix, status: status, statusStyle: style}
 }
 
+// Selected is the rule under the cursor; false when there are none.
+func (m Model) Selected() (domain.PeriodicRule, bool) {
+	schedule, ok := m.current()
+	return schedule.Rule, ok
+}
+
 // current is the selected rule's schedule; false when there are no rules.
 func (m Model) current() (domain.RuleSchedule, bool) {
 	if len(m.schedules) == 0 {

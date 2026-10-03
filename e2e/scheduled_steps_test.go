@@ -3,6 +3,7 @@
 package e2e
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -228,4 +229,175 @@ func registerScheduledSteps(sc *godog.ScenarioContext, w *world) {
 	sc.Step(`^the rule is listed$`, func() error { return w.expectRowHolds(rulesTitle, "Included rule") })
 	sc.Step(`^the rule list is empty$`, w.expectRuleListEmpty)
 	sc.Step(`^I see a hint to press "n" to add a rule$`, func() error { return w.expectScreen(true, "press n to add a rule") })
+}
+
+// ruleBlocks are the `~` blocks of text: a rule line and the indented lines under it.
+func ruleBlocks(text string) []string {
+	var blocks []string
+	lines := strings.Split(text, "\n")
+	for i := 0; i < len(lines); i++ {
+		if !strings.HasPrefix(lines[i], "~") {
+			continue
+		}
+		block := []string{lines[i]}
+		for i+1 < len(lines) && (strings.HasPrefix(lines[i+1], " ") || strings.HasPrefix(lines[i+1], "\t")) {
+			i++
+			block = append(block, lines[i])
+		}
+		blocks = append(blocks, strings.Join(block, "\n"))
+	}
+	return blocks
+}
+
+func allJournalText(files map[string][]byte) string {
+	var all strings.Builder
+	for _, content := range files {
+		all.Write(content)
+		all.WriteByte('\n')
+	}
+	return all.String()
+}
+
+func (w *world) expectRuleCount(n int) error {
+	return w.expectPanel(rulesTitle, func(rows []recentRow) error {
+		if len(rows) != n {
+			return fmt.Errorf("the list has %d rules, want %d", len(rows), n)
+		}
+		return nil
+	})
+}
+
+func (w *world) expectAnyRuleSelected() error {
+	return w.expectPanel(rulesTitle, func(rows []recentRow) error {
+		_, err := w.selectedRule(rows)
+		return err
+	})
+}
+
+// expectNoRuleLine waits for the journal to hold no rule line mentioning text.
+func (w *world) expectNoRuleLine(text string) error {
+	return w.eventually(func() error {
+		for _, block := range ruleBlocks(allJournalText(w.journalFiles())) {
+			header, _, _ := strings.Cut(block, "\n")
+			if strings.Contains(header, text) {
+				return fmt.Errorf("the journal still has the rule %q", header)
+			}
+		}
+		return nil
+	})
+}
+
+// expectJournalLacks waits for none of the texts to be in the journal files.
+func (w *world) expectJournalLacks(texts ...string) error {
+	return w.eventually(func() error {
+		all := allJournalText(w.journalFiles())
+		for _, text := range texts {
+			if strings.Contains(all, text) {
+				return fmt.Errorf("the journal still contains %q", text)
+			}
+		}
+		return nil
+	})
+}
+
+func (w *world) eventually(check func() error) error {
+	s, err := w.session()
+	if err != nil {
+		return err
+	}
+	var failure error
+	s.waitFor(w.suite.timeout, func(string) bool {
+		failure = check()
+		return failure == nil
+	})
+	return failure
+}
+
+func (w *world) expectOneBlockRemoved() error {
+	return w.eventually(func() error {
+		before := ruleBlocks(allJournalText(w.filesAtStart))
+		now := allJournalText(w.journalFiles())
+		missing := 0
+		for _, block := range before {
+			if !strings.Contains(now, block) {
+				missing++
+			}
+		}
+		if missing != 1 {
+			return fmt.Errorf("%d rule blocks changed, want exactly one removed", missing)
+		}
+		return nil
+	})
+}
+
+func (w *world) expectRuleIntact(description string) error {
+	for _, block := range ruleBlocks(allJournalText(w.filesAtStart)) {
+		if header, _, _ := strings.Cut(block, "\n"); strings.Contains(header, description) {
+			return w.eventually(func() error {
+				if !strings.Contains(allJournalText(w.journalFiles()), block) {
+					return fmt.Errorf("the rule %q is not intact", description)
+				}
+				return nil
+			})
+		}
+	}
+	return fmt.Errorf("no rule %q at start", description)
+}
+
+func (w *world) expectMainJournalUnchanged() error {
+	now, err := os.ReadFile(w.journal)
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(now, w.filesAtStart[w.journal]) {
+		return errors.New("the main journal changed")
+	}
+	return nil
+}
+
+func (w *world) expectFileLacksRule(name string) error {
+	return w.eventually(func() error {
+		b, err := os.ReadFile(filepath.Join(filepath.Dir(w.journal), name))
+		if err != nil {
+			return err
+		}
+		if len(ruleBlocks(string(b))) != 0 {
+			return fmt.Errorf("%s still holds a rule", name)
+		}
+		return nil
+	})
+}
+
+func (w *world) expectUpcomingLacks(description string) error {
+	return w.expectUpcoming(func(rows []recentRow) error {
+		for _, row := range rows {
+			if strings.Contains(row.text, description) {
+				return fmt.Errorf("Upcoming still lists %q", description)
+			}
+		}
+		return nil
+	})
+}
+
+func (w *world) expectJournalStillHas(text string) error {
+	return w.eventually(func() error {
+		if !strings.Contains(allJournalText(w.journalFiles()), text) {
+			return fmt.Errorf("the journal no longer contains %q", text)
+		}
+		return nil
+	})
+}
+
+func registerScheduledDeleteSteps(sc *godog.ScenarioContext, w *world) {
+	sc.Step(`^the journal still contains "([^"]*)"$`, w.expectJournalStillHas)
+	sc.Step(`^the rule list has (\d+) rules$`, w.expectRuleCount)
+	sc.Step(`^a rule is selected$`, w.expectAnyRuleSelected)
+	sc.Step(`^the journal no longer contains "([^"]*)" as a rule$`, w.expectNoRuleLine)
+	sc.Step(`^the journal no longer contains "([^"]*)"$`, func(text string) error { return w.expectJournalLacks(text) })
+	sc.Step(`^the journal does not contain "([^"]*)" or "([^"]*)"$`, func(a, b string) error { return w.expectJournalLacks(a, b) })
+	sc.Step(`^the other four rules are byte-identical$`, w.expectOneBlockRemoved)
+	sc.Step(`^the rule "([^"]*)" is intact$`, w.expectRuleIntact)
+	sc.Step(`^the main journal is unchanged$`, w.expectMainJournalUnchanged)
+	sc.Step(`^"([^"]*)" no longer contains the rule$`, w.expectFileLacksRule)
+	sc.Step(`^the Upcoming panel does not list "([^"]*)"$`, w.expectUpcomingLacks)
 }

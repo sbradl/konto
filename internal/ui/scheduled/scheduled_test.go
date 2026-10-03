@@ -230,3 +230,13 @@ func TestBeforeAnythingLoadedThePanelsAreEmpty(t *testing.T) {
 		t.Errorf("view:\n%s", view)
 	}
 }
+
+func TestSelectedIsTheRuleUnderTheCursor(t *testing.T) {
+	rule, ok := loaded().Move("down").Selected()
+	if !ok || rule.Description != "Streaming" {
+		t.Errorf("selected = %q, %v; want Streaming", rule.Description, ok)
+	}
+	if _, ok := New().Selected(); ok {
+		t.Errorf("an empty view has no selection")
+	}
+}

@@ -18,11 +18,8 @@ func (f File) Apply(changeset domain.Changeset) error {
 		return err
 	}
 	for _, edit := range changeset.Edits {
-		switch e := edit.(type) {
-		case domain.SetAccountTag:
-			setTag(sources, e)
-		case domain.RemoveAccountTag:
-			editDirective(sources, e.Account, func(tags []string) []string { return withoutTag(tags, e.Key) })
+		if err := applyEdit(sources, edit); err != nil {
+			return err
 		}
 	}
 	for _, source := range sources {
@@ -33,6 +30,56 @@ func (f File) Apply(changeset domain.Changeset) error {
 		}
 	}
 	return nil
+}
+
+// applyEdit makes one edit in the sources; nothing is written until every edit has gone through.
+func applyEdit(sources []*source, edit domain.Edit) error {
+	switch e := edit.(type) {
+	case domain.SetAccountTag:
+		setTag(sources, e)
+	case domain.RemoveAccountTag:
+		editDirective(sources, e.Account, func(tags []string) []string { return withoutTag(tags, e.Key) })
+	case domain.DeleteRule:
+		return deleteRule(sources, e.Pos)
+	}
+	return nil
+}
+
+// deleteRule removes the `~` block that starts at pos. The line there must be a rule line, or the
+// journal changed under konto and nothing is deleted.
+func deleteRule(sources []*source, pos domain.SourcePos) error {
+	for _, source := range sources {
+		if source.path != pos.File {
+			continue
+		}
+		first := pos.Line - 1
+		if first < 0 || first >= len(source.lines) || !strings.HasPrefix(source.lines[first], "~") {
+			return fmt.Errorf("%s:%d is no longer a periodic rule: reload and try again", pos.File, pos.Line)
+		}
+		source.lines = slices.Delete(source.lines, first, blockEnd(source.lines, first))
+		source.lines = withoutDoubleBlank(source.lines, first)
+		source.dirty = true
+		return nil
+	}
+	return fmt.Errorf("%s is not part of the journal", pos.File)
+}
+
+// blockEnd is the index after the block that starts at first: its line and the indented lines under it.
+func blockEnd(lines []string, first int) int {
+	end := first + 1
+	for end < len(lines) && strings.TrimLeft(lines[end], " \t") != lines[end] {
+		end++
+	}
+	return end
+}
+
+// withoutDoubleBlank drops one of two blank lines that a removal at index at brought together; the
+// last of them can be the file's final newline, so either goes without telling the difference.
+func withoutDoubleBlank(lines []string, at int) []string {
+	if at == 0 || at >= len(lines) || lines[at-1] != "" || lines[at] != "" {
+		return lines
+	}
+	return slices.Delete(lines, at, at+1)
 }
 
 // setTag puts the tag on the account's directive, or declares the account in the main journal.

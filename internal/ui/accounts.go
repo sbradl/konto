@@ -69,3 +69,12 @@ func (m Model) onWritten(written writtenMsg) (Model, tea.Cmd) {
 	m.refreshing = true
 	return m, m.load
 }
+
+// onScheduledKey moves the rule cursor, or on d asks whether to delete the selected rule.
+func (m Model) onScheduledKey(key string) Model {
+	m.scheduled = m.scheduled.Move(key)
+	if rule, ok := m.scheduled.Selected(); ok && key == "d" {
+		m.prompt = &prompt{question: `delete rule "` + rule.Description + `"?`, changeset: rule.Delete()}
+	}
+	return m
+}
