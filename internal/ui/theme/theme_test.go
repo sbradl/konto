@@ -47,7 +47,7 @@ func TestNegativeAndWarnAreForegroundOnlyAnsiColours(t *testing.T) {
 	for name, tc := range map[string]struct {
 		style lipgloss.Style
 		want  string
-	}{"Negative": {Negative, "1"}, "Warn": {Warn, "3"}, "Series": {Series, "6"}} {
+	}{"Negative": {Negative, "1"}, "Warn": {Warn, "3"}, "Series": {Series, "6"}, "PanelTitle": {PanelTitle, "6"}} {
 		if got := tc.style.GetForeground(); got != lipgloss.Color(tc.want) {
 			t.Errorf("%s foreground = %v, want ANSI %s", name, got, tc.want)
 		}

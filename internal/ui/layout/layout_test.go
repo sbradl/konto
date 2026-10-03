@@ -1,6 +1,7 @@
 package layout
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -65,6 +66,10 @@ func TestColumnsFitTheWidthUpToTheMaximum(t *testing.T) {
 
 func TestPanelDrawsARoundedBorderWithTheTitleInsetTwoCells(t *testing.T) {
 	got := Panel("ACCOUNTS", 16, 4, "one\nthis line is far too long")
+	if !strings.Contains(got, "\x1b[36mACCOUNTS") {
+		t.Errorf("the title should be cyan, got %q", got)
+	}
+	got = regexp.MustCompile(`\x1b\[[0-9;]*m`).ReplaceAllString(got, "")
 
 	want := "╭─ ACCOUNTS ───╮\n│one           │\n│this line is f│\n╰──────────────╯"
 	if got != want {

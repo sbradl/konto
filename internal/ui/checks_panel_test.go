@@ -246,3 +246,19 @@ func TestErrorsAreRedAndWarningsAmberInThePanel(t *testing.T) {
 		t.Errorf("ERR should be red and WARN amber:\n%q", content)
 	}
 }
+
+// A failed reload keeps the stale snapshot; the panel carries hledger's error text.
+func TestChecksPanelShowsTheFailureOfAReload(t *testing.T) {
+	model := started(t, fakeLoader{})
+	failed, _ := model.Update(ledgerLoadedMsg{err: errors.New("hledger: boom\nsecond line")})
+	opened, _ := press(failed.(Model), "!")
+
+	content := plain(opened.View().Content)
+
+	if !strings.Contains(content, "✗ hledger: boom") || !strings.Contains(content, "second line") {
+		t.Errorf("the panel should show the reload failure:\n%s", content)
+	}
+	if !strings.Contains(content, "all ") {
+		t.Errorf("the stale check result stays beneath it:\n%s", content)
+	}
+}

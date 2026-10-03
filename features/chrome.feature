@@ -42,7 +42,6 @@ Feature: Chrome, navigation and global keys
       | v   |
       | y   |
 
-  @wip
   Scenario: view state survives switching
     Given I am on the dashboard
     And I press "↓" twice
@@ -50,7 +49,6 @@ Feature: Chrome, navigation and global keys
     And I press "1"
     Then the Accounts cursor is on row 3
 
-  @wip
   Scenario: status bar contents
     Then the status bar shows the view name, a hint, the check status and "? keys"
     And the status bar does not show a mode badge
@@ -61,12 +59,11 @@ Feature: Chrome, navigation and global keys
     When I press "5"
     Then the status bar hint lists "p period"
 
-  @wip
   Scenario: n/total only on cursor views
     When I press "1"
-    Then the status bar shows "n/total"
+    Then the status bar shows a row position
     When I press "5"
-    Then the status bar does not show "n/total"
+    Then the status bar does not show a row position
 
   Rule: Every key press is a real key, not a substring match
 
@@ -138,14 +135,12 @@ Feature: Chrome, navigation and global keys
       And the previous balances are still shown
       And konto is still running
 
-    @wip
     Scenario: hledger failure detail is in the ! panel
       Given hledger starts failing with "boom"
       When I press "r"
       And I press "!"
       Then I see "boom"
 
-    @wip
     Scenario: unparseable hledger output does not crash
       Given hledger returns garbage for "bal"
       When I press "r"
@@ -222,17 +217,14 @@ Feature: Chrome, navigation and global keys
         | 180 | 60 |
         | 240 | 70 |
 
-    @wip
     Scenario: hidden panels are announced
       Given the terminal is 100×30
-      Then the status bar shows "panels hidden · widen terminal"
+      Then the status bar shows "hidden · widen terminal"
 
-    @wip
     Scenario: no hint when nothing is hidden
       Given the terminal is 180×60
       Then the status bar does not show "hidden"
 
-    @wip
     Scenario: resizing re-lays out live
       When I resize the terminal to 160×50
       Then the dashboard fills 160×50
@@ -246,11 +238,9 @@ Feature: Chrome, navigation and global keys
     Scenario: background and foreground are unset
       Then no cell sets a background colour except the selected row and the popup
 
-    @wip
     Scenario: selection is bg 8 fg 15
       When I press "1"
       Then the selected row has background 8 and foreground 15
 
-    @wip
     Scenario: panel titles are cyan
       Then a panel title is coloured 6

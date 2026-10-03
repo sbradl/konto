@@ -214,7 +214,7 @@ Feature: Journal checks — status bar indicator and the ! panel
       Then the VISUAL stub was called
       And the EDITOR stub was not called
 
-    @proposed @wip
+    @proposed
     Scenario: neither set falls back to a sane default editor
       Given neither VISUAL nor EDITOR is set
       And I start konto

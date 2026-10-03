@@ -51,8 +51,27 @@ func (m Model) scrollChecks() Model {
 	return m
 }
 
-// checksBody is the panel's rows: the issues, one clean line, or a note that nothing ran.
+// checksBody is the panel's rows: what went wrong with the last reload, if anything, then the
+// issues, one clean line, or a note that nothing ran.
 func (m Model) checksBody() []string {
+	return append(m.failureRows(), m.runRows()...)
+}
+
+// failureRows are the lines of the error that made the last reload fail, one row per line.
+func (m Model) failureRows() []string {
+	if m.refreshErr == nil {
+		return nil
+	}
+	lines := strings.Split(strings.TrimSpace(m.refreshErr.Error()), "\n")
+	lines[0] = "✗ " + lines[0]
+	for i, line := range lines {
+		lines[i] = " " + theme.Negative.Render(line)
+	}
+	return lines
+}
+
+// runRows are the rows of the latest check run.
+func (m Model) runRows() []string {
 	if m.run == nil {
 		return []string{"no checks have run yet"}
 	}

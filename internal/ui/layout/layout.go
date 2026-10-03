@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+
+	"github.com/sbradl/konto/internal/ui/theme"
 )
 
 // popupZ lifts a popup above the base layer.
@@ -39,7 +41,7 @@ func Panel(title string, w, h int, body string) string {
 	inner := max(0, w-2)
 	rows := strings.Split(body, "\n")
 	lines := make([]string, 0, h)
-	top := "╭─ " + title + " "
+	top := "╭─ " + theme.PanelTitle.Render(title) + " "
 	lines = append(lines, top+strings.Repeat("─", max(0, w-lipgloss.Width(top)-1))+"╮")
 	for i := range max(0, h-2) {
 		row := ""
