@@ -63,6 +63,10 @@ func (c *Client) queryMessage(ctx context.Context, messageOf func(string) string
 type jsonTransaction struct {
 	Date        string `json:"tdate"`
 	Description string `json:"tdescription"`
+	Postings    []struct {
+		Account string       `json:"paccount"`
+		Amounts []jsonAmount `json:"pamount"`
+	} `json:"tpostings"`
 }
 
 // Print returns every transaction in the journal.
@@ -76,12 +80,32 @@ func (c *Client) Print(ctx context.Context) ([]domain.Transaction, error) {
 		return nil, fmt.Errorf("reading hledger print output: %w", err)
 	}
 	transactions := make([]domain.Transaction, len(raw))
-	for i, r := range raw {
-		date, err := time.Parse(time.DateOnly, r.Date)
+	for i, entry := range raw {
+		date, err := time.Parse(time.DateOnly, entry.Date)
 		if err != nil {
 			return nil, fmt.Errorf("reading hledger print output: %w", err)
 		}
-		transactions[i] = domain.Transaction{Date: date, Description: r.Description}
+		postings, err := entry.postings()
+		if err != nil {
+			return nil, fmt.Errorf("reading hledger print output: %w", err)
+		}
+		transactions[i] = domain.Transaction{Date: date, Description: entry.Description, Postings: postings}
 	}
 	return transactions, nil
+}
+
+// postings are the transaction's postings with their amounts.
+func (raw jsonTransaction) postings() ([]domain.Posting, error) {
+	postings := make([]domain.Posting, len(raw.Postings))
+	for i, posting := range raw.Postings {
+		amounts := make(domain.MultiAmount, len(posting.Amounts))
+		for j, amount := range posting.Amounts {
+			var err error
+			if amounts[j], err = amount.amount(); err != nil {
+				return nil, err
+			}
+		}
+		postings[i] = domain.Posting{Account: posting.Account, Amounts: amounts}
+	}
+	return postings, nil
 }

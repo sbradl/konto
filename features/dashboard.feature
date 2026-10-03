@@ -160,7 +160,6 @@ Feature: Dashboard
       When I press "End"
       Then the last account is selected and visible
 
-    @wip
     Scenario: an overflowing read-only panel says how many rows are hidden
       Given the journal "household" with 200 transactions
       And the terminal is 100×30
@@ -169,37 +168,35 @@ Feature: Dashboard
 
   Rule: Recent panel
 
-    @proposed @wip
+    @proposed
     Scenario: newest first across all accounts
       Then the Recent panel's first two rows are dated "2026-09-26" and describe "Sparen"
       And the third row is dated "2026-09-25" and describes "Acme GmbH"
       And the rows are in non-increasing date order
 
-    @proposed @wip
+    @proposed
     Scenario: row shape is date, description, category, amount
       Then the Recent row for "Acme GmbH" on "2026-09-25" shows category "income:salary"
       And it shows "3.000,00 EUR" coloured 2
 
-    @proposed @wip
+    @proposed
     Scenario: expenses are not green
       Then the Recent row for "REWE" on "2026-09-10" shows category "expenses:groceries"
       And its amount is not coloured 2
 
-    @proposed @wip
+    @proposed
     Scenario: a transfer shows the counterpart account, not a category
       Then the Recent rows for "Sparen" show "assets:transfers"
 
-    @proposed @wip
+    @proposed
     Scenario: rows are not selectable
       When I press "↓"
       Then no Recent row is highlighted with background 8
 
-    @wip
     Scenario: no uncategorised marker
       Then I do not see "?" in any Recent row
       And I do not see the word "uncategorized" anywhere
 
-    @wip
     Scenario: no edit key on Recent
       When I press "e"
       Then the screen is unchanged

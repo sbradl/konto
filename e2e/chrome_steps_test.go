@@ -128,6 +128,7 @@ func registerChromeSteps(sc *godog.ScenarioContext, w *world) {
 	registerChecksSteps(sc, w)
 	registerAccountChangeSteps(sc, w)
 	registerStatCardSteps(sc, w)
+	registerRecentSteps(sc, w)
 	sc.Step(`^the active tab is "([^"]*)"$`, w.expectActiveTab)
 	sc.Step(`^the active tab is unchanged$`, func() error { return w.expectActiveTab(w.tabAtBaseline) })
 	sc.Step(`^the tab bar shows the journal path and "(\d+)" transactions on the right$`, func(count string) error {

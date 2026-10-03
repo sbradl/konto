@@ -1,9 +1,63 @@
 package domain
 
-import "time"
+import (
+	"slices"
+	"time"
+)
+
+// Posting is one line of a transaction: an account and the amount it moved.
+type Posting struct {
+	Account string
+	Amounts MultiAmount
+}
 
 // Transaction is one journal entry as hledger reports it.
 type Transaction struct {
 	Date        time.Time
 	Description string
+	Postings    []Posting
+}
+
+// RecentEntry is a transaction as the Dashboard's Recent panel lists it: what moved on the
+// account it belongs to, and the counterpart that says what it was for.
+type RecentEntry struct {
+	Date        time.Time
+	Description string
+	Category    string // the counterpart account: an expense or income category, or a transfer
+	Amount      MultiAmount
+}
+
+// Recent lists the transactions newest first (later ones first within a day). Each is seen from
+// its own asset or liability account: the first such posting that is not the transfer clearing
+// account gives the amount, and the posting beside it the category.
+func (l Ledger) Recent() []RecentEntry {
+	clearing := map[string]bool{}
+	for _, account := range l.Accounts {
+		clearing[account.Name] = account.Source == SourceClearing
+	}
+	entries := make([]RecentEntry, 0, len(l.Transactions))
+	for _, transaction := range slices.Backward(l.Transactions) {
+		entries = append(entries, transaction.recentEntry(clearing))
+	}
+	slices.SortStableFunc(entries, func(a, b RecentEntry) int { return b.Date.Compare(a.Date) })
+	return entries
+}
+
+func (t Transaction) recentEntry(clearing map[string]bool) RecentEntry {
+	entry := RecentEntry{Date: t.Date, Description: t.Description}
+	subject := slices.IndexFunc(t.Postings, func(p Posting) bool {
+		return (Account{Name: p.Account}).IsClassifiable() && !clearing[p.Account]
+	})
+	subject = max(subject, 0)
+	if len(t.Postings) == 0 {
+		return entry
+	}
+	entry.Amount = t.Postings[subject].Amounts
+	for i, posting := range t.Postings {
+		if i != subject {
+			entry.Category = posting.Account
+			break
+		}
+	}
+	return entry
 }

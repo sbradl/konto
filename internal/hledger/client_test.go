@@ -13,10 +13,15 @@ import (
 	"github.com/sbradl/konto/internal/domain"
 )
 
-const printJSON = `[
+var printJSON = `[
   {"tdate": "2026-01-01", "tdescription": "opening balance", "tindex": 1, "tpostings": []},
-  {"tdate": "2026-09-14", "tdescription": "Rent", "tindex": 2, "tpostings": []}
+  {"tdate": "2026-09-14", "tdescription": "Rent", "tindex": 2, "tpostings": [
+    {"paccount": "expenses:rent", "pamount": [` + amountJSON("EUR", 90000, eurStyle) + `]},
+    {"paccount": "assets:checking", "pamount": [` + amountJSON("EUR", -90000, eurStyle) + `]}
+  ]}
 ]`
+
+var euroStyle = domain.AmountStyle{Spaced: true, DecimalMark: ",", GroupMark: ".", GroupSize: 3}
 
 type call struct{ args []string }
 
@@ -41,8 +46,11 @@ func TestPrintReturnsTransactions(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	want := []domain.Transaction{
-		{Date: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), Description: "opening balance"},
-		{Date: time.Date(2026, 9, 14, 0, 0, 0, 0, time.UTC), Description: "Rent"},
+		{Date: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), Description: "opening balance", Postings: []domain.Posting{}},
+		{Date: time.Date(2026, 9, 14, 0, 0, 0, 0, time.UTC), Description: "Rent", Postings: []domain.Posting{
+			{Account: "expenses:rent", Amounts: domain.MultiAmount{{Commodity: "EUR", Mantissa: 90000, Places: 2, Style: euroStyle}}},
+			{Account: "assets:checking", Amounts: domain.MultiAmount{{Commodity: "EUR", Mantissa: -90000, Places: 2, Style: euroStyle}}},
+		}},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("transactions = %+v, want %+v", got, want)
@@ -93,6 +101,8 @@ func TestPrintRejectsGarbage(t *testing.T) {
 		"bad date":     `[{"tdate": "yesterday", "tdescription": "x"}]`,
 		"wrong shape":  `{"tdate": "2026-01-01"}`,
 		"empty output": "",
+		"bad posting amount": `[{"tdate": "2026-01-01", "tdescription": "x", "tpostings": [{"paccount": "a", "pamount": [` +
+			amountJSON("EUR", 1, `{"asdigitgroups": [1, [3]]}`) + `]}]}]`,
 	} {
 		client := newClient(recording(out, nil, new([]call)), "/data/main.journal")
 

@@ -2,6 +2,7 @@
 package dashboard
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 	"time"
@@ -14,17 +15,23 @@ import (
 )
 
 const (
-	minAccountsWidth = 50 // the Accounts column is a third of the screen, but never narrower than this
-	columnDivisor    = 3
-	panelChrome      = 2 // border rows or columns around the panel body
-	cardHeight       = 4 // a stat card: border, figure, note, border
-	cardCount        = 2
-	minCardWidth     = 28 // narrower than this the cards give way
+	minAccountsWidth    = 50 // the Accounts column is a third of the screen, but never narrower than this
+	columnDivisor       = 3
+	panelChrome         = 2 // border rows or columns around the panel body
+	cardHeight          = 4 // a stat card: border, figure, note, border
+	cardCount           = 2
+	minCardWidth        = 24 // narrower than this the cards give way
+	maxCategoryWidth    = 24 // the Recent panel's widest category column
+	minDescriptionWidth = 8
+	descriptionShare    = 45 // percent of the room beside the date and amount that description takes
+	recentGap           = 2
+	recentFixed         = 16 // a Recent row's edges, its date and the gaps around the middle columns
 )
 
 // Model is the Dashboard's view-local state; the ledger is replaced wholesale on refresh.
 type Model struct {
 	accounts []domain.Account
+	recent   []domain.RecentEntry
 	figures  figures
 	cursor   int
 	offset   int // the first visible row
@@ -48,6 +55,7 @@ func (m Model) WithLedger(ledger domain.Ledger) Model {
 		netWorth: ledger.NetWorth(), month: ledger.Month.Month,
 		net: ledger.MonthNet(), income: ledger.MonthIncome(), expenses: ledger.MonthExpenses(),
 	}
+	next.recent = ledger.Recent()
 	return next.WithAccounts(ledger.Accounts)
 }
 
@@ -144,9 +152,67 @@ func (m Model) View() string {
 	if m.width-width < 2*minCardWidth {
 		return left
 	}
-	cards := lipgloss.JoinHorizontal(lipgloss.Top, m.cards(m.width-width)...)
-	filler := strings.Repeat("\n", max(0, m.height-cardHeight-1))
-	return lipgloss.JoinHorizontal(lipgloss.Top, left, cards+filler)
+	right := m.width - width
+	cards := lipgloss.JoinHorizontal(lipgloss.Top, m.cards(right)...)
+	column := cards + "\n" + m.recentPanel(right, m.height-cardHeight)
+	return lipgloss.JoinHorizontal(lipgloss.Top, left, column)
+}
+
+// recentPanel lists the newest transactions, one per row: date, description, category, amount. When
+// they do not all fit, the last row says how many more there are. Rows are not selectable.
+func (m Model) recentPanel(width, height int) string {
+	inner, capacity := max(0, width-panelChrome), max(0, height-panelChrome)
+	shown := m.recent
+	if len(shown) > capacity {
+		shown = shown[:max(0, capacity-1)]
+	}
+	columns := recentColumns(shown, inner)
+	rows := make([]string, 0, capacity)
+	for _, entry := range shown {
+		rows = append(rows, columns.line(entry))
+	}
+	if hidden := len(m.recent) - len(shown); hidden > 0 {
+		rows = append(rows, theme.Dim.Render(fmt.Sprintf(" … %d more", hidden)))
+	}
+	return layout.Panel("RECENT", width, height, strings.Join(rows, "\n"))
+}
+
+// recent column widths for one panel width: what is left of the row after the date and the widest amount
+// is shared between description and category.
+type columns struct {
+	width, amount, description, category int
+}
+
+func recentColumns(entries []domain.RecentEntry, width int) columns {
+	widest := 0
+	for _, entry := range entries {
+		widest = max(widest, lipgloss.Width(entry.Amount.Format()))
+	}
+	spare := max(0, width-recentFixed-widest)
+	description := max(minDescriptionWidth, spare*descriptionShare/100)
+	return columns{
+		width: width, amount: widest, description: min(description, spare),
+		category: min(maxCategoryWidth, max(0, spare-description-recentGap)),
+	}
+}
+
+// line is one transaction: the amount at the right edge, red when negative and green when not.
+func (c columns) line(entry domain.RecentEntry) string {
+	amount := entry.Amount.Format()
+	style := theme.Ok
+	if entry.Amount.IsAllNegative() {
+		style = theme.Negative
+	}
+	left := " " + entry.Date.Format(time.DateOnly) + "  " + fit(entry.Description, c.description)
+	left += "  " + fit(entry.Category, c.category)
+	gap := strings.Repeat(" ", max(1, c.width-lipgloss.Width(left)-lipgloss.Width(amount)-1))
+	return left + gap + style.Render(amount)
+}
+
+// fit pads text to width, or cuts it off there.
+func fit(text string, width int) string {
+	cut := lipgloss.NewStyle().MaxWidth(width).Render(text)
+	return cut + strings.Repeat(" ", width-lipgloss.Width(cut))
 }
 
 // cards are the two stat cards sharing width between them.
@@ -158,7 +224,7 @@ func (m Model) cards(width int) []string {
 		style = theme.Negative
 	}
 	worthValue := theme.Bold.Render(m.figures.netWorth.Format())
-	worthNote := theme.Dim.Render("open assets + liabilities")
+	worthNote := theme.Dim.Render("assets + liabilities")
 	incomeNote := number(m.figures.income) + " in / " + number(m.figures.expenses) + " out"
 	incomeTitle := strings.ToUpper(m.figures.month.String()) + " NET INCOME"
 	return []string{

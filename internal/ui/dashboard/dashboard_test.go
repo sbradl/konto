@@ -1,6 +1,7 @@
 package dashboard
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 	"testing"
@@ -272,7 +273,7 @@ func TestStatCardsShowNetWorthAndTheMonthsNetIncome(t *testing.T) {
 	got := strings.Join(viewLines(m), "\n")
 
 	for _, want := range []string{
-		"╭─ NET WORTH ", "╭─ SEPTEMBER NET INCOME ", "1.815,00 EUR", "3.000,00 in / 1.185,00 out", "open assets + liabilities",
+		"╭─ NET WORTH ", "╭─ SEPTEMBER NET INCOME ", "1.815,00 EUR", "3.000,00 in / 1.185,00 out", "assets + liabilities",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("view lacks %q:\n%s", want, got)
@@ -298,8 +299,8 @@ func TestCardsSitRightOfTheAccountsPanelAndTheViewFillsTheHeight(t *testing.T) {
 			t.Errorf("line is %d wide, want at most 180: %q", w, line)
 		}
 	}
-	if !strings.HasPrefix(got[cardHeight], "│ ") || strings.Contains(got[cardHeight], "╭") {
-		t.Errorf("row under the cards = %q, want the panel continuing alone", got[cardHeight])
+	if !strings.HasPrefix(got[cardHeight], "│ ") || !strings.Contains(got[cardHeight], "╭─ RECENT ") {
+		t.Errorf("row under the cards = %q, want the Accounts panel continuing beside the Recent panel", got[cardHeight])
 	}
 }
 
@@ -318,7 +319,7 @@ func TestNetIncomeIsGreenOrRedBySign(t *testing.T) {
 }
 
 func TestCardsGiveWayOnANarrowScreen(t *testing.T) {
-	m := New().Resize(100, 20).WithLedger(ledgerFigures())
+	m := New().Resize(80, 20).WithLedger(ledgerFigures())
 
 	if got := strings.Join(viewLines(m), "\n"); strings.Contains(got, "NET WORTH") {
 		t.Errorf("a screen too narrow for two cards should show the Accounts panel alone:\n%s", got)
@@ -347,7 +348,7 @@ func TestSeveralCommoditiesShowAsExtraCounts(t *testing.T) {
 
 func TestCardsAppearOnceTwoMinimumWidthsFitBesideThePanel(t *testing.T) {
 	// The Accounts panel is 50 wide at these sizes, so the cards get what is left.
-	for width, want := range map[int]bool{105: false, 106: true} {
+	for width, want := range map[int]bool{97: false, 98: true} {
 		got := strings.Contains(strings.Join(viewLines(New().Resize(width, 20).WithLedger(ledgerFigures())), "\n"), "NET WORTH")
 
 		if got != want {
@@ -361,5 +362,131 @@ func TestACardWithoutAnyFigureStillRenders(t *testing.T) {
 
 	if got := strings.Join(viewLines(New().Resize(180, 20).WithLedger(ledger)), "\n"); !strings.Contains(got, "JUNE NET INCOME") {
 		t.Errorf("view should still show the cards:\n%s", got)
+	}
+}
+
+func withTransactions(n int) domain.Ledger {
+	ledger := ledgerFigures()
+	for i := range n {
+		date := time.Date(2026, 9, 1+i%28, 0, 0, 0, 0, time.UTC)
+		ledger.Transactions = append(ledger.Transactions, domain.Transaction{
+			Date: date, Description: fmt.Sprintf("Shop %02d", i),
+			Postings: []domain.Posting{
+				{Account: "expenses:food", Amounts: eur(1000)},
+				{Account: "assets:cash", Amounts: eur(-1000)},
+			},
+		})
+	}
+	return ledger
+}
+
+func recentRows(m Model) []string {
+	var rows []string
+	inside := false
+	for _, line := range viewLines(m) {
+		switch {
+		case strings.Contains(line, "╭─ RECENT "):
+			inside = true
+		case inside && strings.Contains(line, "╰"):
+			return rows
+		case inside:
+			rows = append(rows, line)
+		}
+	}
+	return rows
+}
+
+func TestRecentListsNewestFirstWithDescriptionCategoryAndAmount(t *testing.T) {
+	ledger := domain.Ledger{Accounts: accounts(), Transactions: []domain.Transaction{
+		{Date: time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC), Description: "REWE", Postings: []domain.Posting{
+			{Account: "expenses:groceries", Amounts: eur(25000)}, {Account: "assets:cash", Amounts: eur(-25000)},
+		}},
+		{Date: time.Date(2026, 9, 25, 0, 0, 0, 0, time.UTC), Description: "Acme GmbH", Postings: []domain.Posting{
+			{Account: "assets:cash", Amounts: eur(300000)}, {Account: "income:salary", Amounts: eur(-300000)},
+		}},
+	}}
+
+	rows := recentRows(New().Resize(180, 20).WithLedger(ledger))
+
+	if !strings.Contains(rows[0], "2026-09-25  Acme GmbH") || !strings.Contains(rows[0], "income:salary") || !strings.Contains(rows[0], "3.000,00 EUR") {
+		t.Errorf("first row = %q, want the salary", rows[0])
+	}
+	if !strings.Contains(rows[1], "2026-09-10  REWE") || !strings.Contains(rows[1], "expenses:groceries") || !strings.Contains(rows[1], "-250,00 EUR") {
+		t.Errorf("second row = %q, want the groceries", rows[1])
+	}
+}
+
+func TestRecentAmountsAreGreenOrRed(t *testing.T) {
+	ledger := domain.Ledger{Transactions: []domain.Transaction{
+		{Date: day1, Description: "in", Postings: []domain.Posting{{Account: "assets:a", Amounts: eur(100)}, {Account: "income:x", Amounts: eur(-100)}}},
+		{Date: day1, Description: "out", Postings: []domain.Posting{{Account: "assets:a", Amounts: eur(-100)}, {Account: "expenses:x", Amounts: eur(100)}}},
+	}}
+
+	view := New().Resize(180, 20).WithLedger(ledger).View()
+
+	if !strings.Contains(view, "\x1b[31m-1,00 EUR") || !strings.Contains(view, "\x1b[32m1,00 EUR") {
+		t.Errorf("amounts should be red when negative and green otherwise:\n%q", view)
+	}
+}
+
+var day1 = time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+
+func TestRecentSaysHowManyRowsDontFit(t *testing.T) {
+	rows := recentRows(New().Resize(180, 14).WithLedger(withTransactions(200))) // 10 rows tall: 8 inside
+
+	if len(rows) != 8 {
+		t.Fatalf("panel has %d rows, want 8", len(rows))
+	}
+	if !strings.Contains(rows[7], "… 193 more") || strings.Contains(rows[6], "more") {
+		t.Errorf("last rows = %q / %q, want 7 transactions then … 193 more", rows[6], rows[7])
+	}
+}
+
+func TestRecentShowsExactlyAsManyAsFitWithoutAMoreRow(t *testing.T) {
+	rows := recentRows(New().Resize(180, 14).WithLedger(withTransactions(8))) // exactly 8 inside
+
+	if text := strings.Join(rows, "\n"); strings.Contains(text, "more") || !strings.Contains(text, "Shop 07") {
+		t.Errorf("all 8 fit, so no … more row:\n%s", text)
+	}
+}
+
+func TestRecentShowsEverythingThatFitsWithoutAMoreRow(t *testing.T) {
+	rows := recentRows(New().Resize(180, 14).WithLedger(withTransactions(3)))
+
+	if strings.Contains(strings.Join(rows, "\n"), "more") {
+		t.Errorf("all 8 fit, so no … more row:\n%s", strings.Join(rows, "\n"))
+	}
+}
+
+func TestRecentRowsFillThePanelWidth(t *testing.T) {
+	for _, line := range recentRows(New().Resize(180, 14).WithLedger(withTransactions(3)))[:3] {
+		if w := lipgloss.Width(line); w != 180 {
+			t.Errorf("row is %d wide, want 180: %q", w, line)
+		}
+	}
+}
+
+func TestRecentCutsLongDescriptionsToKeepTheColumns(t *testing.T) {
+	ledger := withTransactions(1)
+	ledger.Transactions[0].Description = strings.Repeat("long ", 40)
+
+	row := recentRows(New().Resize(110, 14).WithLedger(ledger))[0]
+
+	if lipgloss.Width(row) != 110 || !strings.HasSuffix(strings.TrimRight(row, " │"), "-10,00 EUR") {
+		t.Errorf("row = %q, want it cut to the width with the amount kept", row)
+	}
+}
+
+func TestRecentIsNotSelectable(t *testing.T) {
+	view := New().Resize(180, 14).WithLedger(withTransactions(3)).Move("down").View()
+
+	for line := range strings.SplitSeq(view, "\n") {
+		// Each row is the Accounts panel's border-to-border run, then the right column.
+		if _, right, found := strings.Cut(line, "│╭"); found && strings.Contains(right, "100m") {
+			t.Errorf("a right-column row is highlighted: %q", line)
+		}
+		if _, right, found := strings.Cut(line, "││"); found && strings.Contains(right, "100m") {
+			t.Errorf("a Recent row is highlighted: %q", line)
+		}
 	}
 }
