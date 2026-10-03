@@ -42,7 +42,7 @@ func (m Model) content() string {
 	if m.ledger == nil {
 		return m.centred("loading journal…")
 	}
-	return m.views()
+	return m.withPopup(m.views())
 }
 
 // views is the normal screen: tab bar, rule, the active view, status bar.
@@ -57,21 +57,19 @@ func (m Model) views() string {
 	return strings.Join([]string{m.tabBar(), rule, body, m.statusBar()}, "\n")
 }
 
-// hints are the keys each view answers to, shown in the status bar.
-func hints() [tabCount]string {
-	return [tabCount]string{
-		"c close   o reopen",
-		"n new file   Enter categorise   w write",
-		"n new   e edit   d delete",
-		"",
-		"p period",
+// hint is the active view's keys as the status bar shows them.
+func (m Model) hint() string {
+	parts := make([]string, 0, len(viewKeys()[m.active]))
+	for _, binding := range viewKeys()[m.active] {
+		parts = append(parts, binding.key+" "+binding.action)
 	}
+	return strings.Join(parts, "   ")
 }
 
 // statusBar shows the active view's name and key hint, with "? keys" at the right edge.
 func (m Model) statusBar() string {
 	left := " " + tabNames()[m.active]
-	if hint := hints()[m.active]; hint != "" {
+	if hint := m.hint(); hint != "" {
 		left += "   " + hint
 	}
 	right := m.indicator() + "? keys "

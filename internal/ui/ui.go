@@ -56,6 +56,7 @@ type Model struct {
 	refreshing  bool  // a reload is in flight; the held snapshot stays on screen
 	refreshErr  error // the last reload failed; the snapshot is stale
 	active      int   // index into tabNames
+	popup       popupKind
 	firstRun    bool
 	parseIssue  *domain.CheckIssue
 	createErr   error
@@ -168,8 +169,17 @@ func (m Model) onParseErrorKey(key string) tea.Cmd {
 	return nil
 }
 
-// onViewKey handles the global keys of the normal views: 1–5 switch the view, r reloads.
+// onViewKey handles the global keys of the normal views: 1–5 switch the view, r reloads, ? and ! open the popups.
 func (m Model) onViewKey(key string) (Model, tea.Cmd) {
+	if m.popup != popupNone {
+		return m.onPopupKey(key), nil
+	}
+	switch key {
+	case "?":
+		m.popup = popupKeys
+	case "!":
+		m.popup = popupChecks
+	}
 	if key == "r" {
 		m.refreshing = true
 		return m, m.load

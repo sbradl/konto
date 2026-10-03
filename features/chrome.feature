@@ -91,33 +91,28 @@ Feature: Chrome, navigation and global keys
 
   Rule: Keys popup
 
-    @wip
     Scenario: ? opens and Esc closes it
       When I press "?"
       Then I see the keys popup listing "1–5" "?" "!" "r" "q"
       When I press "Esc"
       Then I do not see the keys popup
 
-    @wip
     Scenario: popup shows the active view's keys
       When I press "3"
       And I press "?"
       Then I see "n" "e" "d" in the keys popup
 
-    @wip
     Scenario: popup is an overlay over the view
       When I press "?"
       Then the view content is still visible above the popup
       And the popup spans the full width
       And the popup is no taller than half the screen
 
-    @wip
     Scenario: popup reflows to fewer columns on narrow terminals
       Given the terminal is 100×30
       When I press "?"
       Then the popup uses at most 4 columns
 
-    @wip
     Scenario: view keys are ignored while the popup is open
       When I press "?"
       And I press "3"

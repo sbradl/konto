@@ -36,7 +36,6 @@ Feature: Journal checks — status bar indicator and the ! panel
       And each invocation named exactly one check
       And the checks run are "parseable" "autobalanced" "assertions" "balanced" "commodities" "accounts" "ordereddates" "tags" "payees" "recentassertions" "uniqueleafnames"
 
-    @wip
     Scenario: ! toggles and Esc closes
       When I press "!"
       And I press "!"
@@ -45,14 +44,12 @@ Feature: Journal checks — status bar indicator and the ! panel
       And I press "Esc"
       Then I do not see the checks panel
 
-    @wip
     Scenario: panel is an overlay sized to its content
       When I press "!"
       Then the view content is still visible above the panel
       And the panel spans the full width
       And the panel is no taller than half the screen
 
-    @wip
     Scenario: opening ! closes ?, only one popup at a time
       When I press "?"
       And I press "!"
@@ -206,7 +203,6 @@ Feature: Journal checks — status bar indicator and the ! panel
       And I can reach the last row with "↓"
       And the selected row is always visible
 
-    @wip
     Scenario: view keys do not leak through the open panel
       Given the journal "household"
       And I start konto
