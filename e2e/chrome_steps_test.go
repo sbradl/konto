@@ -146,6 +146,14 @@ func registerChromeSteps(sc *godog.ScenarioContext, w *world) {
 }
 
 func registerRefreshSteps(sc *godog.ScenarioContext, w *world) {
+	sc.Step(`^I append this to the journal externally:$`, func(text *godog.DocString) error {
+		f, err := os.OpenFile(w.journal, os.O_APPEND|os.O_WRONLY, 0o644)
+		if err != nil {
+			return err
+		}
+		_, werr := f.WriteString("\n" + text.Content + "\n")
+		return errors.Join(werr, f.Close())
+	})
 	sc.Step(`^I append a transaction to the journal externally$`, func() error {
 		f, err := os.OpenFile(w.journal, os.O_APPEND|os.O_WRONLY, 0o644)
 		if err != nil {

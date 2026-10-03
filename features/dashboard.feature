@@ -255,7 +255,6 @@ Feature: Dashboard
 
   Rule: Dropped panels
 
-    @wip
     Scenario Outline: v1 does not show handoff panels
       Then I do not see "<text>"
 
@@ -267,7 +266,6 @@ Feature: Dashboard
         | at cost       |
         | -V market     |
 
-    @wip
     Scenario Outline: dropped keys do nothing
       When I press "<key>"
       Then the screen is unchanged
@@ -280,7 +278,6 @@ Feature: Dashboard
 
   Rule: Refresh and errors
 
-    @wip
     Scenario: external change shows after r
       When I append this to the journal externally:
         """
@@ -292,7 +289,6 @@ Feature: Dashboard
       Then I see a "SEPTEMBER NET INCOME" card showing "1.805,00 EUR"
       And the Recent panel's first row is dated "2026-09-29"
 
-    @wip
     Scenario: external change is not visible before r
       When I append a transaction to the journal externally
       Then the screen is unchanged

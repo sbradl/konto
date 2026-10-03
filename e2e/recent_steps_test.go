@@ -201,6 +201,14 @@ func (w *world) expectRecentOverflow() error {
 }
 
 func registerRecentSteps(sc *godog.ScenarioContext, w *world) {
+	sc.Step(`^the Recent panel's first row is dated "([^"]*)"$`, func(date string) error {
+		return w.expectRecent(func(rows []recentRow) error {
+			if len(rows) == 0 || !strings.Contains(rows[0].text, date) {
+				return fmt.Errorf("the first Recent row is not dated %s", date)
+			}
+			return nil
+		})
+	})
 	sc.Step(`^the Recent panel's first two rows are dated "([^"]*)" and describe "([^"]*)"$`, func(date, description string) error {
 		return w.expectRecentOrder(2, date, description)
 	})
