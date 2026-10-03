@@ -720,3 +720,55 @@ func TestStatusBarCountsHiddenDashboardPanels(t *testing.T) {
 		t.Errorf("only the Dashboard reports hidden panels, got %q", got)
 	}
 }
+
+func scheduledLedger() domain.Ledger {
+	source := domain.SourcePos{File: "j", Line: 3}
+	return domain.Ledger{
+		Rules: []domain.PeriodicRule{
+			{Period: "monthly", Description: "Rent", Lines: []string{"~ monthly  Rent"}, Pos: source},
+			{Period: "monthly", Description: "Salary", Lines: []string{"~ monthly  Salary"}, Pos: domain.SourcePos{File: "j", Line: 8}},
+		},
+		Upcoming: []domain.Transaction{{Description: "Rent", Source: source}},
+	}
+}
+
+func TestSchedViewListsTheRulesWithACursorPosition(t *testing.T) {
+	model, _ := press(started(t, fakeLoader{ledger: scheduledLedger()}), "3")
+
+	content := plain(model.View().Content)
+	if !strings.Contains(content, "╭─ RULES ") || !strings.Contains(content, "Rent") || !strings.Contains(lastLine(model), "1/2") {
+		t.Errorf("Scheduled view and its position:\n%s", content)
+	}
+
+	moved, _ := model.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	if !strings.Contains(lastLine(moved.(Model)), "2/2") {
+		t.Errorf("the arrow moves the cursor: %q", lastLine(moved.(Model)))
+	}
+	if strings.Contains(lastLine(model), "hidden") {
+		t.Errorf("hidden panels are the Dashboard's notice")
+	}
+}
+
+func TestSchedKeysDoNotPostOrPause(t *testing.T) {
+	model, _ := press(started(t, fakeLoader{ledger: scheduledLedger()}), "3")
+
+	for _, key := range []string{"p", "x"} {
+		after, cmd := press(model, key)
+		if cmd != nil || after.prompt != nil || plain(after.View().Content) != plain(model.View().Content) {
+			t.Errorf("%s must do nothing in Scheduled", key)
+		}
+	}
+	if _, cmd := model.Update(tea.KeyPressMsg{Code: tea.KeyEnter}); cmd != nil {
+		t.Errorf("Enter must do nothing in Scheduled")
+	}
+}
+
+func TestSchedViewFollowsTheTerminalSize(t *testing.T) {
+	model, _ := press(started(t, fakeLoader{ledger: scheduledLedger()}), "3")
+
+	rows := strings.Split(plain(resized(model, 160, 50).View().Content), "\n")
+
+	if len(rows) != 50 || !strings.HasPrefix(rows[len(rows)-2], "╰") {
+		t.Errorf("view has %d rows; the panels should end just above the status bar, got %q", len(rows), rows[len(rows)-2])
+	}
+}

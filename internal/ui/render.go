@@ -62,6 +62,8 @@ func (m Model) body() string {
 	switch m.active {
 	case 0:
 		return m.dash.View()
+	case scheduledTab:
+		return m.scheduled.View()
 	case reportsTab:
 		return m.reports.View()
 	}
@@ -165,7 +167,7 @@ func (m Model) statusLeft() string {
 	if hint := m.hint(); hint != "" {
 		left += "   " + hint
 	}
-	if row, total := m.dash.Position(); m.active == 0 && total > 0 {
+	if row, total := m.position(); total > 0 {
 		left += fmt.Sprintf("   %d/%d", row, total)
 	}
 	if hidden := m.dash.HiddenPanels(); m.active == 0 && hidden > 0 {
@@ -180,4 +182,15 @@ func hiddenNotice(hidden int) string {
 		return "1 panel hidden · widen terminal"
 	}
 	return fmt.Sprintf("%d panels hidden · widen terminal", hidden)
+}
+
+// position is the active view's cursor row and row count; views without a cursor have none.
+func (m Model) position() (row, total int) {
+	switch m.active {
+	case 0:
+		return m.dash.Position()
+	case scheduledTab:
+		return m.scheduled.Position()
+	}
+	return 0, 0
 }

@@ -16,7 +16,6 @@ Feature: Scheduled — periodic rules (forecast-only)
 
   Rule: The list
 
-    @wip
     Scenario: rules are sorted by next occurrence
       Then the rule list shows in order
         | next       | description       | cadence                          |
@@ -26,19 +25,16 @@ Feature: Scheduled — periodic rules (forecast-only)
         | 2026-10-26 | Sparen            | monthly from 2026-10-26          |
         | 2026-11-15 | Car insurance     | yearly from 2026-11-15           |
 
-    @wip
     Scenario: the cadence is the raw period expression, not plain English
       Then I do not see "every month" or "monthly on the"
       And I see "monthly from 2026-10-01"
 
-    @wip
     Scenario: the first rule is selected, arrows move the cursor
       Then the first rule is selected with background 8 and foreground 15
       When I press "↓"
       Then the second rule is selected
       And the status bar shows "2/5"
 
-    @wip
     Scenario: cursor limits and paging
       When I press "End"
       Then the last rule is selected
@@ -46,37 +42,32 @@ Feature: Scheduled — periodic rules (forecast-only)
       When I press "Home"
       Then the first rule is selected
 
-    @wip
     Scenario: status is upcoming for rules with future occurrences
       Then the status of "Vermieter Mueller" is "upcoming"
 
-    @wip
     Scenario: a rule with nothing in the next 12 months says so
       Given the journal "household-scheduled" with a rule "~ 2026-01-05  Old once-off\n    expenses:rent  5,00 EUR\n    assets:checking\n"
       And I start konto
       And I press "3"
       Then the status of "Old once-off" is "none in the next 12 months"
 
-    @wip
     Scenario: an ended rule says none in the next 12 months
       Given the journal "household-scheduled" with a rule "~ monthly from 2026-01-01 to 2026-03-01  Ended\n    expenses:rent  5,00 EUR\n    assets:checking\n"
       And I start konto
       And I press "3"
       Then the status of "Ended" is "none in the next 12 months"
 
-    @wip
     Scenario: rules whose dates come only from hledger — konto never computes them
       Given the journal "household-scheduled" with a rule "~ monthly from 2026-01-31  Month end\n    expenses:rent  5,00 EUR\n    assets:checking\n"
       And I start konto
       And I press "3"
       Then the next occurrence of "Month end" is "2026-10-31"
 
-    @wip
     Scenario: hint and keys
       Then the status bar hint lists "n new" "e edit" "d delete"
       And the status bar does not list "p pause" or "x delete" or "Enter post"
 
-    @proposed @wip
+    @proposed
     Scenario: an empty journal of rules shows an empty state
       Given the journal "household"
       And I start konto
@@ -85,7 +76,7 @@ Feature: Scheduled — periodic rules (forecast-only)
       And I see a hint to press "n" to add a rule
       And the status bar does not show "n/total"
 
-    @proposed @wip
+    @proposed
     Scenario: rules in included files are listed too
       Given the journal "household" with a rule in included file "rules.journal"
       And I start konto
@@ -94,7 +85,6 @@ Feature: Scheduled — periodic rules (forecast-only)
 
   Rule: Detail panels
 
-    @wip
     Scenario: raw journal entry of the selected rule
       Then the entry panel shows
         """
@@ -104,12 +94,10 @@ Feature: Scheduled — periodic rules (forecast-only)
         """
       And the "~" line is coloured 5
 
-    @wip
     Scenario: comments in the block are shown dim
       When I select the rule "Streaming"
       Then the entry panel shows "; shared account" coloured 8
 
-    @wip
     Scenario: next six occurrences
       Then the occurrences panel lists
         | 2026-10-01 |
@@ -119,48 +107,41 @@ Feature: Scheduled — periodic rules (forecast-only)
         | 2027-02-01 |
         | 2027-03-01 |
 
-    @proposed @wip
+    @proposed
     Scenario: fewer than six when fewer exist in the horizon
       When I select the rule "Car insurance"
       Then the occurrences panel lists exactly
         | 2026-11-15 |
 
-    @wip
     Scenario: occurrences follow the cursor
       When I select the rule "Acme GmbH"
       Then the occurrences panel's first date is "2026-10-25"
 
-    @wip
     Scenario: annual impact is the signed 12-month net-worth effect per rule
       Then the annual impact table shows "Vermieter Mueller" with "-10.800,00 EUR" coloured 1
       And it shows "Streaming" with "-156,00 EUR" coloured 1
       And it shows "Acme GmbH" with "36.000,00 EUR" coloured 2
       And it shows "Car insurance" with "-240,00 EUR" coloured 1
 
-    @wip
     Scenario: a transfer between own accounts has zero impact
       Then the annual impact table shows "Sparen" with "0,00 EUR" coloured 8
 
-    @wip
     Scenario: the total is the net change of net worth, in plain EUR
       Then the annual impact total is "24.804,00 EUR" coloured 2
       And there is no valuation toggle
 
-    @wip
     Scenario: a net-negative load is red
       Given the journal "household-scheduled" with a rule "~ monthly from 2026-10-02  Big bill\n    expenses:rent  5.000,00 EUR\n    assets:checking\n"
       And I start konto
       And I press "3"
       Then the annual impact total is "-35.196,00 EUR" coloured 1
 
-    @wip
     Scenario: occurrences are projections, not journal entries
       Then the journal is unchanged
       And the tab bar shows "54" transactions
 
   Rule: Periodic rules never post (ADR 0006)
 
-    @wip
     Scenario Outline: no Enter-to-post, no pause
       When I press "<key>"
       Then the journal is unchanged
@@ -172,7 +153,6 @@ Feature: Scheduled — periodic rules (forecast-only)
         | p     |
         | x     |
 
-    @wip
     Scenario: a day passing does not write anything
       Given today is 2026-10-02
       And I start konto

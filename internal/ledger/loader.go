@@ -22,6 +22,7 @@ type gateway interface {
 type journalFile interface {
 	Exists() (bool, error)
 	AccountDeclarations() ([]domain.Declaration, error)
+	PeriodicRules() ([]domain.PeriodicRule, error)
 }
 
 // ErrNoJournal means there is no journal file to load yet (first run).
@@ -48,11 +49,7 @@ func (l *Loader) Load(ctx context.Context) (domain.Ledger, error) {
 	if !exists {
 		return domain.Ledger{}, ErrNoJournal
 	}
-	transactions, err := l.gw.Print(ctx)
-	if err != nil {
-		return domain.Ledger{}, fmt.Errorf("loading ledger: %w", err)
-	}
-	accounts, err := l.gw.Balances(ctx)
+	snapshot, accounts, err := l.fromHledger(ctx)
 	if err != nil {
 		return domain.Ledger{}, fmt.Errorf("loading ledger: %w", err)
 	}
@@ -60,26 +57,39 @@ func (l *Loader) Load(ctx context.Context) (domain.Ledger, error) {
 	if err != nil {
 		return domain.Ledger{}, fmt.Errorf("loading ledger: %w", err)
 	}
+	if snapshot.Rules, err = l.file.PeriodicRules(); err != nil {
+		return domain.Ledger{}, fmt.Errorf("loading ledger: %w", err)
+	}
+	snapshot.Accounts = declare(accounts, declarations)
+	return snapshot, nil
+}
+
+// fromHledger is what hledger reports: the transactions, the balances (returned apart: the directives
+// complete them), the month to date, the spend history and the projected occurrences.
+func (l *Loader) fromHledger(ctx context.Context) (domain.Ledger, []domain.Account, error) {
+	var snapshot domain.Ledger
+	transactions, err := l.gw.Print(ctx)
+	if err != nil {
+		return snapshot, nil, err //nolint:wrapcheck // Load adds the context
+	}
+	accounts, err := l.gw.Balances(ctx)
+	if err != nil {
+		return snapshot, nil, err //nolint:wrapcheck // Load adds the context
+	}
 	month, err := l.monthToDate(ctx)
 	if err != nil {
-		return domain.Ledger{}, fmt.Errorf("loading ledger: %w", err)
+		return snapshot, nil, err
 	}
 	spend, err := l.spendHistory(ctx)
 	if err != nil {
-		return domain.Ledger{}, fmt.Errorf("loading ledger: %w", err)
+		return snapshot, nil, err
 	}
 	today := l.today()
-	upcoming, err := l.gw.Upcoming(ctx, today, today.AddDate(1, 0, 0))
+	upcoming, err := l.gw.Upcoming(ctx, today.AddDate(0, 0, 1), today.AddDate(1, 0, 0))
 	if err != nil {
-		return domain.Ledger{}, fmt.Errorf("loading ledger: %w", err)
+		return snapshot, nil, err //nolint:wrapcheck // Load adds the context
 	}
-	return domain.Ledger{
-		Accounts:     declare(accounts, declarations),
-		Transactions: transactions,
-		Upcoming:     upcoming,
-		Month:        month,
-		Spend:        spend,
-	}, nil
+	return domain.Ledger{Transactions: transactions, Month: month, Spend: spend, Upcoming: upcoming}, accounts, nil
 }
 
 // declare completes each account with what its `account` directive says. An account declared

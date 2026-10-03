@@ -212,7 +212,8 @@ func TestPrintToleratesMissingMessage(t *testing.T) {
 
 var forecastJSON = `[
   {"tdate": "2026-09-14", "tdescription": "Rent", "ttags": [[]], "tpostings": []},
-  {"tdate": "2026-10-01", "tdescription": "Vermieter Mueller", "ttags": [["_generated-transaction", "~ monthly from 2026-10-01"]], "tpostings": [
+  {"tdate": "2026-10-01", "tdescription": "Vermieter Mueller", "ttags": [["_generated-transaction", "~ monthly from 2026-10-01"]],
+   "tsourcepos": [{"sourceName": "/data/main.journal", "sourceLine": 10}, {"sourceName": "/data/main.journal", "sourceLine": 13}], "tpostings": [
     {"paccount": "expenses:rent", "pamount": [` + amountJSON("EUR", 90000, eurStyle) + `]}
   ]}
 ]`
@@ -231,6 +232,9 @@ func TestUpcomingReturnsOnlyGeneratedOccurrencesInThePeriod(t *testing.T) {
 	wantArgs := []string{"-f", "/data/main.journal", "print", "--forecast=2026-09-30..2027-09-30", "-O", "json"}
 	if len(calls) != 1 || !reflect.DeepEqual(calls[0].args, wantArgs) {
 		t.Errorf("calls = %+v, want one call with %v", calls, wantArgs)
+	}
+	if len(got) == 1 && got[0].Source != (domain.SourcePos{File: "/data/main.journal", Line: 10}) {
+		t.Errorf("source = %+v, want the `~` line", got[0].Source)
 	}
 	if len(got) != 1 || got[0].Description != "Vermieter Mueller" || got[0].Date != time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC) {
 		t.Errorf("occurrences = %+v, want only the generated Vermieter Mueller", got)

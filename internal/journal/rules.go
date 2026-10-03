@@ -1,6 +1,52 @@
 package journal
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/sbradl/konto/internal/domain"
+)
+
+// PeriodicRules lists the `~` blocks of the journal and the files it includes, in file order.
+func (f File) PeriodicRules() ([]domain.PeriodicRule, error) {
+	sources, err := f.sources()
+	if err != nil {
+		return nil, err
+	}
+	var rules []domain.PeriodicRule
+	for _, source := range sources {
+		rules = append(rules, blocksIn(source)...)
+	}
+	return rules, nil
+}
+
+// blocksIn reads the rule blocks of one file: a `~` line and the indented lines that follow it.
+func blocksIn(source *source) []domain.PeriodicRule {
+	var rules []domain.PeriodicRule
+	for i, line := range source.lines {
+		if !strings.HasPrefix(line, "~") {
+			continue
+		}
+		lines := []string{line}
+		for _, next := range source.lines[i+1:] {
+			if !strings.HasPrefix(next, " ") && !strings.HasPrefix(next, "\t") {
+				break
+			}
+			lines = append(lines, next)
+		}
+		period, _, _ := strings.Cut(headerBody(line), "  ")
+		rules = append(rules, domain.PeriodicRule{
+			Period: strings.TrimSpace(period), Description: ruleName(line), Lines: lines,
+			Pos: domain.SourcePos{File: source.path, Line: i + 1},
+		})
+	}
+	return rules
+}
+
+// headerBody is a `~` line without its marker and trailing comment.
+func headerBody(header string) string {
+	body, _, _ := strings.Cut(strings.TrimPrefix(header, "~"), ";")
+	return strings.TrimSpace(body)
+}
 
 // RulesReferencing lists the descriptions of the periodic (`~`) rules that post to the account,
 // whether or not they have ended. A rule without a description is named by its period.
@@ -43,7 +89,7 @@ func rulesIn(lines []string, account string) []string {
 
 // ruleName is the description after the period expression (two spaces apart), else the period.
 func ruleName(header string) string {
-	body := strings.TrimSpace(strings.TrimPrefix(header, "~"))
+	body := headerBody(header)
 	if _, description, found := strings.Cut(body, "  "); found {
 		return strings.TrimSpace(description)
 	}

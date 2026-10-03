@@ -25,7 +25,8 @@ type Ledger struct {
 	Transactions []Transaction
 	Upcoming     []Transaction // the periodic rules' occurrences for the next year, soonest first; never in the journal
 	Month        MonthSummary
-	Spend        []MonthSpend // the last six complete months, oldest first
+	Rules        []PeriodicRule // every `~` block of the journal, in file order
+	Spend        []MonthSpend   // the last six complete months, oldest first
 }
 
 // TransactionCount is the number of transactions in the journal.

@@ -14,6 +14,7 @@ import (
 	"github.com/sbradl/konto/internal/ledger"
 	"github.com/sbradl/konto/internal/ui/dashboard"
 	"github.com/sbradl/konto/internal/ui/reports"
+	"github.com/sbradl/konto/internal/ui/scheduled"
 )
 
 // The smallest terminal konto lays its views out in (spec §6.8).
@@ -77,6 +78,7 @@ type Model struct {
 	writer      journalWriter
 	reporter    reportBuilder
 	reports     reports.Model
+	scheduled   scheduled.Model
 	prompt      *prompt          // the y/n question awaiting an answer
 	notice      string           // a one-line message shown until the next key
 	run         *domain.CheckRun // the latest check run; nil until the first one lands
@@ -128,7 +130,7 @@ func New(journalPath string, ports Ports) Model {
 	return Model{
 		journalPath: journalPath, loader: ports.Loader, checker: ports.Checker, creator: ports.Creator,
 		editor: ports.Editor, accounts: ports.Accounts, writer: ports.Writer, dash: dashboard.New(),
-		reporter: ports.Reports, reports: reports.New(),
+		reporter: ports.Reports, reports: reports.New(), scheduled: scheduled.New(),
 	}
 }
 
@@ -161,6 +163,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width, m.height = size.Width, size.Height
 		m.dash = m.dash.Resize(m.width, max(0, m.height-chromeRows))
 		m.reports = m.reports.Resize(m.width, max(0, m.height-chromeRows))
+		m.scheduled = m.scheduled.Resize(m.width, max(0, m.height-chromeRows))
 	}
 	if loaded, ok := msg.(ledgerLoadedMsg); ok {
 		m = m.onLoaded(loaded)
@@ -195,6 +198,7 @@ func (m Model) onLoaded(loaded ledgerLoadedMsg) Model {
 	m.refreshErr = nil
 	m.ledger, m.loadErr = &loaded.ledger, loaded.err
 	m.dash = m.dash.WithLedger(loaded.ledger)
+	m.scheduled = m.scheduled.WithLedger(loaded.ledger)
 	if loaded.err == nil {
 		m.run = &loaded.run
 		m.checkCursor = max(0, min(m.checkCursor, len(loaded.run.Issues)-1))
@@ -303,14 +307,19 @@ func (m Model) onActiveViewKey(key string) (Model, tea.Cmd) {
 	switch m.active {
 	case 0:
 		return m.onDashboardKey(key), nil
+	case scheduledTab:
+		m.scheduled = m.scheduled.Move(key)
 	case reportsTab:
 		return m.onReportsKey(key)
 	}
 	return m, nil
 }
 
-// reportsTab is the index of the Reports view.
-const reportsTab = 4
+// Tab indices of the views.
+const (
+	scheduledTab = 2
+	reportsTab   = 4
+)
 
 // onReportsKey scrolls the tables, or on p moves to the next period and builds its report.
 func (m Model) onReportsKey(key string) (Model, tea.Cmd) {

@@ -12,6 +12,8 @@ var (
 	Dim = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 	// Bold styles figures that stand out.
 	Bold = lipgloss.NewStyle().Bold(true)
+	// Directive styles rule and directive text: ANSI magenta.
+	Directive = lipgloss.NewStyle().Foreground(lipgloss.Color("5"))
 	// Emphasis styles grand totals: bold bright white.
 	Emphasis = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15"))
 	// Negative styles negative amounts: ANSI red.

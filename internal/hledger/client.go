@@ -65,7 +65,11 @@ type jsonTransaction struct {
 	Date        string     `json:"tdate"`
 	Description string     `json:"tdescription"`
 	Tags        [][]string `json:"ttags"`
-	Postings    []struct {
+	SourcePos   []struct {
+		Name string `json:"sourceName"`
+		Line int    `json:"sourceLine"`
+	} `json:"tsourcepos"`
+	Postings []struct {
 		Account string       `json:"paccount"`
 		Amounts []jsonAmount `json:"pamount"`
 	} `json:"tpostings"`
@@ -115,8 +119,11 @@ func (c *Client) transactions(
 		if err != nil {
 			return nil, fmt.Errorf("reading hledger print output: %w", err)
 		}
-		transactions = append(transactions,
-			domain.Transaction{Date: date, Description: entry.Description, Postings: postings})
+		transaction := domain.Transaction{Date: date, Description: entry.Description, Postings: postings}
+		if len(entry.SourcePos) > 0 {
+			transaction.Source = domain.SourcePos{File: entry.SourcePos[0].Name, Line: entry.SourcePos[0].Line}
+		}
+		transactions = append(transactions, transaction)
 	}
 	return transactions, nil
 }

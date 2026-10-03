@@ -60,7 +60,11 @@ type fakeFile struct {
 	err          error
 	declarations []domain.Declaration
 	declareErr   error
+	rules        []domain.PeriodicRule
+	rulesErr     error
 }
+
+func (f fakeFile) PeriodicRules() ([]domain.PeriodicRule, error) { return f.rules, f.rulesErr }
 
 func (f fakeFile) Exists() (bool, error) { return f.exists, f.err }
 
@@ -199,7 +203,7 @@ func TestLoadReportsAFailureToSummariseTheMonth(t *testing.T) {
 	}
 }
 
-// The upcoming occurrences are the next year of the periodic rules, counted from today.
+// The upcoming occurrences are the next year of the periodic rules, from tomorrow: today's are not upcoming.
 func TestLoadProjectsTheNextYearOfPeriodicRules(t *testing.T) {
 	gw := &upcomingRecorder{fakeGateway{upcoming: []domain.Transaction{{Description: "Rent"}}}, time.Time{}, time.Time{}}
 
@@ -207,8 +211,8 @@ func TestLoadProjectsTheNextYearOfPeriodicRules(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if first, last := gw.first.Format(time.DateOnly), gw.last.Format(time.DateOnly); first != "2026-09-30" || last != "2027-09-30" {
-		t.Errorf("projected %s..%s, want 2026-09-30..2027-09-30", first, last)
+	if first, last := gw.first.Format(time.DateOnly), gw.last.Format(time.DateOnly); first != "2026-10-01" || last != "2027-09-30" {
+		t.Errorf("projected %s..%s, want 2026-10-01..2027-09-30", first, last)
 	}
 	if len(got.Upcoming) != 1 || got.Upcoming[0].Description != "Rent" {
 		t.Errorf("Upcoming = %+v, want the projected Rent", got.Upcoming)
@@ -303,6 +307,25 @@ func TestLoadReportsAFailureToSumAMonthOfSpend(t *testing.T) {
 	_, err := NewLoader(&failingAfter{failAt: 3}, present, sept30).Load(context.Background())
 
 	if err == nil || !strings.Contains(err.Error(), "month failed") {
+		t.Errorf("expected an error carrying the cause, got: %v", err)
+	}
+}
+
+func TestLoadReadsThePeriodicRulesOfTheJournal(t *testing.T) {
+	file := fakeFile{exists: true, rules: []domain.PeriodicRule{{Description: "Rent"}}}
+
+	got, err := NewLoader(fakeGateway{}, file, sept30).Load(context.Background())
+	if err != nil || len(got.Rules) != 1 || got.Rules[0].Description != "Rent" {
+		t.Errorf("Rules = %+v, %v; want the journal's rule", got.Rules, err)
+	}
+}
+
+func TestLoadReportsAFailureToReadTheRules(t *testing.T) {
+	file := fakeFile{exists: true, rulesErr: errors.New("rules failed")}
+
+	_, err := NewLoader(fakeGateway{}, file, sept30).Load(context.Background())
+
+	if err == nil || !strings.Contains(err.Error(), "rules failed") {
 		t.Errorf("expected an error carrying the cause, got: %v", err)
 	}
 }

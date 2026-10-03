@@ -15,6 +15,7 @@ type Posting struct {
 type Transaction struct {
 	Date        time.Time
 	Description string
+	Source      SourcePos // where the entry is written; a projected occurrence points at its `~` line
 	Postings    []Posting
 }
 
