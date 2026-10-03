@@ -669,3 +669,19 @@ func TestSpendChartAppearsAtExactlyTheMinimumBandWidth(t *testing.T) {
 		t.Errorf("two minimum-width panels fit, so the chart shows:\n%s", view)
 	}
 }
+
+func TestHiddenPanelsCountWhatTheTerminalIsTooSmallFor(t *testing.T) {
+	for name, tc := range map[string]struct{ width, height, want int }{
+		"everything fits":       {180, 40, 0},
+		"no room for the chart": {minAccountsWidth + 2*minBandWidth - 1, 40, 1},
+		"chart just fits":       {minAccountsWidth + 2*minBandWidth, 40, 0},
+		"no room for the band":  {180, cardHeight + upcomingHeight + minRecentHeight - 1, 2},
+		"band just fits":        {180, cardHeight + upcomingHeight + minRecentHeight, 0},
+		"no room for the cards": {minAccountsWidth + 2*minCardWidth - 1, 40, 5},
+		"cards just fit":        {minAccountsWidth + 2*minCardWidth, 40, 1},
+	} {
+		if got := New().Resize(tc.width, tc.height).HiddenPanels(); got != tc.want {
+			t.Errorf("%s: %d hidden, want %d", name, got, tc.want)
+		}
+	}
+}

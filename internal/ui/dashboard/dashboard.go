@@ -166,6 +166,23 @@ func (m Model) View() string {
 	return lipgloss.JoinHorizontal(lipgloss.Top, left, column)
 }
 
+// extraPanels are the panels beside Accounts: the two stat cards, Recent, Upcoming and the spend chart.
+const extraPanels = 5
+
+// HiddenPanels is how many of the panels beside Accounts the terminal is too small to show.
+func (m Model) HiddenPanels() int {
+	right := m.width - m.accountsWidth()
+	switch {
+	case right < cardCount*minCardWidth:
+		return extraPanels
+	case m.height-cardHeight < upcomingHeight+minRecentHeight:
+		return 2 // Upcoming and the chart
+	case right < bandPanels*minBandWidth:
+		return 1 // the chart
+	}
+	return 0
+}
+
 // listPanels stacks Recent over Upcoming beside the spend chart; the lower band is left out when there is
 // no room for both.
 func (m Model) listPanels(width, height int) string {
@@ -271,9 +288,12 @@ func number(amounts domain.MultiAmount) string {
 	return amounts.Format()
 }
 
+// accountsWidth is a third of the screen, but never narrower than minAccountsWidth.
+func (m Model) accountsWidth() int { return min(m.width, max(minAccountsWidth, m.width/columnDivisor)) }
+
 // accountsPanel is the Accounts panel, a third of the screen wide.
 func (m Model) accountsPanel() string {
-	width := min(m.width, max(minAccountsWidth, m.width/columnDivisor))
+	width := m.accountsWidth()
 	inner := max(0, width-panelChrome)
 	last := min(len(m.accounts), m.offset+m.pageSize())
 	visible := m.accounts[m.offset:last]

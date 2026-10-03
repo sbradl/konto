@@ -165,5 +165,16 @@ func (m Model) statusLeft() string {
 	if row, total := m.dash.Position(); m.active == 0 && total > 0 {
 		left += fmt.Sprintf("   %d/%d", row, total)
 	}
+	if hidden := m.dash.HiddenPanels(); m.active == 0 && hidden > 0 {
+		left += "   " + hiddenNotice(hidden)
+	}
 	return left
+}
+
+// hiddenNotice says how many Dashboard panels did not fit.
+func hiddenNotice(hidden int) string {
+	if hidden == 1 {
+		return "1 panel hidden · widen terminal"
+	}
+	return fmt.Sprintf("%d panels hidden · widen terminal", hidden)
 }

@@ -701,3 +701,22 @@ func TestRDoesNothingOutsideTheNormalViews(t *testing.T) {
 		t.Error("r should do nothing when the terminal is too small")
 	}
 }
+
+// A Dashboard that drops panels says so in the status bar; other views do not.
+func TestStatusBarCountsHiddenDashboardPanels(t *testing.T) {
+	model := started(t, fakeLoader{})
+
+	for size, want := range map[[2]int]string{
+		{180, 40}: "",
+		{100, 30}: "1 panel hidden · widen terminal",
+	} {
+		got := lastLine(resized(model, size[0], size[1]))
+		if (want == "") == strings.Contains(got, "hidden") || !strings.Contains(got, want) {
+			t.Errorf("%v: status bar = %q, want %q", size, got, want)
+		}
+	}
+	other, _ := press(resized(model, 100, 30), "3")
+	if got := lastLine(other); strings.Contains(got, "hidden") {
+		t.Errorf("only the Dashboard reports hidden panels, got %q", got)
+	}
+}

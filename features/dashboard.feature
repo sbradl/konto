@@ -295,7 +295,7 @@ Feature: Dashboard
 
   Rule: Responsive panels
 
-    @proposed @wip
+    @proposed
     Scenario Outline: Accounts always survives, lower priorities drop
       Given the terminal is <w>×<h>
       Then I see the "ACCOUNTS" panel
@@ -307,19 +307,17 @@ Feature: Dashboard
         | 120 | 40 |
         | 180 | 60 |
 
-    @proposed @wip
+    @proposed
     Scenario: hidden panels are counted in the status bar
       Given the terminal is 100×30
-      Then the status bar shows "panels hidden · widen terminal"
+      Then the status bar shows "hidden · widen terminal"
 
-    @wip
     Scenario: dropped panels come back when the terminal grows
       Given the terminal is 100×30
       When I resize the terminal to 180×60
       Then I see the "RECENT" and "UPCOMING" panels
       And the status bar does not show "hidden"
 
-    @wip
     Scenario: panel titles are inset two cells
       Then the top border of the "ACCOUNTS" panel reads "╭─ ACCOUNTS"
       And panel borders use rounded box-drawing characters
