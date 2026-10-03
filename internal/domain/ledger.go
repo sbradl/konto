@@ -13,12 +13,19 @@ type MonthSummary struct {
 // Net is income less expenses.
 func (s MonthSummary) Net() MultiAmount { return s.Income.Plus(s.Expenses.Negated()) }
 
+// MonthSpend is what went out on expense accounts in one calendar month.
+type MonthSpend struct {
+	Month time.Time // the first day of the month
+	Total MultiAmount
+}
+
 // Ledger is a point-in-time snapshot of everything konto has loaded.
 type Ledger struct {
 	Accounts     []Account
 	Transactions []Transaction
 	Upcoming     []Transaction // the periodic rules' occurrences for the next year, soonest first; never in the journal
 	Month        MonthSummary
+	Spend        []MonthSpend // the last six complete months, oldest first
 }
 
 // TransactionCount is the number of transactions in the journal.

@@ -432,7 +432,7 @@ func TestRecentAmountsAreGreenOrRed(t *testing.T) {
 var day1 = time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
 
 func TestRecentSaysHowManyRowsDontFit(t *testing.T) {
-	rows := recentRows(New().Resize(180, 21).WithLedger(withTransactions(200))) // Recent is 10 rows tall: 8 inside
+	rows := recentRows(New().Resize(180, 24).WithLedger(withTransactions(200))) // Recent is 10 rows tall: 8 inside
 
 	if len(rows) != 8 {
 		t.Fatalf("panel has %d rows, want 8", len(rows))
@@ -443,7 +443,7 @@ func TestRecentSaysHowManyRowsDontFit(t *testing.T) {
 }
 
 func TestRecentShowsExactlyAsManyAsFitWithoutAMoreRow(t *testing.T) {
-	rows := recentRows(New().Resize(180, 21).WithLedger(withTransactions(8))) // exactly 8 inside
+	rows := recentRows(New().Resize(180, 24).WithLedger(withTransactions(8))) // exactly 8 inside
 
 	if text := strings.Join(rows, "\n"); strings.Contains(text, "more") || !strings.Contains(text, "Shop 07") {
 		t.Errorf("all 8 fit, so no … more row:\n%s", text)
@@ -451,7 +451,7 @@ func TestRecentShowsExactlyAsManyAsFitWithoutAMoreRow(t *testing.T) {
 }
 
 func TestRecentShowsEverythingThatFitsWithoutAMoreRow(t *testing.T) {
-	rows := recentRows(New().Resize(180, 21).WithLedger(withTransactions(3)))
+	rows := recentRows(New().Resize(180, 24).WithLedger(withTransactions(3)))
 
 	if strings.Contains(strings.Join(rows, "\n"), "more") {
 		t.Errorf("all 8 fit, so no … more row:\n%s", strings.Join(rows, "\n"))
@@ -459,7 +459,7 @@ func TestRecentShowsEverythingThatFitsWithoutAMoreRow(t *testing.T) {
 }
 
 func TestRecentRowsFillThePanelWidth(t *testing.T) {
-	for _, line := range recentRows(New().Resize(180, 21).WithLedger(withTransactions(3)))[:3] {
+	for _, line := range recentRows(New().Resize(180, 24).WithLedger(withTransactions(3)))[:3] {
 		if w := lipgloss.Width(line); w != 180 {
 			t.Errorf("row is %d wide, want 180: %q", w, line)
 		}
@@ -470,7 +470,7 @@ func TestRecentCutsLongDescriptionsToKeepTheColumns(t *testing.T) {
 	ledger := withTransactions(1)
 	ledger.Transactions[0].Description = strings.Repeat("long ", 40)
 
-	row := recentRows(New().Resize(110, 21).WithLedger(ledger))[0]
+	row := recentRows(New().Resize(110, 24).WithLedger(ledger))[0]
 
 	if lipgloss.Width(row) != 110 || !strings.HasSuffix(strings.TrimRight(row, " │"), "-10,00 EUR") {
 		t.Errorf("row = %q, want it cut to the width with the amount kept", row)
@@ -478,7 +478,7 @@ func TestRecentCutsLongDescriptionsToKeepTheColumns(t *testing.T) {
 }
 
 func TestRecentIsNotSelectable(t *testing.T) {
-	view := New().Resize(180, 21).WithLedger(withTransactions(3)).Move("down").View()
+	view := New().Resize(180, 24).WithLedger(withTransactions(3)).Move("down").View()
 
 	for line := range strings.SplitSeq(view, "\n") {
 		// Each row is the Accounts panel's border-to-border run, then the right column.
@@ -542,10 +542,10 @@ func TestUpcomingWithoutRulesIsAnEmptyPanel(t *testing.T) {
 }
 
 func TestUpcomingSaysHowManyOccurrencesDontFit(t *testing.T) {
-	rows := upcomingRows(New().Resize(180, 20).WithLedger(withUpcoming("a", "b", "c", "d", "e", "f", "g", "h")))
+	rows := upcomingRows(New().Resize(180, 20).WithLedger(withUpcoming("a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l")))
 
-	if !strings.Contains(rows[4], "… 4 more") {
-		t.Errorf("last row = %q, want four listed then … 4 more", rows[3])
+	if !strings.Contains(rows[7], "… 5 more") {
+		t.Errorf("last row = %q, want seven listed then … 5 more", rows[3])
 	}
 }
 
@@ -572,5 +572,100 @@ func TestUpcomingFitsWhenRecentKeepsItsMinimum(t *testing.T) {
 
 	if !strings.Contains(view, "UPCOMING") || !strings.Contains(view, "RECENT") {
 		t.Errorf("exactly enough room for both panels should show both:\n%s", view)
+	}
+}
+
+func spendHistory(totals ...int64) []domain.MonthSpend {
+	history := make([]domain.MonthSpend, len(totals))
+	for i, total := range totals {
+		history[i] = domain.MonthSpend{Month: time.Date(2026, time.Month(3+i), 1, 0, 0, 0, 0, time.UTC), Total: eur(total)}
+	}
+	return history
+}
+
+func TestSpendChartLabelsTheSixMonthsOnTheXAxis(t *testing.T) {
+	ledger := withUpcoming()
+	ledger.Spend = spendHistory(117500, 112000, 119500, 115000, 120500, 113000)
+
+	chart := strings.Join(viewLines(New().Resize(180, 40).WithLedger(ledger)), "\n")
+
+	for _, month := range []string{"Mar", "Apr", "May", "Jun", "Jul", "Aug"} {
+		if !strings.Contains(chart, month) {
+			t.Errorf("x axis lacks %s:\n%s", month, chart)
+		}
+	}
+	if strings.Contains(chart, "Sep") {
+		t.Errorf("the current month is not complete and must not be plotted")
+	}
+}
+
+func TestSpendChartYAxisCountsThousandsAndTheLineIsBraille(t *testing.T) {
+	ledger := withUpcoming()
+	ledger.Spend = spendHistory(117500, 112000, 119500, 115000, 120500, 113000)
+
+	view := strings.Join(viewLines(New().Resize(180, 40).WithLedger(ledger)), "\n")
+
+	if !strings.Contains(view, "1.3k") || !strings.Contains(view, "0.0k") {
+		t.Errorf("y axis should read in thousands:\n%s", view)
+	}
+	if !strings.ContainsAny(view, "⠁⠂⠄⡀⢀⠈⠐⠠⣀⠤⠉") {
+		t.Errorf("expected a braille line:\n%s", view)
+	}
+}
+
+func TestSpendChartUsesOnlyAnsi16Colours(t *testing.T) {
+	ledger := withUpcoming()
+	ledger.Spend = spendHistory(117500, 112000, 119500)
+
+	view := New().Resize(180, 40).WithLedger(ledger).View()
+
+	if strings.Contains(view, "38;2;") || strings.Contains(view, "38;5;") {
+		t.Errorf("chart must use ANSI-16 colours only:\n%q", view)
+	}
+}
+
+func TestSpendChartPlotsTheCommodityOfTheFirstMonthWithSpend(t *testing.T) {
+	values, top := spendValues([]domain.MonthSpend{
+		{},
+		{Total: domain.MultiAmount{{Commodity: "PLN", Mantissa: 10000, Places: 2}, {Commodity: "EUR", Mantissa: 500, Places: 2}}},
+		{Total: eur(99900)},
+	})
+
+	if values[0] != 0 || values[1] != 100 || values[2] != 0 || top != 100 {
+		t.Errorf("values = %v top = %v, want only PLN plotted", values, top)
+	}
+}
+
+func TestSpendPanelIsEmptyWithoutHistoryOrRoom(t *testing.T) {
+	for name, panel := range map[string]string{
+		"no history": spendPanel(nil, 60, 10),
+		"too narrow": spendPanel(spendHistory(100), 8, 10),
+		"too short":  spendPanel(spendHistory(100), 60, 5),
+	} {
+		if strings.ContainsAny(plain(panel), "⠁⠂⠄⡀⢀⠈⠐⠠⣀⠤⠉k") || !strings.Contains(plain(panel), "SPEND") {
+			t.Errorf("%s: want an empty SPEND panel:\n%s", name, plain(panel))
+		}
+	}
+}
+
+func TestUpcomingTakesTheWholeBandOnANarrowScreen(t *testing.T) {
+	ledger := withUpcoming("a")
+	ledger.Spend = spendHistory(100, 200)
+
+	view := strings.Join(viewLines(New().Resize(120, 30).WithLedger(ledger)), "\n")
+
+	if !strings.Contains(view, "UPCOMING") || strings.Contains(view, "SPEND") {
+		t.Errorf("a narrow screen drops the chart:\n%s", view)
+	}
+}
+
+func TestSpendChartAppearsAtExactlyTheMinimumBandWidth(t *testing.T) {
+	ledger := withUpcoming("a")
+	ledger.Spend = spendHistory(100, 200)
+
+	view := strings.Join(viewLines(New().Resize(minAccountsWidth+2*minBandWidth, 30).WithLedger(ledger)), "\n")
+
+	if !strings.Contains(view, "SPEND") {
+		t.Errorf("two minimum-width panels fit, so the chart shows:\n%s", view)
 	}
 }

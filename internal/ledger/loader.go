@@ -64,6 +64,10 @@ func (l *Loader) Load(ctx context.Context) (domain.Ledger, error) {
 	if err != nil {
 		return domain.Ledger{}, fmt.Errorf("loading ledger: %w", err)
 	}
+	spend, err := l.spendHistory(ctx)
+	if err != nil {
+		return domain.Ledger{}, fmt.Errorf("loading ledger: %w", err)
+	}
 	today := l.today()
 	upcoming, err := l.gw.Upcoming(ctx, today, today.AddDate(1, 0, 0))
 	if err != nil {
@@ -74,6 +78,7 @@ func (l *Loader) Load(ctx context.Context) (domain.Ledger, error) {
 		Transactions: transactions,
 		Upcoming:     upcoming,
 		Month:        month,
+		Spend:        spend,
 	}, nil
 }
 
@@ -103,15 +108,38 @@ func declare(accounts []domain.Account, declarations []domain.Declaration) []dom
 	return accounts
 }
 
+const spendMonths = 6
+
 // monthToDate sums the calendar month so far: income (as a positive figure) and expenses.
 func (l *Loader) monthToDate(ctx context.Context) (domain.MonthSummary, error) {
 	today := l.today()
 	first := time.Date(today.Year(), today.Month(), 1, 0, 0, 0, 0, today.Location())
-	activity, err := l.gw.PeriodActivity(ctx, first, today)
+	return l.summarise(ctx, first, today)
+}
+
+// spendHistory totals the expenses of each of the six complete months before today's, oldest first.
+func (l *Loader) spendHistory(ctx context.Context) ([]domain.MonthSpend, error) {
+	today := l.today()
+	thisMonth := time.Date(today.Year(), today.Month(), 1, 0, 0, 0, 0, today.Location())
+	history := make([]domain.MonthSpend, 0, spendMonths)
+	for back := spendMonths; back >= 1; back-- {
+		first := thisMonth.AddDate(0, -back, 0)
+		summary, err := l.summarise(ctx, first, thisMonth.AddDate(0, -back+1, -1))
+		if err != nil {
+			return nil, err
+		}
+		history = append(history, domain.MonthSpend{Month: first, Total: summary.Expenses})
+	}
+	return history, nil
+}
+
+// summarise sums income (as a positive figure) and expenses from first through last.
+func (l *Loader) summarise(ctx context.Context, first, last time.Time) (domain.MonthSummary, error) {
+	activity, err := l.gw.PeriodActivity(ctx, first, last)
 	if err != nil {
 		return domain.MonthSummary{}, err //nolint:wrapcheck // Load adds the context
 	}
-	summary := domain.MonthSummary{Month: today.Month()}
+	summary := domain.MonthSummary{Month: first.Month()}
 	for _, account := range activity {
 		switch {
 		case strings.HasPrefix(account.Name, "income:"):

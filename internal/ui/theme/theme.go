@@ -18,6 +18,8 @@ var (
 	Ok = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
 	// Warn styles warnings and manual-entry marks: ANSI yellow, the amber of the handoff.
 	Warn = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
+	// Series styles a chart's data line: ANSI cyan.
+	Series = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
 	// Selected styles the active tab and the selected row: bold bright-white on the selection background.
 	Selected = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15")).Background(lipgloss.Color("8"))
 	// StatusBar styles the bottom bar: bright white on the selection background.

@@ -23,10 +23,12 @@ const (
 	minCardWidth        = 24 // narrower than this the cards give way
 	maxCategoryWidth    = 24 // the Recent panel's widest category column
 	minDescriptionWidth = 8
-	descriptionShare    = 45 // percent of the room beside the date and amount that description takes
+	descriptionShare    = 60 // percent of the room beside the date and amount that description takes
 	recentGap           = 2
 	recentFixed         = 16 // a Recent row's edges, its date and the gaps around the middle columns
-	upcomingHeight      = 7  // the Upcoming panel: border, four occurrences and a "more" row, border
+	upcomingHeight      = 10 // the Upcoming panel and the spend chart beside it
+	bandPanels          = 2  // Upcoming and the spend chart share the lower band
+	minBandWidth        = 40 // narrower than this each, the chart gives way
 	minRecentHeight     = 5  // Upcoming gives way rather than squeeze Recent below this
 )
 
@@ -35,6 +37,7 @@ type Model struct {
 	accounts []domain.Account
 	recent   []domain.RecentEntry
 	upcoming []domain.RecentEntry
+	spend    []domain.MonthSpend
 	figures  figures
 	cursor   int
 	offset   int // the first visible row
@@ -60,6 +63,7 @@ func (m Model) WithLedger(ledger domain.Ledger) Model {
 	}
 	next.recent = ledger.Recent()
 	next.upcoming = ledger.UpcomingEntries()
+	next.spend = ledger.Spend
 	return next.WithAccounts(ledger.Accounts)
 }
 
@@ -162,13 +166,21 @@ func (m Model) View() string {
 	return lipgloss.JoinHorizontal(lipgloss.Top, left, column)
 }
 
-// listPanels stacks Recent over Upcoming; Upcoming is left out when there is no room for both.
+// listPanels stacks Recent over Upcoming beside the spend chart; the lower band is left out when there is
+// no room for both.
 func (m Model) listPanels(width, height int) string {
 	if height < upcomingHeight+minRecentHeight {
 		return entriesPanel("RECENT", m.recent, width, height)
 	}
 	recent := entriesPanel("RECENT", m.recent, width, height-upcomingHeight)
-	return recent + "\n" + entriesPanel("UPCOMING", m.upcoming, width, upcomingHeight)
+	if width < 2*minBandWidth {
+		return recent + "\n" + entriesPanel("UPCOMING", m.upcoming, width, upcomingHeight)
+	}
+	half := width / bandPanels
+	band := lipgloss.JoinHorizontal(lipgloss.Top,
+		entriesPanel("UPCOMING", m.upcoming, half, upcomingHeight),
+		spendPanel(m.spend, width-half, upcomingHeight))
+	return recent + "\n" + band
 }
 
 // entriesPanel lists transactions one per row: date, description, category, amount. When they do not

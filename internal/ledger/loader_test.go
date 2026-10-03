@@ -38,10 +38,14 @@ func (f fakeGateway) PeriodActivity(context.Context, time.Time, time.Time) ([]do
 type periodRecorder struct {
 	fakeGateway
 	first, last time.Time
+	seen        bool
 }
 
+// PeriodActivity keeps the first period asked for: the month to date.
 func (p *periodRecorder) PeriodActivity(_ context.Context, first, last time.Time) ([]domain.Account, error) {
-	p.first, p.last = first, last
+	if !p.seen {
+		p.first, p.last, p.seen = first, last, true
+	}
 	return p.activity, nil
 }
 
@@ -227,4 +231,78 @@ type upcomingRecorder struct {
 func (u *upcomingRecorder) Upcoming(_ context.Context, first, last time.Time) ([]domain.Transaction, error) {
 	u.first, u.last = first, last
 	return u.upcoming, nil
+}
+
+// monthRecorder notes every period asked for and answers each with the same activity.
+type monthRecorder struct {
+	fakeGateway
+	firsts []string
+}
+
+func (m *monthRecorder) PeriodActivity(_ context.Context, first, last time.Time) ([]domain.Account, error) {
+	m.firsts = append(m.firsts, first.Format(time.DateOnly)+".."+last.Format(time.DateOnly))
+	return m.activity, m.activityErr
+}
+
+// The spend history is the six complete months before today's, oldest first, expenses only.
+func TestLoadSumsExpensesForTheLastSixCompleteMonths(t *testing.T) {
+	gw := &monthRecorder{}
+	gw.activity = []domain.Account{
+		{Name: "income:salary", Balance: eur(-300000)},
+		{Name: "expenses:rent", Balance: eur(90000)},
+		{Name: "expenses:food", Balance: eur(25000)},
+	}
+
+	got, err := NewLoader(gw, present, sept30).Load(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	wantPeriods := []string{
+		"2026-03-01..2026-03-31", "2026-04-01..2026-04-30", "2026-05-01..2026-05-31",
+		"2026-06-01..2026-06-30", "2026-07-01..2026-07-31", "2026-08-01..2026-08-31",
+	}
+	if !reflect.DeepEqual(gw.firsts[1:], wantPeriods) { // the first call is the month to date
+		t.Errorf("periods = %v, want %v", gw.firsts[1:], wantPeriods)
+	}
+	if len(got.Spend) != 6 || got.Spend[0].Month.Month() != time.March || got.Spend[5].Month.Month() != time.August {
+		t.Fatalf("Spend = %+v, want March to August", got.Spend)
+	}
+	if got.Spend[0].Total[0].Mantissa != 115000 {
+		t.Errorf("March total = %v, want 1.150,00 (income is not spend)", got.Spend[0].Total)
+	}
+}
+
+func TestLoadSpendCrossesTheYearBoundary(t *testing.T) {
+	gw := &monthRecorder{}
+	jan15 := func() time.Time { return time.Date(2027, 1, 15, 0, 0, 0, 0, time.UTC) }
+
+	if _, err := NewLoader(gw, present, jan15).Load(context.Background()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if gw.firsts[1] != "2026-07-01..2026-07-31" || gw.firsts[6] != "2026-12-01..2026-12-31" {
+		t.Errorf("periods = %v, want July through December 2026", gw.firsts[1:])
+	}
+}
+
+type failingAfter struct {
+	fakeGateway
+	calls, failAt int
+}
+
+func (f *failingAfter) PeriodActivity(context.Context, time.Time, time.Time) ([]domain.Account, error) {
+	f.calls++
+	if f.calls == f.failAt {
+		return nil, errors.New("month failed")
+	}
+	return nil, nil
+}
+
+func TestLoadReportsAFailureToSumAMonthOfSpend(t *testing.T) {
+	_, err := NewLoader(&failingAfter{failAt: 3}, present, sept30).Load(context.Background())
+
+	if err == nil || !strings.Contains(err.Error(), "month failed") {
+		t.Errorf("expected an error carrying the cause, got: %v", err)
+	}
 }
