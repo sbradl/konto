@@ -51,12 +51,11 @@ func (w *world) importRow(title, description, date string) (recentRow, error) {
 	if err != nil {
 		return recentRow{}, err
 	}
-	for _, row := range rows {
-		if strings.Contains(row.text, description) && (date == "" || strings.Contains(row.text, date)) {
-			return row, nil
-		}
+	index, err := importRowIndex(rows, description, date)
+	if err != nil {
+		return recentRow{}, fmt.Errorf("%w in %s", err, title)
 	}
-	return recentRow{}, fmt.Errorf("no row %q (%s) in %s", description, date, title)
+	return rows[index], nil
 }
 
 func (w *world) expectImportRowHolds(description, date string, texts ...string) error {
@@ -337,9 +336,6 @@ func registerImportRowSteps(sc *godog.ScenarioContext, w *world) {
 	})
 	sc.Step(`^the row "([^"]*)" shows target "([^"]*)" coloured (\d+)$`, func(name, target string, colour int) error {
 		return w.expectImportRowColour(name, "", target, colour)
-	})
-	sc.Step(`^the row "([^"]*)" shows "needs a rule" coloured (\d+)$`, func(name string, colour int) error {
-		return w.expectImportRowColour(name, "", "needs a rule", colour)
 	})
 	sc.Step(`^the table row "([^"]*)" shows "([^"]*)"$`, func(name, text string) error { return w.expectImportRowHolds(name, "", text) })
 	sc.Step(`^the row "([^"]*)" shows no rule id$`, func(name string) error {

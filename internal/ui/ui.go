@@ -275,7 +275,14 @@ func (m Model) hasSnapshot() bool {
 }
 
 func (m Model) onKey(key tea.KeyPressMsg) (Model, tea.Cmd) {
-	switch key.String() {
+	name := keyName(key)
+	if m.capturing() {
+		if name == "ctrl+c" {
+			return m, tea.Quit
+		}
+		return m.onImportKey(name)
+	}
+	switch name {
 	case "q", "ctrl+c":
 		return m, tea.Quit
 	}
@@ -283,15 +290,29 @@ func (m Model) onKey(key tea.KeyPressMsg) (Model, tea.Cmd) {
 		return m, nil
 	}
 	if m.firstRun {
-		return m, m.onFirstRunKey(key.String())
+		return m, m.onFirstRunKey(name)
 	}
 	if m.parseIssue != nil {
-		return m, m.onParseErrorKey(key.String())
+		return m, m.onParseErrorKey(name)
 	}
 	if m.ledger != nil {
-		return m.onViewKey(key.String())
+		return m.onViewKey(name)
 	}
 	return m, nil
+}
+
+// keyName is the key as the views name it; a space is typed text, not a word.
+func keyName(key tea.KeyPressMsg) string {
+	if name := key.String(); name != "space" {
+		return name
+	}
+	return " "
+}
+
+// capturing reports whether the Import view's dialog has the keyboard: every key is then text for it.
+func (m Model) capturing() bool {
+	return m.ledger != nil && m.importer != nil && m.prompt == nil && m.popup == popupNone &&
+		m.active == importTab && m.imports.Capturing() && !m.tooSmall()
 }
 
 func (m Model) onFirstRunKey(key string) tea.Cmd {

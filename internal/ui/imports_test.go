@@ -178,3 +178,66 @@ func TestKeysInViewsWithoutKeysOfTheirOwnDoNothing(t *testing.T) {
 		t.Errorf("Forecast has no keys of its own")
 	}
 }
+
+func categorisingModel(t *testing.T) Model {
+	t.Helper()
+	staged := sampleStaged()
+	staged.Known = []domain.Account{{Name: "expenses:books"}}
+	importer := &fakeImporter{entries: []domain.FileEntry{{Name: "sept.csv"}}, staged: staged}
+	model, cmd := press(startedWithImporter(t, importer), "n")
+	updated, _ := model.Update(cmd())
+	model = updated.(Model)
+	model, _ = pressCode(model, tea.KeyDown) // past the parent folder
+	model, cmd = pressCode(model, tea.KeyEnter)
+	updated, _ = model.Update(cmd())
+	model = updated.(Model)
+	model, _ = pressCode(model, tea.KeyEnter) // the categorise popup
+	return model
+}
+
+func TestAnOpenDialogTakesEveryKeyAsTextSoViewKeysAndQuitDoNotLeakThrough(t *testing.T) {
+	model := categorisingModel(t)
+	if !model.capturing() {
+		t.Fatalf("the dialog is not capturing:\n%s", plain(model.View().Content))
+	}
+	for _, key := range []string{"q", "1", "r", "?", "!", " "} {
+		var cmd tea.Cmd
+		model, cmd = press(model, key)
+		if cmd != nil || model.active != importTab || model.popup != popupNone || model.refreshing {
+			t.Fatalf("%q leaked out of the dialog: active %d popup %d", key, model.active, model.popup)
+		}
+	}
+	if got := plain(model.View().Content); !strings.Contains(got, "─ categorise ") {
+		t.Errorf("the dialog closed:\n%s", got)
+	}
+}
+
+func TestCtrlCQuitsEvenWhileADialogIsOpen(t *testing.T) {
+	model := categorisingModel(t)
+	_, cmd := model.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
+	if cmd == nil {
+		t.Fatal("ctrl+c did nothing")
+	}
+	if _, ok := cmd().(tea.QuitMsg); !ok {
+		t.Errorf("ctrl+c returned %T, want a quit", cmd())
+	}
+}
+
+func TestEscClosesTheDialogAndViewKeysWorkAgain(t *testing.T) {
+	model := pressEsc(categorisingModel(t))
+	if model.capturing() {
+		t.Fatal("Esc left the dialog open")
+	}
+	if model, _ = press(model, "1"); model.active != 0 {
+		t.Errorf("active = %d, want the dashboard", model.active)
+	}
+}
+
+func TestSpaceIsNamedAsATextCharacter(t *testing.T) {
+	if got := keyName(tea.KeyPressMsg{Code: tea.KeySpace, Text: " "}); got != " " {
+		t.Errorf("keyName(space) = %q", got)
+	}
+	if got := keyName(tea.KeyPressMsg{Code: tea.KeyEnter}); got != "enter" {
+		t.Errorf("keyName(enter) = %q", got)
+	}
+}

@@ -69,8 +69,11 @@ type Row struct {
 	Description string // the payee, else the transaction type
 	Purpose     string // becomes the transaction comment
 	Amount      domain.MultiAmount
+	Type        string // the export's transaction type, e.g. Kartenzahlung
+	Payee       string // the export's payee; empty for bookings the bank makes itself
 	Target      string // the category or transfer account a rule names; empty while it needs one
-	RuleID      string // the rule that named it
+	RuleID      string // the rule that named it; empty for a row categorised once
+	Once        bool   // the category was chosen for this row alone, and no rule may take it away
 }
 
 // NeedsCategory reports a row no rule has claimed yet.
@@ -78,15 +81,19 @@ func (r Row) NeedsCategory() bool { return r.Target == "" }
 
 // Staged is an export read against the journal, held in memory until it is written.
 type Staged struct {
-	File       string // the export's file name
-	IBAN       string
-	Format     string
-	Account    domain.Account // the account the IBAN belongs to; zero for a new one
-	NewAccount bool           // the IBAN is unknown: the account has yet to be created
-	Watermark  time.Time      // the account's latest transaction; zero for a fresh account
-	Rows       []Row          // new rows, newest first
-	Skipped    []Row          // rows the journal already has, newest first
-	Closing    string         // the bank's closing balance as printed, e.g. "14.261,45"
+	File        string // the export's file name
+	IBAN        string
+	Format      string
+	Account     domain.Account // the account the IBAN belongs to; zero for a new one
+	NewAccount  bool           // the IBAN is unknown: the account has yet to be created
+	Watermark   time.Time      // the account's latest transaction; zero for a fresh account
+	Rows        []Row          // new rows, newest first
+	Skipped     []Row          // rows the journal already has, newest first
+	Closing     string         // the bank's closing balance as printed, e.g. "14.261,45"
+	Rules       []Rule         // the categorisation rules, those staged by this import included
+	Known       []domain.Account
+	NewAccounts []string           // categories this import declares
+	Zero        domain.MultiAmount // a zero in the ledger's currency and style
 }
 
 // NeedCategory counts the new rows no rule has claimed.
@@ -107,7 +114,11 @@ func (s *Service) Open(ctx context.Context, path string, ledger domain.Ledger) (
 	if err != nil {
 		return Staged{}, err
 	}
-	staged := Staged{File: filepath.Base(path), IBAN: preamble.iban, Format: FormatPostbank, Closing: preamble.closing}
+	staged := Staged{
+		File: filepath.Base(path), IBAN: preamble.iban, Format: FormatPostbank, Closing: preamble.closing,
+		Known: ledger.Accounts, Zero: ledger.Zero(),
+	}
+	staged.Rules = s.readRules()
 	staged.Account, staged.NewAccount = accountOf(ledger, preamble.iban)
 	if !staged.NewAccount {
 		if err := staged.Account.ImportRefusal(); err != nil {
@@ -122,8 +133,19 @@ func (s *Service) Open(ctx context.Context, path string, ledger domain.Ledger) (
 	if err != nil {
 		return Staged{}, ConvertError{Err: err}
 	}
-	staged.Rows, staged.Skipped, staged.Watermark = classify(rowsOf(transactions, name), journalBookings(ledger, name))
+	rows := withRawFields(rowsOf(transactions, name), preamble.records)
+	staged.Rows, staged.Skipped, staged.Watermark = classify(rows, journalBookings(ledger, name))
 	return staged, nil
+}
+
+// readRules are the rules of categories.rules; a file that cannot be read has none, and hledger, which
+// includes it, says what is wrong with it.
+func (s *Service) readRules() []Rule {
+	data, err := s.files.ReadFile(s.rulesPath)
+	if err != nil {
+		return nil
+	}
+	return ParseRules(string(data))
 }
 
 // rules is the bank format, then the account the export belongs to, then the categorisation rules.
@@ -142,7 +164,10 @@ func accountOf(ledger domain.Ledger, iban string) (account domain.Account, isNew
 }
 
 // preamble is what the export says about itself.
-type preamble struct{ iban, closing string }
+type preamble struct {
+	iban, closing string
+	records       []record
+}
 
 const (
 	ibanLine      = 2 // Postbank prints the account on the third line
@@ -171,6 +196,7 @@ func readPreamble(data []byte) (preamble, error) {
 			found.closing = fields[balanceColumn]
 		}
 	}
+	found.records = recordsOf(lines)
 	return found, nil
 }
 
@@ -234,18 +260,19 @@ func classify(rows []Row, bookings []booking) (fresh, skipped []Row, watermark t
 			remaining[b]++
 		}
 	}
-	for _, row := range rows {
+	for i := range rows {
+		row := &rows[i]
 		key := booking{row.Date.Format(time.DateOnly), row.Amount.Format(), row.Description}
 		switch {
 		case row.Date.Before(watermark):
-			skipped = append(skipped, row)
+			skipped = append(skipped, *row)
 		case row.Date.After(watermark):
-			fresh = append(fresh, row)
+			fresh = append(fresh, *row)
 		case remaining[key] > 0:
 			remaining[key]--
-			skipped = append(skipped, row)
+			skipped = append(skipped, *row)
 		default:
-			fresh = append(fresh, row)
+			fresh = append(fresh, *row)
 		}
 	}
 	return fresh, skipped, watermark
@@ -270,4 +297,70 @@ func (s *Service) Browse(dir string) ([]domain.FileEntry, error) {
 		return strings.Compare(a.Name, b.Name)
 	})
 	return listed, nil
+}
+
+// record is what one line of the export says in the columns konto matches rules against.
+type record struct{ date, kind, payee, purpose string }
+
+const (
+	typeColumn    = 2
+	payeeColumn   = 3
+	purposeColumn = 4
+)
+
+// recordsOf are the bookings below the export's header line, up to the trailer.
+func recordsOf(lines []string) []record {
+	var records []record
+	inBody := false
+	for _, line := range lines {
+		if strings.HasPrefix(line, "Buchungstag;") {
+			inBody = true
+			continue
+		}
+		fields := strings.Split(line, ";")
+		if !inBody || fields[0] == "Kontostand" {
+			continue
+		}
+		date, err := time.Parse("2.1.2006", fields[0])
+		if err != nil {
+			continue
+		}
+		records = append(records, record{
+			date: date.Format(time.DateOnly), kind: column(fields, typeColumn), payee: column(fields, payeeColumn),
+			purpose: column(fields, purposeColumn),
+		})
+	}
+	return records
+}
+
+// descriptionOf is what the bank format makes of the record: the payee, else the transaction type.
+func (r record) descriptionOf() string {
+	if r.payee == "" {
+		return r.kind
+	}
+	return r.payee
+}
+
+// withRawFields gives each row the transaction type and payee of the export line it came from, found by
+// date, description and purpose.
+func withRawFields(rows []Row, records []record) []Row {
+	for i := range rows {
+		row := &rows[i]
+		for _, rec := range records {
+			if rec.date == row.Date.Format(time.DateOnly) && rec.descriptionOf() == row.Description &&
+				rec.purpose == row.Purpose {
+				row.Type, row.Payee = rec.kind, rec.payee
+				break
+			}
+		}
+	}
+	return rows
+}
+
+// column is the field of a split line, empty when the line is too short to have it.
+func column(fields []string, index int) string {
+	if index >= len(fields) {
+		return ""
+	}
+	return fields[index]
 }

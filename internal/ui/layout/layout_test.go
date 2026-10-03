@@ -6,8 +6,8 @@ import (
 	"testing"
 )
 
-func screen(width, height int) string {
-	row := strings.Repeat(".", width)
+func screen(_, height int) string {
+	row := strings.Repeat(".", 10)
 	rows := make([]string, height)
 	for i := range rows {
 		rows[i] = row
@@ -82,5 +82,16 @@ func TestPanelPadsMissingBodyLines(t *testing.T) {
 
 	if len(got) != 5 || got[2] != "│    │" || got[3] != "│    │" {
 		t.Errorf("panel = %q, want 5 rows with blank body rows", got)
+	}
+}
+
+func TestOverlayFlushReachesTheLastRow(t *testing.T) {
+	got := strings.Split(OverlayFlush(screen(10, 6), "AAAAAAAAAA\nBBBBBBBBBB", 6), "\n")
+
+	want := []string{"..........", "..........", "..........", "..........", "AAAAAAAAAA", "BBBBBBBBBB"}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("row %d = %q, want %q", i, got[i], want[i])
+		}
 	}
 }

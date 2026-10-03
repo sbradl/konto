@@ -18,7 +18,7 @@ import (
 
 const (
 	panelChrome  = 2
-	infoLines    = 5
+	infoLines    = 6
 	infoHeight   = infoLines + panelChrome
 	minPanel     = 4
 	rowsShare    = 60 // percent of the room below the info block the row table takes
@@ -35,6 +35,8 @@ const (
 	createHint   = "create account"
 	noWatermark  = "no watermark"
 	moreTemplate = " … %d more"
+	noItems      = "—"
+	transferMark = " ⇄"
 )
 
 // Action is what the view asks the root to do: list a directory or open a file. At most one is set.
@@ -53,6 +55,8 @@ type Model struct {
 	pickCursor  int
 	pickOffset  int
 	staged      *csvimport.Staged
+	dlg         dialog // the categorising dialog over the rows
+	parent      dialog // the form waiting while its category picker is open
 	cursor      int
 	offset      int
 	message     string
@@ -74,6 +78,7 @@ func (m Model) Resize(width, height int) Model {
 func (m Model) WithStaged(staged csvimport.Staged) Model {
 	next := m
 	next.staged, next.picking, next.message = &staged, false, ""
+	next.dlg, next.parent = dialog{}, dialog{}
 	next.cursor, next.offset = 0, 0
 	return next
 }
@@ -105,6 +110,9 @@ func (m Model) Position() (row, total int) {
 func (m Model) Key(key string) (Model, Action) {
 	next := m
 	next.message = ""
+	if next.dlg.kind != dialogNone {
+		return next.dialogKey(key), Action{}
+	}
 	if next.picking {
 		return next.pickerKey(key)
 	}
@@ -113,9 +121,19 @@ func (m Model) Key(key string) (Model, Action) {
 		next.picking, next.dir, next.entries, next.listErr = true, m.downloadDir, nil, nil
 		next.pickCursor, next.pickOffset = 0, 0
 		return next, Action{Browse: m.downloadDir}
+	case keyEnter:
+		return next.openChoice(), Action{}
 	default:
 		return next.moveRows(key), Action{}
 	}
+}
+
+// openChoice opens the categorise popup on the row under the cursor.
+func (m Model) openChoice() Model {
+	if m.rowCount() > 0 {
+		m.dlg = dialog{kind: dialogChoice}
+	}
+	return m
 }
 
 // rowCount is the number of rows the cursor moves over.
@@ -128,13 +146,13 @@ func (m Model) rowCount() int {
 
 func (m Model) moveRows(key string) Model {
 	switch key {
-	case "up":
+	case keyUp:
 		return m.rowsTo(m.cursor - 1)
-	case "down":
+	case keyDown:
 		return m.rowsTo(m.cursor + 1)
-	case "home":
+	case keyHome:
 		return m.rowsTo(0)
-	case "end":
+	case keyEnd:
 		return m.rowsTo(m.rowCount())
 	case "pgup":
 		return m.rowsTo(m.cursor - m.rowPage())
@@ -188,21 +206,21 @@ func (m Model) pickerPage() int { return max(1, m.height-panelChrome-1) }
 func (m Model) pickerKey(key string) (Model, Action) {
 	rows := m.pickerRows()
 	switch key {
-	case "esc":
+	case keyEsc:
 		m.picking = false
-	case "up":
+	case keyUp:
 		m = m.pickerTo(m.pickCursor - 1)
-	case "down":
+	case keyDown:
 		m = m.pickerTo(m.pickCursor + 1)
-	case "home":
+	case keyHome:
 		m = m.pickerTo(0)
-	case "end":
+	case keyEnd:
 		m = m.pickerTo(len(rows))
 	case "pgup":
 		m = m.pickerTo(m.pickCursor - m.pickerPage())
 	case "pgdown":
 		m = m.pickerTo(m.pickCursor + m.pickerPage())
-	case "enter":
+	case keyEnter:
 		if len(rows) > 0 {
 			return m, m.activate(rows[m.pickCursor])
 		}
@@ -253,7 +271,7 @@ func (m Model) body() string {
 	case m.staged == nil:
 		return layout.Panel("IMPORT", m.width, height, theme.Dim.Render(" "+emptyHint))
 	}
-	return m.stagedView(height)
+	return m.overlay(m.stagedView(height))
 }
 
 // picker is the file picker: the directory, then its folders and CSV files with the cursor.
@@ -305,9 +323,27 @@ func (m Model) info() string {
 	label := func(name, value string) string { return " " + theme.Dim.Render(fmt.Sprintf("%-10s", name)) + value }
 	lines := []string{
 		label("file", staged.File), label("account", account), label("format", staged.Format),
-		label("watermark", watermark), label("", theme.Bold.Render(summary)),
+		label("watermark", watermark), label("staged", m.stagedSummary()), label("", theme.Bold.Render(summary)),
 	}
 	return layout.Panel("IMPORT", m.width, infoHeight, strings.Join(lines, "\n"))
+}
+
+// stagedSummary lists what the import would add to the journal besides the transactions: the rules and the
+// new accounts, and what the categories do to net income.
+func (m Model) stagedSummary() string {
+	rules := m.staged.StagedRules()
+	items := make([]string, 0, len(rules)+len(m.staged.NewAccounts))
+	for _, rule := range rules {
+		items = append(items, "rule "+rule.ID)
+	}
+	for _, name := range m.staged.NewAccounts {
+		items = append(items, "account "+name)
+	}
+	list := noItems
+	if len(items) > 0 {
+		list = strings.Join(items, ", ")
+	}
+	return list + theme.Dim.Render(" · net income ") + m.staged.NetIncomeChange().Format()
 }
 
 // rowLines are the visible rows of the table, the one under the cursor highlighted.
@@ -339,7 +375,12 @@ func cellsOf(row csvimport.Row, width int) rowCells {
 	}
 	if !row.NeedsCategory() {
 		cells.mark, cells.target = "✓", row.Target
-		cells.rule = "#" + row.RuleID
+		if row.IsTransfer() {
+			cells.target += transferMark
+		}
+		if row.RuleID != "" {
+			cells.rule = "#" + row.RuleID
+		}
 	}
 	cells.rule = fit(cells.rule, ruleIDWidth)
 	cells.target = fit(cells.target, targetWidth)
@@ -382,7 +423,8 @@ func (m Model) skippedLines(capacity int) string {
 		shown = shown[:max(0, capacity-1)]
 	}
 	lines := make([]string, 0, capacity)
-	for _, row := range shown {
+	for i := range shown {
+		row := &shown[i]
 		description := fit(row.Description, m.width-panelChrome-1-dateWidth-columnGap-amountWidth-1)
 		line := " " + row.Date.Format(time.DateOnly) + "  " + description + alignRight(row.Amount.Format(), amountWidth)
 		lines = append(lines, theme.Dim.Render(fit(line, m.width-panelChrome)))

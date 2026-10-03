@@ -15,8 +15,19 @@ const popupZ = 10
 // Overlay draws popup over base, full width and bottom-anchored just above the
 // last row (the status bar). A popup taller than the screen is cut off at the bottom.
 func Overlay(base, popup string, height int) string {
+	return overlayAbove(base, popup, height, 1)
+}
+
+// OverlayFlush draws popup over base like Overlay, but down to the very last row of base: for a view that
+// draws inside the screen and so has no status bar of its own below it.
+func OverlayFlush(base, popup string, height int) string {
+	return overlayAbove(base, popup, height, 0)
+}
+
+// overlayAbove puts popup at the bottom of base, leaving gap rows below it.
+func overlayAbove(base, popup string, height, gap int) string {
 	popupHeight := min(lipgloss.Height(popup), height)
-	top := max(0, height-popupHeight-1)
+	top := max(0, height-popupHeight-gap)
 	compositor := lipgloss.NewCompositor(
 		lipgloss.NewLayer(base).X(0).Y(0).Z(0),
 		lipgloss.NewLayer(popup).X(0).Y(top).Z(popupZ),
