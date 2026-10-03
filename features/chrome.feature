@@ -157,31 +157,23 @@ Feature: Chrome, navigation and global keys
         | key    |
         | q      |
         | Ctrl+C |
-
-    @wip
     Scenario: q does not quit while a text input is focused
       Given I am on "3"
       And I press "n"
       When I type "q"
       Then konto is still running
       And the focused input contains "q"
-
-    @wip
     Scenario: global number keys are text while a text input is focused
       Given I am on "3"
       And I press "n"
       When I type "2"
       Then the active tab is "sched"
-
-    @wip
     Scenario: Esc still works in a text input
       Given I am on "3"
       And I press "n"
       When I press "Esc"
       Then the form is closed
       And konto is still running
-
-    @wip
     Scenario: Ctrl+C still quits from a text input
       Given I am on "3"
       And I press "n"

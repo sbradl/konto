@@ -450,8 +450,6 @@ Feature: Import — categorising rows, building and widening rules, the category
       Then the row "Kiosk" shows target "assets:cash"
 
   Rule: Transfers between two import-fed accounts
-
-    @wip
     Scenario: each side imports its own leg and the clearing account nets to zero
       Given a Postbank CSV "out.csv" for IBAN "DE89370400440532013000" with closing balance 13.040,00 EUR:
         | date      | type      | payee              | purpose | amount  |
@@ -468,8 +466,6 @@ Feature: Import — categorising rows, building and widening rules, the category
       And the net worth is 26.600,00 EUR
       And no transaction in "assets:savings" has a counterpart "assets:checking"
       And no transaction in "assets:checking" has a counterpart "assets:savings"
-
-    @wip
     Scenario: one leg imported alone leaves a visible balance on the clearing account
       Given a Postbank CSV "out.csv" for IBAN "DE89370400440532013000" with closing balance 13.040,00 EUR:
         | date      | type      | payee              | purpose | amount  |
@@ -477,8 +473,6 @@ Feature: Import — categorising rows, building and widening rules, the category
       When I import "out.csv" categorising "Umbuchung Sparkonto" as the transfer to "assets:savings"
       Then on the dashboard "assets:transfers" shows "200,00 EUR"
       And the net worth is 26.600,00 EUR
-
-    @wip
     Scenario: the savings watermark is untouched by the checking import
       Given a Postbank CSV "out.csv" for IBAN "DE89370400440532013000" with closing balance 13.040,00 EUR:
         | date      | type      | payee              | purpose | amount  |

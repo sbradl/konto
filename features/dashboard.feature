@@ -73,8 +73,6 @@ Feature: Dashboard
       And I start konto
       Then the "assets:spare" row shows "+ 1 cur" or "100,00 PLN"
       And I do not see the words "commodity" or "at cost"
-
-    @wip
     Scenario: dashboard is month to date whatever Reports shows
       Given I press "5"
       And I press "p" 3 times
@@ -237,11 +235,9 @@ Feature: Dashboard
     @wip
     Scenario: plotted values are the monthly expense totals
       Then the plotted monthly totals are 1175, 1120, 1195, 1150, 1205, 1130
-
     @wip
     Scenario: single line
       Then the chart has exactly 1 data series
-
     @wip
     Scenario: transfers and income are not spend
       Then the plotted totals do not include the monthly 500,00 EUR transfer

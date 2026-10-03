@@ -311,6 +311,9 @@ func (w *world) press(keys ...string) error {
 			return err
 		}
 		s.settle(w.suite.timeout)
+		if k == "y" { // a confirmed write is followed by a reload; what comes next must see its result
+			s.waitFor(w.suite.timeout, func(screen string) bool { return !strings.Contains(screen, "⣾") })
+		}
 	}
 	return nil
 }

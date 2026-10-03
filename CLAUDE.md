@@ -31,11 +31,11 @@ scheduled/periodic transactions, forecast, reports (manual entry deferred, ADR 0
 
 ## State
 
-Foundation spec complete. Built so far: hledger version preflight (`internal/hledger`,
-`internal/domain`), architecture tests (`internal/archtest`), the e2e harness (`e2e/`) and CI.
-Next: the Bubble Tea shell (`cmd/konto`, spec §13). Per-feature design (CSV import, forecast, periodic
-transactions) is grilled just-in-time as each view is built — see `docs/spec.md` §12 and the
-open tickets in `.scratch/konto-spec/issues/`.
+All five v1 views are built and their feature files pass end to end: Dashboard, Import (open, categorise,
+write, staging, Postbank format), Scheduled (list, detail, new/edit form, delete), Forecast and Reports,
+on top of the preflight, architecture tests, e2e harness and CI. What is left is the `@wip` scenarios of
+`features/` (`grep -c @wip features/*.feature`): cross-cutting invariants, a few account/chrome/dashboard
+leftovers. Per-feature design lives in `docs/spec.md` §4 and the tickets in `.scratch/konto-spec/issues/`.
 
 ## Non-negotiables (full detail in docs/spec.md)
 

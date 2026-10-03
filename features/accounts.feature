@@ -55,8 +55,6 @@ Feature: Closing and reopening accounts (Dashboard Accounts panel)
       And I press "y"
       Then the status bar shows "● clean"
       And no full-screen error is shown
-
-    @wip
     Scenario: a closed account leaves the forecast
       Given I select "assets:spare"
       And I press "c"
@@ -64,8 +62,6 @@ Feature: Closing and reopening accounts (Dashboard Accounts panel)
       When I press "4"
       Then I do not see "assets:spare" in the forecast legend
       And I do not see "assets:spare" in the milestone table
-
-    @wip
     Scenario: a closed account leaves the periodic rule form
       Given I select "assets:spare"
       And I press "c"
@@ -74,8 +70,6 @@ Feature: Closing and reopening accounts (Dashboard Accounts panel)
       And I press "n"
       Then the from-account picker does not offer "assets:spare"
       And the to-account picker does not offer "assets:spare"
-
-    @wip
     Scenario: a CSV for a closed account's IBAN is refused
       Given I select "assets:spare"
       And I press "c"
@@ -130,8 +124,6 @@ Feature: Closing and reopening accounts (Dashboard Accounts panel)
       And I select "assets:spare"
       When I press "c"
       Then the refusal names "Alpha" and "Beta"
-
-    @wip
     Scenario: deleting the rule makes closing possible
       Given the journal "household-scheduled" with a rule "~ monthly from 2026-11-01  Top-up\n    assets:spare  10,00 EUR\n    assets:checking\n"
       And I start konto
@@ -179,16 +171,12 @@ Feature: Closing and reopening accounts (Dashboard Accounts panel)
       When I press "o"
       Then no y/n prompt is shown
       And the journal is unchanged
-
-    @wip
     Scenario: a reopened account is forecast again
       Given I select "assets:old-account"
       And I press "o"
       And I press "y"
       When I press "4"
       Then I see "assets:old-account" in the forecast legend
-
-    @wip
     Scenario: a reopened account is an import target again
       Given I select "assets:old-account"
       And I press "o"
@@ -211,7 +199,7 @@ Feature: Closing and reopening accounts (Dashboard Accounts panel)
 
   Rule: Directive handling
 
-    @proposed @wip
+    @proposed
     Scenario: an account without a directive gets one when closed
       Given the journal "household" where "assets:cash" is used in a transaction but never declared
       And I start konto
@@ -219,7 +207,7 @@ Feature: Closing and reopening accounts (Dashboard Accounts panel)
       When I select "assets:cash" and press "c" and "y"
       Then the journal contains a new "account assets:cash" directive with "konto:closed:2026-09-30"
 
-    @proposed @wip
+    @proposed
     Scenario: the tag is written in the file that holds the directive
       Given the journal "household" where the "assets:spare" directive lives in included file "accounts.journal"
       And I start konto

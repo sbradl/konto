@@ -142,7 +142,9 @@ Feature: Journal checks — status bar indicator and the ! panel
       And I start konto
       Then "● 1 warn" is coloured 3
 
-    @wip
+    # An ERR check failing makes konto show the parse-error screen instead of the views, so no status bar
+    # ever counts an error next to warnings.
+    @needs-decision
     Scenario: mixed counts
       Given the journal "household" with 1 error and 2 warnings
       And I start konto

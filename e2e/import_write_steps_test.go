@@ -494,6 +494,9 @@ func (w *world) expectBalance(account, want string) error {
 		if err != nil {
 			return fmt.Errorf("hledger bal: %w: %s", err, out)
 		}
+		if strings.HasPrefix(want, "0,00") && strings.TrimSpace(string(out)) == "" { // hledger prints nothing for zero
+			return nil
+		}
 		if !strings.Contains(string(out), want) {
 			return fmt.Errorf("the balance of %s is %q, want %s", account, strings.TrimSpace(string(out)), want)
 		}
