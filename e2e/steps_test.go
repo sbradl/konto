@@ -42,7 +42,7 @@ func registerGivenSteps(sc *godog.ScenarioContext, w *world) {
 		}
 		return w.useJournal(name, text)
 	})
-	sc.Step(`^a journal containing "(.*)"$`, func(text string) error {
+	sc.Step(`^a journal containing "((?s:.*))"$`, func(text string) error {
 		return os.WriteFile(w.journal, []byte(unescape(text)+"\n"), 0o644)
 	})
 	sc.Step(`^no journal exists at the resolved path$`, func() error {
