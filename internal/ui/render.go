@@ -47,14 +47,22 @@ func (m Model) content() string {
 
 // views is the normal screen: tab bar, rule, the active view, status bar.
 func (m Model) views() string {
-	body := ""
-	if m.loadErr != nil {
-		body = m.loadErr.Error()
-	}
+	body := m.body()
 	bodyHeight := max(0, m.height-chromeRows)
 	body = lipgloss.NewStyle().Height(bodyHeight).MaxHeight(bodyHeight).Render(body)
 	rule := theme.Dim.Render(strings.Repeat("─", m.width))
 	return strings.Join([]string{m.tabBar(), rule, body, m.statusBar()}, "\n")
+}
+
+// body is what the active view shows between the rule and the status bar.
+func (m Model) body() string {
+	if m.loadErr != nil {
+		return m.loadErr.Error()
+	}
+	if m.active == 0 {
+		return m.dash.View()
+	}
+	return ""
 }
 
 // hint is the active view's keys as the status bar shows them.
@@ -72,9 +80,13 @@ func (m Model) statusBar() string {
 	if hint := m.hint(); hint != "" {
 		left += "   " + hint
 	}
-	right := m.indicator() + "? keys "
-	gap := max(1, m.width-lipgloss.Width(left)-lipgloss.Width(right))
-	return theme.StatusBar.Render(left + strings.Repeat(" ", gap) + right)
+	if row, total := m.dash.Position(); m.active == 0 && total > 0 {
+		left += fmt.Sprintf("   %d/%d", row, total)
+	}
+	warn, right := m.checkStatus(), m.indicator()+"? keys "
+	gap := max(1, m.width-lipgloss.Width(left)-lipgloss.Width(warn)-lipgloss.Width(right))
+	return theme.StatusBar.Render(left+strings.Repeat(" ", gap)) +
+		theme.StatusWarn.Render(warn) + theme.StatusBar.Render(right)
 }
 
 func (m Model) firstRunText() string {
@@ -140,4 +152,13 @@ func issueOf(err error) *domain.CheckIssue {
 func parseErrorText(issue domain.CheckIssue) string {
 	return issue.Severity.String() + " " + issue.Check + "  " + issue.Location() + "\n\n" +
 		issue.Message + "\n\nEnter to jump to the editor · q to quit"
+}
+
+// checkStatus is the amber warning count; hledger's own checks are not run yet,
+// so a clean journal shows nothing rather than claiming "clean".
+func (m Model) checkStatus() string {
+	if n := len(m.ledger.UnclassifiedIssues()); n > 0 {
+		return fmt.Sprintf("● %d warn   ", n)
+	}
+	return ""
 }

@@ -62,3 +62,20 @@ func TestColumnsFitTheWidthUpToTheMaximum(t *testing.T) {
 		}
 	}
 }
+
+func TestPanelDrawsARoundedBorderWithTheTitleInsetTwoCells(t *testing.T) {
+	got := Panel("ACCOUNTS", 16, 4, "one\nthis line is far too long")
+
+	want := "╭─ ACCOUNTS ───╮\n│one           │\n│this line is f│\n╰──────────────╯"
+	if got != want {
+		t.Errorf("panel =\n%s\nwant\n%s", got, want)
+	}
+}
+
+func TestPanelPadsMissingBodyLines(t *testing.T) {
+	got := strings.Split(Panel("X", 6, 5, "a"), "\n")
+
+	if len(got) != 5 || got[2] != "│    │" || got[3] != "│    │" {
+		t.Errorf("panel = %q, want 5 rows with blank body rows", got)
+	}
+}

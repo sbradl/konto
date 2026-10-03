@@ -41,3 +41,27 @@ func TestStatusBarIsBrightWhiteOnSelectionBackground(t *testing.T) {
 		t.Error("StatusBar should not be bold")
 	}
 }
+
+// Negative is ANSI red and Warn is ANSI yellow, foreground only (ADR 0005).
+func TestNegativeAndWarnAreForegroundOnlyAnsiColours(t *testing.T) {
+	for name, tc := range map[string]struct {
+		style lipgloss.Style
+		want  string
+	}{"Negative": {Negative, "1"}, "Warn": {Warn, "3"}} {
+		if got := tc.style.GetForeground(); got != lipgloss.Color(tc.want) {
+			t.Errorf("%s foreground = %v, want ANSI %s", name, got, tc.want)
+		}
+		if bg := tc.style.GetBackground(); bg != (lipgloss.NoColor{}) {
+			t.Errorf("%s background = %v, want none", name, bg)
+		}
+	}
+}
+
+func TestStatusWarnIsStatusBarWithAmberText(t *testing.T) {
+	if got := StatusWarn.GetForeground(); got != lipgloss.Color("3") {
+		t.Errorf("foreground = %v, want ANSI 3", got)
+	}
+	if got := StatusWarn.GetBackground(); got != lipgloss.Color("8") {
+		t.Errorf("background = %v, want ANSI 8", got)
+	}
+}

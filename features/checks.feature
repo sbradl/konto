@@ -98,7 +98,6 @@ Feature: Journal checks — status bar indicator and the ! panel
 
   Rule: Unclassified account (konto's own check)
 
-    @wip
     Scenario: an asset without a source tag is a WARN
       Given the journal "household" with the tag removed from "assets:spare"
       And I start konto
@@ -106,7 +105,6 @@ Feature: Journal checks — status bar indicator and the ! panel
       Then I see a "WARN" row naming "assets:spare"
       And the status bar shows "● 1 warn"
 
-    @wip
     Scenario: every unclassified account is listed, not only the first
       Given the journal "household" with the tags removed from "assets:spare" and "assets:savings"
       And I start konto
@@ -115,7 +113,6 @@ Feature: Journal checks — status bar indicator and the ! panel
       And I see a "WARN" row naming "assets:savings"
       And the status bar shows "● 2 warn"
 
-    @wip
     Scenario Outline: categories and equity are never unclassified
       Given the journal "household"
       And I start konto
@@ -128,7 +125,6 @@ Feature: Journal checks — status bar indicator and the ! panel
         | income:salary           |
         | equity:opening-balances |
 
-    @wip
     Scenario: the clearing account is not unclassified
       Given the journal "household"
       And I start konto

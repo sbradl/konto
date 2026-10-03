@@ -12,6 +12,7 @@ import (
 
 	"github.com/sbradl/konto/internal/domain"
 	"github.com/sbradl/konto/internal/ledger"
+	"github.com/sbradl/konto/internal/ui/dashboard"
 )
 
 // The smallest terminal konto lays its views out in (spec §6.8).
@@ -57,6 +58,7 @@ type Model struct {
 	refreshErr  error // the last reload failed; the snapshot is stale
 	active      int   // index into tabNames
 	popup       popupKind
+	dash        dashboard.Model
 	firstRun    bool
 	parseIssue  *domain.CheckIssue
 	createErr   error
@@ -73,7 +75,7 @@ type editorClosedMsg struct{}
 func New(
 	journalPath string, loader ledgerLoader, creator journalCreator, editor func(file string, line int) *exec.Cmd,
 ) Model {
-	return Model{journalPath: journalPath, loader: loader, creator: creator, editor: editor}
+	return Model{journalPath: journalPath, loader: loader, creator: creator, editor: editor, dash: dashboard.New()}
 }
 
 // Init starts loading the ledger.
@@ -96,6 +98,7 @@ func (m Model) create() tea.Msg {
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if size, ok := msg.(tea.WindowSizeMsg); ok {
 		m.width, m.height = size.Width, size.Height
+		m.dash = m.dash.Resize(m.width, max(0, m.height-chromeRows))
 	}
 	if loaded, ok := msg.(ledgerLoadedMsg); ok {
 		m = m.onLoaded(loaded)
@@ -122,6 +125,7 @@ func (m Model) onLoaded(loaded ledgerLoadedMsg) Model {
 	}
 	m.refreshErr = nil
 	m.ledger, m.loadErr = &loaded.ledger, loaded.err
+	m.dash = m.dash.WithAccounts(loaded.ledger.Accounts)
 	m.firstRun = errors.Is(loaded.err, ledger.ErrNoJournal)
 	m.parseIssue = issueOf(loaded.err)
 	return m
@@ -183,6 +187,9 @@ func (m Model) onViewKey(key string) (Model, tea.Cmd) {
 	if key == "r" {
 		m.refreshing = true
 		return m, m.load
+	}
+	if m.active == 0 {
+		m.dash = m.dash.Move(key)
 	}
 	if number, err := strconv.Atoi(key); err == nil && number >= 1 && number <= tabCount {
 		m.active = number - 1

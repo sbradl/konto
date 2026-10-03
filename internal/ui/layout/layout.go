@@ -32,3 +32,24 @@ func PopupHeight(content, screen int) int {
 func Columns(width, minWidth, maxCols int) int {
 	return max(1, min(maxCols, width/minWidth))
 }
+
+// Panel draws body in a rounded border w×h cells in all, the title inset two cells.
+// Body lines wider than the inside are cut off; missing lines are blank.
+func Panel(title string, w, h int, body string) string {
+	inner := max(0, w-2)
+	rows := strings.Split(body, "\n")
+	lines := make([]string, 0, h)
+	top := "╭─ " + title + " "
+	lines = append(lines, top+strings.Repeat("─", max(0, w-lipgloss.Width(top)-1))+"╮")
+	for i := range max(0, h-2) {
+		row := ""
+		if i < len(rows) {
+			row = rows[i]
+		}
+		row = lipgloss.NewStyle().MaxWidth(inner).Render(row)
+		row += strings.Repeat(" ", inner-lipgloss.Width(row))
+		lines = append(lines, "│"+row+"│")
+	}
+	lines = append(lines, "╰"+strings.Repeat("─", inner)+"╯")
+	return strings.Join(lines, "\n")
+}

@@ -237,6 +237,9 @@ func (w *world) useJournal(name, appended string) error {
 	if err := os.WriteFile(w.journal, append(b, []byte(appended)...), 0o644); err != nil {
 		return err
 	}
+	if err := w.copyIncludes(b); err != nil {
+		return err
+	}
 	rules := []byte{}
 	if name != "minimal" {
 		if rules, err = os.ReadFile(w.fixture("categories.rules")); err != nil {
@@ -329,4 +332,23 @@ func (w *world) close() {
 	if os.Getenv("KONTO_E2E_KEEP") == "" {
 		_ = os.RemoveAll(w.dir)
 	}
+}
+
+// copyIncludes puts the fixtures a journal includes by plain file name next to it.
+func (w *world) copyIncludes(journal []byte) error {
+	for line := range strings.Lines(string(journal)) {
+		name, ok := strings.CutPrefix(line, "include ")
+		if !ok {
+			continue
+		}
+		name = strings.TrimSpace(name)
+		b, err := os.ReadFile(w.fixture(name))
+		if err != nil {
+			return fmt.Errorf("fixture include %q: %w", name, err)
+		}
+		if err := os.WriteFile(filepath.Join(filepath.Dir(w.journal), name), b, 0o644); err != nil {
+			return err
+		}
+	}
+	return nil
 }

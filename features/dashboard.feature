@@ -94,7 +94,7 @@ Feature: Dashboard
 
   Rule: Accounts panel
 
-    @proposed @wip
+    @proposed
     Scenario: flat list of full names, not a tree
       Then the Accounts panel lists in order
         | assets:checking        |
@@ -106,29 +106,25 @@ Feature: Dashboard
       And no Accounts row is a parent or header row
       And there are no subtotal rows
 
-    @wip
     Scenario: balances are right-aligned
       Then every balance in the Accounts panel ends at the same column
       And "assets:checking" shows "13.240,00 EUR"
       And "assets:savings" shows "13.500,00 EUR"
 
-    @wip
     Scenario: negative balances are red
       Then "-140,00 EUR" on "liabilities:creditcard" is coloured 1
       And "13.240,00 EUR" on "assets:checking" is not coloured 1
 
-    @wip
     Scenario: import-fed accounts show the import glyph
       Then the row "assets:checking" shows the glyph "↓" coloured 8
       And the row "assets:savings" shows the glyph "↓" coloured 8
 
-    @proposed @wip
+    @proposed
     Scenario: manual accounts show the manual glyph
       Given the journal "household" with "assets:cash" declared as "konto:source:manual"
       And I start konto
       Then the row "assets:cash" shows the glyph "✎" coloured 3
 
-    @wip
     Scenario: closed accounts are listed dimmed below open ones
       Then the last Accounts row is "assets:old-account"
       And it shows "closed 2026-03-01" in the balance column
@@ -138,12 +134,10 @@ Feature: Dashboard
     Scenario: closed accounts do not count toward any total or stat card
       Then I see a "NET WORTH" card showing "26.600,00 EUR"
 
-    @wip
     Scenario: the first row is selected at start
       Then the row "assets:checking" is selected with background 8 and foreground 15
       And the status bar shows "1/6"
 
-    @wip
     Scenario Outline: arrows move the cursor
       When I press "<key>"
       Then the row "<row>" is selected
@@ -157,7 +151,6 @@ Feature: Dashboard
         | PgDn | assets:old-account     | 6/6 |
         | PgUp | assets:checking        | 1/6 |
 
-    @wip
     Scenario: cursor stops at both ends
       When I press "↑"
       Then the row "assets:checking" is selected
@@ -165,12 +158,10 @@ Feature: Dashboard
       And I press "↓"
       Then the row "assets:old-account" is selected
 
-    @wip
     Scenario: vim keys do not move the cursor
       When I press "j"
       Then the row "assets:checking" is selected
 
-    @wip
     Scenario: paging on a long list
       Given the journal "household" with 40 open import accounts
       And the terminal is 120×40

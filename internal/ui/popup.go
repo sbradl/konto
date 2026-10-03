@@ -81,7 +81,7 @@ func (m Model) withPopup(base string) string {
 func (m Model) popupBox() string {
 	title, body := "keys", m.keysBody()
 	if m.popup == popupChecks {
-		title, body = "checks", []string{"no checks have run yet"}
+		title, body = "checks", m.checkRows()
 	}
 	rows := append([]string{m.titleRule(title)}, body...)
 	rows = rows[:layout.PopupHeight(len(rows), m.height)]
@@ -113,4 +113,17 @@ func (m Model) keysBody() []string {
 		body[i%rows] += columnCell.Render(cell)
 	}
 	return body
+}
+
+// checkRows lists the open issues, or says nothing has been checked.
+func (m Model) checkRows() []string {
+	issues := m.ledger.UnclassifiedIssues()
+	if len(issues) == 0 {
+		return []string{"no checks have run yet"}
+	}
+	rows := make([]string, len(issues))
+	for i, issue := range issues {
+		rows[i] = " " + theme.Warn.Render(issue.Severity.String()) + "  " + issue.Check + "  " + issue.Message
+	}
+	return rows
 }

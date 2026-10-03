@@ -109,7 +109,13 @@ func registerEditorSteps(sc *godog.ScenarioContext, w *world) {
 }
 
 func registerWhenSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^I start konto$`, func() error { return w.start() })
+	sc.Step(`^I start konto$`, func() error {
+		if w.s != nil { // a scenario that changes the journal after its Background restarts konto
+			w.s.stop()
+			w.s = nil
+		}
+		return w.start()
+	})
 	sc.Step(`^I start konto with "([^"]*)"$`, func(args string) error { return w.start(strings.Fields(args)...) })
 	sc.Step(`^I press "([^"]*)"$`, func(key string) error { return w.press(key) })
 	sc.Step(`^I press "([^"]*)" twice$`, func(key string) error { return w.press(key, key) })
