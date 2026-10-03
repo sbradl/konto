@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"reflect"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
@@ -26,6 +27,24 @@ type fakeLoader struct {
 }
 
 func (f fakeLoader) Load(context.Context) (domain.Ledger, error) { return f.ledger, f.err }
+
+// fakeChecker runs no hledger checks, only konto's own over the ledger.
+type fakeChecker struct {
+	run domain.CheckRun
+	err error
+}
+
+func (f fakeChecker) Run(_ context.Context, snapshot domain.Ledger) (domain.CheckRun, error) {
+	if f.err != nil {
+		return domain.CheckRun{}, f.err
+	}
+	run := f.run
+	if run.Total == 0 {
+		run.Total = 12
+	}
+	run.Issues = append(slices.Clone(run.Issues), snapshot.UnclassifiedIssues()...)
+	return run, nil
+}
 
 type fakeCreator struct {
 	calls int
@@ -64,7 +83,9 @@ type editorCall struct {
 	line int
 }
 
-func newModel() Model { return New(journalPath, fakeLoader{}, &fakeCreator{}, recordingEditor(nil)) }
+func newModel() Model {
+	return New(journalPath, Ports{Loader: fakeLoader{}, Checker: fakeChecker{}, Creator: &fakeCreator{}, Editor: recordingEditor(nil)})
+}
 
 func ledgerWith(transactions int) domain.Ledger {
 	return domain.Ledger{Transactions: make([]domain.Transaction, transactions)}
@@ -74,7 +95,7 @@ func ledgerWith(transactions int) domain.Ledger {
 // loader finished with the given result.
 func started(t *testing.T, loader fakeLoader) Model {
 	t.Helper()
-	model := New(journalPath, loader, &fakeCreator{}, recordingEditor(nil))
+	model := New(journalPath, Ports{Loader: loader, Checker: fakeChecker{}, Creator: &fakeCreator{}, Editor: recordingEditor(nil)})
 	cmd := model.Init()
 	if cmd == nil {
 		t.Fatal("Init should start loading the ledger")
@@ -191,7 +212,7 @@ func TestTabBarShowsJournalPathAtRightEdge(t *testing.T) {
 // When the path is too long to fit beside the tabs, they are still separated.
 func TestTabBarKeepsTabsAndPathApartWhenPathIsLong(t *testing.T) {
 	long := "/" + strings.Repeat("deep/", 20) + "main.journal"
-	model := New(long, fakeLoader{}, &fakeCreator{}, recordingEditor(nil))
+	model := New(long, Ports{Loader: fakeLoader{}, Checker: fakeChecker{}, Creator: &fakeCreator{}, Editor: recordingEditor(nil)})
 	updated, _ := model.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	updated, _ = updated.Update(model.Init()())
 
@@ -236,7 +257,7 @@ func TestLoadingIndicatorIsCentred(t *testing.T) {
 
 func firstRunModel(t *testing.T, creator *fakeCreator) Model {
 	t.Helper()
-	model := New(journalPath, journalLoader{creator: creator}, creator, recordingEditor(nil))
+	model := New(journalPath, Ports{Loader: journalLoader{creator: creator}, Checker: fakeChecker{}, Creator: creator, Editor: recordingEditor(nil)})
 	updated, _ := model.Update(model.Init()())
 	return updated.(Model)
 }
@@ -334,7 +355,7 @@ func parseErrorModel(t *testing.T, calls *[]editorCall) Model {
 	t.Helper()
 	issue := domain.CheckIssue{Check: "parseable", Severity: domain.SeverityErr, File: "/data/household.journal", Line: 3, Col: 1}
 	loader := fakeLoader{err: fmt.Errorf("loading ledger: %w", domain.JournalError{Issue: issue})}
-	model := New(journalPath, loader, &fakeCreator{}, recordingEditor(calls))
+	model := New(journalPath, Ports{Loader: loader, Checker: fakeChecker{}, Creator: &fakeCreator{}, Editor: recordingEditor(calls)})
 	updated, _ := model.Update(model.Init()())
 	return updated.(Model)
 }
@@ -355,7 +376,7 @@ func TestEnterOpensTheEditorAtTheIssue(t *testing.T) {
 // Enter means nothing outside the parse-error screen.
 func TestEnterDoesNothingOutsideTheParseErrorScreen(t *testing.T) {
 	var calls []editorCall
-	model := New(journalPath, fakeLoader{}, &fakeCreator{}, recordingEditor(&calls))
+	model := New(journalPath, Ports{Loader: fakeLoader{}, Checker: fakeChecker{}, Creator: &fakeCreator{}, Editor: recordingEditor(&calls)})
 	updated, _ := model.Update(model.Init()())
 
 	cmd := pressEnter(updated.(Model))
@@ -558,7 +579,7 @@ func TestStatusBarHintIsPerView(t *testing.T) {
 func TestForecastHasNoHint(t *testing.T) {
 	model, _ := press(started(t, fakeLoader{}), "4")
 
-	if got := strings.Fields(lastLine(model)); !reflect.DeepEqual(got, []string{"forecast", "?", "keys"}) {
+	if got := strings.Fields(lastLine(model)); !reflect.DeepEqual(got, []string{"forecast", "●", "clean", "?", "keys"}) {
 		t.Errorf("status bar words = %v, want only the view name and ? keys", got)
 	}
 }
@@ -600,7 +621,7 @@ func (s sequenceLoader) Load(ctx context.Context) (domain.Ledger, error) {
 func sequenceModel(t *testing.T, results ...fakeLoader) (ready Model, calls *int) {
 	t.Helper()
 	calls = new(int)
-	model := New(journalPath, sequenceLoader{results: results, calls: calls}, &fakeCreator{}, recordingEditor(nil))
+	model := New(journalPath, Ports{Loader: sequenceLoader{results: results, calls: calls}, Checker: fakeChecker{}, Creator: &fakeCreator{}, Editor: recordingEditor(nil)})
 	updated, _ := model.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	updated, _ = updated.Update(model.Init()())
 	return updated.(Model), calls

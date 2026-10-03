@@ -44,9 +44,14 @@ func execRunner(bin string) runner {
 
 // query runs hledger against the client's journal.
 func (c *Client) query(ctx context.Context, args ...string) ([]byte, error) {
+	return c.queryMessage(ctx, firstMessageLine, args...)
+}
+
+// queryMessage is query with its own reading of a located failure's message.
+func (c *Client) queryMessage(ctx context.Context, messageOf func(string) string, args ...string) ([]byte, error) {
 	out, stderr, err := c.run(ctx, append([]string{"-f", c.journal}, args...)...)
 	if err != nil {
-		if issue, ok := parseIssue(stderr); ok {
+		if issue, ok := parseIssue(stderr, messageOf); ok {
 			return nil, domain.JournalError{Issue: issue}
 		}
 		return nil, fmt.Errorf("hledger %s: %w: %s", args[0], err, strings.TrimSpace(stderr))

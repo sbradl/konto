@@ -142,6 +142,7 @@ type world struct {
 	baseline       string
 	tabAtBaseline  string
 	lastStepType   string
+	focusedRow     string // the checks panel row a step last looked at
 }
 
 func newWorld(s *suite) (*world, error) {
@@ -196,6 +197,9 @@ func newWorld(s *suite) (*world, error) {
 }
 
 func (w *world) writeShim() error {
+	if w.s != nil { // a running konto finishes its first load before hledger starts misbehaving
+		w.waitLoaded(w.s)
+	}
 	b, err := json.Marshal(w.shim)
 	if err != nil {
 		return err

@@ -78,9 +78,6 @@ func TestViewKeysAreIgnoredWhileAPopupIsOpen(t *testing.T) {
 		if model.active != 0 || cmd != nil {
 			t.Errorf("%s open: active = %d, cmd = %v, want the dash view and no command", open, model.active, cmd)
 		}
-		if model, cmd = press(model, "r"); model.refreshing || cmd != nil {
-			t.Errorf("%s open: r must not refresh", open)
-		}
 	}
 }
 
@@ -200,9 +197,23 @@ func TestChecksPanelFillsTheWidth(t *testing.T) {
 
 	want := []string{
 		"─ checks " + strings.Repeat("─", 111),
-		"no checks have run yet" + strings.Repeat(" ", 98),
+		" ✓ all 12 checks pass" + strings.Repeat(" ", 99),
 	}
 	if got := plainRows(model.popupBox()); !reflect.DeepEqual(got, want) {
 		t.Errorf("panel =\n%s", strings.Join(got, "\n"))
+	}
+}
+
+// r is global: it reloads with a popup open, so a fix can be picked up from the checks panel.
+func TestRRefreshesWhileAPopupIsOpen(t *testing.T) {
+	for _, open := range []string{"?", "!"} {
+		model, _ := press(started(t, fakeLoader{}), open)
+
+		model, cmd := press(model, "r")
+
+		if !model.refreshing || cmd == nil || model.popup == popupNone {
+			t.Errorf("%s open: refreshing = %v, cmd = %v, popup = %v; want a reload with the popup still open",
+				open, model.refreshing, cmd, model.popup)
+		}
 	}
 }

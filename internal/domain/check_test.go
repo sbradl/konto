@@ -35,3 +35,32 @@ func TestSeverityString(t *testing.T) {
 		t.Errorf("got %q and %q, want ERR and WARN", SeverityErr, SeverityWarn)
 	}
 }
+
+func TestSeverityOfIsAssignedByCheckName(t *testing.T) {
+	for check, want := range map[string]Severity{
+		"parseable": SeverityErr, "autobalanced": SeverityErr, "assertions": SeverityErr, "balanced": SeverityErr,
+		"commodities": SeverityWarn, "accounts": SeverityWarn, "ordereddates": SeverityWarn, "tags": SeverityWarn,
+		"payees": SeverityWarn, "recentassertions": SeverityWarn, "uniqueleafnames": SeverityWarn,
+		"unclassified": SeverityWarn,
+	} {
+		if got := SeverityOf(check); got != want {
+			t.Errorf("SeverityOf(%q) = %v, want %v", check, got, want)
+		}
+	}
+}
+
+func TestCheckRunCountsIssuesBySeverity(t *testing.T) {
+	run := CheckRun{Total: 12, Issues: []CheckIssue{
+		{Severity: SeverityErr}, {Severity: SeverityWarn}, {Severity: SeverityWarn},
+	}}
+
+	if run.Count(SeverityErr) != 1 || run.Count(SeverityWarn) != 2 {
+		t.Errorf("counts = %d err, %d warn, want 1 and 2", run.Count(SeverityErr), run.Count(SeverityWarn))
+	}
+	if run.IsClean() {
+		t.Error("a run with issues is not clean")
+	}
+	if !(CheckRun{Total: 12}).IsClean() {
+		t.Error("a run without issues is clean")
+	}
+}

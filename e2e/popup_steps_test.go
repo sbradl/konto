@@ -24,6 +24,7 @@ var keyLabels = map[string]bool{
 // popup is the open popup as drawn: its title and the rows below it down to the status bar.
 type popup struct {
 	title string
+	top   int // the screen row of the title
 	edge  string
 	rows  []string
 	lines []string // the whole screen
@@ -33,7 +34,7 @@ type popup struct {
 func openPopup(lines []string) (popup, bool) {
 	for y, line := range lines {
 		if match := popupTitle.FindStringSubmatch(line); match != nil {
-			return popup{title: match[1], edge: line, rows: lines[y+1 : len(lines)-1], lines: lines}, true
+			return popup{title: match[1], top: y, edge: line, rows: lines[y+1 : len(lines)-1], lines: lines}, true
 		}
 	}
 	return popup{}, false

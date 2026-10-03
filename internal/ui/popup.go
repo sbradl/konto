@@ -3,6 +3,7 @@ package ui
 import (
 	"strings"
 
+	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
 	"github.com/sbradl/konto/internal/ui/layout"
@@ -46,8 +47,9 @@ func viewKeys() [tabCount][]keyBinding {
 }
 
 // onPopupKey handles a key while a popup is open: the opening keys toggle, Esc
-// closes, everything else is swallowed so view keys never leak through.
-func (m Model) onPopupKey(key string) Model {
+// closes, the checks panel has its own cursor keys, and everything else is swallowed
+// so view keys never leak through.
+func (m Model) onPopupKey(key string) (Model, tea.Cmd) {
 	switch key {
 	case "esc":
 		m.popup = popupNone
@@ -55,8 +57,12 @@ func (m Model) onPopupKey(key string) Model {
 		m = m.toggle(popupKeys)
 	case "!":
 		m = m.toggle(popupChecks)
+	default:
+		if m.popup == popupChecks {
+			return m.onChecksKey(key)
+		}
 	}
-	return m
+	return m, nil
 }
 
 // toggle opens kind, or closes it when it is already the open popup.
@@ -81,12 +87,12 @@ func (m Model) withPopup(base string) string {
 func (m Model) popupBox() string {
 	title, body := "keys", m.keysBody()
 	if m.popup == popupChecks {
-		title, body = "checks", m.checkRows()
+		title, body = "checks", m.checksBody()
 	}
 	rows := append([]string{m.titleRule(title)}, body...)
 	rows = rows[:layout.PopupHeight(len(rows), m.height)]
 	for i, row := range rows[1:] {
-		rows[i+1] = lipgloss.NewStyle().Width(m.width).Render(row)
+		rows[i+1] = fit(row, m.width)
 	}
 	return strings.Join(rows, "\n")
 }
@@ -115,15 +121,8 @@ func (m Model) keysBody() []string {
 	return body
 }
 
-// checkRows lists the open issues, or says nothing has been checked.
-func (m Model) checkRows() []string {
-	issues := m.ledger.UnclassifiedIssues()
-	if len(issues) == 0 {
-		return []string{"no checks have run yet"}
-	}
-	rows := make([]string, len(issues))
-	for i, issue := range issues {
-		rows[i] = " " + theme.Warn.Render(issue.Severity.String()) + "  " + issue.Check + "  " + issue.Message
-	}
-	return rows
+// fit cuts row off at width or pads it with blanks to width.
+func fit(row string, width int) string {
+	row = lipgloss.NewStyle().MaxWidth(width).Render(row)
+	return row + strings.Repeat(" ", width-lipgloss.Width(row))
 }

@@ -13,7 +13,6 @@ Feature: Journal checks — status bar indicator and the ! panel
       And the terminal is 120×40
       And I start konto
 
-    @wip
     Scenario: status bar shows clean in green on every view
       Then the status bar shows "● clean"
       And "● clean" is coloured 2
@@ -22,7 +21,6 @@ Feature: Journal checks — status bar indicator and the ! panel
       When I press "5"
       Then the status bar shows "● clean"
 
-    @wip
     Scenario: ! opens a panel with a single all-pass line
       When I press "!"
       Then I see the checks panel
@@ -30,7 +28,6 @@ Feature: Journal checks — status bar indicator and the ! panel
       And the all-pass line is coloured dim-green
       And the checks panel has no "OK" rows
 
-    @wip
     Scenario: the all-pass count equals the number of checks run
       Then konto ran 11 separate "hledger check" invocations
       And each invocation named exactly one check
@@ -58,7 +55,6 @@ Feature: Journal checks — status bar indicator and the ! panel
 
   Rule: Each check produces one row with the right severity
 
-    @wip
     Scenario Outline: a single problem is reported with check name, severity and location
       # minimal.journal has 6 lines; <appended> starts after it, so its first line is line 7.
       # Verified against hledger 1.52.1: exactly one check fails per example.
@@ -78,7 +74,6 @@ Feature: Journal checks — status bar indicator and the ! panel
         | commodities     | WARN     | 11   | ● 1 warn | \npayee Kiosk\naccount expenses:x\n2026-09-01 Kiosk\n    expenses:x  1,00 USD\n    assets:transfers\n |
         | payees          | WARN     | 9    | ● 1 warn | \naccount expenses:x\n2026-09-01 Kiosk\n    expenses:x  1,00 EUR\n    assets:transfers\n |
 
-    @wip
     Scenario: a failing balance assertion is a load failure, not a panel row
       # hledger refuses to load a journal whose assertion fails; konto does not pass -I,
       # so this is the parse-error screen (decided). `assertions` therefore never reaches `!`.
@@ -88,7 +83,6 @@ Feature: Journal checks — status bar indicator and the ! panel
       And I do not see the tab bar
       And I see an offer to jump to the editor
 
-    @wip
     Scenario: recentassertions WARN when an import account's latest transaction has no assertion
       Given the journal "household" without the assertion on the last "assets:checking" transaction
       And I start konto
@@ -143,7 +137,6 @@ Feature: Journal checks — status bar indicator and the ! panel
 
   Rule: Status bar colours and counts
 
-    @wip
     Scenario: warnings only are amber, errors are red, errors win
       Given the journal "household" with one warning
       And I start konto
@@ -156,14 +149,12 @@ Feature: Journal checks — status bar indicator and the ! panel
       Then the status bar shows "● 1 err · 2 warn"
       And the indicator is coloured 1
 
-    @wip
     Scenario: indicator is on every view
       Given the journal "household" with one warning
       And I start konto
       When I press "2"
       Then the status bar shows "● 1 warn"
 
-    @wip
     Scenario: no Journal Checks panel or stat card on the dashboard
       Given the journal "household" with one warning
       And I start konto
@@ -171,7 +162,6 @@ Feature: Journal checks — status bar indicator and the ! panel
 
   Rule: Panel navigation and scrolling
 
-    @wip
     Scenario: arrows select a row
       Given the journal "household" with 4 warnings
       And I start konto
@@ -179,7 +169,6 @@ Feature: Journal checks — status bar indicator and the ! panel
       When I press "↓"
       Then the second row is selected with background 8 and foreground 15
 
-    @wip
     Scenario: cursor stops at the ends
       Given the journal "household" with 2 warnings
       And I start konto
@@ -189,7 +178,6 @@ Feature: Journal checks — status bar indicator and the ! panel
       When I press "↓" 5 times
       Then the last row is selected
 
-    @wip
     Scenario: over half the screen the list scrolls
       Given the journal "household" with 12 unclassified accounts
       And the terminal is 100×30
@@ -212,14 +200,12 @@ Feature: Journal checks — status bar indicator and the ! panel
       Given the journal "minimal" with appended text "\npayee Kiosk\n2026-09-01 Kiosk\n    expenses:coffee  2,00 EUR\n    assets:transfers\n"
       And EDITOR is a stub recording its arguments
 
-    @wip
     Scenario: Enter opens the editor at the issue line
       Given I start konto
       And I press "!"
       When I press "Enter"
       Then the editor was called with "+10 <journal path>"
 
-    @wip
     Scenario: VISUAL wins over EDITOR
       Given VISUAL is a stub recording its arguments
       And I start konto
@@ -236,7 +222,6 @@ Feature: Journal checks — status bar indicator and the ! panel
       When I press "Enter"
       Then a default editor is started with "+10 <journal path>"
 
-    @wip
     Scenario: the TUI suspends and resumes around the editor
       Given I start konto
       And I press "!"
@@ -244,7 +229,6 @@ Feature: Journal checks — status bar indicator and the ! panel
       Then the terminal left the alternate screen while the editor ran
       And after the editor exits I see the tab bar again
 
-    @wip
     Scenario: fix in the editor, return, see a clean journal
       Given EDITOR is a stub that declares "expenses:coffee" in the journal
       And I start konto
@@ -253,7 +237,6 @@ Feature: Journal checks — status bar indicator and the ! panel
       Then a full refresh happened
       And the status bar shows "● clean"
 
-    @wip
     Scenario: issue in an included file opens that file
       Given the journal "minimal" includes "sub/extra.journal" with the issue in it
       And I start konto
@@ -261,7 +244,6 @@ Feature: Journal checks — status bar indicator and the ! panel
       When I press "Enter"
       Then the editor was called with "+<line> <absolute path of sub/extra.journal>"
 
-    @wip
     Scenario: fix one, refresh, next instance appears
       Given the journal "minimal" with two undeclared accounts on different lines
       And I start konto
@@ -272,7 +254,6 @@ Feature: Journal checks — status bar indicator and the ! panel
 
   Rule: Parse-time checks do not enter the panel
 
-    @wip
     Scenario: autobalanced failure shows the parse-error screen, not the panel
       Given a journal containing an unbalanced transaction
       When I start konto

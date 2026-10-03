@@ -83,10 +83,11 @@ func (m Model) statusBar() string {
 	if row, total := m.dash.Position(); m.active == 0 && total > 0 {
 		left += fmt.Sprintf("   %d/%d", row, total)
 	}
-	warn, right := m.checkStatus(), m.indicator()+"? keys "
-	gap := max(1, m.width-lipgloss.Width(left)-lipgloss.Width(warn)-lipgloss.Width(right))
+	status, statusStyle := m.checkStatus()
+	right := m.indicator() + "? keys "
+	gap := max(1, m.width-lipgloss.Width(left)-lipgloss.Width(status)-lipgloss.Width(right))
 	return theme.StatusBar.Render(left+strings.Repeat(" ", gap)) +
-		theme.StatusWarn.Render(warn) + theme.StatusBar.Render(right)
+		statusStyle.Render(status) + theme.StatusBar.Render(right)
 }
 
 func (m Model) firstRunText() string {
@@ -152,13 +153,4 @@ func issueOf(err error) *domain.CheckIssue {
 func parseErrorText(issue domain.CheckIssue) string {
 	return issue.Severity.String() + " " + issue.Check + "  " + issue.Location() + "\n\n" +
 		issue.Message + "\n\nEnter to jump to the editor · q to quit"
-}
-
-// checkStatus is the amber warning count; hledger's own checks are not run yet,
-// so a clean journal shows nothing rather than claiming "clean".
-func (m Model) checkStatus() string {
-	if n := len(m.ledger.UnclassifiedIssues()); n > 0 {
-		return fmt.Sprintf("● %d warn   ", n)
-	}
-	return ""
 }

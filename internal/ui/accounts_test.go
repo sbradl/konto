@@ -87,9 +87,9 @@ func TestStatusBarCountsUnclassifiedAccountsAsWarnings(t *testing.T) {
 	}
 }
 
-func TestStatusBarShowsNoWarningForAClassifiedLedger(t *testing.T) {
-	if got := lastLine(started(t, fakeLoader{})); strings.Contains(got, "●") {
-		t.Errorf("status bar = %q, want no indicator", got)
+func TestStatusBarShowsCleanForAClassifiedLedger(t *testing.T) {
+	if got := lastLine(started(t, fakeLoader{})); !strings.Contains(got, "● clean") {
+		t.Errorf("status bar = %q, want ● clean", got)
 	}
 }
 

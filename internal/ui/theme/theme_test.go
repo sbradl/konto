@@ -57,11 +57,25 @@ func TestNegativeAndWarnAreForegroundOnlyAnsiColours(t *testing.T) {
 	}
 }
 
-func TestStatusWarnIsStatusBarWithAmberText(t *testing.T) {
-	if got := StatusWarn.GetForeground(); got != lipgloss.Color("3") {
-		t.Errorf("foreground = %v, want ANSI 3", got)
+func TestStatusIndicatorsAreStatusBarWithAColouredText(t *testing.T) {
+	for name, tc := range map[string]struct {
+		style lipgloss.Style
+		want  string
+	}{"StatusOk": {StatusOk, "2"}, "StatusWarn": {StatusWarn, "3"}, "StatusErr": {StatusErr, "1"}} {
+		if got := tc.style.GetForeground(); got != lipgloss.Color(tc.want) {
+			t.Errorf("%s foreground = %v, want ANSI %s", name, got, tc.want)
+		}
+		if got := tc.style.GetBackground(); got != lipgloss.Color("8") {
+			t.Errorf("%s background = %v, want ANSI 8", name, got)
+		}
 	}
-	if got := StatusWarn.GetBackground(); got != lipgloss.Color("8") {
-		t.Errorf("background = %v, want ANSI 8", got)
+}
+
+func TestOkIsAForegroundOnlyGreen(t *testing.T) {
+	if got := Ok.GetForeground(); got != lipgloss.Color("2") {
+		t.Errorf("foreground = %v, want ANSI 2", got)
+	}
+	if bg := Ok.GetBackground(); bg != (lipgloss.NoColor{}) {
+		t.Errorf("background = %v, want none", bg)
 	}
 }

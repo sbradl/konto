@@ -32,8 +32,14 @@ func registerSteps(sc *godog.ScenarioContext, w *world) {
 
 func registerGivenSteps(sc *godog.ScenarioContext, w *world) {
 	sc.Step(`^the journal "([^"]*)"$`, func(name string) error { return w.useJournal(name, "") })
-	sc.Step(`^the journal "([^"]*)" with (?:appended text|a rule) "(.*)"$`, func(name, text string) error {
-		return w.useJournal(name, "\n"+unescape(text))
+	sc.Step(`^the journal "([^"]*)" with (?:appended text|a rule) "((?s:.*))"$`, func(name, text string) error {
+		// Gherkin turns \n in a table cell into a real newline, hence (?s). Appended text starts
+		// on its own line unless it says otherwise: a leading newline is its first (blank) line.
+		text = unescape(text)
+		if !strings.HasPrefix(text, "\n") {
+			text = "\n" + text
+		}
+		return w.useJournal(name, text)
 	})
 	sc.Step(`^a journal containing "(.*)"$`, func(text string) error {
 		return os.WriteFile(w.journal, []byte(unescape(text)+"\n"), 0o644)
@@ -209,6 +215,9 @@ func (w *world) expectRunning() error {
 }
 
 func (w *world) expectEditorCall(want string) error {
+	if included, ok := strings.CutPrefix(want, "+<line> <absolute path of "); ok {
+		return w.expectEditorOpenedIncluded(strings.TrimSuffix(included, ">"))
+	}
 	b, err := os.ReadFile(w.editorLog())
 	if err != nil {
 		return fmt.Errorf("the editor was never called: %w", err)

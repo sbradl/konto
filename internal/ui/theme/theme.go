@@ -12,12 +12,17 @@ var (
 	Dim = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 	// Negative styles negative amounts: ANSI red.
 	Negative = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
+	// Ok styles a passing result: ANSI green.
+	Ok = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
 	// Warn styles warnings and manual-entry marks: ANSI yellow, the amber of the handoff.
 	Warn = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
 	// Selected styles the active tab and the selected row: bold bright-white on the selection background.
 	Selected = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15")).Background(lipgloss.Color("8"))
 	// StatusBar styles the bottom bar: bright white on the selection background.
 	StatusBar = lipgloss.NewStyle().Foreground(lipgloss.Color("15")).Background(lipgloss.Color("8"))
-	// StatusWarn is StatusBar with the amber foreground, for the warning count.
+	// StatusOk, StatusWarn and StatusErr are StatusBar with a green, amber or red foreground,
+	// for the check indicator.
+	StatusOk   = StatusBar.Foreground(lipgloss.Color("2"))
 	StatusWarn = StatusBar.Foreground(lipgloss.Color("3"))
+	StatusErr  = StatusBar.Foreground(lipgloss.Color("1"))
 )

@@ -33,6 +33,10 @@ type ledgerLoader interface {
 	Load(ctx context.Context) (domain.Ledger, error)
 }
 
+type checkRunner interface {
+	Run(ctx context.Context, snapshot domain.Ledger) (domain.CheckRun, error)
+}
+
 type journalCreator interface {
 	Create() error
 }
@@ -40,9 +44,10 @@ type journalCreator interface {
 // journalCreateFailedMsg reports that the first-run journal could not be written.
 type journalCreateFailedMsg struct{ err error }
 
-// ledgerLoadedMsg carries the result of loading the journal.
+// ledgerLoadedMsg carries the result of loading the journal and checking it.
 type ledgerLoadedMsg struct {
 	ledger domain.Ledger
+	run    domain.CheckRun
 	err    error
 }
 
@@ -50,6 +55,10 @@ type ledgerLoadedMsg struct {
 type Model struct {
 	journalPath string
 	loader      ledgerLoader
+	checker     checkRunner
+	run         *domain.CheckRun // the latest check run; nil until the first one lands
+	checkCursor int              // the selected issue in the checks panel
+	checkOffset int              // the first visible issue in the checks panel
 	creator     journalCreator
 	editor      func(file string, line int) *exec.Cmd
 	ledger      *domain.Ledger
@@ -69,21 +78,36 @@ type Model struct {
 // editorClosedMsg reports that the user's editor has exited.
 type editorClosedMsg struct{}
 
-// New returns the root model for the journal at journalPath, loaded through
-// loader; creator writes the journal on first run; editor builds the command
-// that opens a file at a line.
-func New(
-	journalPath string, loader ledgerLoader, creator journalCreator, editor func(file string, line int) *exec.Cmd,
-) Model {
-	return Model{journalPath: journalPath, loader: loader, creator: creator, editor: editor, dash: dashboard.New()}
+// Ports are the use cases and adapters the root model drives.
+type Ports struct {
+	Loader  ledgerLoader   // reads the journal into a snapshot
+	Checker checkRunner    // checks the journal and the snapshot
+	Creator journalCreator // writes the first-run journal
+	// Editor builds the command that opens a file at a line.
+	Editor func(file string, line int) *exec.Cmd
+}
+
+// New returns the root model for the journal at journalPath, driving the given ports.
+func New(journalPath string, ports Ports) Model {
+	return Model{
+		journalPath: journalPath, loader: ports.Loader, checker: ports.Checker, creator: ports.Creator,
+		editor: ports.Editor, dash: dashboard.New(),
+	}
 }
 
 // Init starts loading the ledger.
 func (m Model) Init() tea.Cmd { return m.load }
 
+// load reads the journal and, if it loads, runs every check over it, so the screen
+// always shows a snapshot together with its own check status.
 func (m Model) load() tea.Msg {
-	snapshot, err := m.loader.Load(context.Background())
-	return ledgerLoadedMsg{ledger: snapshot, err: err}
+	ctx := context.Background()
+	snapshot, err := m.loader.Load(ctx)
+	if err != nil {
+		return ledgerLoadedMsg{ledger: snapshot, err: err}
+	}
+	run, err := m.checker.Run(ctx, snapshot)
+	return ledgerLoadedMsg{ledger: snapshot, run: run, err: err}
 }
 
 // create writes the first-run journal, then loads it.
@@ -126,6 +150,11 @@ func (m Model) onLoaded(loaded ledgerLoadedMsg) Model {
 	m.refreshErr = nil
 	m.ledger, m.loadErr = &loaded.ledger, loaded.err
 	m.dash = m.dash.WithAccounts(loaded.ledger.Accounts)
+	if loaded.err == nil {
+		m.run = &loaded.run
+		m.checkCursor = max(0, min(m.checkCursor, len(loaded.run.Issues)-1))
+		m = m.scrollChecks()
+	}
 	m.firstRun = errors.Is(loaded.err, ledger.ErrNoJournal)
 	m.parseIssue = issueOf(loaded.err)
 	return m
@@ -175,18 +204,18 @@ func (m Model) onParseErrorKey(key string) tea.Cmd {
 
 // onViewKey handles the global keys of the normal views: 1–5 switch the view, r reloads, ? and ! open the popups.
 func (m Model) onViewKey(key string) (Model, tea.Cmd) {
+	if key == "r" {
+		m.refreshing = true
+		return m, m.load
+	}
 	if m.popup != popupNone {
-		return m.onPopupKey(key), nil
+		return m.onPopupKey(key)
 	}
 	switch key {
 	case "?":
 		m.popup = popupKeys
 	case "!":
 		m.popup = popupChecks
-	}
-	if key == "r" {
-		m.refreshing = true
-		return m, m.load
 	}
 	if m.active == 0 {
 		m.dash = m.dash.Move(key)

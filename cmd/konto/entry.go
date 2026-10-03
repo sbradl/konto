@@ -6,6 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/sbradl/konto/internal/checks"
 	"github.com/sbradl/konto/internal/config"
 	"github.com/sbradl/konto/internal/hledger"
 	"github.com/sbradl/konto/internal/journal"
@@ -30,8 +31,11 @@ func main() {
 
 func runProgram(cfg config.Config) error {
 	file := journal.NewFile(cfg.JournalPath)
-	loader := ledger.NewLoader(hledger.New("hledger", cfg.JournalPath), file)
-	_, err := tea.NewProgram(ui.New(cfg.JournalPath, loader, file, openInEditor)).Run()
+	client := hledger.New("hledger", cfg.JournalPath)
+	loader := ledger.NewLoader(client, file)
+	_, err := tea.NewProgram(ui.New(cfg.JournalPath, ui.Ports{
+		Loader: loader, Checker: checks.NewRunner(client), Creator: file, Editor: openInEditor,
+	})).Run()
 	return err //nolint:wrapcheck // the program's own error is already self-describing
 }
 
