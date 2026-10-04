@@ -11,7 +11,7 @@ responsive layout into §6.8) beyond that is **deliberately not in this spec** �
 (§12).
 
 Sources: the wayfinder map and decision tickets under `.scratch/konto-spec/`, `CONTEXT.md`
-(domain glossary), `docs/adr/0001`–`0012`.
+(domain glossary), `docs/adr/0001`–`0013`.
 
 ---
 
@@ -176,8 +176,8 @@ The `internal/journal` adapter is a **targeted line-oriented reader/writer, not 
   close/reopen all write through it; each declares its own
   `journalWriter{ Apply(domain.Changeset) error }` port.
 
-It gets the include-set file list from `hledger files` and works per file. It never needs to
-understand transactions, amounts, or include resolution.
+It gets the loaded file list from `hledger files` (the main journal plus the window's year files,
+ADR 0013) and works per file. It never needs to understand transactions, amounts, or include resolution.
 
 ### 4.3 Invocation architecture
 
@@ -266,7 +266,7 @@ jump-to-location — its only use in v1 (no `e`-to-editor on list views, ADR 001
 - **`e`** only on rules that fit the form (that expression shape, 2 postings, one
   single-commodity amount without `@`/`=`, no comments/tags); otherwise refused. Save
   replaces the block in place.
-- **`n`** appends to the file of the last existing `~` rule, else the main journal.
+- **`n`** appends to the main journal (rules live there, ADR 0013).
 - **`d`** deletes any rule after y/n (handoff's `x`, renamed per §6.4): the `~` line + its indented lines; comments above stay.
 - **Write safety**: full reload after every write; single-instance `flock` on a lock file
   next to the journal at startup (a second konto refuses to start). No compare-before-write.
@@ -303,8 +303,9 @@ jump-to-location — its only use in v1 (no `e`-to-editor on list views, ADR 001
 - **Write** (`w`): only when no `?` rows remain; writes the account directive (if new),
   category directives, `categories.rules` changes and transactions together; pre-check journal + candidates via hledger on
   stdin — a failing `= <balance>` assertion blocks with bank / journal / difference.
-  Target file = the account's latest transaction's file (else main journal), date-ordered
-  insert, payees declared.
+  Each transaction goes to the year file of its own date (created on first write; ADR 0013),
+  date-ordered insert, payees declared. A crossing into a new year also writes the carry; rows
+  older than last year go to their own year files, unloaded.
 - **After the write**: status-bar confirmation (`imported N transactions into <account>`),
   then Import returns to its empty start state (`n` picks the next file). The staged import
   survives view switches (views stay alive, §6.1); `q` / `Ctrl+C` with a staged import asks y/n before
@@ -777,11 +778,10 @@ Dashboard, Reports have no ticket; grill inline if a question surfaces. Entry is
 ### 12.1 Large journals
 
 Every hledger call parses the whole journal (about 1.1 s at 20 000 transactions; startup makes ~23 calls
-side by side). konto does not cache or checkpoint: that would mean reimplementing hledger's balance math
-or guarding a cache against stale money. Keep a big journal fast with hledger's own layout instead:
-archive old years with `hledger close --migrate` and point konto at a journal that includes only the
-recent years plus their opening balances. konto then sees that window only (reports, dashboard spend and
-checks stop at its start). An `archive` action in konto would be a separate feature.
+side by side). konto does not cache or checkpoint. It owns a year-partitioned ledger and loads only this
+year and last year (ADR 0013): `main.journal` holds directives and rules, transactions live in
+`YYYY.journal` files, and carry transactions keep earlier balances right. Reports, dashboard spend and
+checks stop at the window's start.
 
 ---
 

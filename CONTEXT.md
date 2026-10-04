@@ -15,13 +15,26 @@ calls; parts refresh independently.
 _Avoid_: Journal (the on-disk file), Book, Database
 
 **Journal**:
-The plain-text hledger file(s) on disk, including anything pulled in via `include`. The
-authoritative store; konto reads it through `hledger` and writes to it directly for edits.
+The ledger's plain-text hledger files on disk: the main journal plus the year files konto loads.
+The authoritative store; konto reads it through `hledger` and writes to it directly for edits.
 
 **Main journal**:
-The file the journal path resolves to; the rest of the journal is pulled in by `include`.
-New accounts and directives are written here; a new transaction goes to the file holding its
-account's latest transaction, else here.
+The file the journal path resolves to. It holds only directives and `~` rules; never transactions
+and never an `include` of a year file. New accounts and directives are written here (ADR 0013).
+
+**Year file**:
+`YYYY.journal` beside the main journal, holding the transactions dated in that year. konto creates
+it on the first write for that year. Only this year's and last year's are loaded; older ones stay
+on disk, consistent but unread.
+
+**Window**:
+This year and last year, the only transactions konto sees. A new ledger with no year files is just
+the main journal.
+
+**Carry**:
+The managed closing transaction at the end of a year file and the matching opening transaction at
+the start of the next (`equity:opening`), written by the first import that crosses into the new
+year and rewritten by the next crossing import, so balances before the window stay right.
 
 ## Accounts
 
