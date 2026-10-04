@@ -33,9 +33,9 @@ scheduled/periodic transactions, forecast, reports (manual entry deferred, ADR 0
 
 All five v1 views are built and their feature files pass end to end: Dashboard, Import (open, categorise,
 write, staging, Postbank format), Scheduled (list, detail, new/edit form, delete), Forecast and Reports,
-on top of the preflight, architecture tests, e2e harness and CI. What is left is the `@wip` and `@needs-decision` scenarios of
-`features/` (`grep -c @wip features/*.feature`): cross-cutting invariants, a few account/chrome/dashboard
-leftovers. Per-feature design lives in `docs/spec.md` §4 and the tickets in `.scratch/konto-spec/issues/`.
+on top of the preflight, architecture tests, e2e harness and CI. No `@wip` or `@needs-decision` scenario is left in
+`features/` (`grep -c @wip features/*.feature`). Per-feature design lives in `docs/spec.md` §4 and the tickets in
+`.scratch/konto-spec/issues/`.
 
 ## Non-negotiables (full detail in docs/spec.md)
 

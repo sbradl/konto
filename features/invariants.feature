@@ -260,14 +260,6 @@ Feature: Product invariants that must hold across the whole app
       And the tab bar shows "0" transactions
       And I see a "NET WORTH" card showing "0"
 
-    @proposed @needs-decision
-    Scenario: a huge journal stays responsive
-      Given the journal "household" with 20000 transactions
-      When I start konto
-      Then I see the tab bar within 5 seconds
-      And pressing "5" shows reports within 2 seconds
-
-
     Scenario: unicode and spaces in paths
       Given the journal "household" at "<tmp>/mein Konto ä/main.journal"
       When I start konto with "--file" pointing there

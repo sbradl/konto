@@ -143,13 +143,7 @@ Feature: Journal checks — status bar indicator and the ! panel
       Then "● 1 warn" is coloured 3
 
     # An ERR check failing makes konto show the parse-error screen instead of the views, so no status bar
-    # ever counts an error next to warnings.
-    @needs-decision
-    Scenario: mixed counts
-      Given the journal "household" with 1 error and 2 warnings
-      And I start konto
-      Then the status bar shows "● 1 err · 2 warn"
-      And the indicator is coloured 1
+    # ever counts an error next to warnings; the "● 1 err · 2 warn" format is a unit test of the status bar.
 
     Scenario: indicator is on every view
       Given the journal "household" with one warning

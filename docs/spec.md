@@ -774,6 +774,15 @@ None open — 07 (responsive layout) resolved into §6.8, 08/09/13/15 into §4.8
 Dashboard, Reports have no ticket; grill inline if a question surfaces. Entry is out of v1
 (ADR 0010).
 
+### 12.1 Large journals
+
+Every hledger call parses the whole journal (about 1.1 s at 20 000 transactions; startup makes ~23 calls
+side by side). konto does not cache or checkpoint: that would mean reimplementing hledger's balance math
+or guarding a cache against stale money. Keep a big journal fast with hledger's own layout instead:
+archive old years with `hledger close --migrate` and point konto at a journal that includes only the
+recent years plus their opening balances. konto then sees that window only (reports, dashboard spend and
+checks stop at its start). An `archive` action in konto would be a separate feature.
+
 ---
 
 ## 13. Suggested build order

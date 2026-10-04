@@ -472,23 +472,8 @@ Feature: Scheduled — periodic rules (forecast-only)
         | ~ monthly from 2026-10-20  Gym\n    expenses:rent  25,00 EUR\n    assets:checking  -25,00 EUR\n |
         | ~ monthly from 2026-10-20  Gym\n    expenses:rent  25,00 EUR @ 1,10 USD\n    assets:checking\n   |
 
-    # hledger itself refuses these two at load (an assertion that fails on the projected occurrences, a rule
-    # that cannot balance), so konto never gets as far as listing them.
-    @needs-decision
-    Scenario Outline: e is refused on rules that hledger refuses to load
-      Given the journal "household-scheduled" with a rule "<rule>"
-      And I start konto
-      And I press "3"
-      And I select the rule "Gym"
-      When I press "e"
-      Then I see a hint to edit the journal by hand
-      And no form is shown
-      And the journal is unchanged
-
-      Examples:
-        | rule                                                                                     |
-        | ~ monthly from 2026-10-20  Gym\n    expenses:rent  25,00 EUR = 100,00 EUR\n    assets:checking\n |
-        | ~ monthly from 2026-10-20  Gym\n    expenses:rent\n    assets:checking\n                        |
+    # A rule hledger refuses at load (an assertion that fails on the projected occurrences, a rule that
+    # cannot balance) never reaches the list: konto shows the parse-error screen instead (checks.feature).
 
     Scenario: the refused rule in the fixture (comment) cannot be edited
       When I select the rule "Streaming"
