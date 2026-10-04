@@ -143,6 +143,7 @@ func (w *world) expectChartColoursBelow16() error {
 }
 
 func registerSpendSteps(sc *godog.ScenarioContext, w *world) {
+	registerSpendLineSteps(sc, w)
 	sc.Step(`^I see a braille chart of monthly spend$`, w.expectBrailleChart)
 	sc.Step(`^the x-axis labels are((?: "[^"]*")+)$`, w.expectXAxisLabels)
 	sc.Step(`^the x-axis does not include "([^"]*)"$`, func(label string) error {
