@@ -116,7 +116,7 @@ func TestPrintRejectsGarbage(t *testing.T) {
 func TestNewRunsTheHledgerBinary(t *testing.T) {
 	fakeHledger(t, printJSON, 0)
 
-	got, err := New("hledger", "/data/main.journal").Print(context.Background())
+	got, err := New("hledger", func() []string { return []string{"/data/main.journal"} }).Print(context.Background())
 
 	if err != nil || len(got) != 2 {
 		t.Errorf("got %+v, %v; want two transactions and no error", got, err)
@@ -127,7 +127,7 @@ func TestNewRunsTheHledgerBinary(t *testing.T) {
 func TestNewReportsBinaryFailure(t *testing.T) {
 	fakeHledger(t, "boom", 3)
 
-	if _, err := New("hledger", "/data/main.journal").Print(context.Background()); err == nil {
+	if _, err := New("hledger", func() []string { return []string{"/data/main.journal"} }).Print(context.Background()); err == nil {
 		t.Error("expected an error when hledger exits non-zero, got nil")
 	}
 }
@@ -192,7 +192,7 @@ func TestNewMapsRealStderrToJournalError(t *testing.T) {
 	}
 	t.Setenv("PATH", dir)
 
-	_, err := New("hledger", "/data/main.journal").Print(context.Background())
+	_, err := New("hledger", func() []string { return []string{"/data/main.journal"} }).Print(context.Background())
 
 	var got domain.JournalError
 	if !errors.As(err, &got) || got.Issue.Message != "unexpected x" {
@@ -381,5 +381,37 @@ func TestTagMapSkipsMalformedTagsAndIsNilWithoutAny(t *testing.T) {
 	}
 	if got := tagMap([][]string{{"konto-rule", "2"}, {"broken"}}); len(got) != 1 || got["konto-rule"] != "2" {
 		t.Errorf("tags = %v", got)
+	}
+}
+
+// Every query names each file of the journal with its own -f, in order.
+func TestQueriesNameEveryFileOfTheJournal(t *testing.T) {
+	var calls []call
+	client := newClient(recording(balanceReport(), nil, &calls), "/data/main.journal", "/data/2025.journal")
+
+	if _, err := client.Balances(context.Background()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	want := []string{"-f", "/data/main.journal", "-f", "/data/2025.journal", "bal", "--flat", "-O", "json", "-E"}
+	if len(calls) != 1 || !reflect.DeepEqual(calls[0].args, want) {
+		t.Errorf("calls = %+v, want one call with %v", calls, want)
+	}
+}
+
+// The files are asked for on every query: a year file created meanwhile joins the next one.
+func TestTheFilesAreResolvedOnEveryQuery(t *testing.T) {
+	var calls []call
+	files := make([]string, 1, 2)
+	files[0] = "/data/main.journal"
+	client := newClient(recording(balanceReport(), nil, &calls))
+	client.files = func() []string { return files }
+
+	_, _ = client.Balances(context.Background())
+	files = append(files, "/data/2026.journal")
+	_, _ = client.Balances(context.Background())
+
+	if len(calls) != 2 || len(calls[0].args) >= len(calls[1].args) || calls[1].args[2] != "-f" {
+		t.Errorf("calls = %+v, want the second query to name the new file too", calls)
 	}
 }

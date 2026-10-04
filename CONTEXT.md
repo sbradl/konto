@@ -33,7 +33,7 @@ the main journal.
 
 **Carry**:
 The managed closing transaction at the end of a year file and the matching opening transaction at
-the start of the next (`equity:opening`), written by the first import that crosses into the new
+the start of the next (`equity:opening-balances`), written by the first import that crosses into the new
 year and rewritten by the next crossing import, so balances before the window stay right.
 
 ## Accounts

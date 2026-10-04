@@ -3,7 +3,9 @@ package journal
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
+	"time"
 )
 
 // A journal file that is there exists.
@@ -124,5 +126,61 @@ func TestCreateFailsWhenRulesCannotBeWritten(t *testing.T) {
 
 	if err := NewFile(filepath.Join(dir, "main.journal")).Create(); err == nil {
 		t.Error("expected an error when categories.rules is a directory, got nil")
+	}
+}
+
+func windowDir(t *testing.T, names ...string) string {
+	t.Helper()
+	dir := t.TempDir()
+	for _, name := range append([]string{"main.journal"}, names...) {
+		if err := os.WriteFile(filepath.Join(dir, name), nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return dir
+}
+
+func septemberOf(year int) time.Time {
+	return time.Date(year, time.September, 30, 0, 0, 0, 0, time.UTC)
+}
+
+// The window is the main journal plus last year's and this year's file, oldest first.
+func TestWindowIsTheMainJournalAndTheLastTwoYears(t *testing.T) {
+	dir := windowDir(t, "2024.journal", "2025.journal", "2026.journal", "2027.journal")
+
+	got := NewFile(filepath.Join(dir, "main.journal")).Window(septemberOf(2026))
+
+	want := []string{"main.journal", "2025.journal", "2026.journal"}
+	for i := range want {
+		want[i] = filepath.Join(dir, want[i])
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("Window = %v, want %v", got, want)
+	}
+}
+
+// A year without a file adds nothing; a ledger without year files is just the main journal.
+func TestWindowSkipsMissingYearFiles(t *testing.T) {
+	dir := windowDir(t, "2026.journal")
+	main := filepath.Join(dir, "main.journal")
+
+	if got, want := NewFile(main).Window(septemberOf(2026)), []string{main, filepath.Join(dir, "2026.journal")}; !slices.Equal(got, want) {
+		t.Errorf("Window = %v, want %v", got, want)
+	}
+	if got := NewFile(main).Window(septemberOf(2030)); !slices.Equal(got, []string{main}) {
+		t.Errorf("Window in a year without files = %v, want only the main journal", got)
+	}
+}
+
+// Only a file named exactly YYYY.journal is a year file: a directory of that name is not.
+func TestWindowIgnoresADirectoryNamedLikeAYear(t *testing.T) {
+	dir := windowDir(t)
+	if err := os.Mkdir(filepath.Join(dir, "2026.journal"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	main := filepath.Join(dir, "main.journal")
+
+	if got := NewFile(main).Window(septemberOf(2026)); !slices.Equal(got, []string{main}) {
+		t.Errorf("Window = %v, want only the main journal", got)
 	}
 }

@@ -34,6 +34,7 @@ func registerSteps(sc *godog.ScenarioContext, w *world) {
 
 func registerGivenSteps(sc *godog.ScenarioContext, w *world) {
 	step(sc, `^the journal "([^"]*)"$`, func(name string) error { return w.useJournal(name, "") })
+	step(sc, `^the ledger "([^"]*)"$`, w.useLedger)
 	step(sc, `^the journal "([^"]*)" with (?:appended text|a rule) "((?s:.*))"$`, func(name, text string) error {
 		// Gherkin turns \n in a table cell into a real newline, hence (?s). Appended text starts
 		// on its own line unless it says otherwise: a leading newline is its first (blank) line.

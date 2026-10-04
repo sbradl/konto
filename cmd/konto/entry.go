@@ -40,8 +40,8 @@ func main() {
 func runProgram(cfg config.Config) error {
 	file := journal.NewFile(cfg.JournalPath)
 	rulesPath := filepath.Join(filepath.Dir(cfg.JournalPath), "categories.rules")
-	client := hledger.New("hledger", cfg.JournalPath)
 	today := todayFunc(os.Getenv, time.Now)
+	client := hledger.New("hledger", func() []string { return file.Window(today()) })
 	loader := ledger.NewLoader(client, file, today)
 	home, _ := os.UserHomeDir() // without a home the picker falls back to a relative Downloads
 	_, err := tea.NewProgram(ui.New(cfg.JournalPath, ui.Ports{

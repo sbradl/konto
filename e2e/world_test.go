@@ -235,6 +235,30 @@ func (w *world) fixture(name string) string {
 	return filepath.Join(w.suite.root, "testdata", "journals", name)
 }
 
+// useLedger installs a fixture ledger (testdata/ledgers/<name>: a main journal and year files, ADR 0013)
+// beside the shared categories.rules.
+func (w *world) useLedger(name string) error {
+	dir := filepath.Join(w.suite.root, "testdata", "ledgers", name)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return fmt.Errorf("fixture ledger %q: %w", name, err)
+	}
+	for _, entry := range entries {
+		b, err := os.ReadFile(filepath.Join(dir, entry.Name()))
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(filepath.Dir(w.journal), entry.Name()), b, 0o644); err != nil {
+			return err
+		}
+	}
+	rules, err := os.ReadFile(w.fixture("categories.rules"))
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(w.rules, rules, 0o644)
+}
+
 // useJournal installs a fixture journal as the main journal. Every fixture
 // but "minimal" is paired with the shared categories.rules; minimal gets the
 // empty one the first-run skeleton writes.

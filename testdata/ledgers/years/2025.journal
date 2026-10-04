@@ -1,0 +1,11 @@
+2025-01-01 opening balance  ; konto:carry
+    assets:checking  1.000,00 EUR
+    equity:opening-balances
+
+2025-06-01 Acme GmbH
+    assets:checking  500,00 EUR
+    income:salary
+
+2025-12-31 closing balance  ; konto:carry
+    assets:checking  -1.500,00 EUR
+    equity:opening-balances

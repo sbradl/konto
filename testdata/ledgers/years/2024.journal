@@ -1,0 +1,7 @@
+2024-03-01 Old Employer
+    assets:checking  1.000,00 EUR
+    income:salary
+
+2024-12-31 closing balance  ; konto:carry
+    assets:checking  -1.000,00 EUR
+    equity:opening-balances

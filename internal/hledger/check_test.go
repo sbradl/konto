@@ -125,7 +125,7 @@ func TestNewChecksTextThroughTheBinary(t *testing.T) {
 	}
 	t.Setenv("PATH", dir)
 
-	err := New("hledger", "/j").CheckText(context.Background(), "the text", []string{"balanced"})
+	err := New("hledger", func() []string { return []string{"/j"} }).CheckText(context.Background(), "the text", []string{"balanced"})
 
 	if err == nil || err.Error() != "broken" {
 		t.Errorf("error = %v, want hledger's stderr", err)

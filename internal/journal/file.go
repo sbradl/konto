@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 // skeleton is a new journal: the declarations konto's own writes rely on, so
@@ -55,6 +56,19 @@ func (f File) Create() error {
 		return err
 	}
 	return touch(filepath.Join(dir, "categories.rules"))
+}
+
+// Window is what hledger is given: the main journal plus last year's and this year's file when they
+// exist, oldest first (ADR 0013). Files of older years stay on disk, unloaded.
+func (f File) Window(today time.Time) []string {
+	files := []string{f.path}
+	for year := today.Year() - 1; year <= today.Year(); year++ {
+		path := filepath.Join(filepath.Dir(f.path), fmt.Sprintf("%04d.journal", year))
+		if info, err := os.Stat(path); err == nil && info.Mode().IsRegular() {
+			files = append(files, path)
+		}
+	}
+	return files
 }
 
 // writeNew creates path with content, failing if it already exists.

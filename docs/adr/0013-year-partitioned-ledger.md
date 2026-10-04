@@ -16,7 +16,7 @@ math, or guarding a cache against stale money). It controls what hledger is give
   write. Directives and rules go to `main.journal`.
 - **Carry-over keeps balances right.** The first import that crosses into a new year writes a
   closing transaction at the end of the old year's file and an opening transaction at the start
-  of the new year's file (the pair `hledger close --migrate` writes, `equity:opening`), both
+  of the new year's file (the pair `hledger close --migrate` writes, `equity:opening-balances`), both
   tagged as managed. The next crossing import recomputes and rewrites them from the loaded files,
   so rows for the previous year imported late stay valid when the window slides. Carries are
   computed through hledger on the changeset text via stdin.

@@ -1,0 +1,15 @@
+decimal-mark ,
+commodity 1.000,00 EUR
+
+account equity:opening-balances
+account assets:checking
+account expenses:rent
+account income:salary
+
+tag konto
+
+payee Old Employer
+payee Acme GmbH
+payee Vermieter Mueller
+payee opening balance
+payee closing balance

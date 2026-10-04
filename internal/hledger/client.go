@@ -23,23 +23,24 @@ type runner func(ctx context.Context, args ...string) (stdout []byte, stderr str
 // inputRunner is the seam for hledger reading journal text from standard input.
 type inputRunner func(ctx context.Context, input string, args ...string) (stdout []byte, stderr string, err error)
 
-// Client asks hledger about one journal. Every call names the journal with -f.
+// Client asks hledger about one journal. Every call names each file of it with -f.
 type Client struct {
 	run       runner
 	runInput  inputRunner
-	journal   string
+	files     func() []string                             // the files making up the journal, asked for on every call
 	tempRules func(rules string) (path string, err error) // the seam for the CSV rules file
 }
 
-// New returns a Client that runs the hledger binary bin on the journal at journalPath.
-func New(bin, journalPath string) *Client {
-	client := newClient(execRunner(bin), journalPath)
+// New returns a Client that runs the hledger binary bin on the journal made of the files named by files.
+func New(bin string, files func() []string) *Client {
+	client := newClient(execRunner(bin))
+	client.files = files
 	client.runInput = execInputRunner(bin)
 	return client
 }
 
-func newClient(run runner, journalPath string) *Client {
-	return &Client{run: run, journal: journalPath, tempRules: osRules}
+func newClient(run runner, files ...string) *Client {
+	return &Client{run: run, files: func() []string { return files }, tempRules: osRules}
 }
 
 func execRunner(bin string) runner {
@@ -70,7 +71,12 @@ func (c *Client) query(ctx context.Context, args ...string) ([]byte, error) {
 
 // queryMessage is query with its own reading of a located failure's message.
 func (c *Client) queryMessage(ctx context.Context, messageOf func(string) string, args ...string) ([]byte, error) {
-	out, stderr, err := c.run(ctx, append([]string{"-f", c.journal}, args...)...)
+	files := c.files()
+	named := make([]string, 0, 2*len(files)+len(args))
+	for _, file := range files {
+		named = append(named, "-f", file)
+	}
+	out, stderr, err := c.run(ctx, append(named, args...)...)
 	if err != nil {
 		if issue, ok := parseIssue(stderr, messageOf); ok {
 			return nil, domain.JournalError{Issue: issue}
