@@ -57,6 +57,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       KONTO_E2E_ARTIFACTS: ${{ github.workspace }}/e2e-artifacts
+      # 2-vCPU runner x 4 parallel scenarios: the 5s local wait budget flakes
+      KONTO_E2E_TIMEOUT: 20s
     steps:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup
