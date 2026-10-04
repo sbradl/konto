@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sbradl/konto/internal/domain"
@@ -69,31 +70,55 @@ func (l *Loader) Load(ctx context.Context) (domain.Ledger, error) {
 }
 
 // fromHledger is what hledger reports: the transactions, the balances (returned apart: the directives
-// complete them), the month to date, the spend history and the projected occurrences.
+// complete them), the month to date, the spend history and the projected occurrences. The queries are
+// independent, so they run side by side.
 func (l *Loader) fromHledger(ctx context.Context) (domain.Ledger, []domain.Account, error) {
-	var snapshot domain.Ledger
-	transactions, err := l.gw.Print(ctx)
-	if err != nil {
-		return snapshot, nil, err //nolint:wrapcheck // Load adds the context
-	}
-	accounts, err := l.gw.Balances(ctx)
-	if err != nil {
-		return snapshot, nil, err //nolint:wrapcheck // Load adds the context
-	}
-	month, err := l.monthToDate(ctx)
-	if err != nil {
-		return snapshot, nil, err
-	}
-	spend, err := l.spendHistory(ctx)
-	if err != nil {
-		return snapshot, nil, err
-	}
+	var (
+		snapshot domain.Ledger
+		accounts []domain.Account
+	)
 	today := l.today()
-	upcoming, err := l.gw.Upcoming(ctx, today.AddDate(0, 0, 1), today.AddDate(1, 0, 0))
-	if err != nil {
-		return snapshot, nil, err //nolint:wrapcheck // Load adds the context
+	snapshot.Spend = make([]domain.MonthSpend, spendMonths)
+	queries := make([]func() error, 0, spendMonths+otherQueries)
+	queries = append(queries,
+		func() error { return assign(&snapshot.Transactions)(l.gw.Print(ctx)) },
+		func() error { return assign(&accounts)(l.gw.Balances(ctx)) },
+		func() error { return assign(&snapshot.Month)(l.monthToDate(ctx)) },
+		func() error {
+			return assign(&snapshot.Upcoming)(l.gw.Upcoming(ctx, today.AddDate(0, 0, 1), today.AddDate(1, 0, 0)))
+		},
+	)
+	for i := range snapshot.Spend {
+		queries = append(queries, func() error { return assign(&snapshot.Spend[i])(l.spendMonth(ctx, spendMonths-i)) })
 	}
-	return domain.Ledger{Transactions: transactions, Month: month, Spend: spend, Upcoming: upcoming}, accounts, nil
+	if err := runAll(queries); err != nil {
+		return domain.Ledger{}, nil, err
+	}
+	return snapshot, accounts, nil
+}
+
+// assign stores a query's result in dst, passing its error on.
+func assign[T any](dst *T) func(T, error) error {
+	return func(value T, err error) error {
+		*dst = value
+		return err
+	}
+}
+
+// runAll runs the queries concurrently and returns the first failure in query order.
+func runAll(queries []func() error) error {
+	failures := make([]error, len(queries))
+	var group sync.WaitGroup
+	for i, query := range queries {
+		group.Go(func() { failures[i] = query() })
+	}
+	group.Wait()
+	for _, err := range failures {
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // declare completes each account with what its `account` directive says. An account declared
@@ -122,7 +147,10 @@ func declare(accounts []domain.Account, declarations []domain.Declaration) []dom
 	return accounts
 }
 
-const spendMonths = 6
+const (
+	spendMonths  = 6
+	otherQueries = 4 // transactions, balances, month to date, upcoming
+)
 
 // monthToDate sums the calendar month so far: income (as a positive figure) and expenses.
 func (l *Loader) monthToDate(ctx context.Context) (domain.MonthSummary, error) {
@@ -131,20 +159,13 @@ func (l *Loader) monthToDate(ctx context.Context) (domain.MonthSummary, error) {
 	return l.summarise(ctx, first, today)
 }
 
-// spendHistory totals the expenses of each of the six complete months before today's, oldest first.
-func (l *Loader) spendHistory(ctx context.Context) ([]domain.MonthSpend, error) {
+// spendMonth totals the expenses of the complete month back months before today's.
+func (l *Loader) spendMonth(ctx context.Context, back int) (domain.MonthSpend, error) {
 	today := l.today()
 	thisMonth := time.Date(today.Year(), today.Month(), 1, 0, 0, 0, 0, today.Location())
-	history := make([]domain.MonthSpend, 0, spendMonths)
-	for back := spendMonths; back >= 1; back-- {
-		first := thisMonth.AddDate(0, -back, 0)
-		summary, err := l.summarise(ctx, first, thisMonth.AddDate(0, -back+1, -1))
-		if err != nil {
-			return nil, err
-		}
-		history = append(history, domain.MonthSpend{Month: first, Total: summary.Expenses})
-	}
-	return history, nil
+	first := thisMonth.AddDate(0, -back, 0)
+	summary, err := l.summarise(ctx, first, thisMonth.AddDate(0, -back+1, -1))
+	return domain.MonthSpend{Month: first, Total: summary.Expenses}, err
 }
 
 // summarise sums income (as a positive figure) and expenses from first through last.

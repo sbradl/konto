@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -38,14 +39,16 @@ func (f fakeGateway) PeriodActivity(context.Context, time.Time, time.Time) ([]do
 // periodRecorder notes the period the loader asked for.
 type periodRecorder struct {
 	fakeGateway
+	mu          sync.Mutex
 	first, last time.Time
-	seen        bool
 }
 
-// PeriodActivity keeps the first period asked for: the month to date.
+// PeriodActivity keeps the latest period asked for: the month to date, the spend history lying before it.
 func (p *periodRecorder) PeriodActivity(_ context.Context, first, last time.Time) ([]domain.Account, error) {
-	if !p.seen {
-		p.first, p.last, p.seen = first, last, true
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if first.After(p.first) {
+		p.first, p.last = first, last
 	}
 	return p.activity, nil
 }
@@ -245,10 +248,20 @@ func (u *upcomingRecorder) Upcoming(_ context.Context, first, last time.Time) ([
 // monthRecorder notes every period asked for and answers each with the same activity.
 type monthRecorder struct {
 	fakeGateway
+	mu     sync.Mutex
 	firsts []string
 }
 
+// periods are the periods asked for, oldest first (the queries run concurrently).
+func (m *monthRecorder) periods() []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return slices.Sorted(slices.Values(m.firsts))
+}
+
 func (m *monthRecorder) PeriodActivity(_ context.Context, first, last time.Time) ([]domain.Account, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.firsts = append(m.firsts, first.Format(time.DateOnly)+".."+last.Format(time.DateOnly))
 	return m.activity, m.activityErr
 }
@@ -271,8 +284,8 @@ func TestLoadSumsExpensesForTheLastSixCompleteMonths(t *testing.T) {
 		"2026-03-01..2026-03-31", "2026-04-01..2026-04-30", "2026-05-01..2026-05-31",
 		"2026-06-01..2026-06-30", "2026-07-01..2026-07-31", "2026-08-01..2026-08-31",
 	}
-	if !reflect.DeepEqual(gw.firsts[1:], wantPeriods) { // the first call is the month to date
-		t.Errorf("periods = %v, want %v", gw.firsts[1:], wantPeriods)
+	if got := gw.periods(); !reflect.DeepEqual(got[:6], wantPeriods) { // the month to date sorts last
+		t.Errorf("periods = %v, want %v", got[:6], wantPeriods)
 	}
 	if len(got.Spend) != 6 || got.Spend[0].Month.Month() != time.March || got.Spend[5].Month.Month() != time.August {
 		t.Fatalf("Spend = %+v, want March to August", got.Spend)
@@ -290,17 +303,20 @@ func TestLoadSpendCrossesTheYearBoundary(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if gw.firsts[1] != "2026-07-01..2026-07-31" || gw.firsts[6] != "2026-12-01..2026-12-31" {
-		t.Errorf("periods = %v, want July through December 2026", gw.firsts[1:])
+	if got := gw.periods(); got[0] != "2026-07-01..2026-07-31" || got[5] != "2026-12-01..2026-12-31" {
+		t.Errorf("periods = %v, want July through December 2026", got[:6])
 	}
 }
 
 type failingAfter struct {
 	fakeGateway
+	mu            sync.Mutex
 	calls, failAt int
 }
 
 func (f *failingAfter) PeriodActivity(context.Context, time.Time, time.Time) ([]domain.Account, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.calls++
 	if f.calls == f.failAt {
 		return nil, errors.New("month failed")

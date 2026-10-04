@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/sbradl/konto/internal/domain"
@@ -14,15 +15,18 @@ import (
 type fakeGateway struct {
 	issues map[string]*domain.CheckIssue
 	errs   map[string]error
+	mu     sync.Mutex
 	ran    []string
 }
 
 func (f *fakeGateway) Check(_ context.Context, name string) (*domain.CheckIssue, error) {
+	f.mu.Lock()
 	f.ran = append(f.ran, name)
+	f.mu.Unlock()
 	return f.issues[name], f.errs[name]
 }
 
-func TestRunRunsEveryHledgerCheckOnceInOrder(t *testing.T) {
+func TestRunRunsEveryHledgerCheckOnce(t *testing.T) {
 	gw := &fakeGateway{}
 
 	run, err := NewRunner(gw).Run(context.Background(), domain.Ledger{})
@@ -34,6 +38,8 @@ func TestRunRunsEveryHledgerCheckOnceInOrder(t *testing.T) {
 		"parseable", "autobalanced", "assertions", "balanced", "commodities", "accounts",
 		"ordereddates", "tags", "payees", "recentassertions", "uniqueleafnames",
 	}
+	slices.Sort(want)
+	slices.Sort(gw.ran)
 	if !reflect.DeepEqual(gw.ran, want) {
 		t.Errorf("checks run = %v, want %v", gw.ran, want)
 	}
@@ -63,16 +69,13 @@ func TestRunCollectsFailuresAndKontosOwnIssues(t *testing.T) {
 	}
 }
 
-func TestRunStopsOnAFailureToRunACheck(t *testing.T) {
+func TestRunFailsOnAFailureToRunACheck(t *testing.T) {
 	gw := &fakeGateway{errs: map[string]error{"tags": errors.New("exit status 2")}}
 
 	_, err := NewRunner(gw).Run(context.Background(), domain.Ledger{})
 
 	if err == nil || !strings.Contains(err.Error(), "tags") || !strings.Contains(err.Error(), "exit status 2") {
 		t.Errorf("error = %v, want one naming the check and carrying the cause", err)
-	}
-	if got := gw.ran[len(gw.ran)-1]; got != "tags" {
-		t.Errorf("last check run = %s, want the run to stop at tags", got)
 	}
 }
 

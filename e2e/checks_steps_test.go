@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/cucumber/godog"
@@ -83,8 +84,10 @@ func (w *world) expectChecksRun(names []string) error {
 	for _, call := range calls {
 		ran = append(ran, call[1])
 	}
-	if strings.Join(ran, " ") != strings.Join(names, " ") {
-		return fmt.Errorf("checks run: %v, want %v", ran, names)
+	// The checks run side by side, so only the set of them is observable.
+	slices.Sort(ran)
+	if want := slices.Sorted(slices.Values(names)); strings.Join(ran, " ") != strings.Join(want, " ") {
+		return fmt.Errorf("checks run: %v, want %v", ran, want)
 	}
 	return nil
 }

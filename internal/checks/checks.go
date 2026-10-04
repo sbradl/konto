@@ -5,6 +5,7 @@ package checks
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/sbradl/konto/internal/domain"
 )
@@ -35,14 +36,21 @@ func NewRunner(gw gateway) *Runner { return &Runner{gw: gw} }
 // Run runs every check against the journal and the loaded ledger. hledger reports only the
 // first failure per check, so each contributes at most one issue; konto's own checks list all.
 func (r *Runner) Run(ctx context.Context, ledger domain.Ledger) (domain.CheckRun, error) {
-	run := domain.CheckRun{Total: len(hledgerChecks()) + ownChecks}
-	for _, name := range hledgerChecks() {
-		issue, err := r.gw.Check(ctx, name)
-		if err != nil {
-			return domain.CheckRun{}, fmt.Errorf("running check %s: %w", name, err)
+	names := hledgerChecks()
+	run := domain.CheckRun{Total: len(names) + ownChecks}
+	issues := make([]*domain.CheckIssue, len(names))
+	failures := make([]error, len(names))
+	var group sync.WaitGroup
+	for i, name := range names {
+		group.Go(func() { issues[i], failures[i] = r.gw.Check(ctx, name) })
+	}
+	group.Wait()
+	for i, name := range names {
+		if failures[i] != nil {
+			return domain.CheckRun{}, fmt.Errorf("running check %s: %w", name, failures[i])
 		}
-		if issue != nil {
-			run.Issues = append(run.Issues, *issue)
+		if issues[i] != nil {
+			run.Issues = append(run.Issues, *issues[i])
 		}
 	}
 	run.Issues = append(run.Issues, ledger.UnclassifiedIssues()...)
