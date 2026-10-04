@@ -229,3 +229,95 @@ func TestProjectionReportsWhatItCannotRead(t *testing.T) {
 		}
 	}
 }
+
+// periodicOutput is `hledger bal -M -O json`: one date column per month, one row per account, one cell per column.
+func periodicOutput(months int, rows ...string) string {
+	dates := strings.TrimSuffix(strings.Repeat(`[],`, months), ",")
+	return `{"prDates": [` + dates + `], "prRows": [` + strings.Join(rows, ",") + `], "prTotals": {}}`
+}
+
+func periodicRow(name string, cells ...string) string {
+	return `{"prrName": "` + name + `", "prrAmounts": [` + strings.Join(cells, ",") + `]}`
+}
+
+func TestMonthlyActivityAsksForIncomeAndExpensesPerMonthOverTheInclusivePeriod(t *testing.T) {
+	var calls []call
+	client := newClient(recording(periodicOutput(2), nil, &calls), "/data/main.journal")
+
+	if _, err := client.MonthlyActivity(context.Background(),
+		time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC)); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	want := []string{
+		"-f", "/data/main.journal", "bal", "--flat", "-M", "-O", "json",
+		"-b", "2026-08-01", "-e", "2026-10-01", "^expenses:", "^income:",
+	}
+	if len(calls) != 1 || !reflect.DeepEqual(calls[0].args, want) {
+		t.Errorf("calls = %+v, want one call with %v", calls, want)
+	}
+}
+
+func TestMonthlyActivitySplitsTheAccountsByMonth(t *testing.T) {
+	out := periodicOutput(3,
+		periodicRow("expenses:rent", `[`+amountJSON("EUR", 90000, eurStyle)+`]`, `[]`, `[`+amountJSON("EUR", 91000, eurStyle)+`]`),
+		periodicRow("income:salary", `[]`, `[`+amountJSON("EUR", -300000, eurStyle)+`]`, `[]`),
+	)
+	client := newClient(recording(out, nil, new([]call)), "/data/main.journal")
+
+	got, err := client.MonthlyActivity(context.Background(),
+		time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	euro := domain.AmountStyle{Spaced: true, DecimalMark: ",", GroupMark: ".", GroupSize: 3}
+	amount := func(mantissa int64) domain.MultiAmount {
+		return domain.MultiAmount{{Commodity: "EUR", Mantissa: mantissa, Places: 2, Style: euro}}
+	}
+	want := [][]domain.Account{
+		{{Name: "expenses:rent", Balance: amount(90000)}},
+		{{Name: "income:salary", Balance: amount(-300000)}},
+		{{Name: "expenses:rent", Balance: amount(91000)}},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("months =\n%+v\nwant\n%+v", got, want)
+	}
+}
+
+func TestMonthlyActivityKeepsEveryMonthEvenWithoutActivity(t *testing.T) {
+	client := newClient(recording(periodicOutput(2), nil, new([]call)), "/data/main.journal")
+
+	got, err := client.MonthlyActivity(context.Background(),
+		time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC))
+
+	if err != nil || len(got) != 2 {
+		t.Errorf("months = %v, %v; want two empty months", got, err)
+	}
+}
+
+func TestMonthlyActivityReportsHledgerFailure(t *testing.T) {
+	client := newClient(recording("", errors.New("exit status 1"), new([]call)), "/data/main.journal")
+
+	_, err := client.MonthlyActivity(context.Background(), time.Now(), time.Now())
+
+	if err == nil || !strings.Contains(err.Error(), "exit status 1") {
+		t.Errorf("expected an error carrying the cause, got: %v", err)
+	}
+}
+
+func TestMonthlyActivityRejectsGarbage(t *testing.T) {
+	for name, out := range map[string]string{
+		"not json":          "oops",
+		"cell not a list":   periodicOutput(1, periodicRow("a", `{}`)),
+		"more cells":        periodicOutput(1, periodicRow("a", `[]`, `[]`)),
+		"bad amount":        periodicOutput(1, periodicRow("a", `[`+amountJSON("EUR", 1, `{"asdigitgroups": [1, [3]]}`)+`]`)),
+		"name not a string": periodicOutput(1, `{"prrName": 1, "prrAmounts": [[]]}`),
+	} {
+		client := newClient(recording(out, nil, new([]call)), "/data/main.journal")
+
+		if _, err := client.MonthlyActivity(context.Background(), time.Now(), time.Now()); err == nil {
+			t.Errorf("%s: expected an error, got nil", name)
+		}
+	}
+}

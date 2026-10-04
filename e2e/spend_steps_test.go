@@ -144,9 +144,9 @@ func (w *world) expectChartColoursBelow16() error {
 
 func registerSpendSteps(sc *godog.ScenarioContext, w *world) {
 	registerSpendLineSteps(sc, w)
-	sc.Step(`^I see a braille chart of monthly spend$`, w.expectBrailleChart)
-	sc.Step(`^the x-axis labels are((?: "[^"]*")+)$`, w.expectXAxisLabels)
-	sc.Step(`^the x-axis does not include "([^"]*)"$`, func(label string) error {
+	step(sc, `^I see a braille chart of monthly spend$`, w.expectBrailleChart)
+	step(sc, `^the x-axis labels are((?: "[^"]*")+)$`, w.expectXAxisLabels)
+	step(sc, `^the x-axis does not include "([^"]*)"$`, func(label string) error {
 		return w.expectSpend(func(text string) error {
 			if strings.Contains(text, label) {
 				return fmt.Errorf("the SPEND panel shows %q", label)
@@ -154,6 +154,6 @@ func registerSpendSteps(sc *godog.ScenarioContext, w *world) {
 			return nil
 		})
 	})
-	sc.Step(`^the y-axis labels are formatted in thousands$`, w.expectYAxisInThousands)
-	sc.Step(`^every chart cell colour is an ANSI index below 16$`, w.expectChartColoursBelow16)
+	step(sc, `^the y-axis labels are formatted in thousands$`, w.expectYAxisInThousands)
+	step(sc, `^every chart cell colour is an ANSI index below 16$`, w.expectChartColoursBelow16)
 }

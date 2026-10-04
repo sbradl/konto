@@ -13,6 +13,6 @@ func (w *world) startAnother() error {
 }
 
 func registerInstanceSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^konto is (?:already )?running on it$`, func() error { return w.start() })
-	sc.Step(`^I start (?:a second )?konto on the same journal$`, w.startAnother)
+	step(sc, `^konto is (?:already )?running on it$`, func() error { return w.start() })
+	step(sc, `^I start (?:a second )?konto on the same journal$`, w.startAnother)
 }

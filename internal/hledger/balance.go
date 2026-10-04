@@ -99,6 +99,53 @@ func (c *Client) PeriodActivity(ctx context.Context, first, last time.Time) ([]d
 	return c.Activity(ctx, first, last, "^expenses:", "^income:")
 }
 
+// MonthlyActivity returns the change in each income and expense account, month by month, from the month
+// of first through last (inclusive): one entry per calendar month, accounts without activity left out.
+func (c *Client) MonthlyActivity(ctx context.Context, first, last time.Time) ([][]domain.Account, error) {
+	out, err := c.query(ctx, "bal", "--flat", "-M", "-O", "json",
+		"-b", first.Format(time.DateOnly), "-e", last.AddDate(0, 0, 1).Format(time.DateOnly), "^expenses:", "^income:")
+	if err != nil {
+		return nil, err
+	}
+	var report multiPeriodReport
+	if err := json.Unmarshal(out, &report); err != nil {
+		return nil, fmt.Errorf("reading hledger bal output: %w", err)
+	}
+	return report.months()
+}
+
+// months splits the report's rows into the accounts active in each month's column.
+func (r multiPeriodReport) months() ([][]domain.Account, error) {
+	months := make([][]domain.Account, len(r.Dates))
+	for _, row := range r.Rows {
+		if len(row.Amounts) != len(months) {
+			return nil, fmt.Errorf("hledger bal row %s has %d months, want %d", row.Name, len(row.Amounts), len(months))
+		}
+		for month, cell := range row.Amounts {
+			if len(cell) == 0 {
+				continue
+			}
+			balance, err := amounts(cell)
+			if err != nil {
+				return nil, err
+			}
+			months[month] = append(months[month], domain.Account{Name: row.Name, Balance: balance})
+		}
+	}
+	return months, nil
+}
+
+func amounts(cell []jsonAmount) (domain.MultiAmount, error) {
+	balance := make(domain.MultiAmount, len(cell))
+	for i, raw := range cell {
+		var err error
+		if balance[i], err = raw.amount(); err != nil {
+			return nil, fmt.Errorf("reading hledger bal output: %w", err)
+		}
+	}
+	return balance, nil
+}
+
 // Activity returns the change in the accounts the queries match (all when there are none) from
 // first through last (inclusive).
 func (c *Client) Activity(ctx context.Context, first, last time.Time, queries ...string) ([]domain.Account, error) {

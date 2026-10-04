@@ -75,25 +75,25 @@ func (w *world) expectEveryPostingIn(commodity string) error {
 }
 
 func registerFormatSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^the row "([^"]*)" is dated "([^"]*)" and shows "([^"]*)"$`, func(name, date, text string) error {
+	step(sc, `^the row "([^"]*)" is dated "([^"]*)" and shows "([^"]*)"$`, func(name, date, text string) error {
 		return w.expectImportRowHolds(name, date, text)
 	})
-	sc.Step(`^the row "([^"]*)" is dated "([^"]*)"$`, func(name, date string) error { return w.expectImportRowHolds(name, date) })
-	sc.Step(`^no row is dated "([^"]*)"$`, w.expectNoRowHolding)
-	sc.Step(`^no row is named "([^"]*)"$`, w.expectNoRowHolding)
-	sc.Step(`^the row "([^"]*)" is shown unmangled$`, func(name string) error {
+	step(sc, `^the row "([^"]*)" is dated "([^"]*)"$`, func(name, date string) error { return w.expectImportRowHolds(name, date) })
+	step(sc, `^no row is dated "([^"]*)"$`, w.expectNoRowHolding)
+	step(sc, `^no row is named "([^"]*)"$`, w.expectNoRowHolding)
+	step(sc, `^the row "([^"]*)" is shown unmangled$`, func(name string) error {
 		if err := w.expectImportRowHolds(name, ""); err != nil {
 			return err
 		}
 		return w.expectNoRowHolding("�")
 	})
-	sc.Step(`^the newest imported transaction has the assertion "([^"]*)" on "([^"]*)"$`, w.expectNewestAssertion)
-	sc.Step(`^no assertion in the journal mentions "([^"]*)"$`, w.expectNoAssertionMentioning)
-	sc.Step(`^the journal has exactly (\d+) "([^"]*)" transactions on "([^"]*)"$`, func(n int, description, date string) error {
+	step(sc, `^the newest imported transaction has the assertion "([^"]*)" on "([^"]*)"$`, w.expectNewestAssertion)
+	step(sc, `^no assertion in the journal mentions "([^"]*)"$`, w.expectNoAssertionMentioning)
+	step(sc, `^the journal has exactly (\d+) "([^"]*)" transactions on "([^"]*)"$`, func(n int, description, date string) error {
 		return w.expectCountOnDate(n, description, "", date)
 	})
-	sc.Step(`^in the journal "([^"]*)" on "([^"]*)" is above "([^"]*)" on "([^"]*)"$`, func(upper, upperDate, lower, lowerDate string) error {
+	step(sc, `^in the journal "([^"]*)" on "([^"]*)" is above "([^"]*)" on "([^"]*)"$`, func(upper, upperDate, lower, lowerDate string) error {
 		return w.expectAbove(upperDate+" "+upper, lowerDate+" "+lower)
 	})
-	sc.Step(`^every imported posting is in "([^"]*)"$`, w.expectEveryPostingIn)
+	step(sc, `^every imported posting is in "([^"]*)"$`, w.expectEveryPostingIn)
 }

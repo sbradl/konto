@@ -206,16 +206,16 @@ func (w *world) expectFocusedShows(text string, uncoloured int) error {
 }
 
 func registerAccountSelectionSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^I am on the dashboard$`, func() error { return w.press("1") })
-	sc.Step(`^I am on "(\d)"$`, func(view string) error { return w.press(view) })
-	sc.Step(`^I select "([^"]*)"(?: on the dashboard)?$`, w.selectAccount)
-	sc.Step(`^I select "([^"]*)" and press "([^"]*)"$`, func(account, key string) error {
+	step(sc, `^I am on the dashboard$`, func() error { return w.press("1") })
+	step(sc, `^I am on "(\d)"$`, func(view string) error { return w.press(view) })
+	step(sc, `^I select "([^"]*)"(?: on the dashboard)?$`, w.selectAccount)
+	step(sc, `^I select "([^"]*)" and press "([^"]*)"$`, func(account, key string) error {
 		if err := w.selectAccount(account); err != nil {
 			return err
 		}
 		return w.press(key)
 	})
-	sc.Step(`^I select "([^"]*)" and press "([^"]*)" and "([^"]*)"$`, func(account, first, second string) error {
+	step(sc, `^I select "([^"]*)" and press "([^"]*)" and "([^"]*)"$`, func(account, first, second string) error {
 		if err := w.selectAccount(account); err != nil {
 			return err
 		}
@@ -224,49 +224,49 @@ func registerAccountSelectionSteps(sc *godog.ScenarioContext, w *world) {
 }
 
 func registerPromptSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^I see a y/n prompt naming "([^"]*)"$`, func(account string) error {
+	step(sc, `^I see a y/n prompt naming "([^"]*)"$`, func(account string) error {
 		return w.expectStatusHas(true, []string{account, "(y/n)"})
 	})
-	sc.Step(`^the (?:y/n )?prompt is still open$`, func() error { return w.expectStatusHas(true, []string{"(y/n)"}) })
-	sc.Step(`^no y/n prompt is shown$`, w.expectNoPrompt)
-	sc.Step(`^I see a refusal mentioning ("[^"]*" and "[^"]*")$`, func(list string) error {
+	step(sc, `^the (?:y/n )?prompt is still open$`, func() error { return w.expectStatusHas(true, []string{"(y/n)"}) })
+	step(sc, `^no y/n prompt is shown$`, w.expectNoPrompt)
+	step(sc, `^I see a refusal mentioning ("[^"]*" and "[^"]*")$`, func(list string) error {
 		return w.expectStatusHas(true, quotedList(list))
 	})
-	sc.Step(`^I see a refusal mentioning ("[^"]*" or "[^"]*")$`, func(list string) error {
+	step(sc, `^I see a refusal mentioning ("[^"]*" or "[^"]*")$`, func(list string) error {
 		return w.expectStatusHas(false, quotedList(list))
 	})
-	sc.Step(`^I see a refusal mentioning "([^"]*)"$`, func(text string) error { return w.expectStatusHas(true, []string{text}) })
-	sc.Step(`^I see a refusal "([^"]*)"$`, func(text string) error { return w.expectStatusHas(true, []string{text}) })
-	sc.Step(`^the refusal names ("[^"]*" and "[^"]*")$`, func(list string) error { return w.expectStatusHas(true, quotedList(list)) })
-	sc.Step(`^no full-screen error is shown$`, func() error { return w.expectScreen(true, tabBarMarker) })
+	step(sc, `^I see a refusal mentioning "([^"]*)"$`, func(text string) error { return w.expectStatusHas(true, []string{text}) })
+	step(sc, `^I see a refusal "([^"]*)"$`, func(text string) error { return w.expectStatusHas(true, []string{text}) })
+	step(sc, `^the refusal names ("[^"]*" and "[^"]*")$`, func(list string) error { return w.expectStatusHas(true, quotedList(list)) })
+	step(sc, `^no full-screen error is shown$`, func() error { return w.expectScreen(true, tabBarMarker) })
 }
 
 func registerDirectiveSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^the journal's "account ([^"]*)" directive contains "([^"]*)"$`, func(account, text string) error {
+	step(sc, `^the journal's "account ([^"]*)" directive contains "([^"]*)"$`, func(account, text string) error {
 		return w.expectDirective(account, true, []string{text})
 	})
-	sc.Step(`^the journal's "account ([^"]*)" directive does not contain "([^"]*)"$`, func(account, text string) error {
+	step(sc, `^the journal's "account ([^"]*)" directive does not contain "([^"]*)"$`, func(account, text string) error {
 		return w.expectDirective(account, false, []string{text})
 	})
-	sc.Step(`^the directive still contains ("[^"]*"(?: and "[^"]*")*)$`, func(list string) error {
+	step(sc, `^the directive still contains ("[^"]*"(?: and "[^"]*")*)$`, func(list string) error {
 		return w.expectDirective(w.directiveOwner(), true, quotedList(list))
 	})
-	sc.Step(`^the directive contains "([^"]*)"$`, func(text string) error {
+	step(sc, `^the directive contains "([^"]*)"$`, func(text string) error {
 		return w.expectDirective("assets:spare", true, []string{text})
 	})
-	sc.Step(`^exactly (\d+) lines? of the journal changed$`, w.expectLinesChanged)
-	sc.Step(`^the journal is byte-identical to the start$`, w.expectByteIdentical)
+	step(sc, `^exactly (\d+) lines? of the journal changed$`, w.expectLinesChanged)
+	step(sc, `^the journal is byte-identical to the start$`, w.expectByteIdentical)
 }
 
 // directiveOwner is the account the last directive step looked at.
 func (w *world) directiveOwner() string { return w.focusedRow }
 
 func registerAccountRowSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^the row "([^"]*)" is listed below every open account$`, func(account string) error { return w.expectRowPlace(account, true) })
-	sc.Step(`^the row "([^"]*)" is listed among the open accounts$`, func(account string) error { return w.expectRowPlace(account, false) })
-	sc.Step(`^it shows "([^"]*)" and is not coloured (\d+)$`, w.expectFocusedShows)
-	sc.Step(`^it shows "([^"]*)"$`, func(text string) error { return w.expectFocusedShows(text, -1) })
-	sc.Step(`^the journal "([^"]*)" with two rules "([^"]*)" and "([^"]*)" referencing "([^"]*)"$`,
+	step(sc, `^the row "([^"]*)" is listed below every open account$`, func(account string) error { return w.expectRowPlace(account, true) })
+	step(sc, `^the row "([^"]*)" is listed among the open accounts$`, func(account string) error { return w.expectRowPlace(account, false) })
+	step(sc, `^it shows "([^"]*)" and is not coloured (\d+)$`, w.expectFocusedShows)
+	step(sc, `^it shows "([^"]*)"$`, func(text string) error { return w.expectFocusedShows(text, -1) })
+	step(sc, `^the journal "([^"]*)" with two rules "([^"]*)" and "([^"]*)" referencing "([^"]*)"$`,
 		func(name, first, second, account string) error {
 			rule := func(description string) string {
 				return "\n~ monthly from 2026-11-01  " + description + "\n    " + account + "  10,00 EUR\n    assets:checking\n"

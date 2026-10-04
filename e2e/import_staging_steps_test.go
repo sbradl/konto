@@ -53,16 +53,16 @@ func (w *world) expectRuleFromDisk(id string) error {
 }
 
 func registerStagingSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^the cursor is where I left it$`, func() error { return w.expectCursorOn(w.leftRow) })
-	sc.Step(`^the table row "([^"]*)" is selected$`, w.expectCursorOn)
-	sc.Step(`^I append to the journal externally a checking transaction on (\d{4}-\d{2}-\d{2}) "([^"]*)" of ([\d,]+) EUR$`,
+	step(sc, `^the cursor is where I left it$`, func() error { return w.expectCursorOn(w.leftRow) })
+	step(sc, `^the table row "([^"]*)" is selected$`, w.expectCursorOn)
+	step(sc, `^I append to the journal externally a checking transaction on (\d{4}-\d{2}-\d{2}) "([^"]*)" of ([\d,]+) EUR$`,
 		w.appendExternally)
-	sc.Step(`^the row "([^"]*)" is skipped$`, func(name string) error { return w.expectRowState(name, "", "", "skipped") })
-	sc.Step(`^I see a y/n prompt about discarding the staged import$`, func() error {
+	step(sc, `^the row "([^"]*)" is skipped$`, func(name string) error { return w.expectRowState(name, "", "", "skipped") })
+	step(sc, `^I see a y/n prompt about discarding the staged import$`, func() error {
 		return w.expectStatusHas(true, []string{"discard the staged import", "(y/n)"})
 	})
-	sc.Step(`^I see the rule (\d+) was read from categories\.rules$`, w.expectRuleFromDisk)
-	sc.Step(`^"w" is blocked only by the (\d+) new rows that need a category$`, func(n int) error {
+	step(sc, `^I see the rule (\d+) was read from categories\.rules$`, w.expectRuleFromDisk)
+	step(sc, `^"w" is blocked only by the (\d+) new rows that need a category$`, func(n int) error {
 		if err := w.press("w"); err != nil {
 			return err
 		}

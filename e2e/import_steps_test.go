@@ -273,21 +273,21 @@ func (w *world) expectPickerOrMessage() error {
 }
 
 func registerImportPickerSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^I open "([^"]*)" in Import$`, w.openInImport)
-	sc.Step(`^I see an empty Import with a hint to press "n" for a new file$`, func() error {
+	step(sc, `^I open "([^"]*)" in Import$`, w.openInImport)
+	step(sc, `^I see an empty Import with a hint to press "n" for a new file$`, func() error {
 		return w.expectScreen(true, "press n for a new file")
 	})
-	sc.Step(`^I see the empty Import$`, func() error { return w.expectScreen(true, "press n for a new file") })
-	sc.Step(`^I do not see a file list$`, func() error { return w.expectScreen(false, "OPEN A CSV FILE") })
-	sc.Step(`^I do not see status dots$`, w.expectNoStatusDots)
-	sc.Step(`^I see a file picker$`, func() error { return w.expectScreen(true, "OPEN A CSV FILE") })
-	sc.Step(`^the picker shows the download directory path$`, func() error { return w.expectScreen(true, w.downloads) })
-	sc.Step(`^the picker shows "~/Downloads"$`, func() error { return w.expectScreen(true, filepath.Join(w.home, "Downloads")) })
-	sc.Step(`^the picker lists "([^"]*)" and "([^"]*)"$`, func(a, b string) error { return w.expectPickerLists(a, b) })
-	sc.Step(`^the picker does not list "([^"]*)" or "([^"]*)"$`, func(a, b string) error { return w.expectPickerLacks(a, b) })
-	sc.Step(`^I enter "([^"]*)" in the picker$`, func(name string) error { return w.selectInPicker(name) })
-	sc.Step(`^I select "([^"]*)" with "Enter"$`, func(name string) error { return w.selectInPicker(name) })
-	sc.Step(`^I see a file picker or a message naming the missing directory$`, w.expectPickerOrMessage)
+	step(sc, `^I see the empty Import$`, func() error { return w.expectScreen(true, "press n for a new file") })
+	step(sc, `^I do not see a file list$`, func() error { return w.expectScreen(false, "OPEN A CSV FILE") })
+	step(sc, `^I do not see status dots$`, w.expectNoStatusDots)
+	step(sc, `^I see a file picker$`, func() error { return w.expectScreen(true, "OPEN A CSV FILE") })
+	step(sc, `^the picker shows the download directory path$`, func() error { return w.expectScreen(true, w.downloads) })
+	step(sc, `^the picker shows "~/Downloads"$`, func() error { return w.expectScreen(true, filepath.Join(w.home, "Downloads")) })
+	step(sc, `^the picker lists "([^"]*)" and "([^"]*)"$`, func(a, b string) error { return w.expectPickerLists(a, b) })
+	step(sc, `^the picker does not list "([^"]*)" or "([^"]*)"$`, func(a, b string) error { return w.expectPickerLacks(a, b) })
+	step(sc, `^I enter "([^"]*)" in the picker$`, func(name string) error { return w.selectInPicker(name) })
+	step(sc, `^I select "([^"]*)" with "Enter"$`, func(name string) error { return w.selectInPicker(name) })
+	step(sc, `^I see a file picker or a message naming the missing directory$`, w.expectPickerOrMessage)
 }
 
 // selectInPicker moves to the entry in the open picker and presses Enter.
@@ -313,10 +313,10 @@ func (w *world) selectInPicker(name string) error {
 }
 
 func registerImportRowSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^I see the row table$`, func() error { return w.expectScreen(true, "╭─ ROWS ") })
-	sc.Step(`^the row table has (?:exactly )?(\d+) rows?$`, func(n int) error { return w.expectPanelRowCount(rowsTitle, n) })
-	sc.Step(`^the row table has no rows$`, func() error { return w.expectPanelRowCount(rowsTitle, 0) })
-	sc.Step(`^the row table has no row "([^"]*)"$`, func(name string) error {
+	step(sc, `^I see the row table$`, func() error { return w.expectScreen(true, "╭─ ROWS ") })
+	step(sc, `^the row table has (?:exactly )?(\d+) rows?$`, func(n int) error { return w.expectPanelRowCount(rowsTitle, n) })
+	step(sc, `^the row table has no rows$`, func() error { return w.expectPanelRowCount(rowsTitle, 0) })
+	step(sc, `^the row table has no row "([^"]*)"$`, func(name string) error {
 		return w.expectPanel(rowsTitle, func(rows []recentRow) error {
 			if _, err := rowFor(rows, name); err == nil {
 				return fmt.Errorf("the row table has %q", name)
@@ -324,21 +324,21 @@ func registerImportRowSteps(sc *godog.ScenarioContext, w *world) {
 			return nil
 		})
 	})
-	sc.Step(`^the row "([^"]*)" on "([^"]*)" shows "([^"]*)" coloured (\d+) and rule id "([^"]*)"$`,
+	step(sc, `^the row "([^"]*)" on "([^"]*)" shows "([^"]*)" coloured (\d+) and rule id "([^"]*)"$`,
 		func(name, date, mark string, colour int, id string) error {
 			if err := w.expectImportRowColour(name, date, mark, colour); err != nil {
 				return err
 			}
 			return w.expectImportRowHolds(name, date, "#"+id)
 		})
-	sc.Step(`^the row "([^"]*)" on "([^"]*)" shows "([^"]*)" coloured (\d+)$`, func(name, date, mark string, colour int) error {
+	step(sc, `^the row "([^"]*)" on "([^"]*)" shows "([^"]*)" coloured (\d+)$`, func(name, date, mark string, colour int) error {
 		return w.expectImportRowColour(name, date, mark, colour)
 	})
-	sc.Step(`^the row "([^"]*)" shows target "([^"]*)" coloured (\d+)$`, func(name, target string, colour int) error {
+	step(sc, `^the row "([^"]*)" shows target "([^"]*)" coloured (\d+)$`, func(name, target string, colour int) error {
 		return w.expectImportRowColour(name, "", target, colour)
 	})
-	sc.Step(`^the table row "([^"]*)" shows "([^"]*)"$`, func(name, text string) error { return w.expectImportRowHolds(name, "", text) })
-	sc.Step(`^the row "([^"]*)" shows no rule id$`, func(name string) error {
+	step(sc, `^the table row "([^"]*)" shows "([^"]*)"$`, func(name, text string) error { return w.expectImportRowHolds(name, "", text) })
+	step(sc, `^the row "([^"]*)" shows no rule id$`, func(name string) error {
 		return w.eventually(func() error {
 			row, err := w.importRow(rowsTitle, name, "")
 			if err == nil && strings.Contains(row.text, "#") {
@@ -347,38 +347,38 @@ func registerImportRowSteps(sc *godog.ScenarioContext, w *world) {
 			return err
 		})
 	})
-	sc.Step(`^the (first|second|last) table row is selected(?: with background \d+ and foreground \d+)?$`, w.expectSelectedRow)
-	sc.Step(`^I do not see "([^"]*)" or "([^"]*)" or "([^"]*)"$`, w.expectNoneOf3Screen)
+	step(sc, `^the (first|second|last) table row is selected(?: with background \d+ and foreground \d+)?$`, w.expectSelectedRow)
+	step(sc, `^I do not see "([^"]*)" or "([^"]*)" or "([^"]*)"$`, w.expectNoneOf3Screen)
 }
 
 func registerImportInfoSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^the info block shows file "([^"]*)"$`, func(v string) error { return w.expectInfo("file", v) })
-	sc.Step(`^the info block shows account "([^"]*)"$`, func(v string) error { return w.expectInfo("account", v) })
-	sc.Step(`^the info block shows format "([^"]*)"$`, func(v string) error { return w.expectInfo("format", v) })
-	sc.Step(`^the info block shows watermark "([^"]*)"$`, func(v string) error { return w.expectInfo("watermark", v) })
-	sc.Step(`^the info block shows no watermark$`, func() error { return w.expectInfo("watermark", "no watermark") })
-	sc.Step(`^I do not see a list of existing accounts to attach to$`, func() error { return w.expectScreen(false, "attach") })
-	sc.Step(`^nothing is staged$`, w.expectNothingStaged)
-	sc.Step(`^I see a message saying the file is not a recognised export$`, func() error {
+	step(sc, `^the info block shows file "([^"]*)"$`, func(v string) error { return w.expectInfo("file", v) })
+	step(sc, `^the info block shows account "([^"]*)"$`, func(v string) error { return w.expectInfo("account", v) })
+	step(sc, `^the info block shows format "([^"]*)"$`, func(v string) error { return w.expectInfo("format", v) })
+	step(sc, `^the info block shows watermark "([^"]*)"$`, func(v string) error { return w.expectInfo("watermark", v) })
+	step(sc, `^the info block shows no watermark$`, func() error { return w.expectInfo("watermark", "no watermark") })
+	step(sc, `^I do not see a list of existing accounts to attach to$`, func() error { return w.expectScreen(false, "attach") })
+	step(sc, `^nothing is staged$`, w.expectNothingStaged)
+	step(sc, `^I see a message saying the file is not a recognised export$`, func() error {
 		return w.expectScreen(true, "not a recognised Postbank export")
 	})
-	sc.Step(`^I see a message saying the account could not be detected$`, func() error {
+	step(sc, `^I see a message saying the account could not be detected$`, func() error {
 		return w.expectScreen(true, "could not be detected")
 	})
-	sc.Step(`^I see a message about the unreadable row or file$`, func() error { return w.expectScreen(true, "unreadable row or file") })
-	sc.Step(`^I see hledger's error text$`, func() error { return w.expectScreen(true, "hledger converting") })
-	sc.Step(`^the import is refused with a message naming "([^"]*)"$`, func(name string) error { return w.expectScreen(true, name) })
-	sc.Step(`^no file other than the journal and categories.rules exists next to the journal$`, w.expectNoStateFiles)
-	sc.Step(`^no "\.latest" file exists next to the journal or the CSV$`, w.expectNoStateFiles)
+	step(sc, `^I see a message about the unreadable row or file$`, func() error { return w.expectScreen(true, "unreadable row or file") })
+	step(sc, `^I see hledger's error text$`, func() error { return w.expectScreen(true, "hledger converting") })
+	step(sc, `^the import is refused with a message naming "([^"]*)"$`, func(name string) error { return w.expectScreen(true, name) })
+	step(sc, `^no file other than the journal and categories.rules exists next to the journal$`, w.expectNoStateFiles)
+	step(sc, `^no "\.latest" file exists next to the journal or the CSV$`, w.expectNoStateFiles)
 }
 
 func registerImportSkippedSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^I see a "SKIPPED" list with exactly these rows$`, w.expectSkippedRows)
-	sc.Step(`^the skipped rows are coloured 8$`, w.expectSkippedDim)
-	sc.Step(`^the skipped panel shows (\d+) rows, not just the number \d+$`, func(n int) error { return w.expectPanelRowCount(skippedTitle, n) })
-	sc.Step(`^the skipped list has (\d+) rows?$`, func(n int) error { return w.expectPanelRowCount(skippedTitle, n) })
-	sc.Step(`^the skipped panel is empty$`, func() error { return w.expectPanelRowCount(skippedTitle, 0) })
-	sc.Step(`^the rows dated before "([^"]*)" are skipped$`, func(_ string) error {
+	step(sc, `^I see a "SKIPPED" list with exactly these rows$`, w.expectSkippedRows)
+	step(sc, `^the skipped rows are coloured 8$`, w.expectSkippedDim)
+	step(sc, `^the skipped panel shows (\d+) rows, not just the number \d+$`, func(n int) error { return w.expectPanelRowCount(skippedTitle, n) })
+	step(sc, `^the skipped list has (\d+) rows?$`, func(n int) error { return w.expectPanelRowCount(skippedTitle, n) })
+	step(sc, `^the skipped panel is empty$`, func() error { return w.expectPanelRowCount(skippedTitle, 0) })
+	step(sc, `^the rows dated before "([^"]*)" are skipped$`, func(_ string) error {
 		return w.expectPanel(skippedTitle, func(rows []recentRow) error {
 			if len(rows) == 0 {
 				return errors.New("nothing is skipped")
@@ -386,7 +386,7 @@ func registerImportSkippedSteps(sc *godog.ScenarioContext, w *world) {
 			return nil
 		})
 	})
-	sc.Step(`^the rows dated after "([^"]*)" are new$`, func(_ string) error {
+	step(sc, `^the rows dated after "([^"]*)" are new$`, func(_ string) error {
 		return w.expectPanel(rowsTitle, func(rows []recentRow) error {
 			if len(rows) == 0 {
 				return errors.New("nothing is new")
@@ -394,17 +394,17 @@ func registerImportSkippedSteps(sc *godog.ScenarioContext, w *world) {
 			return nil
 		})
 	})
-	sc.Step(`^"([^"]*)" of ([-\d.,]+) on "([^"]*)" is (new|skipped)$`, func(name, amount, date, state string) error {
+	step(sc, `^"([^"]*)" of ([-\d.,]+) on "([^"]*)" is (new|skipped)$`, func(name, amount, date, state string) error {
 		return w.expectRowState(name, amount, date, state)
 	})
-	sc.Step(`^the row "([^"]*)" of ([-\d.,]+) is (new|skipped)$`, func(name, amount, state string) error {
+	step(sc, `^the row "([^"]*)" of ([-\d.,]+) is (new|skipped)$`, func(name, amount, state string) error {
 		return w.expectRowState(name, amount, "", state)
 	})
-	sc.Step(`^the row "([^"]*)" on "([^"]*)" is skipped$`, func(name, date string) error {
+	step(sc, `^the row "([^"]*)" on "([^"]*)" is skipped$`, func(name, date string) error {
 		return w.expectRowState(name, "", date, "skipped")
 	})
-	sc.Step(`^the row "([^"]*)" is new$`, func(name string) error { return w.expectRowState(name, "", "", "new") })
-	sc.Step(`^"([^"]*)" is skipped$`, func(name string) error { return w.expectRowState(name, "", "", "skipped") })
+	step(sc, `^the row "([^"]*)" is new$`, func(name string) error { return w.expectRowState(name, "", "", "new") })
+	step(sc, `^"([^"]*)" is skipped$`, func(name string) error { return w.expectRowState(name, "", "", "skipped") })
 }
 
 // appendToJournal adds text to the end of the main journal.
@@ -463,16 +463,16 @@ func (w *world) downloadDirContains(table *godog.Table) error {
 var sourceTag = regexp.MustCompile(`konto:source:[a-z]+(, )?`)
 
 func registerImportFixtureSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^the XDG download directory contains$`, w.downloadDirContains)
-	sc.Step(`^the XDG download directory does not exist$`, func() error { return os.RemoveAll(w.downloads) })
-	sc.Step(`^hledger fails on CSV conversion$`, func() error {
+	step(sc, `^the XDG download directory contains$`, w.downloadDirContains)
+	step(sc, `^the XDG download directory does not exist$`, func() error { return os.RemoveAll(w.downloads) })
+	step(sc, `^hledger fails on CSV conversion$`, func() error {
 		w.shim.FailCSV = "hledger: simulated CSV conversion failure"
 		return w.writeShim()
 	})
-	sc.Step(`^a file "([^"]*)" in the download directory with random binary content$`, func(name string) error {
+	step(sc, `^a file "([^"]*)" in the download directory with random binary content$`, func(name string) error {
 		return os.WriteFile(filepath.Join(w.downloads, name), []byte("\x00\x9f\x92\x96\xff\xfe\x01\x02\x80"), 0o644)
 	})
-	sc.Step(`^a Postbank CSV without an IBAN line named "([^"]*)"$`, func(name string) error {
+	step(sc, `^a Postbank CSV without an IBAN line named "([^"]*)"$`, func(name string) error {
 		b, err := postbankExport{IBAN: "", ClosingBalance: "1,00", Rows: []postbankRow{
 			{Date: "29.9.2026", Type: "Gutschrift", Payee: "X", Purpose: "x", Amount: "1,00"},
 		}}.render()
@@ -481,13 +481,13 @@ func registerImportFixtureSteps(sc *godog.ScenarioContext, w *world) {
 		}
 		return os.WriteFile(filepath.Join(w.downloads, name), b, 0o644)
 	})
-	sc.Step(`^the journal "([^"]*)" where IBAN ([A-Z0-9]+) is a closed account$`, func(name, _ string) error {
+	step(sc, `^the journal "([^"]*)" where IBAN ([A-Z0-9]+) is a closed account$`, func(name, _ string) error {
 		return w.useJournal(name, "")
 	})
-	sc.Step(`^the journal "([^"]*)" where "([^"]*)" is manual with IBAN ([A-Z0-9]+)$`, func(name, account, iban string) error {
+	step(sc, `^the journal "([^"]*)" where "([^"]*)" is manual with IBAN ([A-Z0-9]+)$`, func(name, account, iban string) error {
 		return w.useJournal(name, "\naccount "+account+"  ; konto:source:manual, konto:iban:"+iban+"\n")
 	})
-	sc.Step(`^the journal "([^"]*)" where "([^"]*)" has no source tag$`, func(name, account string) error {
+	step(sc, `^the journal "([^"]*)" where "([^"]*)" has no source tag$`, func(name, account string) error {
 		if err := w.useJournal(name, ""); err != nil {
 			return err
 		}
@@ -495,19 +495,19 @@ func registerImportFixtureSteps(sc *godog.ScenarioContext, w *world) {
 			return sourceTag.ReplaceAllString(line, "")
 		})
 	})
-	sc.Step(`^the journal "([^"]*)" where the clearing account carries IBAN ([A-Z0-9]+)$`, func(name, iban string) error {
+	step(sc, `^the journal "([^"]*)" where the clearing account carries IBAN ([A-Z0-9]+)$`, func(name, iban string) error {
 		if err := w.useJournal(name, ""); err != nil {
 			return err
 		}
 		return w.editDirective("assets:transfers", func(line string) string { return line + ", konto:iban:" + iban })
 	})
-	sc.Step(`^the journal "([^"]*)" with a later (checking|savings) transaction on ([\d-]+)$`, func(name, which, date string) error {
+	step(sc, `^the journal "([^"]*)" with a later (checking|savings) transaction on ([\d-]+)$`, func(name, which, date string) error {
 		if err := w.useJournal(name, ""); err != nil {
 			return err
 		}
 		return w.laterTransaction("assets:"+which, date)
 	})
-	sc.Step(`^the journal "([^"]*)" with an extra checking transaction on ([\d-]+): description "([^"]*)", category "([^"]*)", amount ([\d,.]+ EUR)$`,
+	step(sc, `^the journal "([^"]*)" with an extra checking transaction on ([\d-]+): description "([^"]*)", category "([^"]*)", amount ([\d,.]+ EUR)$`,
 		func(name, date, description, category, amount string) error {
 			if err := w.useJournal(name, ""); err != nil {
 				return err

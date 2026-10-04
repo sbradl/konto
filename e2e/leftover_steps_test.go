@@ -161,22 +161,22 @@ func (w *world) expectDashboardShows(account, text string) error {
 }
 
 func registerLeftoverSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^the focused input contains "([^"]*)"$`, w.expectFocusedInputHolds)
-	sc.Step(`^I (do not )?see "([^"]*)" in the forecast legend$`, func(not, account string) error {
+	step(sc, `^the focused input contains "([^"]*)"$`, w.expectFocusedInputHolds)
+	step(sc, `^I (do not )?see "([^"]*)" in the forecast legend$`, func(not, account string) error {
 		return w.forecastLegendHas(account, not == "")
 	})
-	sc.Step(`^I do not see "([^"]*)" in the milestone table$`, func(account string) error {
+	step(sc, `^I do not see "([^"]*)" in the milestone table$`, func(account string) error {
 		return w.expectInMilestones(account, false)
 	})
-	sc.Step(`^I see the row table with (\d+) new rows?$`, func(n int) error { return w.expectPanelRowCount(rowsTitle, n) })
-	sc.Step(`^I delete the rule "([^"]*)" in Scheduled$`, w.deleteRuleInScheduled)
-	sc.Step(`^the journal "([^"]*)" where "([^"]*)" is used in a transaction but never declared$`, w.useUndeclaredCash)
-	sc.Step(`^"([^"]*)" has a zero balance$`, func(string) error { return nil }) // the fixture's two transactions cancel
-	sc.Step(`^the journal contains a new "([^"]*)" directive with "([^"]*)"$`, w.expectNewDirective)
-	sc.Step(`^the journal "([^"]*)" where the "([^"]*)" directive lives in included file "([^"]*)"$`, w.useDirectiveInInclude)
-	sc.Step(`^I import "([^"]*)" categorising "([^"]*)" as the transfer to "([^"]*)"$`, w.importAsTransfer)
-	sc.Step(`^no transaction in "([^"]*)" has a counterpart "([^"]*)"$`, w.expectNoCounterpart)
-	sc.Step(`^I open a CSV for the savings IBAN in Import$`, w.openSavingsCSV)
-	sc.Step(`^the net worth is ([\d.,]+ EUR)$`, w.expectNetWorth)
-	sc.Step(`^on the dashboard "([^"]*)" shows "([^"]*)"$`, w.expectDashboardShows)
+	step(sc, `^I see the row table with (\d+) new rows?$`, func(n int) error { return w.expectPanelRowCount(rowsTitle, n) })
+	step(sc, `^I delete the rule "([^"]*)" in Scheduled$`, w.deleteRuleInScheduled)
+	step(sc, `^the journal "([^"]*)" where "([^"]*)" is used in a transaction but never declared$`, w.useUndeclaredCash)
+	step(sc, `^"([^"]*)" has a zero balance$`, func(string) error { return nil }) // the fixture's two transactions cancel
+	step(sc, `^the journal contains a new "([^"]*)" directive with "([^"]*)"$`, w.expectNewDirective)
+	step(sc, `^the journal "([^"]*)" where the "([^"]*)" directive lives in included file "([^"]*)"$`, w.useDirectiveInInclude)
+	step(sc, `^I import "([^"]*)" categorising "([^"]*)" as the transfer to "([^"]*)"$`, w.importAsTransfer)
+	step(sc, `^no transaction in "([^"]*)" has a counterpart "([^"]*)"$`, w.expectNoCounterpart)
+	step(sc, `^I open a CSV for the savings IBAN in Import$`, w.openSavingsCSV)
+	step(sc, `^the net worth is ([\d.,]+ EUR)$`, w.expectNetWorth)
+	step(sc, `^on the dashboard "([^"]*)" shows "([^"]*)"$`, w.expectDashboardShows)
 }

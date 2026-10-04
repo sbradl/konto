@@ -111,13 +111,13 @@ func checkStatusBarLast(lines []string) error {
 }
 
 func registerLayoutSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^every line of the screen is at most (\d+) cells wide$`, func(width int) error {
+	step(sc, `^every line of the screen is at most (\d+) cells wide$`, func(width int) error {
 		return w.expectScreenLines(checkLineWidths(width))
 	})
-	sc.Step(`^the screen has exactly (\d+) lines$`, func(height int) error {
+	step(sc, `^the screen has exactly (\d+) lines$`, func(height int) error {
 		return w.expectScreenLines(checkHeight(height))
 	})
-	sc.Step(`^the status bar is on the last line$`, func() error { return w.expectScreenLines(checkStatusBarLast) })
+	step(sc, `^the status bar is on the last line$`, func() error { return w.expectScreenLines(checkStatusBarLast) })
 }
 
 var quoted = regexp.MustCompile(`"([^"]*)"`)
@@ -148,22 +148,22 @@ func registerChromeSteps(sc *godog.ScenarioContext, w *world) {
 	registerScheduledFormSteps(sc, w)
 	registerLeftoverSteps(sc, w)
 	registerInvariantSteps(sc, w)
-	sc.Step(`^the active tab is "([^"]*)"$`, w.expectActiveTab)
-	sc.Step(`^the active tab is unchanged$`, func() error { return w.expectActiveTab(w.tabAtBaseline) })
-	sc.Step(`^the tab bar shows the journal path and "(\d+)" transactions on the right$`, func(count string) error {
+	step(sc, `^the active tab is "([^"]*)"$`, w.expectActiveTab)
+	step(sc, `^the active tab is unchanged$`, func() error { return w.expectActiveTab(w.tabAtBaseline) })
+	step(sc, `^the tab bar shows the journal path and "(\d+)" transactions on the right$`, func(count string) error {
 		return w.expectLine(0, "tab bar", count, func(line, count string) bool {
 			tabsEnd := strings.Index(line, "5 reports") + len("5 reports")
 			rest := line[tabsEnd:]
 			return strings.Contains(rest, w.journal) && strings.Contains(rest, count)
 		})
 	})
-	sc.Step(`^the tab bar does not show a check status$`, func() error {
+	step(sc, `^the tab bar does not show a check status$`, func() error {
 		return w.expectLine(0, "tab bar", "●", func(line, marker string) bool { return !strings.Contains(line, marker) })
 	})
 }
 
 func registerRefreshSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^I append this to the journal externally:$`, func(text *godog.DocString) error {
+	step(sc, `^I append this to the journal externally:$`, func(text *godog.DocString) error {
 		f, err := os.OpenFile(w.journal, os.O_APPEND|os.O_WRONLY, 0o644)
 		if err != nil {
 			return err
@@ -171,7 +171,7 @@ func registerRefreshSteps(sc *godog.ScenarioContext, w *world) {
 		_, werr := f.WriteString("\n" + text.Content + "\n")
 		return errors.Join(werr, f.Close())
 	})
-	sc.Step(`^I append a transaction to the journal externally$`, func() error {
+	step(sc, `^I append a transaction to the journal externally$`, func() error {
 		f, err := os.OpenFile(w.journal, os.O_APPEND|os.O_WRONLY, 0o644)
 		if err != nil {
 			return err
@@ -180,23 +180,23 @@ func registerRefreshSteps(sc *godog.ScenarioContext, w *world) {
 		_, werr := f.WriteString(txn)
 		return errors.Join(werr, f.Close())
 	})
-	sc.Step(`^the new transaction appears after refresh$`, func() error {
+	step(sc, `^the new transaction appears after refresh$`, func() error {
 		return w.expectLine(0, "tab bar", "55 txns", strings.Contains)
 	})
-	sc.Step(`^the status bar shows a spinner$`, func() error {
+	step(sc, `^the status bar shows a spinner$`, func() error {
 		return w.expectLine(-1, "status bar", "⣾", strings.Contains)
 	})
-	sc.Step(`^the status bar shows an error indicator$`, func() error {
+	step(sc, `^the status bar shows an error indicator$`, func() error {
 		return w.expectLine(-1, "status bar", "✗", strings.Contains)
 	})
-	sc.Step(`^(?:the current panels stay rendered|the previous balances are still shown)$`, func() error {
+	step(sc, `^(?:the current panels stay rendered|the previous balances are still shown)$`, func() error {
 		return w.expectLine(0, "tab bar", "54 txns", strings.Contains)
 	})
 }
 
 func registerStatusBarSteps(sc *godog.ScenarioContext, w *world) {
 	registerRefreshSteps(sc, w)
-	sc.Step(`^the status bar hint lists ((?:"[^"]*" ?)+)$`, func(list string) error {
+	step(sc, `^the status bar hint lists ((?:"[^"]*" ?)+)$`, func(list string) error {
 		for _, match := range quoted.FindAllStringSubmatch(list, -1) {
 			if err := w.expectLine(-1, "status bar", match[1], strings.Contains); err != nil {
 				return err
@@ -207,7 +207,7 @@ func registerStatusBarSteps(sc *godog.ScenarioContext, w *world) {
 }
 
 func registerThemeSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^no cell sets a background colour except the selected row and the popup$`, func() error {
+	step(sc, `^no cell sets a background colour except the selected row and the popup$`, func() error {
 		s, err := w.session()
 		if err != nil {
 			return err

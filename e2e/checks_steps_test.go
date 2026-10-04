@@ -193,35 +193,35 @@ func (w *world) expectSelectionVisible() error {
 }
 
 func registerChecksPanelSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^I see "([^"]*)" and "([^"]*)" in the checks panel$`, func(a, b string) error {
+	step(sc, `^I see "([^"]*)" and "([^"]*)" in the checks panel$`, func(a, b string) error {
 		return w.expectPopupContains("checks", []string{a, b})
 	})
-	sc.Step(`^the all-pass line is coloured dim-green$`, func() error { return w.expectColour("✓ all", 2) })
-	sc.Step(`^the checks panel has no "([^"]*)" rows$`, func(text string) error { return w.expectNotInPopup(text) })
-	sc.Step(`^the checks panel has exactly (\d+) rows?$`, w.expectRowCount)
-	sc.Step(`^the row shows severity "([^"]*)", check "([^"]*)" and a "file:(\d+)" reference$`, w.expectRowShows)
-	sc.Step(`^the checks panel has a row for check "([^"]*)"$`, func(check string) error {
+	step(sc, `^the all-pass line is coloured dim-green$`, func() error { return w.expectColour("✓ all", 2) })
+	step(sc, `^the checks panel has no "([^"]*)" rows$`, func(text string) error { return w.expectNotInPopup(text) })
+	step(sc, `^the checks panel has exactly (\d+) rows?$`, w.expectRowCount)
+	step(sc, `^the row shows severity "([^"]*)", check "([^"]*)" and a "file:(\d+)" reference$`, w.expectRowShows)
+	step(sc, `^the checks panel has a row for check "([^"]*)"$`, func(check string) error {
 		row, err := w.panelRow(check)
 		w.focusedRow = row
 		return err
 	})
-	sc.Step(`^its severity is "([^"]*)"$`, func(severity string) error {
+	step(sc, `^its severity is "([^"]*)"$`, func(severity string) error {
 		if !strings.Contains(w.focusedRow, severity) {
 			return fmt.Errorf("row %q does not have severity %s", w.focusedRow, severity)
 		}
 		return nil
 	})
-	sc.Step(`^the (first|second|last) row is selected$`, w.expectPanelSelection)
-	sc.Step(`^the (second) row is selected with background (\d+) and foreground (\d+)$`, w.expectSelectedColours)
-	sc.Step(`^the panel is no taller than (\d+) lines$`, w.expectPanelHeightAtMost)
-	sc.Step(`^I can reach the last row with "↓"$`, w.reachLastRow)
-	sc.Step(`^the selected row is always visible$`, w.expectSelectionVisible)
+	step(sc, `^the (first|second|last) row is selected$`, w.expectPanelSelection)
+	step(sc, `^the (second) row is selected with background (\d+) and foreground (\d+)$`, w.expectSelectedColours)
+	step(sc, `^the panel is no taller than (\d+) lines$`, w.expectPanelHeightAtMost)
+	step(sc, `^I can reach the last row with "↓"$`, w.reachLastRow)
+	step(sc, `^the selected row is always visible$`, w.expectSelectionVisible)
 }
 
 func registerChecksRunSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^konto ran (\d+) separate "hledger check" invocations$`, w.expectCheckInvocations)
-	sc.Step(`^each invocation named exactly one check$`, w.expectOneCheckEach)
-	sc.Step(`^the checks run are ((?:"[^"]*" ?)+)$`, func(list string) error { return w.expectChecksRun(quotedList(list)) })
+	step(sc, `^konto ran (\d+) separate "hledger check" invocations$`, w.expectCheckInvocations)
+	step(sc, `^each invocation named exactly one check$`, w.expectOneCheckEach)
+	step(sc, `^the checks run are ((?:"[^"]*" ?)+)$`, func(list string) error { return w.expectChecksRun(quotedList(list)) })
 }
 
 // lineEnding matches a posting's balance assertion.
@@ -280,21 +280,21 @@ func (w *world) expectEditorOpenedIncluded(include string) error {
 }
 
 func registerWarningFixtureSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^the journal "([^"]*)" with (\d+|one) (?:warnings?|unclassified accounts?)$`, func(name, n string) error {
+	step(sc, `^the journal "([^"]*)" with (\d+|one) (?:warnings?|unclassified accounts?)$`, func(name, n string) error {
 		count := 1
 		if n != "one" {
 			_, _ = fmt.Sscanf(n, "%d", &count)
 		}
 		return w.warnings(name, count)
 	})
-	sc.Step(`^the journal "([^"]*)" with a wrong assertion "= ([^"]*)" on the last "([^"]*)" posting$`,
+	step(sc, `^the journal "([^"]*)" with a wrong assertion "= ([^"]*)" on the last "([^"]*)" posting$`,
 		func(name, wrong, account string) error {
 			if err := w.useJournal(name, ""); err != nil {
 				return err
 			}
 			return w.editLastPosting(account, func(line string) string { return assertionSuffix.ReplaceAllString(line, " = "+wrong) })
 		})
-	sc.Step(`^the journal "([^"]*)" without the assertion on the last "([^"]*)" transaction$`, func(name, account string) error {
+	step(sc, `^the journal "([^"]*)" without the assertion on the last "([^"]*)" transaction$`, func(name, account string) error {
 		if err := w.useJournal(name, ""); err != nil {
 			return err
 		}
@@ -304,14 +304,14 @@ func registerWarningFixtureSteps(sc *godog.ScenarioContext, w *world) {
 
 func registerChecksFixtureSteps(sc *godog.ScenarioContext, w *world) {
 	registerWarningFixtureSteps(sc, w)
-	sc.Step(`^the journal "minimal" with two undeclared accounts on different lines$`, func() error {
+	step(sc, `^the journal "minimal" with two undeclared accounts on different lines$`, func() error {
 		return w.useJournal("minimal", twoUndeclared)
 	})
-	sc.Step(`^the journal "([^"]*)" includes "([^"]*)" with the issue in it$`, w.includeWithIssue)
-	sc.Step(`^a journal containing an unbalanced transaction$`, func() error {
+	step(sc, `^the journal "([^"]*)" includes "([^"]*)" with the issue in it$`, w.includeWithIssue)
+	step(sc, `^a journal containing an unbalanced transaction$`, func() error {
 		return w.useJournal("minimal", "\n2026-09-01 Broken\n    expenses:x  1,00 EUR\n    assets:transfers  -2,00 EUR\n")
 	})
-	sc.Step(`^the checks panel lists (?:only )?the (first|second) undeclared account$`, func(which string) error {
+	step(sc, `^the checks panel lists (?:only )?the (first|second) undeclared account$`, func(which string) error {
 		want, other := "expenses:first", "expenses:second"
 		if which == "second" {
 			want, other = other, want
@@ -324,7 +324,7 @@ func registerChecksFixtureSteps(sc *godog.ScenarioContext, w *world) {
 			return nil
 		})
 	})
-	sc.Step(`^I fix that account externally and press "r"$`, func() error {
+	step(sc, `^I fix that account externally and press "r"$`, func() error {
 		if err := w.declare("account expenses:first"); err != nil {
 			return err
 		}
@@ -388,15 +388,15 @@ func (w *world) expectEditorNotCalled() error {
 }
 
 func registerChecksEditorSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^EDITOR is a stub that declares "([^"]*)" in the journal$`, func(account string) error {
+	step(sc, `^EDITOR is a stub that declares "([^"]*)" in the journal$`, func(account string) error {
 		return w.editorStub(`printf '\naccount ` + account + `\n' >> "` + w.journal + `"`)
 	})
-	sc.Step(`^VISUAL is a stub recording its arguments$`, w.visualStub)
-	sc.Step(`^the VISUAL stub was called$`, w.expectVisualCalled)
-	sc.Step(`^the EDITOR stub was not called$`, w.expectEditorNotCalled)
-	sc.Step(`^a full refresh happened$`, w.expectFullRefresh)
-	sc.Step(`^the terminal left the alternate screen while the editor ran$`, w.expectLeftAlternateScreen)
-	sc.Step(`^after the editor exits I see the tab bar again$`, func() error { return w.expectScreen(true, tabBarMarker) })
+	step(sc, `^VISUAL is a stub recording its arguments$`, w.visualStub)
+	step(sc, `^the VISUAL stub was called$`, w.expectVisualCalled)
+	step(sc, `^the EDITOR stub was not called$`, w.expectEditorNotCalled)
+	step(sc, `^a full refresh happened$`, w.expectFullRefresh)
+	step(sc, `^the terminal left the alternate screen while the editor ran$`, w.expectLeftAlternateScreen)
+	step(sc, `^after the editor exits I see the tab bar again$`, func() error { return w.expectScreen(true, tabBarMarker) })
 }
 
 func registerChecksSteps(sc *godog.ScenarioContext, w *world) {

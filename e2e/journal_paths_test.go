@@ -45,7 +45,7 @@ func (w *world) startWithSources(invocation string) error {
 }
 
 func registerJournalPathSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^journals exist at (.+)$`, func(sources string) error {
+	step(sc, `^journals exist at (.+)$`, func(sources string) error {
 		for source := range strings.SplitSeq(sources, ", ") {
 			if err := os.WriteFile(w.sourcePath(source), []byte("; "+source+"\n"), 0o644); err != nil {
 				return err
@@ -53,19 +53,19 @@ func registerJournalPathSteps(sc *godog.ScenarioContext, w *world) {
 		}
 		return nil
 	})
-	sc.Step(`^I start konto with (--file flag and \$LEDGER_FILE set|only \$LEDGER_FILE set|nothing set)$`, w.startWithSources)
-	sc.Step(`^a journal "([^"]*)" at "([^"]*)"$`, func(name, path string) error {
+	step(sc, `^I start konto with (--file flag and \$LEDGER_FILE set|only \$LEDGER_FILE set|nothing set)$`, w.startWithSources)
+	step(sc, `^a journal "([^"]*)" at "([^"]*)"$`, func(name, path string) error {
 		content, err := os.ReadFile(w.fixture(name + ".journal"))
 		if err != nil {
 			return err
 		}
 		return os.WriteFile(filepath.Join(w.dir, path), content, 0o644)
 	})
-	sc.Step(`^the tab bar shows an absolute path ending in "([^"]*)"$`, func(suffix string) error {
+	step(sc, `^the tab bar shows an absolute path ending in "([^"]*)"$`, func(suffix string) error {
 		absolute := regexp.MustCompile(`\s/\S*` + regexp.QuoteMeta(suffix) + `(\s|$)`)
 		return w.expectLine(0, "tab bar", "", func(line, _ string) bool { return absolute.MatchString(line) })
 	})
-	sc.Step(`^the tab bar shows the path of (flag|env|default)$`, func(winner string) error {
+	step(sc, `^the tab bar shows the path of (flag|env|default)$`, func(winner string) error {
 		if winner == "default" {
 			winner = sourceDefault
 		}

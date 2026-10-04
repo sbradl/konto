@@ -125,23 +125,23 @@ func (w *world) expectStatusBarContents() error {
 }
 
 func registerChromeExtraSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^the status bar shows the view name, a hint, the check status and "\? keys"$`, w.expectStatusBarContents)
-	sc.Step(`^the indicator is coloured (\d+)$`, w.expectIndicatorColour)
-	sc.Step(`^the status bar does not show a mode badge$`, w.expectNoModeBadge)
-	sc.Step(`^a panel title is coloured (\d+)$`, w.expectPanelTitleColour)
-	sc.Step(`^the selected row has background (\d+) and foreground (\d+)$`, w.expectSelectedRowColours)
-	sc.Step(`^the dashboard fills (\d+)×(\d+)$`, w.expectFillsTerminal)
-	sc.Step(`^neither VISUAL nor EDITOR is set$`, w.useDefaultEditor)
-	sc.Step(`^a default editor is started with "(.*)"$`, w.expectEditorCall)
-	sc.Step(`^the Accounts cursor is on row (\d+)$`, func(row int) error {
+	step(sc, `^the status bar shows the view name, a hint, the check status and "\? keys"$`, w.expectStatusBarContents)
+	step(sc, `^the indicator is coloured (\d+)$`, w.expectIndicatorColour)
+	step(sc, `^the status bar does not show a mode badge$`, w.expectNoModeBadge)
+	step(sc, `^a panel title is coloured (\d+)$`, w.expectPanelTitleColour)
+	step(sc, `^the selected row has background (\d+) and foreground (\d+)$`, w.expectSelectedRowColours)
+	step(sc, `^the dashboard fills (\d+)×(\d+)$`, w.expectFillsTerminal)
+	step(sc, `^neither VISUAL nor EDITOR is set$`, w.useDefaultEditor)
+	step(sc, `^a default editor is started with "(.*)"$`, w.expectEditorCall)
+	step(sc, `^the Accounts cursor is on row (\d+)$`, func(row int) error {
 		return w.expectLine(-1, "status bar", fmt.Sprintf("%d/", row), func(line, text string) bool {
 			return strings.Contains(line, " "+text)
 		})
 	})
-	sc.Step(`^the status bar shows a row position$`, func() error {
+	step(sc, `^the status bar shows a row position$`, func() error {
 		return w.expectLine(-1, "status bar", "", func(line, _ string) bool { return rowPosition.MatchString(line) })
 	})
-	sc.Step(`^the status bar does not show a row position$`, func() error {
+	step(sc, `^the status bar does not show a row position$`, func() error {
 		return w.expectLine(-1, "status bar", "", func(line, _ string) bool { return !rowPosition.MatchString(line) })
 	})
 }

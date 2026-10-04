@@ -678,8 +678,8 @@ func registerForecastSteps(sc *godog.ScenarioContext, w *world) {
 }
 
 func registerForecastChartSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^I see exactly (\d+) charts? titled ((?:"[^"]*"\s*)+)$`, w.expectChartTitles)
-	sc.Step(`^the chart is drawn with braille characters$`, func() error {
+	step(sc, `^I see exactly (\d+) charts? titled ((?:"[^"]*"\s*)+)$`, w.expectChartTitles)
+	step(sc, `^the chart is drawn with braille characters$`, func() error {
 		return w.eventually(func() error {
 			if strings.IndexFunc(w.s.screenText(), isBraille) < 0 {
 				return errors.New("no braille on screen")
@@ -687,14 +687,14 @@ func registerForecastChartSteps(sc *godog.ScenarioContext, w *world) {
 			return nil
 		})
 	})
-	sc.Step(`^the EUR chart has lines for$`, func(table *godog.Table) error {
+	step(sc, `^the EUR chart has lines for$`, func(table *godog.Table) error {
 		accounts := make([]string, len(table.Rows))
 		for i, row := range table.Rows {
 			accounts[i] = strings.TrimSpace(row.Cells[0].Value)
 		}
 		return w.expectChartLines("EUR", accounts, false)
 	})
-	sc.Step(`^the EUR chart has exactly (\d+) lines$`, func(n int) error {
+	step(sc, `^the EUR chart has exactly (\d+) lines$`, func(n int) error {
 		return w.onChart("EUR", func(chart screenPanel) error {
 			if got := len(chart.legend()); got != n {
 				return fmt.Errorf("the EUR chart has %d lines, want %d", got, n)
@@ -702,17 +702,17 @@ func registerForecastChartSteps(sc *godog.ScenarioContext, w *world) {
 			return nil
 		})
 	})
-	sc.Step(`^the "([^"]*)" chart has a line for "([^"]*)"$`, func(title, account string) error {
+	step(sc, `^the "([^"]*)" chart has a line for "([^"]*)"$`, func(title, account string) error {
 		return w.expectChartLines(title, []string{account}, false)
 	})
-	sc.Step(`^the "([^"]*)" chart has no line for "([^"]*)"$`, w.expectChartLacksLine)
-	sc.Step(`^the charts are stacked vertically$`, w.expectStacked)
-	sc.Step(`^every chart is fully visible$`, w.expectFullyVisible)
+	step(sc, `^the "([^"]*)" chart has no line for "([^"]*)"$`, w.expectChartLacksLine)
+	step(sc, `^the charts are stacked vertically$`, w.expectStacked)
+	step(sc, `^every chart is fully visible$`, w.expectFullyVisible)
 }
 
 func registerForecastLineSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^the legend entry "([^"]*)" is coloured (\d+)$`, w.expectLegendColour)
-	sc.Step(`^the legend colours follow the order ([\d, ]+)$`, func(order string) error {
+	step(sc, `^the legend entry "([^"]*)" is coloured (\d+)$`, w.expectLegendColour)
+	step(sc, `^the legend colours follow the order ([\d, ]+)$`, func(order string) error {
 		fields := strings.Split(order, ",")
 		colours := make([]int, len(fields))
 		for i, field := range fields {
@@ -720,45 +720,45 @@ func registerForecastLineSteps(sc *godog.ScenarioContext, w *world) {
 		}
 		return w.expectLegendColourOrder(colours)
 	})
-	sc.Step(`^I see a legend below the "([^"]*)" chart listing every line's account name$`, func(title string) error {
+	step(sc, `^I see a legend below the "([^"]*)" chart listing every line's account name$`, func(title string) error {
 		return w.expectChartLines(title,
 			[]string{"assets:checking", "assets:savings", "assets:spare", "liabilities:creditcard"}, true)
 	})
-	sc.Step(`^the EUR chart's x-range starts six months before today$`, w.expectXRange)
-	sc.Step(`^it ends twelve months after today$`, func() error { return nil }) // the same labels row says both
-	sc.Step(`^the EUR chart has a vertical line coloured 8 at the column for ([\d-]+)$`, w.expectTodayLine)
-	sc.Step(`^the forecast y-axis labels are formatted in thousands$`, w.expectYLabelsInThousands)
-	sc.Step(`^the checking line at ([\d-]+) is at ([\d.,]+ EUR)$`, func(month, value string) error {
+	step(sc, `^the EUR chart's x-range starts six months before today$`, w.expectXRange)
+	step(sc, `^it ends twelve months after today$`, func() error { return nil }) // the same labels row says both
+	step(sc, `^the EUR chart has a vertical line coloured 8 at the column for ([\d-]+)$`, w.expectTodayLine)
+	step(sc, `^the forecast y-axis labels are formatted in thousands$`, w.expectYLabelsInThousands)
+	step(sc, `^the checking line at ([\d-]+) is at ([\d.,]+ EUR)$`, func(month, value string) error {
 		return w.expectLineValue("assets:checking", month, value)
 	})
-	sc.Step(`^the "([^"]*)" line is flat$`, w.expectLineFlat)
+	step(sc, `^the "([^"]*)" line is flat$`, w.expectLineFlat)
 }
 
 func registerForecastTableSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^the milestone table header is ((?:"[^"]*"\s*)+)$`, func(list string) error {
+	step(sc, `^the milestone table header is ((?:"[^"]*"\s*)+)$`, func(list string) error {
 		return w.expectMilestoneHeader(quotedTexts(list))
 	})
-	sc.Step(`^the milestone table has the groups ((?:"[^"]*"\s*)+)$`, func(list string) error {
+	step(sc, `^the milestone table has the groups ((?:"[^"]*"\s*)+)$`, func(list string) error {
 		return w.expectGroups(quotedTexts(list))
 	})
-	sc.Step(`^the milestone row "([^"]*)" (?:still )?shows ((?:"[^"]*"\s*)+)$`, func(account, list string) error {
+	step(sc, `^the milestone row "([^"]*)" (?:still )?shows ((?:"[^"]*"\s*)+)$`, func(account, list string) error {
 		return w.expectMilestones(account, quotedTexts(list))
 	})
-	sc.Step(`^"([^"]*)" in the milestone row "([^"]*)" is coloured (\d+)$`, w.expectMilestoneColour)
-	sc.Step(`^the milestone table has no "([^"]*)" row$`, func(text string) error { return w.expectMilestoneText(false, text) })
-	sc.Step(`^the milestone table has no row "([^"]*)"$`, func(account string) error {
+	step(sc, `^"([^"]*)" in the milestone row "([^"]*)" is coloured (\d+)$`, w.expectMilestoneColour)
+	step(sc, `^the milestone table has no "([^"]*)" row$`, func(text string) error { return w.expectMilestoneText(false, text) })
+	step(sc, `^the milestone table has no row "([^"]*)"$`, func(account string) error {
 		return w.expectMilestoneText(false, account)
 	})
-	sc.Step(`^the "today" figure of "([^"]*)" differs from its journal balance of ([\d.,]+ EUR)$`, func(account, balance string) error {
+	step(sc, `^the "today" figure of "([^"]*)" differs from its journal balance of ([\d.,]+ EUR)$`, func(account, balance string) error {
 		return w.expectMilestoneToday(account, balance, false)
 	})
-	sc.Step(`^the "today" figure of "([^"]*)" is "([^"]*)"$`, func(account, figure string) error {
+	step(sc, `^the "today" figure of "([^"]*)" is "([^"]*)"$`, func(account, figure string) error {
 		return w.expectMilestoneToday(account, figure, true)
 	})
 }
 
 func registerForecastStateSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^the charts show no total line$`, func() error {
+	step(sc, `^the charts show no total line$`, func() error {
 		return w.onForecast(func(panels []screenPanel) error {
 			for _, panel := range panels {
 				if isChart(panel) && strings.Contains(strings.ToLower(strings.Join(panel.accounts(), " ")), "total") {
@@ -768,16 +768,16 @@ func registerForecastStateSteps(sc *godog.ScenarioContext, w *world) {
 			return nil
 		})
 	})
-	sc.Step(`^I do not see "net worth" on the forecast view$`, func() error { return w.expectViewLacks("net worth") })
-	sc.Step(`^I do not see "([^"]*)" or "([^"]*)" or "([^"]*)" or "([^"]*)" or "([^"]*)"$`, func(a, b, c, d, e string) error {
+	step(sc, `^I do not see "net worth" on the forecast view$`, func() error { return w.expectViewLacks("net worth") })
+	step(sc, `^I do not see "([^"]*)" or "([^"]*)" or "([^"]*)" or "([^"]*)" or "([^"]*)"$`, func(a, b, c, d, e string) error {
 		return w.expectViewLacks(a, b, c, d, e)
 	})
-	sc.Step(`^no value on the screen is a converted amount$`, func() error { return w.expectViewLacks("≈", "converted", "rate") })
-	sc.Step(`^I append a rule externally:$`, func(doc *godog.DocString) error { return w.appendRule(doc.Content) })
-	sc.Step(`^the journal "([^"]*)" with a manual account "([^"]*)" holding ([\d,]+ EUR) from ([\d-]+) and the rule "((?s:.*))"$`,
+	step(sc, `^no value on the screen is a converted amount$`, func() error { return w.expectViewLacks("≈", "converted", "rate") })
+	step(sc, `^I append a rule externally:$`, func(doc *godog.DocString) error { return w.appendRule(doc.Content) })
+	step(sc, `^the journal "([^"]*)" with a manual account "([^"]*)" holding ([\d,]+ EUR) from ([\d-]+) and the rule "((?s:.*))"$`,
 		w.useManualAccount)
-	sc.Step(`^no Recent row is dated after "([^"]*)"$`, w.expectNoRecentAfter)
-	sc.Step(`^I see a message that there is nothing to forecast$`, func() error {
+	step(sc, `^no Recent row is dated after "([^"]*)"$`, w.expectNoRecentAfter)
+	step(sc, `^I see a message that there is nothing to forecast$`, func() error {
 		return w.expectScreen(true, "nothing to forecast")
 	})
 }

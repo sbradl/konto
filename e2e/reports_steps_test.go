@@ -367,51 +367,51 @@ func (w *world) statementShows(t *godog.Table) error { return w.expectTableShows
 func (w *world) anyNoHighlight(int) error { return w.expectNoHighlightInBody() }
 
 func registerReportsTableSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^the report period reads "([^"]*)"$`, w.expectPeriod)
-	sc.Step(`^the balance sheet shows$`, w.sheetShows)
-	sc.Step(`^the income statement shows$`, w.statementShows)
-	sc.Step(`^the balance sheet shows "([^"]*)" with "([^"]*)"$`, w.sheetRowHolds)
-	sc.Step(`^"([^"]*)" shows the balance "([^"]*)"$`, w.sheetRowHolds)
-	sc.Step(`^the balance of "([^"]*)" is "([^"]*)"$`, w.sheetRowHolds)
-	sc.Step(`^the balance sheet lists "([^"]*)" with "([^"]*)"$`, w.sheetRowHolds)
-	sc.Step(`^the balance sheet's grand total shows "([^"]*)"$`, w.netWorthShows)
-	sc.Step(`^the balance sheet has no "([^"]*)" column$`, w.sheetColumnAbsent)
-	sc.Step(`^the balance sheet does not list "([^"]*)"$`, w.sheetNotListed)
-	sc.Step(`^the balance of "([^"]*)" shows "([^"]*)" or all its currencies$`, w.expectWalletCurrencies)
+	step(sc, `^the report period reads "([^"]*)"$`, w.expectPeriod)
+	step(sc, `^the balance sheet shows$`, w.sheetShows)
+	step(sc, `^the income statement shows$`, w.statementShows)
+	step(sc, `^the balance sheet shows "([^"]*)" with "([^"]*)"$`, w.sheetRowHolds)
+	step(sc, `^"([^"]*)" shows the balance "([^"]*)"$`, w.sheetRowHolds)
+	step(sc, `^the balance of "([^"]*)" is "([^"]*)"$`, w.sheetRowHolds)
+	step(sc, `^the balance sheet lists "([^"]*)" with "([^"]*)"$`, w.sheetRowHolds)
+	step(sc, `^the balance sheet's grand total shows "([^"]*)"$`, w.netWorthShows)
+	step(sc, `^the balance sheet has no "([^"]*)" column$`, w.sheetColumnAbsent)
+	step(sc, `^the balance sheet does not list "([^"]*)"$`, w.sheetNotListed)
+	step(sc, `^the balance of "([^"]*)" shows "([^"]*)" or all its currencies$`, w.expectWalletCurrencies)
 }
 
 func registerReportsStatementSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^the income statement does not list "([^"]*)" or "([^"]*)"$`, w.statementNotListedEither)
-	sc.Step(`^the income statement does not list "([^"]*)"$`, w.statementNotListed)
-	sc.Step(`^the income statement total income is "([^"]*)"$`, w.totalIncome)
-	sc.Step(`^the income statement total expenses is "([^"]*)"$`, w.totalExpenses)
-	sc.Step(`^the income statement net is "([^"]*)"$`, w.expectIncomeNet)
-	sc.Step(`^the income statement is empty$`, w.statementIsEmpty)
-	sc.Step(`^the income statement has exactly 2 columns$`, func() error { return w.statementRowsLack("Δ%") })
-	sc.Step(`^I do not see "%" in the income statement$`, func() error { return w.statementRowsLack("%") })
+	step(sc, `^the income statement does not list "([^"]*)" or "([^"]*)"$`, w.statementNotListedEither)
+	step(sc, `^the income statement does not list "([^"]*)"$`, w.statementNotListed)
+	step(sc, `^the income statement total income is "([^"]*)"$`, w.totalIncome)
+	step(sc, `^the income statement total expenses is "([^"]*)"$`, w.totalExpenses)
+	step(sc, `^the income statement net is "([^"]*)"$`, w.expectIncomeNet)
+	step(sc, `^the income statement is empty$`, w.statementIsEmpty)
+	step(sc, `^the income statement has exactly 2 columns$`, func() error { return w.statementRowsLack("Δ%") })
+	step(sc, `^I do not see "%" in the income statement$`, func() error { return w.statementRowsLack("%") })
 }
 
 func registerReportsStyleSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^"([^"]*)" in the Δ column of "([^"]*)" is coloured (\d+)$`, w.sheetDelta)
-	sc.Step(`^the Δ of "([^"]*)" is "([^"]*)" coloured (\d+)$`, func(label, figure string, colour int) error {
+	step(sc, `^"([^"]*)" in the Δ column of "([^"]*)" is coloured (\d+)$`, w.sheetDelta)
+	step(sc, `^the Δ of "([^"]*)" is "([^"]*)" coloured (\d+)$`, func(label, figure string, colour int) error {
 		return w.sheetDelta(figure, label, colour)
 	})
-	sc.Step(`^the section header "([^"]*)" is coloured (\d+) and bold$`, w.expectHeaderStyle)
-	sc.Step(`^the liability balance "([^"]*)" is coloured (\d+)$`, w.liabilityColour)
-	sc.Step(`^the grand total is bright white$`, w.grandTotalWhite)
+	step(sc, `^the section header "([^"]*)" is coloured (\d+) and bold$`, w.expectHeaderStyle)
+	step(sc, `^the liability balance "([^"]*)" is coloured (\d+)$`, w.liabilityColour)
+	step(sc, `^the grand total is bright white$`, w.grandTotalWhite)
 }
 
 func registerReportsLayoutSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^the journal "([^"]*)" with (\d+) expense categories used this month$`, w.useManyCategories)
-	sc.Step(`^both tables have scrolled by 3 rows$`, w.expectBothTablesScrolled)
-	sc.Step(`^the first row of each table is visible$`, w.expectFirstRowsVisible)
-	sc.Step(`^the last row of each table is visible$`, w.expectLastRowsVisible)
-	sc.Step(`^the tables end with "… N more" where N > 0$`, w.expectTablesOverflow)
-	sc.Step(`^no row is highlighted with background (\d+)$`, w.anyNoHighlight)
-	sc.Step(`^I see no figure dated after "([^"]*)"$`, w.expectNoDateAfter)
-	sc.Step(`^I see "([^"]*)" and "([^"]*)" on the same screen row$`, w.expectSameRow)
-	sc.Step(`^I do not see "([^"]*)" or "([^"]*)" or "([^"]*)" or "([^"]*)"$`, w.expectNoneOf)
-	sc.Step(`^I do not see the word "([^"]*)"$`, func(word string) error { return w.expectScreen(false, word) })
+	step(sc, `^the journal "([^"]*)" with (\d+) expense categories used this month$`, w.useManyCategories)
+	step(sc, `^both tables have scrolled by 3 rows$`, w.expectBothTablesScrolled)
+	step(sc, `^the first row of each table is visible$`, w.expectFirstRowsVisible)
+	step(sc, `^the last row of each table is visible$`, w.expectLastRowsVisible)
+	step(sc, `^the tables end with "… N more" where N > 0$`, w.expectTablesOverflow)
+	step(sc, `^no row is highlighted with background (\d+)$`, w.anyNoHighlight)
+	step(sc, `^I see no figure dated after "([^"]*)"$`, w.expectNoDateAfter)
+	step(sc, `^I see "([^"]*)" and "([^"]*)" on the same screen row$`, w.expectSameRow)
+	step(sc, `^I do not see "([^"]*)" or "([^"]*)" or "([^"]*)" or "([^"]*)"$`, w.expectNoneOf)
+	step(sc, `^I do not see the word "([^"]*)"$`, func(word string) error { return w.expectScreen(false, word) })
 }
 
 func registerReportsSteps(sc *godog.ScenarioContext, w *world) {

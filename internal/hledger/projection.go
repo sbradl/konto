@@ -17,6 +17,7 @@ type multiPeriodReport struct {
 		Contents string `json:"contents"`
 	} `json:"prDates"`
 	Rows []struct {
+		Name    string         `json:"prrName"`
 		Amounts [][]jsonAmount `json:"prrAmounts"`
 	} `json:"prRows"`
 }

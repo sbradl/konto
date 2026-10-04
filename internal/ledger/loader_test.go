@@ -6,7 +6,6 @@ import (
 	"reflect"
 	"slices"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -18,7 +17,7 @@ type fakeGateway struct {
 	accounts     []domain.Account
 	err          error
 	balancesErr  error
-	activity     []domain.Account
+	months       [][]domain.Account // nil: seven months without activity
 	activityErr  error
 	upcoming     []domain.Transaction
 	upcomingErr  error
@@ -32,25 +31,22 @@ func (f fakeGateway) Print(context.Context) ([]domain.Transaction, error) {
 	return f.transactions, f.err
 }
 
-func (f fakeGateway) PeriodActivity(context.Context, time.Time, time.Time) ([]domain.Account, error) {
-	return f.activity, f.activityErr
+func (f fakeGateway) MonthlyActivity(context.Context, time.Time, time.Time) ([][]domain.Account, error) {
+	if f.months == nil && f.activityErr == nil {
+		return make([][]domain.Account, spendMonths+1), nil
+	}
+	return f.months, f.activityErr
 }
 
-// periodRecorder notes the period the loader asked for.
+// periodRecorder notes the period the loader asked the monthly report for.
 type periodRecorder struct {
 	fakeGateway
-	mu          sync.Mutex
 	first, last time.Time
 }
 
-// PeriodActivity keeps the latest period asked for: the month to date, the spend history lying before it.
-func (p *periodRecorder) PeriodActivity(_ context.Context, first, last time.Time) ([]domain.Account, error) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if first.After(p.first) {
-		p.first, p.last = first, last
-	}
-	return p.activity, nil
+func (p *periodRecorder) MonthlyActivity(ctx context.Context, first, last time.Time) ([][]domain.Account, error) {
+	p.first, p.last = first, last
+	return p.fakeGateway.MonthlyActivity(ctx, first, last)
 }
 
 var sept30 = func() time.Time { return time.Date(2026, 9, 30, 15, 0, 0, 0, time.UTC) }
@@ -182,7 +178,8 @@ func eur(mantissa int64) domain.MultiAmount {
 // The month to date runs from the first of today's month through today; income is shown as a positive figure.
 func TestLoadSummarisesTheMonthToDate(t *testing.T) {
 	gw := &periodRecorder{}
-	gw.activity = []domain.Account{
+	gw.months = make([][]domain.Account, spendMonths+1)
+	gw.months[spendMonths] = []domain.Account{
 		{Name: "income:salary", Balance: eur(-300000)},
 		{Name: "expenses:rent", Balance: eur(90000)},
 		{Name: "expenses:groceries", Balance: eur(25000)},
@@ -194,8 +191,8 @@ func TestLoadSummarisesTheMonthToDate(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if want := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC); !gw.first.Equal(want) || gw.last.Day() != 30 {
-		t.Errorf("period = %v to %v, want 2026-09-01 through 2026-09-30", gw.first, gw.last)
+	if want := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC); !gw.first.Equal(want) || gw.last.Day() != 30 {
+		t.Errorf("period = %v to %v, want 2026-03-01 through 2026-09-30", gw.first, gw.last)
 	}
 	month := got.Month
 	if month.Month != time.September || month.Income[0].Mantissa != 300000 || month.Expenses[0].Mantissa != 115000 {
@@ -245,90 +242,57 @@ func (u *upcomingRecorder) Upcoming(_ context.Context, first, last time.Time) ([
 	return u.upcoming, nil
 }
 
-// monthRecorder notes every period asked for and answers each with the same activity.
-type monthRecorder struct {
-	fakeGateway
-	mu     sync.Mutex
-	firsts []string
-}
-
-// periods are the periods asked for, oldest first (the queries run concurrently).
-func (m *monthRecorder) periods() []string {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return slices.Sorted(slices.Values(m.firsts))
-}
-
-func (m *monthRecorder) PeriodActivity(_ context.Context, first, last time.Time) ([]domain.Account, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.firsts = append(m.firsts, first.Format(time.DateOnly)+".."+last.Format(time.DateOnly))
-	return m.activity, m.activityErr
-}
-
 // The spend history is the six complete months before today's, oldest first, expenses only.
 func TestLoadSumsExpensesForTheLastSixCompleteMonths(t *testing.T) {
-	gw := &monthRecorder{}
-	gw.activity = []domain.Account{
-		{Name: "income:salary", Balance: eur(-300000)},
-		{Name: "expenses:rent", Balance: eur(90000)},
-		{Name: "expenses:food", Balance: eur(25000)},
+	months := make([][]domain.Account, spendMonths+1)
+	for i := range months {
+		months[i] = []domain.Account{
+			{Name: "income:salary", Balance: eur(-300000)},
+			{Name: "expenses:rent", Balance: eur(90000)},
+			{Name: "expenses:food", Balance: eur(int64(25000 + i))},
+		}
 	}
 
-	got, err := NewLoader(gw, present, sept30).Load(context.Background())
+	got, err := NewLoader(fakeGateway{months: months}, present, sept30).Load(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	wantPeriods := []string{
-		"2026-03-01..2026-03-31", "2026-04-01..2026-04-30", "2026-05-01..2026-05-31",
-		"2026-06-01..2026-06-30", "2026-07-01..2026-07-31", "2026-08-01..2026-08-31",
-	}
-	if got := gw.periods(); !reflect.DeepEqual(got[:6], wantPeriods) { // the month to date sorts last
-		t.Errorf("periods = %v, want %v", got[:6], wantPeriods)
-	}
 	if len(got.Spend) != 6 || got.Spend[0].Month.Month() != time.March || got.Spend[5].Month.Month() != time.August {
 		t.Fatalf("Spend = %+v, want March to August", got.Spend)
 	}
-	if got.Spend[0].Total[0].Mantissa != 115000 {
-		t.Errorf("March total = %v, want 1.150,00 (income is not spend)", got.Spend[0].Total)
+	for i, month := range got.Spend {
+		if want := int64(115000 + i); month.Total[0].Mantissa != want {
+			t.Errorf("%v total = %v, want %d (income is not spend)", month.Month.Month(), month.Total, want)
+		}
 	}
 }
 
 func TestLoadSpendCrossesTheYearBoundary(t *testing.T) {
-	gw := &monthRecorder{}
+	gw := &periodRecorder{}
 	jan15 := func() time.Time { return time.Date(2027, 1, 15, 0, 0, 0, 0, time.UTC) }
 
-	if _, err := NewLoader(gw, present, jan15).Load(context.Background()); err != nil {
+	got, err := NewLoader(gw, present, jan15).Load(context.Background())
+	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if got := gw.periods(); got[0] != "2026-07-01..2026-07-31" || got[5] != "2026-12-01..2026-12-31" {
-		t.Errorf("periods = %v, want July through December 2026", got[:6])
+	if want := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC); !gw.first.Equal(want) {
+		t.Errorf("report starts %v, want %v", gw.first, want)
+	}
+	if got.Spend[0].Month.Month() != time.July || got.Spend[5].Month.Month() != time.December ||
+		got.Spend[5].Month.Year() != 2026 || got.Month.Month != time.January {
+		t.Errorf("Spend = %+v, month = %+v; want July to December 2026 and January", got.Spend, got.Month)
 	}
 }
 
-type failingAfter struct {
-	fakeGateway
-	mu            sync.Mutex
-	calls, failAt int
-}
+func TestLoadRejectsAReportWithTheWrongNumberOfMonths(t *testing.T) {
+	gw := fakeGateway{months: make([][]domain.Account, 3)}
 
-func (f *failingAfter) PeriodActivity(context.Context, time.Time, time.Time) ([]domain.Account, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.calls++
-	if f.calls == f.failAt {
-		return nil, errors.New("month failed")
-	}
-	return nil, nil
-}
+	_, err := NewLoader(gw, present, sept30).Load(context.Background())
 
-func TestLoadReportsAFailureToSumAMonthOfSpend(t *testing.T) {
-	_, err := NewLoader(&failingAfter{failAt: 3}, present, sept30).Load(context.Background())
-
-	if err == nil || !strings.Contains(err.Error(), "month failed") {
-		t.Errorf("expected an error carrying the cause, got: %v", err)
+	if err == nil || !strings.Contains(err.Error(), "3 months") {
+		t.Errorf("expected an error naming the month count, got: %v", err)
 	}
 }
 

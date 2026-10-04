@@ -45,11 +45,11 @@ func (w *world) expectRoundedBorders() error {
 }
 
 func registerPanelSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^I see the "([^"]*)" panel$`, func(title string) error { return w.expectPanels(title) })
-	sc.Step(`^I see the "([^"]*)" and "([^"]*)" panels$`, func(a, b string) error { return w.expectPanels(a, b) })
-	sc.Step(`^the layout has no line wider than (\d+) cells$`, w.expectNoLineWiderThan)
-	sc.Step(`^the top border of the "([^"]*)" panel reads "([^"]*)"$`, func(_, border string) error {
+	step(sc, `^I see the "([^"]*)" panel$`, func(title string) error { return w.expectPanels(title) })
+	step(sc, `^I see the "([^"]*)" and "([^"]*)" panels$`, func(a, b string) error { return w.expectPanels(a, b) })
+	step(sc, `^the layout has no line wider than (\d+) cells$`, w.expectNoLineWiderThan)
+	step(sc, `^the top border of the "([^"]*)" panel reads "([^"]*)"$`, func(_, border string) error {
 		return w.expectScreen(true, border)
 	})
-	sc.Step(`^panel borders use rounded box-drawing characters$`, w.expectRoundedBorders)
+	step(sc, `^panel borders use rounded box-drawing characters$`, w.expectRoundedBorders)
 }

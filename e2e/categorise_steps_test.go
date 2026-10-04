@@ -311,10 +311,10 @@ func registerCategoriseSteps(sc *godog.ScenarioContext, w *world) {
 }
 
 func registerDialogSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^I select the row "([^"]*)"$`, func(name string) error { return w.selectRow(name, "") })
-	sc.Step(`^I select the row "([^"]*)" dated "([^"]*)"$`, w.selectRow)
-	sc.Step(`^I choose "([^"]*)"$`, w.chooseOption)
-	sc.Step(`^I see a popup offering exactly ((?:"[^"]*"(?:, )?)+)$`, func(list string) error {
+	step(sc, `^I select the row "([^"]*)"$`, func(name string) error { return w.selectRow(name, "") })
+	step(sc, `^I select the row "([^"]*)" dated "([^"]*)"$`, w.selectRow)
+	step(sc, `^I choose "([^"]*)"$`, w.chooseOption)
+	step(sc, `^I see a popup offering exactly ((?:"[^"]*"(?:, )?)+)$`, func(list string) error {
 		return w.withDialog(func(d dialog) error {
 			want := quotedList(list)
 			if d.title != "categorise" || strings.Join(d.rows, "|") != strings.Join(want, "|") {
@@ -323,39 +323,39 @@ func registerDialogSteps(sc *godog.ScenarioContext, w *world) {
 			return nil
 		})
 	})
-	sc.Step(`^I do not see the popup$`, w.expectNoDialog)
-	sc.Step(`^I see the rule list to add to$`, func() error { return w.expectDialogTitle("add to rule") })
-	sc.Step(`^the row table is still visible$`, func() error { return w.expectScreen(true, "╭─ ROWS ") })
-	sc.Step(`^I pick the category "([^"]*)"$`, w.pickCategory)
-	sc.Step(`^I pick the transfer target "([^"]*)"$`, w.pickCategory)
+	step(sc, `^I do not see the popup$`, w.expectNoDialog)
+	step(sc, `^I see the rule list to add to$`, func() error { return w.expectDialogTitle("add to rule") })
+	step(sc, `^the row table is still visible$`, func() error { return w.expectScreen(true, "╭─ ROWS ") })
+	step(sc, `^I pick the category "([^"]*)"$`, w.pickCategory)
+	step(sc, `^I pick the transfer target "([^"]*)"$`, w.pickCategory)
 }
 
 func registerCategoriseRowSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^the row "([^"]*)" still shows "([^"]*)"$`, func(name, text string) error {
+	step(sc, `^the row "([^"]*)" still shows "([^"]*)"$`, func(name, text string) error {
 		return w.expectImportRowHolds(name, "", text)
 	})
-	sc.Step(`^the row "([^"]*)" shows target "([^"]*)"$`, func(name, target string) error {
+	step(sc, `^the row "([^"]*)" shows target "([^"]*)"$`, func(name, target string) error {
 		return w.expectImportRowHolds(name, "", target)
 	})
-	sc.Step(`^the row "([^"]*)" shows "([^"]*)" and rule id "([^"]*)"$`, func(name, mark, id string) error {
+	step(sc, `^the row "([^"]*)" shows "([^"]*)" and rule id "([^"]*)"$`, func(name, mark, id string) error {
 		return w.expectImportRowHolds(name, "", mark, "#"+id)
 	})
-	sc.Step(`^the row "([^"]*)" (?:still )?shows rule id "([^"]*)"$`, func(name, id string) error {
+	step(sc, `^the row "([^"]*)" (?:still )?shows rule id "([^"]*)"$`, func(name, id string) error {
 		return w.expectImportRowHolds(name, "", "#"+id)
 	})
-	sc.Step(`^the row "([^"]*)" shows "([^"]*)" coloured (\d+)$`, func(name, mark string, colour int) error {
+	step(sc, `^the row "([^"]*)" shows "([^"]*)" coloured (\d+)$`, func(name, mark string, colour int) error {
 		return w.expectImportRowColour(name, "", mark, colour)
 	})
-	sc.Step(`^the row "([^"]*)" is marked as a transfer$`, func(name string) error {
+	step(sc, `^the row "([^"]*)" is marked as a transfer$`, func(name string) error {
 		return w.expectImportRowHolds(name, "", "⇄")
 	})
-	sc.Step(`^the row dated "([^"]*)" (?:still )?shows "([^"]*)"$`, func(date, text string) error {
+	step(sc, `^the row dated "([^"]*)" (?:still )?shows "([^"]*)"$`, func(date, text string) error {
 		return w.expectImportRowHolds("", date, text)
 	})
-	sc.Step(`^the row table shows the description "([^"]*)"$`, func(text string) error {
+	step(sc, `^the row table shows the description "([^"]*)"$`, func(text string) error {
 		return w.expectImportRowHolds(text, "")
 	})
-	sc.Step(`^the summary reads "([^"]*)"$`, func(text string) error {
+	step(sc, `^the summary reads "([^"]*)"$`, func(text string) error {
 		return w.expectPanel(infoTitle, func(rows []recentRow) error {
 			for _, row := range rows {
 				if strings.Contains(row.text, text) {
@@ -365,16 +365,16 @@ func registerCategoriseRowSteps(sc *godog.ScenarioContext, w *world) {
 			return fmt.Errorf("no info row reads %q", text)
 		})
 	})
-	sc.Step(`^no rule is staged$`, func() error { return w.expectStaged(false, "rule ") })
-	sc.Step(`^the rule (\d+) is unchanged in the staged rules$`, func(id string) error {
+	step(sc, `^no rule is staged$`, func() error { return w.expectStaged(false, "rule ") })
+	step(sc, `^the rule (\d+) is unchanged in the staged rules$`, func(id string) error {
 		return w.expectStaged(false, "rule "+id)
 	})
-	sc.Step(`^the staged unit contains the directive "([^"]*)"$`, func(text string) error { return w.expectStaged(true, text) })
-	sc.Step(`^the staged net income change is (\d+),(\d+) EUR$`, func(whole, cents string) error {
+	step(sc, `^the staged unit contains the directive "([^"]*)"$`, func(text string) error { return w.expectStaged(true, text) })
+	step(sc, `^the staged net income change is (\d+),(\d+) EUR$`, func(whole, cents string) error {
 		return w.expectStaged(true, "net income "+whole+","+cents+" EUR")
 	})
-	sc.Step(`^no new file exists next to the journal$`, w.expectNoStateFiles)
-	sc.Step(`^I do not see "([^"]*)" change in the reports$`, w.expectReportsUnchangedFor)
+	step(sc, `^no new file exists next to the journal$`, w.expectNoStateFiles)
+	step(sc, `^I do not see "([^"]*)" change in the reports$`, w.expectReportsUnchangedFor)
 }
 
 // expectReportsUnchangedFor shows the reports and checks the account has no staged amount there: the
@@ -411,22 +411,22 @@ func registerPickerListSteps(sc *godog.ScenarioContext, w *world) {
 			return nil
 		})
 	}
-	sc.Step(`^the picker lists "([^"]*)"$`, func(name string) error { return lists(true, name, "") })
-	sc.Step(`^the picker does not list "([^"]*)"$`, func(name string) error { return lists(false, name, "") })
-	sc.Step(`^the picker lists "([^"]*)" as a transfer target$`, func(name string) error {
+	step(sc, `^the picker lists "([^"]*)"$`, func(name string) error { return lists(true, name, "") })
+	step(sc, `^the picker does not list "([^"]*)"$`, func(name string) error { return lists(false, name, "") })
+	step(sc, `^the picker lists "([^"]*)" as a transfer target$`, func(name string) error {
 		return lists(true, name, "(transfer)")
 	})
 }
 
 func registerPickerGroupSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^the picker's first group is the "([^"]*)" categories$`, func(group string) error {
+	step(sc, `^the picker's first group is the "([^"]*)" categories$`, func(group string) error {
 		return w.expectGroup(0, group)
 	})
-	sc.Step(`^the second group is the "([^"]*)" categories$`, func(group string) error { return w.expectGroup(1, group) })
-	sc.Step(`^the third group is the other open accounts as transfer targets$`, func() error {
+	step(sc, `^the second group is the "([^"]*)" categories$`, func(group string) error { return w.expectGroup(1, group) })
+	step(sc, `^the third group is the other open accounts as transfer targets$`, func() error {
 		return w.expectGroup(2, "transfer")
 	})
-	sc.Step(`^the suggested name is "([^"]*)"$`, func(name string) error {
+	step(sc, `^the suggested name is "([^"]*)"$`, func(name string) error {
 		return w.withDialog(func(d dialog) error {
 			if !d.holds("+ create " + name) {
 				return fmt.Errorf("the picker does not suggest %q: %q", name, d.rows)
@@ -434,8 +434,8 @@ func registerPickerGroupSteps(sc *godog.ScenarioContext, w *world) {
 			return nil
 		})
 	})
-	sc.Step(`^I choose "\+ create" with an empty name$`, func() error { return w.press("End", "Enter") })
-	sc.Step(`^I see a refusal mentioning "([^"]*)" or "([^"]*)" or "([^"]*)"$`, func(a, b, c string) error {
+	step(sc, `^I choose "\+ create" with an empty name$`, func() error { return w.press("End", "Enter") })
+	step(sc, `^I see a refusal mentioning "([^"]*)" or "([^"]*)" or "([^"]*)"$`, func(a, b, c string) error {
 		return w.withDialog(func(d dialog) error {
 			if !d.holds("refused:") || (!d.holds(a) && !d.holds(b) && !d.holds(c)) {
 				return fmt.Errorf("no refusal mentions %q, %q or %q: %q", a, b, c, d.rows)
@@ -449,24 +449,24 @@ func registerRuleFormSteps(sc *godog.ScenarioContext, w *world) {
 	registerRuleDraftSteps(sc, w)
 	registerRulePreviewSteps(sc, w)
 	registerRuleRefusalSteps(sc, w)
-	sc.Step(`^I pick the rule "([^"]*)"$`, w.pickRule)
-	sc.Step(`^I edit the added matcher to "([^"]*)"$`, w.typeAfterClearing)
-	sc.Step(`^the rule list shows only rules whose category contains "([^"]*)"$`, w.expectRuleListShows)
+	step(sc, `^I pick the rule "([^"]*)"$`, w.pickRule)
+	step(sc, `^I edit the added matcher to "([^"]*)"$`, w.typeAfterClearing)
+	step(sc, `^the rule list shows only rules whose category contains "([^"]*)"$`, w.expectRuleListShows)
 }
 
 func registerRuleDraftSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^the pattern input contains "([^"]*)"$`, func(text string) error { return w.expectDialogRow("pattern", text) })
-	sc.Step(`^I type "([^"]*)" after clearing the pattern$`, w.typeAfterClearing)
-	sc.Step(`^I start a new rule for "([^"]*)" with category "([^"]*)"$`, func(name, category string) error {
+	step(sc, `^the pattern input contains "([^"]*)"$`, func(text string) error { return w.expectDialogRow("pattern", text) })
+	step(sc, `^I type "([^"]*)" after clearing the pattern$`, w.typeAfterClearing)
+	step(sc, `^I start a new rule for "([^"]*)" with category "([^"]*)"$`, func(name, category string) error {
 		return w.startNewRule(name, category, false)
 	})
-	sc.Step(`^I start a new rule for "([^"]*)" with category "([^"]*)" created on the fly$`, func(name, category string) error {
+	step(sc, `^I start a new rule for "([^"]*)" with category "([^"]*)" created on the fly$`, func(name, category string) error {
 		return w.startNewRule(name, category, true)
 	})
-	sc.Step(`^I confirm(?: the rule)?$`, func() error { return w.press("Enter") })
-	sc.Step(`^I clear the pattern and confirm$`, func() error { return w.press("Ctrl+U", "Enter") })
-	sc.Step(`^I confirm without choosing a category$`, func() error { return w.press("Enter") })
-	sc.Step(`^I add the purpose condition "([^"]*)"$`, w.addPurposeCondition)
+	step(sc, `^I confirm(?: the rule)?$`, func() error { return w.press("Enter") })
+	step(sc, `^I clear the pattern and confirm$`, func() error { return w.press("Ctrl+U", "Enter") })
+	step(sc, `^I confirm without choosing a category$`, func() error { return w.press("Enter") })
+	step(sc, `^I add the purpose condition "([^"]*)"$`, w.addPurposeCondition)
 }
 
 func (w *world) pickRule(id string) error {
@@ -483,8 +483,8 @@ func (w *world) pickRule(id string) error {
 }
 
 func registerRulePreviewSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^I see the rule preview$`, w.expectPreview)
-	sc.Step(`^the rule preview contains "([^"]*)"$`, func(text string) error {
+	step(sc, `^I see the rule preview$`, w.expectPreview)
+	step(sc, `^the rule preview contains "([^"]*)"$`, func(text string) error {
 		return w.withDialog(func(d dialog) error {
 			if !strings.Contains(strings.Join(previewOf(d), "\n"), text) {
 				return fmt.Errorf("the rule preview %q lacks %q", previewOf(d), text)
@@ -492,22 +492,22 @@ func registerRulePreviewSteps(sc *godog.ScenarioContext, w *world) {
 			return nil
 		})
 	})
-	sc.Step(`^the rule preview starts with "([^"]*)"$`, func(text string) error {
+	step(sc, `^the rule preview starts with "([^"]*)"$`, func(text string) error {
 		return w.expectPreviewLine(func(lines []string) bool { return len(lines) > 0 && strings.HasPrefix(lines[0], text) }, text)
 	})
 }
 
 func registerRuleRefusalSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^I see a message that the pattern is required$`, func() error { return w.expectScreen(true, "the pattern is required") })
-	sc.Step(`^I see a refusal naming "([^"]*)"$`, func(name string) error {
+	step(sc, `^I see a message that the pattern is required$`, func() error { return w.expectScreen(true, "the pattern is required") })
+	step(sc, `^I see a refusal naming "([^"]*)"$`, func(name string) error {
 		if err := w.expectRefusal(true); err != nil {
 			return err
 		}
 		return w.expectScreen(true, name)
 	})
-	sc.Step(`^I see no refusal$`, func() error { return w.expectRefusal(false) })
-	sc.Step(`^saving is blocked$`, func() error { return w.expectScreen(true, "saving is blocked") })
-	sc.Step(`^I see "([^"]*)" and "([^"]*)"$`, func(a, b string) error {
+	step(sc, `^I see no refusal$`, func() error { return w.expectRefusal(false) })
+	step(sc, `^saving is blocked$`, func() error { return w.expectScreen(true, "saving is blocked") })
+	step(sc, `^I see "([^"]*)" and "([^"]*)"$`, func(a, b string) error {
 		if err := w.expectScreen(true, a); err != nil {
 			return err
 		}

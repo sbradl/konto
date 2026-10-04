@@ -528,7 +528,7 @@ func registerScheduledFormSteps(sc *godog.ScenarioContext, w *world) {
 }
 
 func registerFormFieldSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^I see a form with the fields$`, func(table *godog.Table) error {
+	step(sc, `^I see a form with the fields$`, func(table *godog.Table) error {
 		for _, row := range table.Rows {
 			if err := w.expectField(strings.TrimSpace(row.Cells[0].Value), true); err != nil {
 				return err
@@ -536,19 +536,19 @@ func registerFormFieldSteps(sc *godog.ScenarioContext, w *world) {
 		}
 		return nil
 	})
-	sc.Step(`^the frequency choices are ((?:"[^"]*"\s*)+)$`, w.expectFrequencyChoices)
-	sc.Step(`^I do not see the field "([^"]*)"$`, func(label string) error { return w.expectField(label, false) })
-	sc.Step(`^I see the field "([^"]*)"$`, func(label string) error { return w.expectField(label, true) })
-	sc.Step(`^the focus is on "([^"]*)"$`, w.expectFocusOn)
-	sc.Step(`^I focus the field "([^"]*)"$`, w.focusField)
-	sc.Step(`^the field "([^"]*)" contains "([^"]*)"$`, w.expectFieldHolds)
-	sc.Step(`^the field "([^"]*)" is "([^"]*)"$`, w.expectFieldIs)
-	sc.Step(`^the form is closed$`, func() error { return w.expectFormClosed(true) })
-	sc.Step(`^no form is shown$`, func() error { return w.expectFormClosed(true) })
-	sc.Step(`^the form stays open$`, func() error { return w.expectFormClosed(false) })
-	sc.Step(`^the currency choices are the currencies declared in the journal$`, w.expectCurrencyChoices)
-	sc.Step(`^the currency is "([^"]*)"$`, func(name string) error { return w.expectFieldIs("currency", name) })
-	sc.Step(`^the currency is the first declared currency$`, func() error {
+	step(sc, `^the frequency choices are ((?:"[^"]*"\s*)+)$`, w.expectFrequencyChoices)
+	step(sc, `^I do not see the field "([^"]*)"$`, func(label string) error { return w.expectField(label, false) })
+	step(sc, `^I see the field "([^"]*)"$`, func(label string) error { return w.expectField(label, true) })
+	step(sc, `^the focus is on "([^"]*)"$`, w.expectFocusOn)
+	step(sc, `^I focus the field "([^"]*)"$`, w.focusField)
+	step(sc, `^the field "([^"]*)" contains "([^"]*)"$`, w.expectFieldHolds)
+	step(sc, `^the field "([^"]*)" is "([^"]*)"$`, w.expectFieldIs)
+	step(sc, `^the form is closed$`, func() error { return w.expectFormClosed(true) })
+	step(sc, `^no form is shown$`, func() error { return w.expectFormClosed(true) })
+	step(sc, `^the form stays open$`, func() error { return w.expectFormClosed(false) })
+	step(sc, `^the currency choices are the currencies declared in the journal$`, w.expectCurrencyChoices)
+	step(sc, `^the currency is "([^"]*)"$`, func(name string) error { return w.expectFieldIs("currency", name) })
+	step(sc, `^the currency is the first declared currency$`, func() error {
 		declared, err := declaredCommodities(w.journalFiles())
 		if err != nil {
 			return err
@@ -558,11 +558,11 @@ func registerFormFieldSteps(sc *godog.ScenarioContext, w *world) {
 }
 
 func registerFormPickerSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^the (from|to)-account picker does not offer "([^"]*)"$`, func(side, account string) error {
+	step(sc, `^the (from|to)-account picker does not offer "([^"]*)"$`, func(side, account string) error {
 		return w.expectPickerOffers(side+" account", account, false)
 	})
-	sc.Step(`^the account picker lists "([^"]*)"$`, func(account string) error { return w.expectFormPickerLists(account, true) })
-	sc.Step(`^the account picker does not list "([^"]*)"$`, func(account string) error {
+	step(sc, `^the account picker lists "([^"]*)"$`, func(account string) error { return w.expectFormPickerLists(account, true) })
+	step(sc, `^the account picker does not list "([^"]*)"$`, func(account string) error {
 		return w.expectFormPickerLists(account, false)
 	})
 }
@@ -581,27 +581,27 @@ func (w *world) expectFormPickerLists(account string, listed bool) error {
 }
 
 func registerFormInputSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^I choose the frequency "([^"]*)"$`, w.chooseFrequency)
-	sc.Step(`^I choose the from account "([^"]*)"$`, func(account string) error { return w.pickAccount("from account", account) })
-	sc.Step(`^I fill the form with valid values$`, func() error { return w.fillForm(validForm()) })
-	sc.Step(`^I fill the form with valid values except ([a-z ]+) is empty$`, func(field string) error {
+	step(sc, `^I choose the frequency "([^"]*)"$`, w.chooseFrequency)
+	step(sc, `^I choose the from account "([^"]*)"$`, func(account string) error { return w.pickAccount("from account", account) })
+	step(sc, `^I fill the form with valid values$`, func() error { return w.fillForm(validForm()) })
+	step(sc, `^I fill the form with valid values except ([a-z ]+) is empty$`, func(field string) error {
 		return w.fillExcept(field, "")
 	})
-	sc.Step(`^I fill the form with valid values except ([a-z ]+) is "([^"]*)"$`, w.fillExcept)
-	sc.Step(`^I fill the form with the same account for from and to$`, func() error {
+	step(sc, `^I fill the form with valid values except ([a-z ]+) is "([^"]*)"$`, w.fillExcept)
+	step(sc, `^I fill the form with the same account for from and to$`, func() error {
 		values := validForm()
 		values["to account"] = values["from account"]
 		return w.fillForm(values)
 	})
-	sc.Step(`^I confirm the form$`, func() error { return w.press("Ctrl+S") })
-	sc.Step(`^I see a message about the missing "([^"]*)"$`, w.expectFormMessage)
-	sc.Step(`^I type "([^"]*)" and press "([^"]*)"$`, func(text, key string) error {
+	step(sc, `^I confirm the form$`, func() error { return w.press("Ctrl+S") })
+	step(sc, `^I see a message about the missing "([^"]*)"$`, w.expectFormMessage)
+	step(sc, `^I type "([^"]*)" and press "([^"]*)"$`, func(text, key string) error {
 		if err := w.typeText(text); err != nil {
 			return err
 		}
 		return w.press(key)
 	})
-	sc.Step(`^the field "to account" is empty or shows an error$`, func() error {
+	step(sc, `^the field "to account" is empty or shows an error$`, func() error {
 		return w.onForm(func(rows []string) error {
 			value, _ := fieldRow(rows, "to account")
 			if strings.TrimSpace(strings.ReplaceAll(value, "▏", "")) != "—" &&
@@ -611,34 +611,34 @@ func registerFormInputSteps(sc *godog.ScenarioContext, w *world) {
 			return nil
 		})
 	})
-	sc.Step(`^I change the amount to "([^"]*)"$`, w.changeAmount)
+	step(sc, `^I change the amount to "([^"]*)"$`, w.changeAmount)
 }
 
 func registerFormWriteSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(ruleDescription.String(), func(date, frequency, remaining, description, amount, currency, from, to string) error {
+	step(sc, ruleDescription.String(), func(date, frequency, remaining, description, amount, currency, from, to string) error {
 		return w.createRule(date, frequency, remaining, description, amount, currency, from, to)
 	})
-	sc.Step(`^the journal contains "([^"]*)"$`, func(text string) error { return w.expectJournalHas(text, true) })
-	sc.Step(`^the journal does not contain "([^"]*)"$`, func(text string) error { return w.expectJournalHas(text, false) })
+	step(sc, `^the journal contains "([^"]*)"$`, func(text string) error { return w.expectJournalHas(text, true) })
+	step(sc, `^the journal does not contain "([^"]*)"$`, func(text string) error { return w.expectJournalHas(text, false) })
 }
 
 func registerFormResultSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^the occurrences panel for "([^"]*)" lists exactly$`, w.expectOccurrencesFor)
-	sc.Step(`^"([^"]*)" contains "([^"]*)"$`, w.expectFileHas)
-	sc.Step(`^the main journal ends with the new rule$`, w.expectMainEndsWithRule)
-	sc.Step(`^the rule list shows "([^"]*)" with next date "([^"]*)"$`, w.expectRuleListRow)
-	sc.Step(`^the Upcoming panel lists "([^"]*)" on "([^"]*)"$`, w.expectUpcomingLists)
-	sc.Step(`^the checking line has changed$`, w.expectCheckingChanged)
-	sc.Step(`^the journal was reloaded$`, w.expectReloaded)
-	sc.Step(`^the tab bar still shows "(\d+)" transactions$`, w.expectTabCountStill)
-	sc.Step(`^hledger prints occurrences for "([^"]*)" on "([^"]*)" and "([^"]*)"$`, w.expectHledgerPrints)
-	sc.Step(`^the journal has the same number of lines$`, w.expectSameLineCount)
-	sc.Step(`^the block of "([^"]*)" (?:now )?shows "([^"]*)"$`, w.expectBlockShows)
-	sc.Step(`^the other four rules are unchanged$`, func() error { return w.expectOthersUnchanged("Acme GmbH") })
-	sc.Step(`^the other rules are byte-identical$`, func() error { return w.expectOthersUnchanged("Streaming", "Sparen") })
-	sc.Step(`^"([^"]*)" is gone$`, w.expectRuleGone)
-	sc.Step(`^the journal still contains "([^"]*)" directly above the rule$`, w.expectRuleDirectlyBelow)
-	sc.Step(`^I see a hint to edit the journal by hand$`, func() error {
+	step(sc, `^the occurrences panel for "([^"]*)" lists exactly$`, w.expectOccurrencesFor)
+	step(sc, `^"([^"]*)" contains "([^"]*)"$`, w.expectFileHas)
+	step(sc, `^the main journal ends with the new rule$`, w.expectMainEndsWithRule)
+	step(sc, `^the rule list shows "([^"]*)" with next date "([^"]*)"$`, w.expectRuleListRow)
+	step(sc, `^the Upcoming panel lists "([^"]*)" on "([^"]*)"$`, w.expectUpcomingLists)
+	step(sc, `^the checking line has changed$`, w.expectCheckingChanged)
+	step(sc, `^the journal was reloaded$`, w.expectReloaded)
+	step(sc, `^the tab bar still shows "(\d+)" transactions$`, w.expectTabCountStill)
+	step(sc, `^hledger prints occurrences for "([^"]*)" on "([^"]*)" and "([^"]*)"$`, w.expectHledgerPrints)
+	step(sc, `^the journal has the same number of lines$`, w.expectSameLineCount)
+	step(sc, `^the block of "([^"]*)" (?:now )?shows "([^"]*)"$`, w.expectBlockShows)
+	step(sc, `^the other four rules are unchanged$`, func() error { return w.expectOthersUnchanged("Acme GmbH") })
+	step(sc, `^the other rules are byte-identical$`, func() error { return w.expectOthersUnchanged("Streaming", "Sparen") })
+	step(sc, `^"([^"]*)" is gone$`, w.expectRuleGone)
+	step(sc, `^the journal still contains "([^"]*)" directly above the rule$`, w.expectRuleDirectlyBelow)
+	step(sc, `^I see a hint to edit the journal by hand$`, func() error {
 		return w.expectLine(-1, "status bar", "edit the journal by hand", strings.Contains)
 	})
 }

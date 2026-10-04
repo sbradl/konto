@@ -109,16 +109,16 @@ func registerPopupSteps(sc *godog.ScenarioContext, w *world) {
 }
 
 func registerPopupVisibilitySteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^I see the keys popup listing ((?:"[^"]*" ?)+)$`, func(list string) error {
+	step(sc, `^I see the keys popup listing ((?:"[^"]*" ?)+)$`, func(list string) error {
 		return w.expectPopupContains("keys", quotedList(list))
 	})
-	sc.Step(`^I see ((?:"[^"]*" ?)+) in the keys popup$`, func(list string) error {
+	step(sc, `^I see ((?:"[^"]*" ?)+) in the keys popup$`, func(list string) error {
 		return w.expectPopupContains("keys", quotedList(list))
 	})
-	sc.Step(`^I do not see the keys popup$`, func() error { return w.expectPopup("keys", false) })
-	sc.Step(`^I see the checks panel$`, func() error { return w.expectPopup("checks", true) })
-	sc.Step(`^I do not see the checks panel$`, func() error { return w.expectPopup("checks", false) })
-	sc.Step(`^the view content is still visible above the (?:popup|panel)$`, func() error {
+	step(sc, `^I do not see the keys popup$`, func() error { return w.expectPopup("keys", false) })
+	step(sc, `^I see the checks panel$`, func() error { return w.expectPopup("checks", true) })
+	step(sc, `^I do not see the checks panel$`, func() error { return w.expectPopup("checks", false) })
+	step(sc, `^the view content is still visible above the (?:popup|panel)$`, func() error {
 		return w.withPopup(func(p popup) error {
 			if first := p.lines[0]; !strings.Contains(first, "1 dash") {
 				return fmt.Errorf("the tab bar is covered: %q", first)
@@ -129,7 +129,7 @@ func registerPopupVisibilitySteps(sc *godog.ScenarioContext, w *world) {
 }
 
 func registerPopupGeometrySteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^the (?:popup|panel) spans the full width$`, func() error {
+	step(sc, `^the (?:popup|panel) spans the full width$`, func() error {
 		return w.withPopup(func(p popup) error {
 			if got := ansi.StringWidth(p.edge); got != w.width {
 				return fmt.Errorf("the popup edge is %d cells wide, want %d", got, w.width)
@@ -137,7 +137,7 @@ func registerPopupGeometrySteps(sc *godog.ScenarioContext, w *world) {
 			return nil
 		})
 	})
-	sc.Step(`^the (?:popup|panel) is no taller than half the screen$`, func() error {
+	step(sc, `^the (?:popup|panel) is no taller than half the screen$`, func() error {
 		return w.withPopup(func(p popup) error {
 			if height := len(p.rows) + 1; height > w.height/2 {
 				return fmt.Errorf("the popup is %d rows tall, want at most %d", height, w.height/2)
@@ -145,7 +145,7 @@ func registerPopupGeometrySteps(sc *godog.ScenarioContext, w *world) {
 			return nil
 		})
 	})
-	sc.Step(`^the popup uses at most (\d+) columns$`, func(most int) error {
+	step(sc, `^the popup uses at most (\d+) columns$`, func(most int) error {
 		return w.withPopup(func(p popup) error {
 			if columns := countKeyLabels(p.rows[0]); columns > most {
 				return fmt.Errorf("the first popup row has %d columns, want at most %d: %q", columns, most, p.rows[0])

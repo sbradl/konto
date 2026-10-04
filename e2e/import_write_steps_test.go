@@ -674,25 +674,25 @@ func registerImportWriteSteps(sc *godog.ScenarioContext, w *world) {
 }
 
 func registerWriteFlowSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^I categorise the rows$`, w.categoriseRows)
-	sc.Step(`^I open "([^"]*)" in Import and categorise every row$`, func(file string) error {
+	step(sc, `^I categorise the rows$`, w.categoriseRows)
+	step(sc, `^I open "([^"]*)" in Import and categorise every row$`, func(file string) error {
 		if err := w.openInImport(file); err != nil {
 			return err
 		}
 		return w.categoriseEveryRow()
 	})
-	sc.Step(`^I write the import$`, w.writeImport)
-	sc.Step(`^I import "([^"]*)" categorising every row$`, w.importEveryRow)
-	sc.Step(`^I import "([^"]*)" creating the category "([^"]*)" for "([^"]*)"$`, w.importCreatingCategory)
-	sc.Step(`^no key skips or dismisses a "\?" row$`, w.expectNoRowSkipped)
-	sc.Step(`^I do not see "skip" in the key hints$`, func() error {
+	step(sc, `^I write the import$`, w.writeImport)
+	step(sc, `^I import "([^"]*)" categorising every row$`, w.importEveryRow)
+	step(sc, `^I import "([^"]*)" creating the category "([^"]*)" for "([^"]*)"$`, w.importCreatingCategory)
+	step(sc, `^no key skips or dismisses a "\?" row$`, w.expectNoRowSkipped)
+	step(sc, `^I do not see "skip" in the key hints$`, func() error {
 		return w.expectLine(-1, "status bar", "skip", func(line, text string) bool { return !strings.Contains(line, text) })
 	})
-	sc.Step(`^I see a y/n prompt$`, func() error { return w.expectStatusHas(true, []string{"(y/n)"}) })
-	sc.Step(`^I see a preview containing$`, func(doc *godog.DocString) error {
+	step(sc, `^I see a y/n prompt$`, func() error { return w.expectStatusHas(true, []string{"(y/n)"}) })
+	step(sc, `^I see a preview containing$`, func(doc *godog.DocString) error {
 		return w.expectWritePreview(strings.Split(strings.TrimSpace(doc.Content), "\n"))
 	})
-	sc.Step(`^I see a preview containing "([^"]*)"$`, func(text string) error {
+	step(sc, `^I see a preview containing "([^"]*)"$`, func(text string) error {
 		return w.withDialog(func(d dialog) error {
 			if d.title != "write" || !d.holds(text) {
 				return fmt.Errorf("the %q dialog does not show %q: %q", d.title, text, d.rows)
@@ -700,16 +700,16 @@ func registerWriteFlowSteps(sc *godog.ScenarioContext, w *world) {
 			return nil
 		})
 	})
-	sc.Step(`^the row table is still shown with every row categorised$`, w.expectEveryRowCategorised)
-	sc.Step(`^the row table is still shown$`, func() error { return w.expectScreen(true, "╭─ ROWS ") })
-	sc.Step(`^the write is blocked$`, func() error { return w.expectScreen(true, "write blocked") })
-	sc.Step(`^I see "([^"]*)" "([^"]*)"$`, func(label, value string) error { return w.expectScreenLineWith(label, value) })
-	sc.Step(`^the journal file was never modified during the attempt$`, w.expectJournalFilesUnchanged)
-	sc.Step(`^the write succeeds$`, func() error { return w.expectScreen(true, "imported ") })
+	step(sc, `^the row table is still shown with every row categorised$`, w.expectEveryRowCategorised)
+	step(sc, `^the row table is still shown$`, func() error { return w.expectScreen(true, "╭─ ROWS ") })
+	step(sc, `^the write is blocked$`, func() error { return w.expectScreen(true, "write blocked") })
+	step(sc, `^I see "([^"]*)" "([^"]*)"$`, func(label, value string) error { return w.expectScreenLineWith(label, value) })
+	step(sc, `^the journal file was never modified during the attempt$`, w.expectJournalFilesUnchanged)
+	step(sc, `^the write succeeds$`, func() error { return w.expectScreen(true, "imported ") })
 }
 
 func registerWriteJournalSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^the journal contains no "([^"]*)" or "([^"]*)" account$`, func(a, b string) error {
+	step(sc, `^the journal contains no "([^"]*)" or "([^"]*)" account$`, func(a, b string) error {
 		return w.eventually(func() error {
 			text := strings.ToLower(allJournalText(w.journalFiles()))
 			if len(w.newBlocks(false)) == 0 || strings.Contains(text, a) || strings.Contains(text, b) {
@@ -718,7 +718,7 @@ func registerWriteJournalSteps(sc *godog.ScenarioContext, w *world) {
 			return nil
 		})
 	})
-	sc.Step(`^the journal's "([^"]*)" transaction on "([^"]*)" has no "([^"]*)" tag$`, func(description, date, tag string) error {
+	step(sc, `^the journal's "([^"]*)" transaction on "([^"]*)" has no "([^"]*)" tag$`, func(description, date, tag string) error {
 		return w.expectNewBlock(date+" "+description, func(block string) error {
 			if strings.Contains(block, tag) {
 				return fmt.Errorf("%q has a %s tag", block, tag)
@@ -726,55 +726,55 @@ func registerWriteJournalSteps(sc *godog.ScenarioContext, w *world) {
 			return nil
 		})
 	})
-	sc.Step(`^the "([^"]*)" transaction has the assertion "([^"]*)" on "([^"]*)"$`, w.expectAssertion)
-	sc.Step(`^no other imported transaction has an assertion$`, w.expectNoOtherAssertion)
-	sc.Step(`^no imported transaction has a secondary date$`, w.expectNoSecondaryDate)
-	sc.Step(`^the imported transactions contain no IBAN, BIC, reference or transaction type$`, w.expectNoBankFields)
-	sc.Step(`^the journal has exactly (\d+) "([^"]*)"( checking)? transaction on "([^"]*)"$`, func(n int, description, checking, date string) error {
+	step(sc, `^the "([^"]*)" transaction has the assertion "([^"]*)" on "([^"]*)"$`, w.expectAssertion)
+	step(sc, `^no other imported transaction has an assertion$`, w.expectNoOtherAssertion)
+	step(sc, `^no imported transaction has a secondary date$`, w.expectNoSecondaryDate)
+	step(sc, `^the imported transactions contain no IBAN, BIC, reference or transaction type$`, w.expectNoBankFields)
+	step(sc, `^the journal has exactly (\d+) "([^"]*)"( checking)? transaction on "([^"]*)"$`, func(n int, description, checking, date string) error {
 		return w.expectCountOnDate(n, description, strings.TrimSpace(checking), date)
 	})
-	sc.Step(`^the journal balance of "([^"]*)" is ([\d.,-]+ EUR)$`, w.expectBalance)
-	sc.Step(`^the journal declares "([^"]*)"$`, func(text string) error { return w.expectDeclares(text, 1) })
-	sc.Step(`^"([^"]*)" is declared exactly once$`, func(text string) error { return w.expectDeclares(text, 1) })
-	sc.Step(`^hledger check ([a-z]+) passes$`, w.expectCheck)
-	sc.Step(`^categories.rules still contains rules 1 to 5 unchanged$`, w.expectRulesKeepTheOldOnes)
-	sc.Step(`^categories.rules does not mention "([^"]*)"$`, func(text string) error { return w.expectRulesMention(text, false) })
-	sc.Step(`^no "\.latest" file exists$`, w.expectNoStateFiles)
-	sc.Step(`^no temporary rules file is left behind$`, w.expectNoTempFiles)
-	sc.Step(`^no file other than the journal and categories.rules was written$`, w.expectNoStateFiles)
+	step(sc, `^the journal balance of "([^"]*)" is ([\d.,-]+ EUR)$`, w.expectBalance)
+	step(sc, `^the journal declares "([^"]*)"$`, func(text string) error { return w.expectDeclares(text, 1) })
+	step(sc, `^"([^"]*)" is declared exactly once$`, func(text string) error { return w.expectDeclares(text, 1) })
+	step(sc, `^hledger check ([a-z]+) passes$`, w.expectCheck)
+	step(sc, `^categories.rules still contains rules 1 to 5 unchanged$`, w.expectRulesKeepTheOldOnes)
+	step(sc, `^categories.rules does not mention "([^"]*)"$`, func(text string) error { return w.expectRulesMention(text, false) })
+	step(sc, `^no "\.latest" file exists$`, w.expectNoStateFiles)
+	step(sc, `^no temporary rules file is left behind$`, w.expectNoTempFiles)
+	step(sc, `^no file other than the journal and categories.rules was written$`, w.expectNoStateFiles)
 }
 
 func registerWriteFixtureSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^the journal "([^"]*)" where every "([^"]*)" transaction lives in included file "([^"]*)"$`,
+	step(sc, `^the journal "([^"]*)" where every "([^"]*)" transaction lives in included file "([^"]*)"$`,
 		func(name, account, file string) error {
 			if err := w.useJournal(name, ""); err != nil {
 				return err
 			}
 			return w.splitJournal(file, func(block string) bool { return strings.Contains(block, account) })
 		})
-	sc.Step(`^the journal "([^"]*)" where every transaction lives in included file "([^"]*)"$`, func(name, file string) error {
+	step(sc, `^the journal "([^"]*)" where every transaction lives in included file "([^"]*)"$`, func(name, file string) error {
 		if err := w.useJournal(name, ""); err != nil {
 			return err
 		}
 		return w.splitJournal(file, func(string) bool { return true })
 	})
-	sc.Step(`^the journal "([^"]*)" with an unrelated transaction dated ([\d-]+) as the last entry of the file$`,
+	step(sc, `^the journal "([^"]*)" with an unrelated transaction dated ([\d-]+) as the last entry of the file$`,
 		func(name, date string) error {
 			return w.useJournal(name, "\npayee Unrelated\n\n"+date+" Unrelated\n    assets:savings  1,00 EUR\n    equity:opening-balances\n")
 		})
-	sc.Step(`^the new transactions are in "([^"]*)"$`, func(file string) error { return w.expectInFile(file, "2026-09-30 REWE Markt") })
-	sc.Step(`^the main journal has no new transaction$`, w.expectMainHasNoNewTransaction)
-	sc.Step(`^the main journal contains "([^"]*)"$`, w.expectMainContains)
-	sc.Step(`^the main journal contains the opening balance for "([^"]*)"$`, func(account string) error {
+	step(sc, `^the new transactions are in "([^"]*)"$`, func(file string) error { return w.expectInFile(file, "2026-09-30 REWE Markt") })
+	step(sc, `^the main journal has no new transaction$`, w.expectMainHasNoNewTransaction)
+	step(sc, `^the main journal contains "([^"]*)"$`, w.expectMainContains)
+	step(sc, `^the main journal contains the opening balance for "([^"]*)"$`, func(account string) error {
 		return w.expectMainContains("opening balance\n    " + account)
 	})
-	sc.Step(`^the journal's "opening balance" on "([^"]*)" posts ([\d.,-]+ EUR) to "([^"]*)" with assertion "([^"]*)"$`,
+	step(sc, `^the journal's "opening balance" on "([^"]*)" posts ([\d.,-]+ EUR) to "([^"]*)" with assertion "([^"]*)"$`,
 		w.expectOpeningBalance)
-	sc.Step(`^the journal's "opening balance" on "([^"]*)" posts to "([^"]*)"$`, w.expectOpeningCounter)
-	sc.Step(`^the journal's "opening balance" is dated "([^"]*)"$`, func(date string) error {
+	step(sc, `^the journal's "opening balance" on "([^"]*)" posts to "([^"]*)"$`, w.expectOpeningCounter)
+	step(sc, `^the journal's "opening balance" is dated "([^"]*)"$`, func(date string) error {
 		return w.expectOpeningCounter(date, "")
 	})
-	sc.Step(`^the "1\.9\." transfer posts against "([^"]*)"$`, func(account string) error {
+	step(sc, `^the "1\.9\." transfer posts against "([^"]*)"$`, func(account string) error {
 		return w.expectNewBlock("2026-09-01 ", func(block string) error {
 			if !strings.Contains(block, account) {
 				return fmt.Errorf("%q does not post against %s", block, account)
@@ -782,30 +782,30 @@ func registerWriteFixtureSteps(sc *godog.ScenarioContext, w *world) {
 			return nil
 		})
 	})
-	sc.Step(`^the last transaction of the file is dated "([^"]*)"$`, w.expectLastTransactionDated)
-	sc.Step(`^the "([^"]*)" transaction is above the unrelated "([^"]*)" transaction$`, func(upper, date string) error {
+	step(sc, `^the last transaction of the file is dated "([^"]*)"$`, w.expectLastTransactionDated)
+	step(sc, `^the "([^"]*)" transaction is above the unrelated "([^"]*)" transaction$`, func(upper, date string) error {
 		return w.expectAbove(upper, date+" Unrelated")
 	})
 }
 
 func registerWriteAccountSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^I see the account name input$`, func() error { _, err := w.accountNameInput(); return err })
-	sc.Step(`^the suggested name is not empty$`, func() error {
+	step(sc, `^I see the account name input$`, func() error { _, err := w.accountNameInput(); return err })
+	step(sc, `^the suggested name is not empty$`, func() error {
 		name, err := w.accountNameInput()
 		if err == nil && name == "" {
 			err = errors.New("the suggested name is empty")
 		}
 		return err
 	})
-	sc.Step(`^the suggested name starts with "([^"]*)" or "([^"]*)"$`, func(a, b string) error {
+	step(sc, `^the suggested name starts with "([^"]*)" or "([^"]*)"$`, func(a, b string) error {
 		name, err := w.accountNameInput()
 		if err == nil && !strings.HasPrefix(name, a) && !strings.HasPrefix(name, b) {
 			err = fmt.Errorf("the suggested name %q starts with neither %q nor %q", name, a, b)
 		}
 		return err
 	})
-	sc.Step(`^I set the account name to "([^"]*)"$`, w.setAccountName)
-	sc.Step(`^I see a name refusal mentioning "([^"]*)"$`, func(text string) error {
+	step(sc, `^I set the account name to "([^"]*)"$`, w.setAccountName)
+	step(sc, `^I see a name refusal mentioning "([^"]*)"$`, func(text string) error {
 		return w.withDialog(func(d dialog) error {
 			if !d.holds("refused:") || !d.holds(text) {
 				return fmt.Errorf("no refusal mentions %q: %q", text, d.rows)
@@ -813,11 +813,11 @@ func registerWriteAccountSteps(sc *godog.ScenarioContext, w *world) {
 			return nil
 		})
 	})
-	sc.Step(`^I cannot continue$`, func() error { return w.expectDialogTitle("create account") })
-	sc.Step(`^I create the account "([^"]*)"$`, func(name string) error { return w.createAccount(name, "") })
-	sc.Step(`^I create the account "([^"]*)"(?: from "([^"]*)")? and import every row$`, w.createAndImport)
-	sc.Step(`^I create the account "([^"]*)" from "([^"]*)"$`, w.createAccount)
-	sc.Step(`^the row "([^"]*)" shows the glyph "([^"]*)"$`, func(account, glyph string) error {
+	step(sc, `^I cannot continue$`, func() error { return w.expectDialogTitle("create account") })
+	step(sc, `^I create the account "([^"]*)"$`, func(name string) error { return w.createAccount(name, "") })
+	step(sc, `^I create the account "([^"]*)"(?: from "([^"]*)")? and import every row$`, w.createAndImport)
+	step(sc, `^I create the account "([^"]*)" from "([^"]*)"$`, w.createAccount)
+	step(sc, `^the row "([^"]*)" shows the glyph "([^"]*)"$`, func(account, glyph string) error {
 		return w.expectAccounts(expectShows(account, glyph))
 	})
 }

@@ -201,7 +201,7 @@ func (w *world) expectRecentOverflow() error {
 }
 
 func registerRecentSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^the Recent panel's first row is dated "([^"]*)"$`, func(date string) error {
+	step(sc, `^the Recent panel's first row is dated "([^"]*)"$`, func(date string) error {
 		return w.expectRecent(func(rows []recentRow) error {
 			if len(rows) == 0 || !strings.Contains(rows[0].text, date) {
 				return fmt.Errorf("the first Recent row is not dated %s", date)
@@ -209,10 +209,10 @@ func registerRecentSteps(sc *godog.ScenarioContext, w *world) {
 			return nil
 		})
 	})
-	sc.Step(`^the Recent panel's first two rows are dated "([^"]*)" and describe "([^"]*)"$`, func(date, description string) error {
+	step(sc, `^the Recent panel's first two rows are dated "([^"]*)" and describe "([^"]*)"$`, func(date, description string) error {
 		return w.expectRecentOrder(2, date, description)
 	})
-	sc.Step(`^the third row is dated "([^"]*)" and describes "([^"]*)"$`, func(date, description string) error {
+	step(sc, `^the third row is dated "([^"]*)" and describes "([^"]*)"$`, func(date, description string) error {
 		return w.expectRecent(func(rows []recentRow) error {
 			if len(rows) < 3 || !strings.Contains(rows[2].text, date) || !strings.Contains(rows[2].text, description) {
 				return fmt.Errorf("the third row is not dated %s and %s", date, description)
@@ -220,21 +220,21 @@ func registerRecentSteps(sc *godog.ScenarioContext, w *world) {
 			return nil
 		})
 	})
-	sc.Step(`^the rows are in non-increasing date order$`, w.expectRecentDatesDescend)
-	sc.Step(`^the Recent row for "([^"]*)" on "([^"]*)" shows category "([^"]*)"$`, w.expectRecentCategory)
-	sc.Step(`^it shows "([^"]*)" coloured (\d+)$`, func(text string, colour int) error {
+	step(sc, `^the rows are in non-increasing date order$`, w.expectRecentDatesDescend)
+	step(sc, `^the Recent row for "([^"]*)" on "([^"]*)" shows category "([^"]*)"$`, w.expectRecentCategory)
+	step(sc, `^it shows "([^"]*)" coloured (\d+)$`, func(text string, colour int) error {
 		return w.expectRecentAmountColour(text, colour, false)
 	})
-	sc.Step(`^its amount is not coloured (\d+)$`, func(colour int) error {
+	step(sc, `^its amount is not coloured (\d+)$`, func(colour int) error {
 		fields := strings.Fields(w.focusedRecent.text)
 		return w.expectRecentAmountColour(strings.Join(fields[len(fields)-2:], " "), colour, true)
 	})
-	sc.Step(`^the Recent rows for "([^"]*)" show "([^"]*)"$`, w.expectEveryRecentRowShows)
-	sc.Step(`^no Recent row is highlighted with background (\d+)$`, func(int) error { return w.expectNoRecentHighlight() })
-	sc.Step(`^I do not see "\?" in any Recent row$`, w.expectNoQuestionMarkInRecent)
-	sc.Step(`^I do not see the word "([^"]*)" anywhere$`, func(word string) error { return w.expectScreen(false, word) })
-	sc.Step(`^the Recent panel ends with "… N more" where N > 0$`, w.expectRecentOverflow)
-	sc.Step(`^the journal "([^"]*)" with (\d+) transactions$`, func(name string, n int) error {
+	step(sc, `^the Recent rows for "([^"]*)" show "([^"]*)"$`, w.expectEveryRecentRowShows)
+	step(sc, `^no Recent row is highlighted with background (\d+)$`, func(int) error { return w.expectNoRecentHighlight() })
+	step(sc, `^I do not see "\?" in any Recent row$`, w.expectNoQuestionMarkInRecent)
+	step(sc, `^I do not see the word "([^"]*)" anywhere$`, func(word string) error { return w.expectScreen(false, word) })
+	step(sc, `^the Recent panel ends with "… N more" where N > 0$`, w.expectRecentOverflow)
+	step(sc, `^the journal "([^"]*)" with (\d+) transactions$`, func(name string, n int) error {
 		var b strings.Builder
 		for i := range n {
 			fmt.Fprintf(&b, "\n2026-09-%02d Bulk %03d\n    expenses:groceries  1,00 EUR\n    equity:opening-balances\n", 1+i%28, i)
@@ -313,13 +313,13 @@ func (w *world) expectNoUpcomingHighlight() error {
 }
 
 func registerUpcomingSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^the Upcoming panel lists in order$`, w.expectUpcomingOrder)
-	sc.Step(`^the Upcoming panel is empty$`, w.expectUpcomingEmpty)
-	sc.Step(`^no Upcoming row is highlighted with background (\d+)$`, func(int) error { return w.expectNoUpcomingHighlight() })
-	sc.Step(`^the transaction count in the tab bar is still (\d+)$`, func(count string) error {
+	step(sc, `^the Upcoming panel lists in order$`, w.expectUpcomingOrder)
+	step(sc, `^the Upcoming panel is empty$`, w.expectUpcomingEmpty)
+	step(sc, `^no Upcoming row is highlighted with background (\d+)$`, func(int) error { return w.expectNoUpcomingHighlight() })
+	step(sc, `^the transaction count in the tab bar is still (\d+)$`, func(count string) error {
 		return w.expectLine(0, "tab bar", count+" txns", strings.Contains)
 	})
-	sc.Step(`^the status bar shows no error indicator$`, func() error {
+	step(sc, `^the status bar shows no error indicator$`, func() error {
 		return w.expectLine(-1, "status bar", "✗", func(line, marker string) bool { return !strings.Contains(line, marker) })
 	})
 }

@@ -377,42 +377,42 @@ func (w *world) expectTabBarWithin(seconds int) error {
 }
 
 func registerInvariantSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^I perform the write "([^"]*)"$`, w.performWrite)
-	sc.Step(`^I perform every kind of write in sequence$`, w.performEveryWrite)
-	sc.Step(`^the checks panel shows "✓ all"$`, w.expectChecksAllClear)
-	sc.Step(`^I close and reopen "([^"]*)"$`, w.closeAndReopen)
-	sc.Step(`^the journal's "account ([^"]*)" directive has exactly one "konto:source:" tag$`, w.expectOneSourceTag)
-	sc.Step(`^I start konto again$`, w.startAgain)
-	sc.Step(`^every transaction has a counterpart that is a category, an account, or "equity:opening-balances"$`, w.expectCounterpartsAreAccounts)
-	sc.Step(`^the journal has no account named "([^"]*)" or "([^"]*)" or "([^"]*)"$`, func(a, b, c string) error {
+	step(sc, `^I perform the write "([^"]*)"$`, w.performWrite)
+	step(sc, `^I perform every kind of write in sequence$`, w.performEveryWrite)
+	step(sc, `^the checks panel shows "✓ all"$`, w.expectChecksAllClear)
+	step(sc, `^I close and reopen "([^"]*)"$`, w.closeAndReopen)
+	step(sc, `^the journal's "account ([^"]*)" directive has exactly one "konto:source:" tag$`, w.expectOneSourceTag)
+	step(sc, `^I start konto again$`, w.startAgain)
+	step(sc, `^every transaction has a counterpart that is a category, an account, or "equity:opening-balances"$`, w.expectCounterpartsAreAccounts)
+	step(sc, `^the journal has no account named "([^"]*)" or "([^"]*)" or "([^"]*)"$`, func(a, b, c string) error {
 		return w.expectNoCatchAll(a, b, c)
 	})
-	sc.Step(`^I visit every view and press every read-only key$`, w.visitEveryView)
-	sc.Step(`^I visit every view$`, w.visitEveryView)
-	sc.Step(`^I visit every view and quit$`, func() error {
+	step(sc, `^I visit every view and press every read-only key$`, w.visitEveryView)
+	step(sc, `^I visit every view$`, w.visitEveryView)
+	step(sc, `^I visit every view and quit$`, func() error {
 		if err := w.visitEveryView(); err != nil {
 			return err
 		}
 		return w.press("q")
 	})
-	sc.Step(`^the transaction count is still (\d+)$`, w.expectTransactionCount)
-	sc.Step(`^the skipped list contains the row "([^"]*)"$`, w.expectSkippedRow)
-	sc.Step(`^a lock file exists next to the journal$`, w.expectLockFile)
-	sc.Step(`^konto was killed with SIGKILL$`, func() error { return w.signalKonto(syscall.SIGKILL) })
-	sc.Step(`^konto receives SIGTERM$`, func() error { return w.signalKonto(syscall.SIGTERM) })
-	sc.Step(`^konto exits$`, func() error { _, err := w.s.waitExit(w.suite.timeout); return err })
-	sc.Step(`^I can start konto again$`, func() error {
+	step(sc, `^the transaction count is still (\d+)$`, w.expectTransactionCount)
+	step(sc, `^the skipped list contains the row "([^"]*)"$`, w.expectSkippedRow)
+	step(sc, `^a lock file exists next to the journal$`, w.expectLockFile)
+	step(sc, `^konto was killed with SIGKILL$`, func() error { return w.signalKonto(syscall.SIGKILL) })
+	step(sc, `^konto receives SIGTERM$`, func() error { return w.signalKonto(syscall.SIGTERM) })
+	step(sc, `^konto exits$`, func() error { _, err := w.s.waitExit(w.suite.timeout); return err })
+	step(sc, `^I can start konto again$`, func() error {
 		if err := w.startAgain(); err != nil {
 			return err
 		}
 		return w.expectScreen(true, tabBarMarker)
 	})
-	sc.Step(`^the terminal left the alternate screen$`, w.expectTerminalRestored)
-	sc.Step(`^the cursor is visible again$`, func() error { return nil }) // checked with the alternate screen
-	sc.Step(`^konto opened no network sockets$`, w.expectNoSockets)
-	sc.Step(`^no file was created in the user's config or state directories$`, w.expectNoStateInHome)
-	sc.Step(`^no file other than the lock file was created next to the journal$`, w.expectNoStateFiles)
-	sc.Step(`^I see the tab bar or the parse-error screen$`, func() error {
+	step(sc, `^the terminal left the alternate screen$`, w.expectTerminalRestored)
+	step(sc, `^the cursor is visible again$`, func() error { return nil }) // checked with the alternate screen
+	step(sc, `^konto opened no network sockets$`, w.expectNoSockets)
+	step(sc, `^no file was created in the user's config or state directories$`, w.expectNoStateInHome)
+	step(sc, `^no file other than the lock file was created next to the journal$`, w.expectNoStateFiles)
+	step(sc, `^I see the tab bar or the parse-error screen$`, func() error {
 		return w.eventually(func() error {
 			text := w.s.screenText()
 			if !strings.Contains(text, tabBarMarker) && !strings.Contains(text, "Enter to jump to the editor") &&
@@ -422,13 +422,13 @@ func registerInvariantSteps(sc *godog.ScenarioContext, w *world) {
 			return nil
 		})
 	})
-	sc.Step(`^the journal "([^"]*)" at "([^"]*)"$`, w.useJournalAt)
-	sc.Step(`^I start konto with "--file" pointing there$`, func() error { return w.start("--file", w.journal) })
-	sc.Step(`^I see the tab bar within (\d+) seconds$`, w.expectTabBarWithin)
-	sc.Step(`^pressing "5" shows reports within (\d+) seconds$`, w.expectReportsWithin)
-	sc.Step(`^the journal "([^"]*)" is read-only$`, w.useReadOnly)
-	sc.Step(`^I try to write the import$`, w.tryWriteImport)
-	sc.Step(`^the Accounts panel lists no "expenses:\*" or "income:\*" entries$`, w.expectNoCategoryRows)
-	sc.Step(`^I see an error naming the file$`, func() error { return w.expectLine(-1, "status bar", filepath.Base(w.journal), strings.Contains) })
-	sc.Step(`^the journal file is deleted externally$`, w.deleteJournal)
+	step(sc, `^the journal "([^"]*)" at "([^"]*)"$`, w.useJournalAt)
+	step(sc, `^I start konto with "--file" pointing there$`, func() error { return w.start("--file", w.journal) })
+	step(sc, `^I see the tab bar within (\d+) seconds$`, w.expectTabBarWithin)
+	step(sc, `^pressing "5" shows reports within (\d+) seconds$`, w.expectReportsWithin)
+	step(sc, `^the journal "([^"]*)" is read-only$`, w.useReadOnly)
+	step(sc, `^I try to write the import$`, w.tryWriteImport)
+	step(sc, `^the Accounts panel lists no "expenses:\*" or "income:\*" entries$`, w.expectNoCategoryRows)
+	step(sc, `^I see an error naming the file$`, func() error { return w.expectLine(-1, "status bar", filepath.Base(w.journal), strings.Contains) })
+	step(sc, `^the journal file is deleted externally$`, w.deleteJournal)
 }

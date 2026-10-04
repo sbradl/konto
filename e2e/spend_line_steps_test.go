@@ -166,11 +166,11 @@ func (w *world) expectOneSeries() error {
 }
 
 func registerSpendLineSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^the plotted monthly totals are ([\d, ]+)$`, w.expectPlottedList)
-	sc.Step(`^the chart has exactly 1 data series$`, w.expectOneSeries)
+	step(sc, `^the plotted monthly totals are ([\d, ]+)$`, w.expectPlottedList)
+	step(sc, `^the chart has exactly 1 data series$`, w.expectOneSeries)
 	// Transfers and income would lift the line by thousands; the plotted totals being the expense totals rules them out.
-	sc.Step(`^the plotted totals do not include the monthly 500,00 EUR transfer$`,
+	step(sc, `^the plotted totals do not include the monthly 500,00 EUR transfer$`,
 		func() error { return w.expectPlottedTotals(householdSpend) })
-	sc.Step(`^the plotted totals do not include salary$`,
+	step(sc, `^the plotted totals do not include salary$`,
 		func() error { return w.expectPlottedTotals(householdSpend) })
 }

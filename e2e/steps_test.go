@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/cucumber/godog"
 )
@@ -32,8 +33,8 @@ func registerSteps(sc *godog.ScenarioContext, w *world) {
 }
 
 func registerGivenSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^the journal "([^"]*)"$`, func(name string) error { return w.useJournal(name, "") })
-	sc.Step(`^the journal "([^"]*)" with (?:appended text|a rule) "((?s:.*))"$`, func(name, text string) error {
+	step(sc, `^the journal "([^"]*)"$`, func(name string) error { return w.useJournal(name, "") })
+	step(sc, `^the journal "([^"]*)" with (?:appended text|a rule) "((?s:.*))"$`, func(name, text string) error {
 		// Gherkin turns \n in a table cell into a real newline, hence (?s). Appended text starts
 		// on its own line unless it says otherwise: a leading newline is its first (blank) line.
 		text = unescape(text)
@@ -42,19 +43,19 @@ func registerGivenSteps(sc *godog.ScenarioContext, w *world) {
 		}
 		return w.useJournal(name, text)
 	})
-	sc.Step(`^a journal containing "((?s:.*))"$`, func(text string) error {
+	step(sc, `^a journal containing "((?s:.*))"$`, func(text string) error {
 		return os.WriteFile(w.journal, []byte(unescape(text)+"\n"), 0o644)
 	})
-	sc.Step(`^no journal exists at the resolved path$`, func() error {
+	step(sc, `^no journal exists at the resolved path$`, func() error {
 		if w.lastStepType == outcomeStep {
 			return expectAbsent(w.journal)
 		}
 		return removeIfExists(w.journal)
 	})
-	sc.Step(`^today is (\d{4}-\d{2}-\d{2})$`, func(day string) { w.env["KONTO_TODAY"] = day })
-	sc.Step(`^the terminal is (\d+)×(\d+)$`, w.setTerminalSize)
-	sc.Step(`^XDG_DOWNLOAD_DIR is not configured$`, func() { w.unset["XDG_DOWNLOAD_DIR"] = true })
-	sc.Step(`^a Postbank CSV "([^"]*)" for IBAN "([^"]*)" with closing balance ([\d.,-]+) EUR( and CRLF line endings| and a trailing blank line)?:$`,
+	step(sc, `^today is (\d{4}-\d{2}-\d{2})$`, func(day string) { w.env["KONTO_TODAY"] = day })
+	step(sc, `^the terminal is (\d+)×(\d+)$`, w.setTerminalSize)
+	step(sc, `^XDG_DOWNLOAD_DIR is not configured$`, func() { w.unset["XDG_DOWNLOAD_DIR"] = true })
+	step(sc, `^a Postbank CSV "([^"]*)" for IBAN "([^"]*)" with closing balance ([\d.,-]+) EUR( and CRLF line endings| and a trailing blank line)?:$`,
 		func(file, iban, balance, variant string, table *godog.Table) error {
 			rows, err := postbankRows(table)
 			if err != nil {
@@ -66,16 +67,16 @@ func registerGivenSteps(sc *godog.ScenarioContext, w *world) {
 			}
 			return w.writeExport(file, export)
 		})
-	sc.Step(`^a Postbank CSV "([^"]*)" for IBAN "([^"]*)" with closing balance ([\d.,-]+) EUR and a broken row "(.*)"$`,
+	step(sc, `^a Postbank CSV "([^"]*)" for IBAN "([^"]*)" with closing balance ([\d.,-]+) EUR and a broken row "(.*)"$`,
 		func(file, iban, balance, broken string) error {
 			row := postbankRow{Date: "29.9.2026", Type: "Kartenzahlung", Payee: "Kiosk", Purpose: "x", Amount: "-1,00"}
 			return w.writeExport(file, postbankExport{IBAN: iban, ClosingBalance: balance, Rows: []postbankRow{row}, BrokenRow: broken})
 		})
-	sc.Step(`^the download directory contains "([^"]*)" with these exact bytes \(UTF-8 BOM first, LF line ends\):$`,
+	step(sc, `^the download directory contains "([^"]*)" with these exact bytes \(UTF-8 BOM first, LF line ends\):$`,
 		func(file string, doc *godog.DocString) error {
 			return os.WriteFile(filepath.Join(w.downloads, file), []byte("\xef\xbb\xbf"+doc.Content+"\n"), 0o644)
 		})
-	sc.Step(`^a file "([^"]*)" in the download directory containing "((?s:.*))"$`, func(file, content string) error {
+	step(sc, `^a file "([^"]*)" in the download directory containing "((?s:.*))"$`, func(file, content string) error {
 		return os.WriteFile(filepath.Join(w.downloads, file), []byte(unescape(content)), 0o644)
 	})
 	registerHledgerShimSteps(sc, w)
@@ -83,52 +84,52 @@ func registerGivenSteps(sc *godog.ScenarioContext, w *world) {
 }
 
 func registerHledgerShimSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^hledger is not on PATH$`, func() { w.env["PATH"] = filepath.Join(w.dir, "empty-path") })
-	sc.Step(`^hledger reports version "([^"]*)"$`, func(v string) error {
+	step(sc, `^hledger is not on PATH$`, func() { w.env["PATH"] = filepath.Join(w.dir, "empty-path") })
+	step(sc, `^hledger reports version "([^"]*)"$`, func(v string) error {
 		w.shim.Version = v
 		return w.writeShim()
 	})
-	sc.Step(`^hledger is slowed by (\d+)(ms|s)$`, func(n int, unit string) error {
+	step(sc, `^hledger is slowed by (\d+)(ms|s)$`, func(n int, unit string) error {
 		w.shim.DelayMs = n
 		if unit == "s" {
 			w.shim.DelayMs = n * 1000
 		}
 		return w.writeShim()
 	})
-	sc.Step(`^hledger starts failing(?: with "([^"]*)")?$`, func(msg string) error {
+	step(sc, `^hledger starts failing(?: with "([^"]*)")?$`, func(msg string) error {
 		w.shim.Fail = "hledger: simulated failure " + msg
 		return w.writeShim()
 	})
-	sc.Step(`^hledger returns garbage for "([^"]*)"$`, func(command string) error {
+	step(sc, `^hledger returns garbage for "([^"]*)"$`, func(command string) error {
 		w.shim.GarbageFor = append(w.shim.GarbageFor, command)
 		return w.writeShim()
 	})
 }
 
 func registerEditorSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^EDITOR is a stub recording its arguments$`, func() error {
+	step(sc, `^EDITOR is a stub recording its arguments$`, func() error {
 		return w.editorStub(`printf '%s\n' "$*" >> "` + w.editorLog() + `"`)
 	})
-	sc.Step(`^EDITOR is a stub that replaces the journal with "([^"]*)"$`, func(name string) error {
+	step(sc, `^EDITOR is a stub that replaces the journal with "([^"]*)"$`, func(name string) error {
 		return w.editorStub(`printf '%s\n' "$*" >> "` + w.editorLog() + `"` + "\n" +
 			`cp "` + w.fixture(name+".journal") + `" "` + w.journal + `"`)
 	})
 }
 
 func registerWhenSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^I start konto$`, func() error {
+	step(sc, `^I start konto$`, func() error {
 		if w.s != nil { // a scenario that changes the journal after its Background restarts konto
 			w.s.stop()
 			w.s = nil
 		}
 		return w.start()
 	})
-	sc.Step(`^I start konto with "([^"]*)"$`, func(args string) error { return w.start(strings.Fields(args)...) })
-	sc.Step(`^I press "([^"]*)"$`, func(key string) error { return w.press(key) })
-	sc.Step(`^I press "([^"]*)" twice$`, func(key string) error { return w.press(key, key) })
-	sc.Step(`^I press "([^"]*)" (\d+) times$`, func(key string, n int) error { return w.press(repeat(key, n)...) })
-	sc.Step(`^I type "([^"]*)"$`, func(text string) error { return w.typeText(text) })
-	sc.Step(`^I resize the terminal to (\d+)×(\d+)$`, func(width, height int) error {
+	step(sc, `^I start konto with "([^"]*)"$`, func(args string) error { return w.start(strings.Fields(args)...) })
+	step(sc, `^I press "([^"]*)"$`, func(key string) error { return w.press(key) })
+	step(sc, `^I press "([^"]*)" twice$`, func(key string) error { return w.press(key, key) })
+	step(sc, `^I press "([^"]*)" (\d+) times$`, func(key string, n int) error { return w.press(repeat(key, n)...) })
+	step(sc, `^I type "([^"]*)"$`, func(text string) error { return w.typeText(text) })
+	step(sc, `^I resize the terminal to (\d+)×(\d+)$`, func(width, height int) error {
 		s, err := w.session()
 		if err != nil {
 			return err
@@ -142,20 +143,20 @@ func registerWhenSteps(sc *godog.ScenarioContext, w *world) {
 }
 
 func registerScreenSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^I see "([^"]*)"$`, func(text string) error { return w.expectScreen(true, text) })
-	sc.Step(`^I do not see "([^"]*)"$`, func(text string) error { return w.expectScreen(false, text) })
-	sc.Step(`^I see the tab bar$`, func() error { return w.expectScreen(true, tabBarMarker) })
-	sc.Step(`^I do not see the tab bar$`, func() error { return w.expectScreen(false, tabBarMarker) })
-	sc.Step(`^the tab bar reads "(.*)"$`, func(text string) error { return w.expectLine(0, "tab bar", text, strings.Contains) })
-	sc.Step(`^the status bar shows "([^"]*)"$`, func(text string) error { return w.expectLine(-1, "status bar", text, strings.Contains) })
-	sc.Step(`^the status bar starts with "([^"]*)"$`, func(text string) error {
+	step(sc, `^I see "([^"]*)"$`, func(text string) error { return w.expectScreen(true, text) })
+	step(sc, `^I do not see "([^"]*)"$`, func(text string) error { return w.expectScreen(false, text) })
+	step(sc, `^I see the tab bar$`, func() error { return w.expectScreen(true, tabBarMarker) })
+	step(sc, `^I do not see the tab bar$`, func() error { return w.expectScreen(false, tabBarMarker) })
+	step(sc, `^the tab bar reads "(.*)"$`, func(text string) error { return w.expectLine(0, "tab bar", text, strings.Contains) })
+	step(sc, `^the status bar shows "([^"]*)"$`, func(text string) error { return w.expectLine(-1, "status bar", text, strings.Contains) })
+	step(sc, `^the status bar starts with "([^"]*)"$`, func(text string) error {
 		return w.expectLine(-1, "status bar", text, func(line, t string) bool { return strings.HasPrefix(strings.TrimSpace(line), t) })
 	})
-	sc.Step(`^the status bar does not show "([^"]*)"$`, func(text string) error {
+	step(sc, `^the status bar does not show "([^"]*)"$`, func(text string) error {
 		return w.expectLine(-1, "status bar", text, func(line, t string) bool { return !strings.Contains(line, t) })
 	})
-	sc.Step(`^"([^"]*)" is coloured (\d+)$`, func(text string, colour int) error { return w.expectColour(text, colour) })
-	sc.Step(`^the screen is unchanged$`, func() error {
+	step(sc, `^"([^"]*)" is coloured (\d+)$`, func(text string, colour int) error { return w.expectColour(text, colour) })
+	step(sc, `^the screen is unchanged$`, func() error {
 		s, err := w.session()
 		if err != nil {
 			return err
@@ -165,7 +166,7 @@ func registerScreenSteps(sc *godog.ScenarioContext, w *world) {
 		}
 		return nil
 	})
-	sc.Step(`^the screen contains no 24-bit or 256-colour escape sequences$`, func() error {
+	step(sc, `^the screen contains no 24-bit or 256-colour escape sequences$`, func() error {
 		s, err := w.session()
 		if err != nil {
 			return err
@@ -178,14 +179,14 @@ func registerScreenSteps(sc *godog.ScenarioContext, w *world) {
 }
 
 func registerProcessSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^konto exits with code (\d+)$`, w.expectExitCode)
-	sc.Step(`^konto is still running$`, w.expectRunning)
-	sc.Step(`^stderr mentions "([^"]*)"(?: and "([^"]*)")?$`, func(a, b string) error { return w.expectStderr(a, b) })
-	sc.Step(`^stderr mentions the minimum version "([^"]*)"$`, func(v string) error { return w.expectStderr(v) })
-	sc.Step(`^every recorded hledger invocation contains "-f <absolute journal path>"$`, func() error {
+	step(sc, `^konto exits with code (\d+)$`, w.expectExitCode)
+	step(sc, `^konto is still running$`, w.expectRunning)
+	step(sc, `^stderr mentions "([^"]*)"(?: and "([^"]*)")?$`, func(a, b string) error { return w.expectStderr(a, b) })
+	step(sc, `^stderr mentions the minimum version "([^"]*)"$`, func(v string) error { return w.expectStderr(v) })
+	step(sc, `^every recorded hledger invocation contains "-f <absolute journal path>"$`, func() error {
 		return w.expectEveryCall([]string{"-f", w.journal})
 	})
-	sc.Step(`^the editor was called with "(.*)"$`, w.expectEditorCall)
+	step(sc, `^the editor was called with "(.*)"$`, w.expectEditorCall)
 }
 
 func (w *world) expectExitCode(want int) error {
@@ -230,18 +231,18 @@ func (w *world) expectEditorCall(want string) error {
 }
 
 func registerFileSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^the journal contains$`, func(doc *godog.DocString) error {
+	step(sc, `^the journal contains$`, func(doc *godog.DocString) error {
 		return w.eventually(func() error { return expectFileBlock(w.journal, doc.Content) })
 	})
-	sc.Step(`^categories.rules contains$`, func(doc *godog.DocString) error {
+	step(sc, `^categories.rules contains$`, func(doc *godog.DocString) error {
 		return w.eventually(func() error { return expectFileBlock(w.rules, doc.Content) })
 	})
-	sc.Step(`^the journal is unchanged$`, w.expectJournalFilesUnchanged)
-	sc.Step(`^categories.rules is unchanged$`, func() error { return expectUnchanged(w.rules, w.rulesAtStart) })
-	sc.Step(`^(?:every )?hledger check passes$`, func() error {
+	step(sc, `^the journal is unchanged$`, w.expectJournalFilesUnchanged)
+	step(sc, `^categories.rules is unchanged$`, func() error { return expectUnchanged(w.rules, w.rulesAtStart) })
+	step(sc, `^(?:every )?hledger check passes$`, func() error {
 		return w.eventually(func() error { return runChecks(w.suite.realHledger, w.journal, false) })
 	})
-	sc.Step(`^every hledger check passes individually$`, func() error { return runChecks(w.suite.realHledger, w.journal, true) })
+	step(sc, `^every hledger check passes individually$`, func() error { return runChecks(w.suite.realHledger, w.journal, true) })
 }
 
 // tabBarMarker is the start of the v1 tab bar (spec §6.4a).
@@ -474,4 +475,16 @@ func (w *world) expectJournalFilesUnchanged() error {
 		return errors.New("the set of journal files changed")
 	}
 	return nil
+}
+
+// compiledSteps caches step expressions: godog compiles them again for every scenario otherwise.
+var compiledSteps sync.Map
+
+// step registers a step like sc.Step, compiling its expression once per suite.
+func step(sc *godog.ScenarioContext, expr string, handler any) {
+	compiled, ok := compiledSteps.Load(expr)
+	if !ok {
+		compiled, _ = compiledSteps.LoadOrStore(expr, regexp.MustCompile(expr))
+	}
+	sc.Step(compiled, handler)
 }

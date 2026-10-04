@@ -97,7 +97,7 @@ func registerStatCardSteps(sc *godog.ScenarioContext, w *world) {
 }
 
 func registerCardReadingSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^I see a "([^"]*)" card showing "([^"]*)"$`, func(title, value string) error {
+	step(sc, `^I see a "([^"]*)" card showing "([^"]*)"$`, func(title, value string) error {
 		return w.expectCard(title, func(card statCard) error {
 			if card.value != value {
 				return fmt.Errorf("the %q card shows %q, want %q", title, card.value, value)
@@ -105,46 +105,46 @@ func registerCardReadingSteps(sc *godog.ScenarioContext, w *world) {
 			return nil
 		})
 	})
-	sc.Step(`^the card note reads "([^"]*)"$`, func(note string) error {
+	step(sc, `^the card note reads "([^"]*)"$`, func(note string) error {
 		if w.focusedCard.note != note {
 			return fmt.Errorf("the card note reads %q, want %q", w.focusedCard.note, note)
 		}
 		return nil
 	})
-	sc.Step(`^I see exactly (\d+) stat cards$`, w.expectCardCount)
-	sc.Step(`^the "([^"]*)" figure does not include the 500,00 EUR transfer to savings$`, func(title string) error {
+	step(sc, `^I see exactly (\d+) stat cards$`, w.expectCardCount)
+	step(sc, `^the "([^"]*)" figure does not include the 500,00 EUR transfer to savings$`, func(title string) error {
 		return w.expectFigure(title, "1.815,00 EUR")
 	})
-	sc.Step(`^the "([^"]*)" figure does not include any September transaction$`, func(title string) error {
+	step(sc, `^the "([^"]*)" figure does not include any September transaction$`, func(title string) error {
 		return w.expectFigure(title, "0,00 EUR")
 	})
-	sc.Step(`^"([^"]*)" equals income minus expenses, not the change in asset accounts$`, func(title string) error {
+	step(sc, `^"([^"]*)" equals income minus expenses, not the change in asset accounts$`, func(title string) error {
 		return w.expectFigure(title, "1.815,00 EUR")
 	})
 }
 
 func registerCardFixtureSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^the row "([^"]*)" shows "([^"]*)"$`, func(account, text string) error {
+	step(sc, `^the row "([^"]*)" shows "([^"]*)"$`, func(account, text string) error {
 		return w.expectAccounts(expectShows(account, text))
 	})
-	sc.Step(`^the journal "([^"]*)" with a one-sided transfer leg of ([\d.,]+ EUR) on the clearing account$`,
+	step(sc, `^the journal "([^"]*)" with a one-sided transfer leg of ([\d.,]+ EUR) on the clearing account$`,
 		func(name, amount string) error {
 			return w.useJournal(name, "\n2026-09-27 Sparen\n    assets:transfers  "+amount+"\n    assets:checking  -"+amount+"\n")
 		})
-	sc.Step(`^the journal "([^"]*)" where closed account "([^"]*)" holds ([\d.,]+ EUR)$`,
+	step(sc, `^the journal "([^"]*)" where closed account "([^"]*)" holds ([\d.,]+ EUR)$`,
 		func(name, account, amount string) error {
 			return w.useJournal(name, "\n2026-09-27 Stray\n    "+account+"  "+amount+"\n    equity:opening-balances\n")
 		})
-	sc.Step(`^the journal "([^"]*)" where "([^"]*)" holds ([\d.,]+ PLN)$`, func(name, account, amount string) error {
+	step(sc, `^the journal "([^"]*)" where "([^"]*)" holds ([\d.,]+ PLN)$`, func(name, account, amount string) error {
 		return w.useJournal(name, "\n2026-09-27 Zloty\n    "+account+"  "+amount+"\n    equity:opening-balances\n")
 	})
-	sc.Step(`^I do not see the words "([^"]*)" or "([^"]*)"$`, func(a, b string) error {
+	step(sc, `^I do not see the words "([^"]*)" or "([^"]*)"$`, func(a, b string) error {
 		if err := w.expectScreen(false, a); err != nil {
 			return err
 		}
 		return w.expectScreen(false, b)
 	})
-	sc.Step(`^the "([^"]*)" row shows "([^"]*)" or "([^"]*)"$`, func(account, a, b string) error {
+	step(sc, `^the "([^"]*)" row shows "([^"]*)" or "([^"]*)"$`, func(account, a, b string) error {
 		return w.expectAccounts(func(rows []accountRow) error {
 			if err := expectShows(account, a)(rows); err != nil {
 				return expectShows(account, b)(rows)

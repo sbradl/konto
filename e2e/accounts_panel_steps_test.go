@@ -227,29 +227,29 @@ func expectShows(account, balance string) func(rows []accountRow) error {
 }
 
 func registerAccountsLayoutSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^the Accounts panel lists in order$`, func(table *godog.Table) error {
+	step(sc, `^the Accounts panel lists in order$`, func(table *godog.Table) error {
 		return w.expectAccounts(expectOrder(table))
 	})
-	sc.Step(`^no Accounts row is indented$`, w.rowsStep(checkNotIndented))
-	sc.Step(`^no Accounts row is a parent or header row$`, w.rowsStep(checkAllHaveBalances))
-	sc.Step(`^there are no subtotal rows$`, w.rowsStep(checkNoParents))
-	sc.Step(`^every balance in the Accounts panel ends at the same column$`, w.rowsStep(checkSameEndColumn))
-	sc.Step(`^"([^"]*)" shows "([^"]*)"$`, func(account, balance string) error {
+	step(sc, `^no Accounts row is indented$`, w.rowsStep(checkNotIndented))
+	step(sc, `^no Accounts row is a parent or header row$`, w.rowsStep(checkAllHaveBalances))
+	step(sc, `^there are no subtotal rows$`, w.rowsStep(checkNoParents))
+	step(sc, `^every balance in the Accounts panel ends at the same column$`, w.rowsStep(checkSameEndColumn))
+	step(sc, `^"([^"]*)" shows "([^"]*)"$`, func(account, balance string) error {
 		return w.expectAccounts(expectShows(account, balance))
 	})
 }
 
 func registerAccountsStyleSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^"([^"]*)" on "([^"]*)" is coloured (\d+)$`, func(text, account string, want int) error {
+	step(sc, `^"([^"]*)" on "([^"]*)" is coloured (\d+)$`, func(text, account string, want int) error {
 		return w.expectRowColour(account, text, want, false)
 	})
-	sc.Step(`^"([^"]*)" on "([^"]*)" is not coloured (\d+)$`, func(text, account string, want int) error {
+	step(sc, `^"([^"]*)" on "([^"]*)" is not coloured (\d+)$`, func(text, account string, want int) error {
 		return w.expectRowColour(account, text, want, true)
 	})
-	sc.Step(`^the row "([^"]*)" shows the glyph "([^"]*)" coloured (\d+)$`, func(account, glyph string, want int) error {
+	step(sc, `^the row "([^"]*)" shows the glyph "([^"]*)" coloured (\d+)$`, func(account, glyph string, want int) error {
 		return w.expectRowColour(account, glyph, want, false)
 	})
-	sc.Step(`^the last Accounts row is "([^"]*)"$`, func(account string) error {
+	step(sc, `^the last Accounts row is "([^"]*)"$`, func(account string) error {
 		return w.expectAccounts(func(rows []accountRow) error {
 			if got := rows[len(rows)-1].name(); got != account {
 				return fmt.Errorf("the last row is %q", got)
@@ -257,7 +257,7 @@ func registerAccountsStyleSteps(sc *godog.ScenarioContext, w *world) {
 			return nil
 		})
 	})
-	sc.Step(`^it shows "([^"]*)" in the balance column$`, func(text string) error {
+	step(sc, `^it shows "([^"]*)" in the balance column$`, func(text string) error {
 		return w.expectAccounts(func(rows []accountRow) error {
 			if last := rows[len(rows)-1]; !strings.HasSuffix(strings.TrimSpace(last.text), text) {
 				return fmt.Errorf("the last row %q does not end in %q", last.text, text)
@@ -265,18 +265,18 @@ func registerAccountsStyleSteps(sc *godog.ScenarioContext, w *world) {
 			return nil
 		})
 	})
-	sc.Step(`^the row is coloured (\d+)$`, func(want int) error {
+	step(sc, `^the row is coloured (\d+)$`, func(want int) error {
 		return w.expectAccounts(func(rows []accountRow) error {
 			last := rows[len(rows)-1]
 			return w.expectRowColour(last.name(), last.name(), want, false)
 		})
 	})
-	sc.Step(`^the row "([^"]*)" is selected with background (\d+) and foreground (\d+)$`, w.expectSelected)
-	sc.Step(`^the row "([^"]*)" is selected$`, func(account string) error { return w.expectSelected(account, selectionBackground, -1) })
+	step(sc, `^the row "([^"]*)" is selected with background (\d+) and foreground (\d+)$`, w.expectSelected)
+	step(sc, `^the row "([^"]*)" is selected$`, func(account string) error { return w.expectSelected(account, selectionBackground, -1) })
 }
 
 func registerAccountsPagingSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^the selected row is more than 1 row below the first$`, func() error {
+	step(sc, `^the selected row is more than 1 row below the first$`, func() error {
 		return w.expectAccounts(func(rows []accountRow) error {
 			selected, err := w.selectedRow(rows)
 			if err == nil && selected.y-rows[0].y <= 1 {
@@ -285,10 +285,10 @@ func registerAccountsPagingSteps(sc *godog.ScenarioContext, w *world) {
 			return err
 		})
 	})
-	sc.Step(`^the selected row is visible$`, func() error {
+	step(sc, `^the selected row is visible$`, func() error {
 		return w.expectAccounts(func(rows []accountRow) error { _, err := w.selectedRow(rows); return err })
 	})
-	sc.Step(`^the last account is selected and visible$`, func() error {
+	step(sc, `^the last account is selected and visible$`, func() error {
 		return w.expectAccounts(func(rows []accountRow) error {
 			selected, err := w.selectedRow(rows)
 			if err == nil && selected.y != rows[len(rows)-1].y {
@@ -359,24 +359,24 @@ func (w *world) withDeclared(name string, lines ...string) error {
 }
 
 func registerAccountsFixtureSteps(sc *godog.ScenarioContext, w *world) {
-	sc.Step(`^the journal "([^"]*)" with "([^"]*)" declared as "([^"]*)"$`, func(name, account, tag string) error {
+	step(sc, `^the journal "([^"]*)" with "([^"]*)" declared as "([^"]*)"$`, func(name, account, tag string) error {
 		return w.withDeclared(name, "account "+account+"  ; "+tag)
 	})
-	sc.Step(`^the journal "([^"]*)" with (\d+) open import accounts$`, func(name string, n int) error {
+	step(sc, `^the journal "([^"]*)" with (\d+) open import accounts$`, func(name string, n int) error {
 		lines := make([]string, n)
 		for i := range lines {
 			lines[i] = fmt.Sprintf("account assets:extra-%02d  ; konto:source:import, konto:iban:DE00%016d", i+1, i+1)
 		}
 		return w.withDeclared(name, lines...)
 	})
-	sc.Step(`^the journal "([^"]*)" with the tags? removed from "([^"]*)"(?: and "([^"]*)")?$`, func(name, first, second string) error {
+	step(sc, `^the journal "([^"]*)" with the tags? removed from "([^"]*)"(?: and "([^"]*)")?$`, func(name, first, second string) error {
 		if err := w.useJournal(name, ""); err != nil {
 			return err
 		}
 		return w.removeTags(first, second)
 	})
-	sc.Step(`^I see a "(WARN|ERR)" row naming "([^"]*)"$`, w.expectPopupRow)
-	sc.Step(`^I do not see "([^"]*)" in the checks panel$`, w.expectNotInPopup)
+	step(sc, `^I see a "(WARN|ERR)" row naming "([^"]*)"$`, w.expectPopupRow)
+	step(sc, `^I do not see "([^"]*)" in the checks panel$`, w.expectNotInPopup)
 }
 
 func registerAccountsPanelSteps(sc *godog.ScenarioContext, w *world) {
