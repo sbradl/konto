@@ -3,11 +3,9 @@
 package e2e
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -460,7 +458,7 @@ func (w *world) expectOccurrencesFor(description string, table *godog.Table) err
 
 func (w *world) expectHledgerPrints(description, first, second string) error {
 	return w.eventually(func() error {
-		out, err := exec.CommandContext(context.Background(), w.suite.realHledger, "-f", w.journal, "print", "--forecast=2026-10-01..2028-01-01",
+		out, err := hledgerOn(w.suite.realHledger, w.journal, "print", "--forecast=2026-10-01..2028-01-01",
 			"desc:"+description).CombinedOutput()
 		if err != nil {
 			return fmt.Errorf("hledger print: %s", out)

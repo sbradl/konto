@@ -51,7 +51,7 @@ func (s Staged) AccountName() string {
 // Plan checks that the import can be written and plans the write (spec §4.9): every row categorised, the
 // journal ending at the bank's balance, and a changeset that declares what is new, writes the rules and
 // adds the transactions, the opening balance first when the account is new.
-func (s Staged) Plan(ledger domain.Ledger) (Plan, error) {
+func (s Staged) Plan() (Plan, error) {
 	if len(s.Rows) == 0 {
 		return Plan{}, ErrNothingToWrite
 	}
@@ -69,7 +69,7 @@ func (s Staged) Plan(ledger domain.Ledger) (Plan, error) {
 		return Plan{}, err
 	}
 	changeset := domain.Changeset{Edits: slices.Concat(
-		s.declarations(), []domain.Edit{domain.AddTransactions{File: s.targetFile(ledger), Transactions: transactions}},
+		s.declarations(), []domain.Edit{domain.AddTransactions{Transactions: transactions}},
 		s.ruleEdits(),
 	)}
 	return Plan{
@@ -167,22 +167,6 @@ func (s Staged) openingBalance(closing domain.Amount) domain.NewTransaction {
 			{Account: OpeningBalanceAccount},
 		},
 	}
-}
-
-// targetFile is the file the rows are written to: where the account's latest transaction is, else the main journal.
-func (s Staged) targetFile(ledger domain.Ledger) string {
-	file := ""
-	if s.NewAccount {
-		return file
-	}
-	for i := range ledger.Transactions {
-		for _, posting := range ledger.Transactions[i].Postings {
-			if posting.Account == s.Account.Name {
-				file = ledger.Transactions[i].Source.File
-			}
-		}
-	}
-	return file
 }
 
 // declarations are the directives the import adds: the new account, the categories it created that are used,

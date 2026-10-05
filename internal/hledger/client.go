@@ -71,12 +71,7 @@ func (c *Client) query(ctx context.Context, args ...string) ([]byte, error) {
 
 // queryMessage is query with its own reading of a located failure's message.
 func (c *Client) queryMessage(ctx context.Context, messageOf func(string) string, args ...string) ([]byte, error) {
-	files := c.files()
-	named := make([]string, 0, 2*len(files)+len(args))
-	for _, file := range files {
-		named = append(named, "-f", file)
-	}
-	out, stderr, err := c.run(ctx, append(named, args...)...)
+	out, stderr, err := c.runJournal(ctx, args)
 	if err != nil {
 		if issue, ok := parseIssue(stderr, messageOf); ok {
 			return nil, domain.JournalError{Issue: issue}
@@ -84,6 +79,21 @@ func (c *Client) queryMessage(ctx context.Context, messageOf func(string) string
 		return nil, fmt.Errorf("hledger %s: %w: %s", args[0], err, strings.TrimSpace(stderr))
 	}
 	return out, nil
+}
+
+// runJournal runs hledger on the journal. A single file is named with -f. Several files go as one journal on
+// standard input that includes them: hledger checks balance assertions per -f file but across an include, so
+// only an include sees the carry-over and every earlier posting of an account.
+func (c *Client) runJournal(ctx context.Context, args []string) (stdout []byte, stderr string, err error) {
+	files := c.files()
+	if len(files) == 1 {
+		return c.run(ctx, append([]string{"-f", files[0]}, args...)...)
+	}
+	var journal strings.Builder
+	for _, file := range files {
+		journal.WriteString("include " + file + "\n")
+	}
+	return c.runInput(ctx, journal.String(), append([]string{"-f", "-"}, args...)...)
 }
 
 // jsonTransaction is the part of `hledger print -O json` konto reads.

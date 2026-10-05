@@ -1,6 +1,7 @@
 package journal
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,6 +18,16 @@ func spend(date time.Time, description string) domain.NewTransaction {
 		Date: date, Description: description,
 		Postings: []domain.NewPosting{{Account: "expenses:x"}, {Account: "assets:checking"}},
 	}
+}
+
+// withYear is a ledger whose 2026 file holds text; the main journal holds only a directive.
+func withYear(t *testing.T, text string) File {
+	t.Helper()
+	file := journalWith(t, "decimal-mark ,\n")
+	if err := os.WriteFile(file.yearPath(2026), []byte(text), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return file
 }
 
 func apply(t *testing.T, file File, edits ...domain.Edit) {
@@ -77,7 +88,7 @@ const ordered = `2026-09-10 A
 `
 
 func TestAddTransactionsInsertsAtTheDatePosition(t *testing.T) {
-	file := journalWith(t, ordered)
+	file := withYear(t, ordered)
 
 	apply(t, file, domain.AddTransactions{Transactions: []domain.NewTransaction{spend(day(28), "B")}})
 
@@ -93,19 +104,19 @@ func TestAddTransactionsInsertsAtTheDatePosition(t *testing.T) {
     expenses:x  3,00 EUR
     assets:checking
 `
-	if got := readFile(t, file.path); got != want {
+	if got := readFile(t, file.yearPath(2026)); got != want {
 		t.Errorf("journal =\n%s\nwant\n%s", got, want)
 	}
 }
 
 func TestAddTransactionsAppendsWhatIsNotBeforeAnyOther(t *testing.T) {
-	file := journalWith(t, ordered)
+	file := withYear(t, ordered)
 
 	apply(t, file, domain.AddTransactions{Transactions: []domain.NewTransaction{
 		spend(day(29), "D"), spend(day(30), "E"),
 	}})
 
-	got := readFile(t, file.path)
+	got := readFile(t, file.yearPath(2026))
 	if want := "    assets:checking\n\n2026-09-29 D\n    expenses:x\n    assets:checking\n\n2026-09-30 E\n"; !strings.Contains(got, want) {
 		t.Errorf("journal =\n%s\nwant it to contain\n%s", got, want)
 	}
@@ -115,52 +126,62 @@ func TestAddTransactionsAppendsWhatIsNotBeforeAnyOther(t *testing.T) {
 }
 
 func TestAddTransactionsKeepsTheCommentsOfTheTransactionBelow(t *testing.T) {
-	file := journalWith(t, "; about C\n2026-09-29 C\n    expenses:x  3,00 EUR\n    assets:checking\n")
+	file := withYear(t, "; about C\n2026-09-29 C\n    expenses:x  3,00 EUR\n    assets:checking\n")
 
 	apply(t, file, domain.AddTransactions{Transactions: []domain.NewTransaction{spend(day(28), "B")}})
 
-	if got := readFile(t, file.path); !strings.HasPrefix(got, "2026-09-28 B\n") || !strings.Contains(got, "\n; about C\n2026-09-29 C") {
+	if got := readFile(t, file.yearPath(2026)); !strings.HasPrefix(got, "2026-09-28 B\n") || !strings.Contains(got, "\n; about C\n2026-09-29 C") {
 		t.Errorf("journal =\n%s", got)
 	}
 }
 
-func TestAddTransactionsIntoAnEmptyFileStartsIt(t *testing.T) {
-	file := journalWith(t, "")
+func TestAddTransactionsStartTheYearFileWhenItIsNotThereYet(t *testing.T) {
+	file := journalWith(t, "decimal-mark ,\n")
 
 	apply(t, file, domain.AddTransactions{Transactions: []domain.NewTransaction{spend(day(28), "B")}})
 
-	if got, want := readFile(t, file.path), "2026-09-28 B\n    expenses:x\n    assets:checking\n"; got != want {
-		t.Errorf("journal = %q, want %q", got, want)
+	if got, want := readFile(t, file.yearPath(2026)), "2026-09-28 B\n    expenses:x\n    assets:checking\n"; got != want {
+		t.Errorf("2026.journal = %q, want %q", got, want)
 	}
-}
-
-func TestAddTransactionsGoIntoTheNamedFile(t *testing.T) {
-	dir := t.TempDir()
-	sub := filepath.Join(dir, "sub.journal")
-	if err := os.WriteFile(sub, []byte(ordered), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	file := writeJournal(t, dir, "main.journal", "include sub.journal\n")
-
-	apply(t, file, domain.AddTransactions{File: sub, Transactions: []domain.NewTransaction{spend(day(30), "E")}})
-
-	if got := readFile(t, sub); !strings.Contains(got, "2026-09-30 E") {
-		t.Errorf("sub.journal = %q, want the transaction", got)
-	}
-	if got := readFile(t, file.path); got != "include sub.journal\n" {
+	if got := readFile(t, file.path); got != "decimal-mark ,\n" {
 		t.Errorf("main journal = %q, want it untouched", got)
 	}
 }
 
-func TestAddTransactionsRefuseAFileOutsideTheJournal(t *testing.T) {
+func TestAddTransactionsGoToTheYearFileOfTheirDate(t *testing.T) {
 	file := journalWith(t, "x\n")
+	december := time.Date(2025, 12, 30, 0, 0, 0, 0, time.UTC)
 
-	err := file.Apply(domain.Changeset{Edits: []domain.Edit{
-		domain.AddTransactions{File: "/elsewhere.journal", Transactions: []domain.NewTransaction{spend(day(30), "E")}},
+	apply(t, file, domain.AddTransactions{Transactions: []domain.NewTransaction{
+		spend(december, "Late"), spend(day(28), "B"),
 	}})
 
-	if err == nil {
-		t.Error("expected an error for a file the journal does not include")
+	if got := readFile(t, file.yearPath(2025)); !strings.HasPrefix(got, "2025-12-30 Late\n") || strings.Contains(got, "B") {
+		t.Errorf("2025.journal = %q, want only the December transaction", got)
+	}
+	if got := readFile(t, file.yearPath(2026)); !strings.HasPrefix(got, "2026-09-28 B\n") || strings.Contains(got, "Late") {
+		t.Errorf("2026.journal = %q, want only the September transaction", got)
+	}
+}
+
+func TestAddTransactionsRefuseDatesOutsideTheWindow(t *testing.T) {
+	for name, date := range map[string]time.Time{
+		"older than last year": time.Date(2024, 12, 31, 0, 0, 0, 0, time.UTC),
+		"next year":            time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC),
+	} {
+		file := journalWith(t, "x\n")
+
+		err := file.Apply(domain.Changeset{Edits: []domain.Edit{
+			domain.AddTransactions{Transactions: []domain.NewTransaction{spend(date, "Out")}},
+		}})
+
+		var refusal domain.RefusalError
+		if !errors.As(err, &refusal) || !strings.Contains(refusal.Reason, "2025") {
+			t.Errorf("%s: error = %v, want a refusal naming the window", name, err)
+		}
+		if isFile(file.yearPath(date.Year())) {
+			t.Errorf("%s: a file for %d was written", name, date.Year())
+		}
 	}
 }
 
@@ -228,26 +249,45 @@ func TestRenderSplicesIncludedFilesInAndWritesNothing(t *testing.T) {
 	}
 	file := writeJournal(t, dir, "main.journal", "top\ninclude sub.journal\ninclude none-*.journal\nbottom\n")
 
+	got, err := file.Render(domain.Changeset{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if want := "top\nsub 1\n\nbottom\n"; got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
+	}
+}
+
+// The journal as it would read: the main journal, then the window's year files, the new ones included.
+func TestRenderAppendsTheYearFilesAndWritesNothing(t *testing.T) {
+	file := withYear(t, "2026-09-10 A\n")
+	if err := os.WriteFile(file.yearPath(2025), []byte("2025-01-01 Z\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
 	got, err := file.Render(domain.Changeset{Edits: []domain.Edit{
-		domain.AddTransactions{File: sub, Transactions: []domain.NewTransaction{spend(day(30), "E")}},
+		domain.AddTransactions{Transactions: []domain.NewTransaction{spend(day(30), "E")}},
 	}})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	want := "top\nsub 1\n\n2026-09-30 E\n    expenses:x\n    assets:checking\n\nbottom\n"
+	want := "decimal-mark ,\n2025-01-01 Z\n2026-09-10 A\n\n2026-09-30 E\n    expenses:x\n    assets:checking\n"
 	if got != want {
 		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
-	if readFile(t, sub) != "sub 1\n" {
-		t.Error("Render wrote to the journal")
+	if readFile(t, file.yearPath(2026)) != "2026-09-10 A\n" {
+		t.Error("Render wrote to the year file")
 	}
 }
 
 func TestRenderReportsAnEditThatDoesNotApply(t *testing.T) {
 	file := journalWith(t, "x\n")
 
-	_, err := file.Render(domain.Changeset{Edits: []domain.Edit{domain.AddTransactions{File: "/nope"}}})
+	_, err := file.Render(domain.Changeset{Edits: []domain.Edit{
+		domain.AddTransactions{Transactions: []domain.NewTransaction{spend(time.Date(1999, 1, 1, 0, 0, 0, 0, time.UTC), "Old")}},
+	}})
 
 	if err == nil {
 		t.Error("expected an error")
@@ -277,39 +317,12 @@ func TestRenderDoesNotSpliceAFileTwice(t *testing.T) {
 	}
 }
 
-func TestAddTransactionsFindTheFileByAnyOfItsSpellings(t *testing.T) {
-	dir := t.TempDir()
-	sub := filepath.Join(dir, "sub.journal")
-	if err := os.WriteFile(sub, []byte(ordered), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	file := writeJournal(t, dir, "main.journal", "include sub.journal\n")
-
-	apply(t, file, domain.AddTransactions{
-		File: filepath.Join(dir, ".", "other", "..", "sub.journal"), Transactions: []domain.NewTransaction{spend(day(30), "E")},
-	})
-
-	if got := readFile(t, sub); !strings.Contains(got, "2026-09-30 E") {
-		t.Errorf("sub.journal = %q, want the transaction", got)
-	}
-}
-
-func TestAddTransactionsNamingTheMainJournalWriteThere(t *testing.T) {
-	file := journalWith(t, ordered)
-
-	apply(t, file, domain.AddTransactions{File: file.path, Transactions: []domain.NewTransaction{spend(day(30), "E")}})
-
-	if got := readFile(t, file.path); !strings.Contains(got, "2026-09-30 E") {
-		t.Errorf("journal = %q, want the transaction", got)
-	}
-}
-
 func TestAddTransactionsSeeATransactionWhoseLineIsOnlyADate(t *testing.T) {
-	file := journalWith(t, "2026-09-29\n    expenses:x  3,00 EUR\n    assets:checking\n")
+	file := withYear(t, "2026-09-29\n    expenses:x  3,00 EUR\n    assets:checking\n")
 
 	apply(t, file, domain.AddTransactions{Transactions: []domain.NewTransaction{spend(day(28), "B")}})
 
-	if got := readFile(t, file.path); !strings.HasPrefix(got, "2026-09-28 B\n") {
+	if got := readFile(t, file.yearPath(2026)); !strings.HasPrefix(got, "2026-09-28 B\n") {
 		t.Errorf("journal = %q, want B above the bare-date transaction", got)
 	}
 }
@@ -409,5 +422,17 @@ func TestReplaceRuleRefusesALineThatIsNoRuleAnymore(t *testing.T) {
 		if err == nil {
 			t.Errorf("%+v: expected an error", pos)
 		}
+	}
+}
+
+func TestRenderReportsAnUnreadableYearFile(t *testing.T) {
+	file := withYear(t, "2026-09-10 A\n")
+	if err := os.Chmod(file.yearPath(2026), 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(file.yearPath(2026), 0o644) })
+
+	if _, err := file.Render(domain.Changeset{}); err == nil {
+		t.Error("expected an error for a year file that cannot be read")
 	}
 }

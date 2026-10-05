@@ -140,15 +140,15 @@ func windowDir(t *testing.T, names ...string) string {
 	return dir
 }
 
-func septemberOf(year int) time.Time {
-	return time.Date(year, time.September, 30, 0, 0, 0, 0, time.UTC)
+func septemberOf(year int) func() time.Time {
+	return func() time.Time { return time.Date(year, time.September, 30, 0, 0, 0, 0, time.UTC) }
 }
 
 // The window is the main journal plus last year's and this year's file, oldest first.
 func TestWindowIsTheMainJournalAndTheLastTwoYears(t *testing.T) {
 	dir := windowDir(t, "2024.journal", "2025.journal", "2026.journal", "2027.journal")
 
-	got := NewFile(filepath.Join(dir, "main.journal")).Window(septemberOf(2026))
+	got := NewFile(filepath.Join(dir, "main.journal")).WithToday(septemberOf(2026)).Window()
 
 	want := []string{"main.journal", "2025.journal", "2026.journal"}
 	for i := range want {
@@ -164,10 +164,10 @@ func TestWindowSkipsMissingYearFiles(t *testing.T) {
 	dir := windowDir(t, "2026.journal")
 	main := filepath.Join(dir, "main.journal")
 
-	if got, want := NewFile(main).Window(septemberOf(2026)), []string{main, filepath.Join(dir, "2026.journal")}; !slices.Equal(got, want) {
+	if got, want := NewFile(main).WithToday(septemberOf(2026)).Window(), []string{main, filepath.Join(dir, "2026.journal")}; !slices.Equal(got, want) {
 		t.Errorf("Window = %v, want %v", got, want)
 	}
-	if got := NewFile(main).Window(septemberOf(2030)); !slices.Equal(got, []string{main}) {
+	if got := NewFile(main).WithToday(septemberOf(2030)).Window(); !slices.Equal(got, []string{main}) {
 		t.Errorf("Window in a year without files = %v, want only the main journal", got)
 	}
 }
@@ -180,7 +180,7 @@ func TestWindowIgnoresADirectoryNamedLikeAYear(t *testing.T) {
 	}
 	main := filepath.Join(dir, "main.journal")
 
-	if got := NewFile(main).Window(septemberOf(2026)); !slices.Equal(got, []string{main}) {
+	if got := NewFile(main).WithToday(septemberOf(2026)).Window(); !slices.Equal(got, []string{main}) {
 		t.Errorf("Window = %v, want only the main journal", got)
 	}
 }

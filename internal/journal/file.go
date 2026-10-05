@@ -24,13 +24,20 @@ const (
 	fileMode = 0o644
 )
 
-// File is the main journal file on disk.
+// File is the main journal file on disk, with the year files beside it (ADR 0013).
 type File struct {
-	path string
+	path  string
+	today func() time.Time // decides which years are the window
 }
 
-// NewFile returns the journal file at path.
-func NewFile(path string) File { return File{path: path} }
+// NewFile returns the journal file at path; the window follows the clock.
+func NewFile(path string) File { return File{path: path, today: time.Now} }
+
+// WithToday returns the file with today as the day the window is counted from.
+func (f File) WithToday(today func() time.Time) File {
+	f.today = today
+	return f
+}
 
 // Exists reports whether the journal file is there.
 func (f File) Exists() (bool, error) {
@@ -60,15 +67,28 @@ func (f File) Create() error {
 
 // Window is what hledger is given: the main journal plus last year's and this year's file when they
 // exist, oldest first (ADR 0013). Files of older years stay on disk, unloaded.
-func (f File) Window(today time.Time) []string {
+func (f File) Window() []string {
 	files := []string{f.path}
-	for year := today.Year() - 1; year <= today.Year(); year++ {
-		path := filepath.Join(filepath.Dir(f.path), fmt.Sprintf("%04d.journal", year))
-		if info, err := os.Stat(path); err == nil && info.Mode().IsRegular() {
+	for year := f.firstYear(); year <= f.lastYear(); year++ {
+		if path := f.yearPath(year); isFile(path) {
 			files = append(files, path)
 		}
 	}
 	return files
+}
+
+// firstYear and lastYear bound the window: last year and this year.
+func (f File) firstYear() int { return f.today().Year() - 1 }
+func (f File) lastYear() int  { return f.today().Year() }
+
+// yearPath is where the transactions of a year live.
+func (f File) yearPath(year int) string {
+	return filepath.Join(filepath.Dir(f.path), fmt.Sprintf("%04d.journal", year))
+}
+
+func isFile(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.Mode().IsRegular()
 }
 
 // writeNew creates path with content, failing if it already exists.

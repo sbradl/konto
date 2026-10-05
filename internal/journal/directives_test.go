@@ -22,7 +22,7 @@ func writeJournal(t *testing.T, dir, name, text string) File {
 	if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	return NewFile(path)
+	return NewFile(path).WithToday(func() time.Time { return time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC) })
 }
 
 const directivesJournal = `decimal-mark ,

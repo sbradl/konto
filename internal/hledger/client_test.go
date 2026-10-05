@@ -384,17 +384,36 @@ func TestTagMapSkipsMalformedTagsAndIsNilWithoutAny(t *testing.T) {
 	}
 }
 
-// Every query names each file of the journal with its own -f, in order.
-func TestQueriesNameEveryFileOfTheJournal(t *testing.T) {
-	var calls []call
-	client := newClient(recording(balanceReport(), nil, &calls), "/data/main.journal", "/data/2025.journal")
+// Balance assertions are checked per -f file but across an include, so a journal of several files reaches
+// hledger as one journal on standard input that includes them in order.
+func TestQueriesGiveSeveralFilesAsOneJournalThatIncludesThem(t *testing.T) {
+	var input string
+	var args []string
+	client := newClient(nil, "/data/main.journal", "/data/2025.journal", "/data/my 2026.journal")
+	client.runInput = inputReturning(balanceReport(), "", nil, &input, &args)
 
 	if _, err := client.Balances(context.Background()); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	want := []string{"-f", "/data/main.journal", "-f", "/data/2025.journal", "bal", "--flat", "-O", "json", "-E"}
-	if len(calls) != 1 || !reflect.DeepEqual(calls[0].args, want) {
+	wantArgs := []string{"-f", "-", "bal", "--flat", "-O", "json", "-E"}
+	wantInput := "include /data/main.journal\ninclude /data/2025.journal\ninclude /data/my 2026.journal\n"
+	if !reflect.DeepEqual(args, wantArgs) || input != wantInput {
+		t.Errorf("args = %v, input = %q; want %v and %q", args, input, wantArgs, wantInput)
+	}
+}
+
+// A single file is named with -f as it is.
+func TestQueriesNameASingleFileWithF(t *testing.T) {
+	var calls []call
+	client := newClient(recording(balanceReport(), nil, &calls), "/data/main.journal")
+
+	if _, err := client.Balances(context.Background()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if want := []string{"-f", "/data/main.journal", "bal", "--flat", "-O", "json", "-E"}; len(calls) != 1 ||
+		!reflect.DeepEqual(calls[0].args, want) {
 		t.Errorf("calls = %+v, want one call with %v", calls, want)
 	}
 }
@@ -402,16 +421,30 @@ func TestQueriesNameEveryFileOfTheJournal(t *testing.T) {
 // The files are asked for on every query: a year file created meanwhile joins the next one.
 func TestTheFilesAreResolvedOnEveryQuery(t *testing.T) {
 	var calls []call
+	var input string
+	var args []string
 	files := make([]string, 1, 2)
 	files[0] = "/data/main.journal"
 	client := newClient(recording(balanceReport(), nil, &calls))
 	client.files = func() []string { return files }
+	client.runInput = inputReturning(balanceReport(), "", nil, &input, &args)
 
 	_, _ = client.Balances(context.Background())
 	files = append(files, "/data/2026.journal")
 	_, _ = client.Balances(context.Background())
 
-	if len(calls) != 2 || len(calls[0].args) >= len(calls[1].args) || calls[1].args[2] != "-f" {
-		t.Errorf("calls = %+v, want the second query to name the new file too", calls)
+	if len(calls) != 1 || input != "include /data/main.journal\ninclude /data/2026.journal\n" {
+		t.Errorf("calls = %+v, input = %q; want the second query to include the new file", calls, input)
+	}
+}
+
+func TestSeveralFilesReportHledgerFailure(t *testing.T) {
+	var input string
+	var args []string
+	client := newClient(nil, "/data/main.journal", "/data/2026.journal")
+	client.runInput = inputReturning("", "boom", errors.New("exit status 1"), &input, &args)
+
+	if _, err := client.Balances(context.Background()); err == nil || !strings.Contains(err.Error(), "boom") {
+		t.Errorf("expected an error carrying hledger's message, got: %v", err)
 	}
 }

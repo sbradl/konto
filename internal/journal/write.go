@@ -66,16 +66,32 @@ func declares(line, directive, name string) bool {
 	return strings.TrimSpace(declared) == name
 }
 
-// addTransactions writes each transaction into the file at its date position.
-func addTransactions(sources []*source, edit domain.AddTransactions) error {
-	target, err := fileNamed(sources, edit.File)
-	if err != nil {
-		return err
-	}
+// addTransactions writes each transaction into the year file of its date, at its date position. A year
+// file that is not there yet starts empty; a year outside the window has no loaded file to go into.
+func (w *workspace) addTransactions(edit domain.AddTransactions) error {
 	for _, transaction := range edit.Transactions {
+		target, err := w.yearFile(transaction.Date.Year())
+		if err != nil {
+			return err
+		}
 		insertTransaction(target, transaction)
 	}
 	return nil
+}
+
+// yearFile is the source of the year's file, started in memory when the year has none yet.
+func (w *workspace) yearFile(year int) (*source, error) {
+	if year < w.firstYear || year > w.lastYear {
+		return nil, domain.RefusalError{Reason: fmt.Sprintf(
+			"a transaction dated %d is outside the loaded window %d–%d", year, w.firstYear, w.lastYear)}
+	}
+	path := w.yearPath(year)
+	if i := slices.IndexFunc(w.sources, func(s *source) bool { return s.path == path }); i >= 0 {
+		return w.sources[i], nil
+	}
+	created := &source{path: path, lines: []string{""}}
+	w.sources = append(w.sources, created)
+	return created, nil
 }
 
 // fileNamed is the journal file at the path; the main journal when the path is empty.

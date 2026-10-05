@@ -16,12 +16,18 @@ type source struct {
 }
 
 // sources reads the main journal and every file it includes, each once, a file before
-// the files it includes. Include patterns are relative to the including file; one that
-// matches nothing is skipped, as hledger does for globs.
+// the files it includes, then the year files of the window, oldest first. Include patterns are
+// relative to the including file; one that matches nothing is skipped, as hledger does for globs.
 func (f File) sources() ([]*source, error) {
 	var sources []*source
-	if err := readSource(f.path, map[string]bool{}, &sources); err != nil {
+	seen := map[string]bool{}
+	if err := readSource(f.path, seen, &sources); err != nil {
 		return nil, err
+	}
+	for _, path := range f.Window()[1:] {
+		if err := readSource(path, seen, &sources); err != nil {
+			return nil, err
+		}
 	}
 	return sources, nil
 }

@@ -9,9 +9,12 @@ math, or guarding a cache against stale money). It controls what hledger is give
   plus sibling `YYYY.journal` files. There is no existing-journal support and no migration; a new
   ledger starts empty. `main.journal` holds only directives (`account` with tags, `commodity`,
   payees) and `~` rules, never transactions and never an `include` of a year file.
-- **One load rule, no mode.** konto calls hledger with `-f main.journal -f <last year>.journal
-  -f <this year>.journal`, whichever of those exist. A ledger with no year files is just
-  `main.journal`.
+- **One load rule, no mode.** konto gives hledger `main.journal`, `<last year>.journal` and
+  `<this year>.journal`, whichever of those exist. A ledger with no year files is just
+  `main.journal`. Several files go to hledger as one journal on standard input that `include`s
+  them (`hledger -f -`), never as several `-f`: hledger checks balance assertions per `-f` file but
+  across an include, and CSV import writes a `= <balance>` assertion that needs every earlier
+  posting of the account.
 - **Writes route by nature.** A transaction goes to the file of its own year, created on first
   write. Directives and rules go to `main.journal`.
 - **Carry-over keeps balances right.** The first import that crosses into a new year writes a

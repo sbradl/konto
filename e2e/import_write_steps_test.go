@@ -4,11 +4,9 @@ package e2e
 
 import (
 	"cmp"
-	"context"
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -489,8 +487,7 @@ func (w *world) expectDeclares(text string, times int) error {
 
 func (w *world) expectBalance(account, want string) error {
 	return w.eventually(func() error {
-		out, err := exec.CommandContext(context.Background(), w.suite.realHledger,
-			"-f", w.journal, "bal", account, "-N", "--no-total").CombinedOutput()
+		out, err := hledgerOn(w.suite.realHledger, w.journal, "bal", account, "-N", "--no-total").CombinedOutput()
 		if err != nil {
 			return fmt.Errorf("hledger bal: %w: %s", err, out)
 		}
@@ -506,7 +503,7 @@ func (w *world) expectBalance(account, want string) error {
 
 func (w *world) expectCheck(name string) error {
 	return w.eventually(func() error {
-		out, err := exec.CommandContext(context.Background(), w.suite.realHledger, "-f", w.journal, "check", name).CombinedOutput()
+		out, err := hledgerOn(w.suite.realHledger, w.journal, "check", name).CombinedOutput()
 		if err != nil {
 			return fmt.Errorf("check %s: %s", name, out)
 		}
@@ -536,41 +533,14 @@ func (w *world) expectOpeningCounter(date, account string) error {
 	})
 }
 
-// splitJournal moves the transactions that match into a file the main journal includes.
-func (w *world) splitJournal(relative string, moves func(block string) bool) error {
-	text, err := os.ReadFile(w.journal)
-	if err != nil {
-		return err
-	}
-	blocks := blocksOf(string(text))
-	head, _, _ := strings.Cut(string(text), blocks[0])
-	var moved, kept []string
-	for _, block := range blocks {
-		if moves(block) {
-			moved = append(moved, block)
-		} else {
-			kept = append(kept, block)
-		}
-	}
-	path := filepath.Join(w.dir, relative)
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	if err := os.WriteFile(path, []byte(strings.Join(moved, "\n\n")+"\n"), 0o644); err != nil {
-		return err
-	}
-	main := head + "include " + relative + "\n\n" + strings.Join(kept, "\n\n") + "\n"
-	return os.WriteFile(w.journal, []byte(main), 0o644)
-}
-
-func (w *world) expectInFile(relative, header string) error {
+func (w *world) expectInYearFile(name, header string) error {
 	return w.eventually(func() error {
-		content, err := os.ReadFile(filepath.Join(w.dir, relative))
+		content, err := os.ReadFile(filepath.Join(filepath.Dir(w.journal), name))
 		if err != nil {
 			return err
 		}
 		if _, err := blockStarting(blocksOf(string(content)), header); err != nil {
-			return fmt.Errorf("%s: %w", relative, err)
+			return fmt.Errorf("%s: %w", name, err)
 		}
 		return nil
 	})
@@ -598,9 +568,12 @@ func (w *world) expectMainContains(text string) error {
 	})
 }
 
+// yearJournal is the year file of 2026, where the fixtures' import lands.
+func (w *world) yearJournal() string { return filepath.Join(filepath.Dir(w.journal), "2026.journal") }
+
 func (w *world) expectLastTransactionDated(date string) error {
 	return w.eventually(func() error {
-		content, err := os.ReadFile(w.journal)
+		content, err := os.ReadFile(w.yearJournal())
 		if err != nil {
 			return err
 		}
@@ -614,7 +587,7 @@ func (w *world) expectLastTransactionDated(date string) error {
 
 func (w *world) expectAbove(upper, lower string) error {
 	return w.eventually(func() error {
-		content, err := os.ReadFile(w.journal)
+		content, err := os.ReadFile(w.yearJournal())
 		if err != nil {
 			return err
 		}
@@ -745,24 +718,17 @@ func registerWriteJournalSteps(sc *godog.ScenarioContext, w *world) {
 }
 
 func registerWriteFixtureSteps(sc *godog.ScenarioContext, w *world) {
-	step(sc, `^the journal "([^"]*)" where every "([^"]*)" transaction lives in included file "([^"]*)"$`,
-		func(name, account, file string) error {
-			if err := w.useJournal(name, ""); err != nil {
+	step(sc, `^the journal "([^"]*)" with an unrelated transaction dated ([\d-]+) as the last entry of the year file$`,
+		func(name, date string) error {
+			if err := w.useJournal(name, "\npayee Unrelated\n"); err != nil {
 				return err
 			}
-			return w.splitJournal(file, func(block string) bool { return strings.Contains(block, account) })
+			unrelated := date + " Unrelated\n    assets:savings  1,00 EUR\n    equity:opening-balances\n"
+			return os.WriteFile(w.yearJournal(), []byte(unrelated), 0o644)
 		})
-	step(sc, `^the journal "([^"]*)" where every transaction lives in included file "([^"]*)"$`, func(name, file string) error {
-		if err := w.useJournal(name, ""); err != nil {
-			return err
-		}
-		return w.splitJournal(file, func(string) bool { return true })
+	step(sc, `^the new transactions are in the year file "([^"]*)"$`, func(file string) error {
+		return w.expectInYearFile(file, "2026-09-30 REWE Markt")
 	})
-	step(sc, `^the journal "([^"]*)" with an unrelated transaction dated ([\d-]+) as the last entry of the file$`,
-		func(name, date string) error {
-			return w.useJournal(name, "\npayee Unrelated\n\n"+date+" Unrelated\n    assets:savings  1,00 EUR\n    equity:opening-balances\n")
-		})
-	step(sc, `^the new transactions are in "([^"]*)"$`, func(file string) error { return w.expectInFile(file, "2026-09-30 REWE Markt") })
 	step(sc, `^the main journal has no new transaction$`, w.expectMainHasNoNewTransaction)
 	step(sc, `^the main journal contains "([^"]*)"$`, w.expectMainContains)
 	step(sc, `^the main journal contains the opening balance for "([^"]*)"$`, func(account string) error {

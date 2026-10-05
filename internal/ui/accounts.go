@@ -144,7 +144,7 @@ func (m Model) onImportKey(key string) (Model, tea.Cmd) {
 // being written (rows without a category, a balance the bank does not share) is a message in the view.
 func (m Model) planImport() Model {
 	staged, _ := m.imports.Staged() // the view asks to write only with an import staged
-	plan, err := staged.Plan(*m.ledger)
+	plan, err := staged.Plan()
 	if err != nil {
 		m.imports = m.imports.WithMessage(err.Error())
 		return m

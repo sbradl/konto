@@ -233,7 +233,7 @@ func (w *world) expectEditorCall(want string) error {
 
 func registerFileSteps(sc *godog.ScenarioContext, w *world) {
 	step(sc, `^the journal contains$`, func(doc *godog.DocString) error {
-		return w.eventually(func() error { return expectFileBlock(w.journal, doc.Content) })
+		return w.eventually(func() error { return w.expectJournalBlock(doc.Content) })
 	})
 	step(sc, `^categories.rules contains$`, func(doc *godog.DocString) error {
 		return w.eventually(func() error { return expectFileBlock(w.rules, doc.Content) })
@@ -418,6 +418,18 @@ func expectFileBlock(path, want string) error {
 		return fmt.Errorf("%s does not contain\n%s\n--- actual ---\n%s", filepath.Base(path), want, b)
 	}
 	return nil
+}
+
+// expectJournalBlock waits for the lines to appear in one of the ledger's journal files.
+func (w *world) expectJournalBlock(want string) error {
+	var names []string
+	for path, content := range w.journalFiles() {
+		if containsBlock(string(content), want) {
+			return nil
+		}
+		names = append(names, filepath.Base(path))
+	}
+	return fmt.Errorf("none of %v contains\n%s", names, want)
 }
 
 func expectUnchanged(path string, before []byte) error {

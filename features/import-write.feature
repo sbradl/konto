@@ -138,21 +138,19 @@ Feature: Import — writing, assertions, opening balance, staging and quitting
 
   Rule: Write target and ordering
 
-    Scenario: the account's latest transaction's file receives the rows
-      Given the journal "household" where every "assets:checking" transaction lives in included file "sub/checking.journal"
-      And I start konto
+    # ADR 0013: a transaction goes to the year file of its date; directives stay in the main journal.
+    Scenario: rows go to the year file of their date
       When I import "sept.csv" categorising every row
-      Then the new transactions are in "sub/checking.journal"
+      Then the new transactions are in the year file "2026.journal"
       And the main journal has no new transaction
 
-    Scenario: new directives go to the main journal even when rows go to an include
-      Given the journal "household" where every "assets:checking" transaction lives in included file "sub/checking.journal"
-      And I start konto
+    Scenario: new directives go to the main journal while rows go to the year file
       When I import "sept.csv" creating the category "expenses:cafe" for "Kaffeehaus"
       Then the main journal contains "account expenses:cafe"
+      And the main journal has no new transaction
 
     Scenario: rows are inserted at their date position, not appended
-      Given the journal "household" with an unrelated transaction dated 2026-09-29 as the last entry of the file
+      Given the journal "household" with an unrelated transaction dated 2026-09-29 as the last entry of the year file
       And I start konto
       When I import "sept.csv" categorising every row
       Then the "2026-09-28 Kaffeehaus" transaction is above the unrelated "2026-09-29" transaction
@@ -337,13 +335,10 @@ Feature: Import — writing, assertions, opening balance, staging and quitting
       When I create the account "assets:wallet" from "x.csv" and import every row
       Then the journal's "opening balance" is dated "2025-12-31"
 
-    @proposed
-    Scenario: the opening balance is written to the main journal even when other accounts live in includes
-      Given the journal "household" where every transaction lives in included file "sub/all.journal"
-      And I start konto
+    Scenario: the opening balance is written to the year file of its date, the account directive to the main journal
       When I create the account "assets:holiday" from "new.csv" and import every row
       Then the main journal contains "account assets:holiday"
-      And the main journal contains the opening balance for "assets:holiday"
+      And the main journal has no new transaction
 
     Scenario: a later CSV for the new account dedups against the first import
       Given I create the account "assets:holiday" and import every row

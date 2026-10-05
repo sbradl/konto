@@ -5,7 +5,10 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -52,6 +55,24 @@ func equalLines(a, b []string) bool {
 	return true
 }
 
+var yearFile = regexp.MustCompile(`^\d{4}\.journal$`)
+
+// hledgerOn builds an hledger command on the ledger whose main journal is at journal: the main journal and the
+// year files beside it, as one journal that includes them (hledger checks balance assertions per -f file, but
+// across an include).
+func hledgerOn(hledger, journal string, args ...string) *exec.Cmd {
+	includes := "include " + journal + "\n"
+	entries, _ := os.ReadDir(filepath.Dir(journal))
+	for _, entry := range entries {
+		if yearFile.MatchString(entry.Name()) {
+			includes += "include " + filepath.Join(filepath.Dir(journal), entry.Name()) + "\n"
+		}
+	}
+	cmd := exec.CommandContext(context.Background(), hledger, append([]string{"-f", "-"}, args...)...) //nolint:gosec // test helper
+	cmd.Stdin = strings.NewReader(includes)
+	return cmd
+}
+
 // runChecks runs hledger's checks on the journal: all at once, or one
 // invocation per check so each failure is reported (hledger stops at the
 // first).
@@ -65,8 +86,7 @@ func runChecks(hledger, journal string, individually bool) error {
 	}
 	var failures []string
 	for _, g := range groups {
-		args := append([]string{"-f", journal, "check"}, g...)
-		if out, err := exec.CommandContext(context.Background(), hledger, args...).CombinedOutput(); err != nil {
+		if out, err := hledgerOn(hledger, journal, append([]string{"check"}, g...)...).CombinedOutput(); err != nil {
 			failures = append(failures, fmt.Sprintf("check %s: %s", strings.Join(g, " "), strings.TrimSpace(string(out))))
 		}
 	}

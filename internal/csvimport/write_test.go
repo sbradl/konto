@@ -36,9 +36,9 @@ func weekImport() Staged {
 	return staged
 }
 
-func planned(t *testing.T, staged Staged, ledger domain.Ledger) Plan {
+func planned(t *testing.T, staged Staged) Plan {
 	t.Helper()
-	plan, err := staged.Plan(ledger)
+	plan, err := staged.Plan()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -46,7 +46,7 @@ func planned(t *testing.T, staged Staged, ledger domain.Ledger) Plan {
 }
 
 func TestPlanRefusesAnImportWithNoRows(t *testing.T) {
-	_, err := Staged{}.Plan(domain.Ledger{})
+	_, err := Staged{}.Plan()
 
 	if !errors.Is(err, ErrNothingToWrite) {
 		t.Errorf("err = %v, want ErrNothingToWrite", err)
@@ -58,7 +58,7 @@ func TestPlanRefusesWhileRowsNeedACategory(t *testing.T) {
 		"1 row needs a category": {debit("A")},
 		"2 rows need a category": {debit("A"), debit("B")},
 	} {
-		_, err := stagedRows(rows...).Plan(domain.Ledger{})
+		_, err := stagedRows(rows...).Plan()
 
 		if got := refusal(t, err); got != want {
 			t.Errorf("refusal = %q, want %q", got, want)
@@ -67,7 +67,7 @@ func TestPlanRefusesWhileRowsNeedACategory(t *testing.T) {
 }
 
 func TestPlanWritesRowsOldestFirstWithTheAssertionOnTheNewest(t *testing.T) {
-	plan := planned(t, weekImport(), domain.Ledger{})
+	plan := planned(t, weekImport())
 
 	var added domain.AddTransactions
 	for _, edit := range plan.Changeset.Edits {
@@ -99,7 +99,7 @@ func TestPlanWritesRowsOldestFirstWithTheAssertionOnTheNewest(t *testing.T) {
 }
 
 func TestPlanDeclaresWhatIsNewAndWritesTheStagedRules(t *testing.T) {
-	plan := planned(t, weekImport(), domain.Ledger{})
+	plan := planned(t, weekImport())
 
 	want := []domain.Edit{
 		domain.Declare{Directive: "account", Name: "expenses:cafe"},
@@ -122,7 +122,7 @@ func TestPlanDeclaresTheRuleTagForARuleWithoutRows(t *testing.T) {
 	staged := weekImport()
 	staged.Rows[0].RuleID, staged.Rows[1].RuleID = "", ""
 
-	plan := planned(t, staged, domain.Ledger{})
+	plan := planned(t, staged)
 
 	if !slices.Contains(plan.Changeset.Edits, domain.Edit(domain.Declare{Directive: "tag", Name: "konto-rule"})) {
 		t.Error("the staged rule's tag is not declared")
@@ -134,7 +134,7 @@ func TestPlanDeclaresNoRuleTagWhenNothingCarriesOne(t *testing.T) {
 	staged.Rows[0].RuleID, staged.Rows[1].RuleID = "", ""
 	staged.Rules = nil
 
-	plan := planned(t, staged, domain.Ledger{})
+	plan := planned(t, staged)
 
 	if slices.Contains(plan.Changeset.Edits, domain.Edit(domain.Declare{Directive: "tag", Name: "konto-rule"})) {
 		t.Error("a rule tag is declared though no posting carries one")
@@ -142,7 +142,7 @@ func TestPlanDeclaresNoRuleTagWhenNothingCarriesOne(t *testing.T) {
 }
 
 func TestPlanPreviewListsTransactionsNewestFirstThenDirectivesAndRules(t *testing.T) {
-	plan := planned(t, weekImport(), domain.Ledger{})
+	plan := planned(t, weekImport())
 
 	if plan.Preview[0] != "2026-09-30 REWE Markt  ; Einkauf" {
 		t.Errorf("preview starts %q, want the newest transaction", plan.Preview[0])
@@ -157,28 +157,11 @@ func TestPlanPreviewListsTransactionsNewestFirstThenDirectivesAndRules(t *testin
 	}
 }
 
-func TestPlanWritesToTheFileOfTheAccountsLatestTransaction(t *testing.T) {
-	ledger := domain.Ledger{Transactions: []domain.Transaction{
-		{Source: domain.SourcePos{File: "/j/old.journal"}, Postings: []domain.Posting{{Account: checking}}},
-		{Source: domain.SourcePos{File: "/j/other.journal"}, Postings: []domain.Posting{{Account: "assets:savings"}}},
-		{Source: domain.SourcePos{File: "/j/sub/checking.journal"}, Postings: []domain.Posting{{Account: checking}}},
-		{Source: domain.SourcePos{File: "/j/other.journal"}, Postings: []domain.Posting{{Account: "assets:savings"}}},
-	}}
-
-	plan := planned(t, weekImport(), ledger)
-
-	for _, edit := range plan.Changeset.Edits {
-		if added, ok := edit.(domain.AddTransactions); ok && added.File != "/j/sub/checking.journal" {
-			t.Errorf("file = %q, want the latest checking transaction's", added.File)
-		}
-	}
-}
-
 func TestPlanBlocksAnExportThatDoesNotReachTheBanksBalance(t *testing.T) {
 	staged := weekImport()
 	staged.Closing = "13.182,03"
 
-	_, err := staged.Plan(domain.Ledger{})
+	_, err := staged.Plan()
 
 	var blocked BalanceMismatchError
 	if !errors.As(err, &blocked) {
@@ -199,7 +182,7 @@ func TestPlanReportsAnUnreadableClosingBalance(t *testing.T) {
 		staged := weekImport()
 		staged.Closing = closing
 
-		if _, err := staged.Plan(domain.Ledger{}); err == nil || !strings.Contains(err.Error(), "closing balance") {
+		if _, err := staged.Plan(); err == nil || !strings.Contains(err.Error(), "closing balance") {
 			t.Errorf("closing %q: err = %v, want a closing-balance error", closing, err)
 		}
 	}
@@ -230,7 +213,7 @@ func TestPlanForANewAccountOpensItsBalanceTheDayBeforeTheOldestRow(t *testing.T)
 		NewAccounts: []string{"income:interest", "expenses:cash"},
 	}
 
-	plan := planned(t, staged, domain.Ledger{})
+	plan := planned(t, staged)
 
 	text := strings.Join(plan.Preview, "\n")
 	for _, want := range []string{
@@ -245,11 +228,6 @@ func TestPlanForANewAccountOpensItsBalanceTheDayBeforeTheOldestRow(t *testing.T)
 	}
 	if plan.Count != 3 || plan.Account != "assets:holiday" {
 		t.Errorf("count, account = %d, %q", plan.Count, plan.Account)
-	}
-	for _, edit := range plan.Changeset.Edits {
-		if added, ok := edit.(domain.AddTransactions); ok && added.File != "" {
-			t.Errorf("file = %q, want the main journal", added.File)
-		}
 	}
 }
 
@@ -384,7 +362,7 @@ func TestPlanWritesEurosWhenTheLedgerHasNoBalanceToTakeAStyleFrom(t *testing.T) 
 	staged := weekImport()
 	staged.Zero = nil
 
-	plan := planned(t, staged, domain.Ledger{})
+	plan := planned(t, staged)
 
 	if text := strings.Join(plan.Preview, "\n"); !strings.Contains(text, "assets:checking  -42,17 EUR = 13.192,63 EUR") {
 		t.Errorf("preview =\n%s", text)

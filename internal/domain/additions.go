@@ -50,10 +50,9 @@ func commentOf(comment string) string {
 	return "  ; " + comment
 }
 
-// AddTransactions writes transactions into a journal file, each at the position its date gives it, so
-// the file stays date-ordered. File is the path hledger reports for the file; empty means the main journal.
+// AddTransactions writes transactions into the year file of their date (ADR 0013), each at the position
+// its date gives it, so the file stays date-ordered.
 type AddTransactions struct {
-	File         string
 	Transactions []NewTransaction
 }
 

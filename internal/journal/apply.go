@@ -13,9 +13,11 @@ import (
 
 // workspace is the journal's files as edits change them, and the categories.rules file beside the journal.
 type workspace struct {
-	sources   []*source
-	rulesPath string
-	rules     *source // read when an edit first needs it
+	sources             []*source
+	rulesPath           string
+	rules               *source // read when an edit first needs it
+	firstYear, lastYear int     // the window's years
+	yearPath            func(year int) string
 }
 
 // plan makes the edits in memory; nothing is written.
@@ -24,7 +26,10 @@ func (f File) plan(changeset domain.Changeset) (*workspace, error) {
 	if err != nil {
 		return nil, err
 	}
-	work := &workspace{sources: sources, rulesPath: f.rulesPath()}
+	work := &workspace{
+		sources: sources, rulesPath: f.rulesPath(),
+		firstYear: f.firstYear(), lastYear: f.lastYear(), yearPath: f.yearPath,
+	}
 	for _, edit := range changeset.Edits {
 		if err := work.apply(edit); err != nil {
 			return nil, err
@@ -69,7 +74,14 @@ func (f File) Render(changeset domain.Changeset) (string, error) {
 	for _, file := range work.sources {
 		byPath[file.path] = file
 	}
-	return flatten(byPath, work.sources[0], map[string]bool{}), nil
+	var text strings.Builder
+	text.WriteString(flatten(byPath, work.sources[0], map[string]bool{}))
+	for year := f.firstYear(); year <= f.lastYear(); year++ {
+		if file, ok := byPath[f.yearPath(year)]; ok {
+			text.WriteString(strings.Join(file.lines, "\n"))
+		}
+	}
+	return text.String(), nil
 }
 
 // flatten is the file's text with each `include` line replaced by the text of the files it names. Every
@@ -113,7 +125,7 @@ func (w *workspace) apply(edit domain.Edit) error {
 	case domain.Declare:
 		declare(w.sources, change)
 	case domain.AddTransactions:
-		return addTransactions(w.sources, change)
+		return w.addTransactions(change)
 	case domain.SetCategoryRule:
 		return w.setCategoryRule(change)
 	case domain.AddRule:
