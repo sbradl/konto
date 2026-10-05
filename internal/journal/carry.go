@@ -8,9 +8,9 @@ import (
 	"github.com/sbradl/konto/internal/domain"
 )
 
-// CarryYears are the years whose carry the changeset leaves stale (ADR 0013): every loaded year after the
-// earliest year written to, and a year file the changeset starts, as long as an earlier year file is loaded
-// to carry from. Oldest first, so each carry is computed on top of the one before.
+// CarryYears are the years whose carry the changeset leaves stale (ADR 0013): every year with a file after the
+// earliest year written to, loaded or not, and a year file the changeset starts, as long as an earlier year
+// file is there to carry from. Oldest first, so each carry is computed on top of the one before.
 func (f File) CarryYears(changeset domain.Changeset) ([]int, error) {
 	work, err := f.plan(changeset)
 	if err != nil {
@@ -20,17 +20,20 @@ func (f File) CarryYears(changeset domain.Changeset) ([]int, error) {
 		return nil, nil
 	}
 	earliest := slices.Min(work.touched)
-	var years []int
-	for year := work.firstYear; year <= work.lastYear; year++ {
-		if work.hasYear(year) && work.priorYear(year) != 0 && (year > earliest || work.created[year]) {
-			years = append(years, year)
-		}
-	}
-	return years, nil
+	return slices.DeleteFunc(work.years(), func(year int) bool {
+		return year < earliest || work.priorYear(year) == 0 || (year == earliest && !work.created[year])
+	}), nil
 }
 
-// hasYear reports a year file that is read or started.
-func (w *workspace) hasYear(year int) bool { return w.findYear(year) != nil }
+// years are the years that have a file, on disk or started by the edits, oldest first.
+func (w *workspace) years() []int {
+	years := slices.Clone(w.onDisk)
+	for year := range w.created {
+		years = append(years, year)
+	}
+	slices.Sort(years)
+	return slices.Compact(years)
+}
 
 func (w *workspace) findYear(year int) *source {
 	path := w.yearPath(year)
@@ -40,14 +43,25 @@ func (w *workspace) findYear(year int) *source {
 	return nil
 }
 
-// priorYear is the latest loaded year before year that has a file; 0 when there is none.
-func (w *workspace) priorYear(year int) int {
-	for earlier := year - 1; earlier >= w.firstYear; earlier-- {
-		if w.hasYear(earlier) {
-			return earlier
-		}
+// readYear reads the year's file from disk into the workspace.
+func (w *workspace) readYear(year int) (*source, error) {
+	seen := map[string]bool{}
+	for _, s := range w.sources {
+		seen[s.path] = true
 	}
-	return 0
+	if err := readSource(w.yearPath(year), seen, &w.sources); err != nil {
+		return nil, err
+	}
+	return w.findYear(year), nil
+}
+
+// priorYear is the latest year before year that has a file; 0 when there is none.
+func (w *workspace) priorYear(year int) int {
+	earlier := slices.DeleteFunc(w.years(), func(y int) bool { return y >= year })
+	if len(earlier) == 0 {
+		return 0
+	}
+	return earlier[len(earlier)-1]
 }
 
 // setCarry replaces the managed carry into the edit's year.

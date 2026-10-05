@@ -164,24 +164,46 @@ func TestAddTransactionsGoToTheYearFileOfTheirDate(t *testing.T) {
 	}
 }
 
-func TestAddTransactionsRefuseDatesOutsideTheWindow(t *testing.T) {
-	for name, date := range map[string]time.Time{
-		"older than last year": time.Date(2024, 12, 31, 0, 0, 0, 0, time.UTC),
-		"next year":            time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC),
-	} {
-		file := journalWith(t, "x\n")
+func TestAddTransactionsOlderThanTheWindowGoToTheirOwnYearFile(t *testing.T) {
+	file := journalWith(t, "x\n")
+	old := time.Date(2024, 12, 31, 0, 0, 0, 0, time.UTC)
 
-		err := file.Apply(domain.Changeset{Edits: []domain.Edit{
-			domain.AddTransactions{Transactions: []domain.NewTransaction{spend(date, "Out")}},
-		}})
+	apply(t, file, domain.AddTransactions{Transactions: []domain.NewTransaction{spend(old, "Old")}})
 
-		var refusal domain.RefusalError
-		if !errors.As(err, &refusal) || !strings.Contains(refusal.Reason, "2025") {
-			t.Errorf("%s: error = %v, want a refusal naming the window", name, err)
-		}
-		if isFile(file.yearPath(date.Year())) {
-			t.Errorf("%s: a file for %d was written", name, date.Year())
-		}
+	if got, want := readFile(t, file.yearPath(2024)), "2024-12-31 Old\n    expenses:x\n    assets:checking\n"; got != want {
+		t.Errorf("2024.journal = %q, want %q", got, want)
+	}
+}
+
+func TestAddTransactionsAddToAnOlderYearFileThatIsOnDisk(t *testing.T) {
+	file := journalWith(t, "x\n")
+	if err := os.WriteFile(file.yearPath(2023), []byte("2023-01-05 Z\n    expenses:x\n    assets:checking\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	apply(t, file, domain.AddTransactions{Transactions: []domain.NewTransaction{
+		spend(time.Date(2023, 1, 2, 0, 0, 0, 0, time.UTC), "Early"),
+	}})
+
+	if got := readFile(t, file.yearPath(2023)); !strings.HasPrefix(got, "2023-01-02 Early\n") || !strings.Contains(got, "2023-01-05 Z") {
+		t.Errorf("2023.journal = %q, want the new row above the old one", got)
+	}
+}
+
+func TestAddTransactionsRefuseNextYear(t *testing.T) {
+	file := journalWith(t, "x\n")
+	next := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	err := file.Apply(domain.Changeset{Edits: []domain.Edit{
+		domain.AddTransactions{Transactions: []domain.NewTransaction{spend(next, "Out")}},
+	}})
+
+	var refusal domain.RefusalError
+	if !errors.As(err, &refusal) || !strings.Contains(refusal.Reason, "2027") || !strings.Contains(refusal.Reason, "2026") {
+		t.Errorf("error = %v, want a refusal naming 2027 and this year", err)
+	}
+	if isFile(file.yearPath(2027)) {
+		t.Error("a file for 2027 was written")
 	}
 }
 
@@ -286,7 +308,7 @@ func TestRenderReportsAnEditThatDoesNotApply(t *testing.T) {
 	file := journalWith(t, "x\n")
 
 	_, err := file.Render(domain.Changeset{Edits: []domain.Edit{
-		domain.AddTransactions{Transactions: []domain.NewTransaction{spend(time.Date(1999, 1, 1, 0, 0, 0, 0, time.UTC), "Old")}},
+		domain.AddTransactions{Transactions: []domain.NewTransaction{spend(time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC), "Future")}},
 	}})
 
 	if err == nil {
@@ -434,5 +456,28 @@ func TestRenderReportsAnUnreadableYearFile(t *testing.T) {
 
 	if _, err := file.Render(domain.Changeset{}); err == nil {
 		t.Error("expected an error for a year file that cannot be read")
+	}
+}
+
+// An older year's file is part of the text, so the carry into the next year can be added up from it.
+func TestRenderIncludesTheOlderYearFileTheEditsTouch(t *testing.T) {
+	file := withYear(t, "2026-09-10 A\n")
+	if err := os.WriteFile(file.yearPath(2020), []byte("2020-01-01 Far\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(file.yearPath(2021), []byte("2021-01-01 Untouched\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := file.Render(domain.Changeset{Edits: []domain.Edit{
+		domain.AddTransactions{Transactions: []domain.NewTransaction{spend(time.Date(2020, 2, 1, 0, 0, 0, 0, time.UTC), "E")}},
+	}})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	want := "decimal-mark ,\n2020-01-01 Far\n\n2020-02-01 E\n    expenses:x\n    assets:checking\n2026-09-10 A\n"
+	if got != want {
+		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }

@@ -67,7 +67,7 @@ func declares(line, directive, name string) bool {
 }
 
 // addTransactions writes each transaction into the year file of its date, at its date position. A year
-// file that is not there yet starts empty; a year outside the window has no loaded file to go into.
+// file that is not there yet starts empty; a year after this one is refused.
 func (w *workspace) addTransactions(edit domain.AddTransactions) error {
 	for _, transaction := range edit.Transactions {
 		target, err := w.yearFile(transaction.Date.Year())
@@ -80,14 +80,18 @@ func (w *workspace) addTransactions(edit domain.AddTransactions) error {
 	return nil
 }
 
-// yearFile is the source of the year's file, started in memory when the year has none yet.
+// yearFile is the source of the year's file: read when it is on disk and not loaded yet, started in memory
+// when the year has none.
 func (w *workspace) yearFile(year int) (*source, error) {
-	if year < w.firstYear || year > w.lastYear {
+	if year > w.lastYear {
 		return nil, domain.RefusalError{Reason: fmt.Sprintf(
-			"a transaction dated %d is outside the loaded window %d–%d", year, w.firstYear, w.lastYear)}
+			"a transaction dated %d is after this year, %d", year, w.lastYear)}
 	}
 	if found := w.findYear(year); found != nil {
 		return found, nil
+	}
+	if slices.Contains(w.onDisk, year) {
+		return w.readYear(year)
 	}
 	created := &source{path: w.yearPath(year), lines: []string{""}}
 	w.sources = append(w.sources, created)

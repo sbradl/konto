@@ -23,3 +23,19 @@ Feature: Carry-over between year files
     When I import "jan.csv" categorising every row
     And I press "1"
     Then I see a "NET WORTH" card showing "840,00 EUR"
+
+  # A new account whose export reaches back before last year: its oldest rows go to year files that stay
+  # unloaded (2025 here), the carry chain 2025 → 2026 → 2027 keeps the loaded balances right.
+  Scenario: rows older than the window are written to their own year files with the carry chain
+    Given a Postbank CSV "old.csv" for IBAN "DE91100000000123456789" with closing balance 140,00 EUR:
+      | date       | type       | payee | purpose | amount |
+      | 3.3.2027   | Auszahlung | Bar   | Geld    | -10,00 |
+      | 15.12.2025 | Gutschrift | Oma   | Geld    | 100,00 |
+    When I create the account "assets:savings" from "old.csv" and import every row
+    Then "2025.journal" ends with a closing balance of "-150,00 EUR" on "assets:savings"
+    And "2026.journal" starts with an opening balance of "150,00 EUR" on "assets:savings"
+    And "2026.journal" ends with a closing balance of "-150,00 EUR" on "assets:savings"
+    And "2027.journal" starts with an opening balance of "150,00 EUR" on "assets:savings"
+    And hledger check passes
+    When I press "1"
+    Then I see a "NET WORTH" card showing "990,00 EUR"

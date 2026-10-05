@@ -6,6 +6,9 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -84,6 +87,20 @@ func (f File) lastYear() int  { return f.today().Year() }
 // yearPath is where the transactions of a year live.
 func (f File) yearPath(year int) string {
 	return filepath.Join(filepath.Dir(f.path), fmt.Sprintf("%04d.journal", year))
+}
+
+// yearsOnDisk are the years that have a year file beside the journal, loaded or not, oldest first.
+func (f File) yearsOnDisk() []int {
+	pattern := filepath.Join(filepath.Dir(f.path), "[0-9][0-9][0-9][0-9].journal")
+	paths, _ := filepath.Glob(pattern) // only a bad pattern errs
+	years := make([]int, 0, len(paths))
+	for _, path := range paths {
+		if year, err := strconv.Atoi(strings.TrimSuffix(filepath.Base(path), ".journal")); err == nil && isFile(path) {
+			years = append(years, year)
+		}
+	}
+	slices.Sort(years)
+	return years
 }
 
 func isFile(path string) bool {

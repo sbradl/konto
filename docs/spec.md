@@ -305,7 +305,7 @@ jump-to-location — its only use in v1 (no `e`-to-editor on list views, ADR 001
   stdin — a failing `= <balance>` assertion blocks with bank / journal / difference.
   Each transaction goes to the year file of its own date (created on first write; ADR 0013),
   date-ordered insert, payees declared. A crossing into a new year also writes the carry; rows
-  older than last year go to their own year files, unloaded.
+  older than last year go to their own year files, unloaded, with the carry chain between them.
 - **After the write**: status-bar confirmation (`imported N transactions into <account>`),
   then Import returns to its empty start state (`n` picks the next file). The staged import
   survives view switches (views stay alive, §6.1); `q` / `Ctrl+C` with a staged import asks y/n before

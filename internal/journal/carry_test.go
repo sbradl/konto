@@ -100,6 +100,7 @@ func TestSetCarryLeavesAYearWithoutALoadedPriorFileAlone(t *testing.T) {
 func TestCarryYearsAreTheYearsAfterTheEarliestWrittenOneAndANewFile(t *testing.T) {
 	later := domain.AddTransactions{Transactions: []domain.NewTransaction{{Date: time.Date(2027, 1, 10, 0, 0, 0, 0, time.UTC), Description: "x"}}}
 	late := domain.AddTransactions{Transactions: []domain.NewTransaction{{Date: time.Date(2026, 12, 20, 0, 0, 0, 0, time.UTC), Description: "x"}}}
+	early := domain.AddTransactions{Transactions: []domain.NewTransaction{{Date: time.Date(2024, 5, 1, 0, 0, 0, 0, time.UTC), Description: "x"}}}
 	tests := []struct {
 		name  string
 		files map[int]string
@@ -110,6 +111,9 @@ func TestCarryYearsAreTheYearsAfterTheEarliestWrittenOneAndANewFile(t *testing.T
 		{"a late row of last year", map[int]string{2026: carriedYear, 2027: "x\n"}, late, []int{2027}},
 		{"a row of the newest year", map[int]string{2026: carriedYear, 2027: "x\n"}, later, nil},
 		{"the first year file", nil, later, nil},
+		{"a row older than the window", map[int]string{2026: carriedYear, 2027: "x\n"}, early, []int{2026, 2027}},
+		{"a row older than the window, a file in between", map[int]string{2024: "x\n", 2025: "x\n", 2027: "x\n"}, early, []int{2025, 2027}},
+		{"a new year file with an unloaded year before it", map[int]string{2024: "x\n"}, later, []int{2027}},
 		{"no transactions", map[int]string{2026: carriedYear}, domain.Declare{Directive: "payee", Name: "x"}, nil},
 	}
 	for _, test := range tests {
@@ -127,17 +131,29 @@ func TestCarryYearsAreTheYearsAfterTheEarliestWrittenOneAndANewFile(t *testing.T
 
 func TestCarryYearsReportsAnEditThatDoesNotApply(t *testing.T) {
 	file := inJanuary2027(t, nil)
-	old := domain.AddTransactions{Transactions: []domain.NewTransaction{{Date: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)}}}
+	future := domain.AddTransactions{Transactions: []domain.NewTransaction{{Date: time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC)}}}
 
-	if _, err := file.CarryYears(domain.Changeset{Edits: []domain.Edit{old}}); err == nil {
-		t.Error("want the refusal of a row outside the window")
+	if _, err := file.CarryYears(domain.Changeset{Edits: []domain.Edit{future}}); err == nil {
+		t.Error("want the refusal of a row in the future")
 	}
 }
 
-func TestSetCarryRefusesAYearOutsideTheWindow(t *testing.T) {
+func TestSetCarryRefusesAYearInTheFuture(t *testing.T) {
 	file := inJanuary2027(t, nil)
 
-	if err := file.Apply(domain.Changeset{Edits: []domain.Edit{domain.SetCarry{Year: 2020}}}); err == nil {
-		t.Error("want the refusal of a year outside the window")
+	if err := file.Apply(domain.Changeset{Edits: []domain.Edit{domain.SetCarry{Year: 2030}}}); err == nil {
+		t.Error("want the refusal of a year in the future")
+	}
+}
+
+func TestSetCarryClosesAnOlderYearFileThatIsNotLoaded(t *testing.T) {
+	file := inJanuary2027(t, map[int]string{2024: "2024-02-01 A\n    expenses:x  1,00 EUR\n    assets:checking\n", 2027: ""})
+
+	apply(t, file, domain.SetCarry{Year: 2027, Balances: balances(900)})
+
+	want := "2024-02-01 A\n    expenses:x  1,00 EUR\n    assets:checking\n\n" +
+		"2024-12-31 closing balance  ; konto:carry\n    assets:checking  -9,00 EUR\n    equity:opening-balances\n"
+	if got := readFile(t, file.yearPath(2024)); got != want {
+		t.Errorf("2024 =\n%s\nwant\n%s", got, want)
 	}
 }

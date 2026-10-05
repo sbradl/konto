@@ -13,13 +13,14 @@ import (
 
 // workspace is the journal's files as edits change them, and the categories.rules file beside the journal.
 type workspace struct {
-	sources             []*source
-	rulesPath           string
-	rules               *source // read when an edit first needs it
-	firstYear, lastYear int     // the window's years
-	yearPath            func(year int) string
-	touched             []int        // the years transactions were added to
-	created             map[int]bool // the years whose file the edits started
+	sources   []*source
+	rulesPath string
+	rules     *source // read when an edit first needs it
+	lastYear  int     // this year: nothing is written after it
+	yearPath  func(year int) string
+	onDisk    []int        // the years that have a file, loaded or not
+	touched   []int        // the years transactions were added to
+	created   map[int]bool // the years whose file the edits started
 }
 
 // plan makes the edits in memory; nothing is written.
@@ -30,7 +31,7 @@ func (f File) plan(changeset domain.Changeset) (*workspace, error) {
 	}
 	work := &workspace{
 		sources: sources, rulesPath: f.rulesPath(),
-		firstYear: f.firstYear(), lastYear: f.lastYear(), yearPath: f.yearPath, created: map[int]bool{},
+		lastYear: f.lastYear(), yearPath: f.yearPath, onDisk: f.yearsOnDisk(), created: map[int]bool{},
 	}
 	for _, edit := range changeset.Edits {
 		if err := work.apply(edit); err != nil {
@@ -66,7 +67,8 @@ func (f File) Apply(changeset domain.Changeset) error {
 }
 
 // Render is the journal as it would read after the changeset, its included files spliced in where they are
-// included, so hledger can check it from standard input without anything being written.
+// included, then the year files the changeset reads or starts (older, unloaded ones it touches among them),
+// so hledger can check it from standard input without anything being written.
 func (f File) Render(changeset domain.Changeset) (string, error) {
 	work, err := f.plan(changeset)
 	if err != nil {
@@ -78,8 +80,8 @@ func (f File) Render(changeset domain.Changeset) (string, error) {
 	}
 	var text strings.Builder
 	text.WriteString(flatten(byPath, work.sources[0], map[string]bool{}))
-	for year := f.firstYear(); year <= f.lastYear(); year++ {
-		if file, ok := byPath[f.yearPath(year)]; ok {
+	for _, year := range work.years() {
+		if file := work.findYear(year); file != nil {
 			text.WriteString(strings.Join(file.lines, "\n"))
 		}
 	}
