@@ -61,15 +61,16 @@ var yearFile = regexp.MustCompile(`^\d{4}\.journal$`)
 // year files beside it, as one journal that includes them (hledger checks balance assertions per -f file, but
 // across an include).
 func hledgerOn(hledger, journal string, args ...string) *exec.Cmd {
-	includes := "include " + journal + "\n"
+	var includes strings.Builder
+	includes.WriteString("include " + journal + "\n")
 	entries, _ := os.ReadDir(filepath.Dir(journal))
 	for _, entry := range entries {
 		if yearFile.MatchString(entry.Name()) {
-			includes += "include " + filepath.Join(filepath.Dir(journal), entry.Name()) + "\n"
+			includes.WriteString("include " + filepath.Join(filepath.Dir(journal), entry.Name()) + "\n")
 		}
 	}
-	cmd := exec.CommandContext(context.Background(), hledger, append([]string{"-f", "-"}, args...)...) //nolint:gosec // test helper
-	cmd.Stdin = strings.NewReader(includes)
+	cmd := exec.CommandContext(context.Background(), hledger, append([]string{"-f", "-"}, args...)...)
+	cmd.Stdin = strings.NewReader(includes.String())
 	return cmd
 }
 
