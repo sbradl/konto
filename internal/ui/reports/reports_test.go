@@ -209,6 +209,18 @@ func TestBeforeTheFirstReportThePanelsAreEmptyToo(t *testing.T) {
 	}
 }
 
+func TestTheBarSaysLoadingUntilTheFirstReportArrives(t *testing.T) {
+	loading := plain(New().Resize(180, 30).View())
+	loaded := plain(New().Resize(180, 30).WithReport(domain.Report{Period: domain.MonthToDate}).View())
+
+	if !strings.Contains(loading, "loading the reports") {
+		t.Errorf("before the first report:\n%s", loading)
+	}
+	if strings.Contains(loaded, "loading") {
+		t.Errorf("after the first report:\n%s", loaded)
+	}
+}
+
 func TestLongLabelsAreCutToKeepTheAmounts(t *testing.T) {
 	report := sample()
 	report.BalanceSheet[1].Label = strings.Repeat("long:", 30)

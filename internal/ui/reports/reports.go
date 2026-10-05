@@ -28,6 +28,7 @@ type Model struct {
 	offset int
 	width  int
 	height int
+	loaded bool // the first report has arrived
 }
 
 // New returns a Reports view on month to date with nothing loaded yet.
@@ -44,7 +45,7 @@ func (m Model) NextPeriod() Model {
 
 // WithReport shows a freshly built report, keeping the scroll position when it still fits.
 func (m Model) WithReport(report domain.Report) Model {
-	m.report = report
+	m.report, m.loaded = report, true
 	m.offset = min(m.offset, m.maxOffset())
 	return m
 }
@@ -90,6 +91,9 @@ func (m Model) Move(key string) Model {
 // View draws the period bar above the two panels.
 func (m Model) View() string {
 	bar := " " + theme.Dim.Render("period") + "  " + theme.Bold.Render(m.period.String())
+	if !m.loaded {
+		bar += "  " + theme.Dim.Render("loading the reports…")
+	}
 	sheetWidth := m.width / panelCount
 	height := m.height - periodRows
 	sheet := layout.Panel("BALANCE SHEET", sheetWidth, height, m.table(m.report.BalanceSheet, sheetWidth-panelChrome))
