@@ -75,6 +75,7 @@ func (w *workspace) addTransactions(edit domain.AddTransactions) error {
 			return err
 		}
 		insertTransaction(target, transaction)
+		w.touched = append(w.touched, transaction.Date.Year())
 	}
 	return nil
 }
@@ -85,12 +86,12 @@ func (w *workspace) yearFile(year int) (*source, error) {
 		return nil, domain.RefusalError{Reason: fmt.Sprintf(
 			"a transaction dated %d is outside the loaded window %d–%d", year, w.firstYear, w.lastYear)}
 	}
-	path := w.yearPath(year)
-	if i := slices.IndexFunc(w.sources, func(s *source) bool { return s.path == path }); i >= 0 {
-		return w.sources[i], nil
+	if found := w.findYear(year); found != nil {
+		return found, nil
 	}
-	created := &source{path: path, lines: []string{""}}
+	created := &source{path: w.yearPath(year), lines: []string{""}}
 	w.sources = append(w.sources, created)
+	w.created[year] = true
 	return created, nil
 }
 

@@ -9,7 +9,7 @@ import (
 // Every edit kind is an Edit; the closed set is what lets the journal adapter switch over it.
 func TestEditKindsAreEdits(*testing.T) {
 	for _, edit := range []Edit{
-		SetAccountTag{}, RemoveAccountTag{}, DeleteRule{}, Declare{}, AddTransactions{}, SetCategoryRule{}, AddRule{}, ReplaceRule{},
+		SetAccountTag{}, RemoveAccountTag{}, DeleteRule{}, Declare{}, AddTransactions{}, SetCategoryRule{}, AddRule{}, ReplaceRule{}, SetCarry{},
 	} {
 		edit.isEdit()
 	}

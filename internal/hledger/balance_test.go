@@ -321,3 +321,42 @@ func TestMonthlyActivityRejectsGarbage(t *testing.T) {
 		}
 	}
 }
+
+func TestTextBalancesAskAboutAssetsAndLiabilitiesBeforeTheDayFromStandardInput(t *testing.T) {
+	var input string
+	var args []string
+	out := balanceReport(row("assets:checking", amountJSON("EUR", 90000, eurStyle)))
+	client := &Client{runInput: inputReturning(out, "", nil, &input, &args)}
+
+	got, err := client.TextBalances(context.Background(), "journal text", time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC))
+
+	want := []string{"-f", "-", "bal", "--flat", "-O", "json", "-e", "2027-01-01", "^assets:", "^liabilities:"}
+	if err != nil || input != "journal text" || !reflect.DeepEqual(args, want) {
+		t.Fatalf("err = %v, input = %q, args = %v; want %v", err, input, args, want)
+	}
+	if len(got) != 1 || got[0].Name != "assets:checking" || got[0].Balance[0].Mantissa != 90000 {
+		t.Errorf("balances = %+v", got)
+	}
+}
+
+func TestTextBalancesReportHledgersWordsWhenItFails(t *testing.T) {
+	var input string
+	var args []string
+	client := &Client{runInput: inputReturning("", "bad journal\n", errors.New("exit 1"), &input, &args)}
+
+	_, err := client.TextBalances(context.Background(), "x", time.Time{})
+
+	if err == nil || !strings.Contains(err.Error(), "bad journal") {
+		t.Errorf("err = %v", err)
+	}
+}
+
+func TestTextBalancesRejectUnreadableOutput(t *testing.T) {
+	var input string
+	var args []string
+	client := &Client{runInput: inputReturning("oops", "", nil, &input, &args)}
+
+	if _, err := client.TextBalances(context.Background(), "x", time.Time{}); err == nil {
+		t.Error("want an error for output that is no report")
+	}
+}

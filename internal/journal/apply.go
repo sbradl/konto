@@ -18,6 +18,8 @@ type workspace struct {
 	rules               *source // read when an edit first needs it
 	firstYear, lastYear int     // the window's years
 	yearPath            func(year int) string
+	touched             []int        // the years transactions were added to
+	created             map[int]bool // the years whose file the edits started
 }
 
 // plan makes the edits in memory; nothing is written.
@@ -28,7 +30,7 @@ func (f File) plan(changeset domain.Changeset) (*workspace, error) {
 	}
 	work := &workspace{
 		sources: sources, rulesPath: f.rulesPath(),
-		firstYear: f.firstYear(), lastYear: f.lastYear(), yearPath: f.yearPath,
+		firstYear: f.firstYear(), lastYear: f.lastYear(), yearPath: f.yearPath, created: map[int]bool{},
 	}
 	for _, edit := range changeset.Edits {
 		if err := work.apply(edit); err != nil {
@@ -128,6 +130,8 @@ func (w *workspace) apply(edit domain.Edit) error {
 		return w.addTransactions(change)
 	case domain.SetCategoryRule:
 		return w.setCategoryRule(change)
+	case domain.SetCarry:
+		return w.setCarry(change)
 	case domain.AddRule:
 		return addRule(w.sources, change)
 	case domain.ReplaceRule:

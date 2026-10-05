@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/sbradl/konto/internal/domain"
@@ -166,6 +167,21 @@ func (c *Client) flatBalances(ctx context.Context, extra ...string) ([]domain.Ac
 	if err != nil {
 		return nil, err
 	}
+	return readFlatBalances(out)
+}
+
+// TextBalances returns the asset and liability balances of journal text given on standard input, counting
+// every transaction dated before the day; zero balances are left out. Nothing on disk is read.
+func (c *Client) TextBalances(ctx context.Context, text string, before time.Time) ([]domain.Account, error) {
+	out, stderr, err := c.runInput(ctx, text, "-f", "-", "bal", "--flat", "-O", "json",
+		"-e", before.Format(time.DateOnly), "^assets:", "^liabilities:")
+	if err != nil {
+		return nil, fmt.Errorf("hledger bal: %w: %s", err, strings.TrimSpace(stderr))
+	}
+	return readFlatBalances(out)
+}
+
+func readFlatBalances(out []byte) ([]domain.Account, error) {
 	var report []json.RawMessage // [rows, totals]
 	if err := json.Unmarshal(out, &report); err != nil || len(report) == 0 {
 		return nil, fmt.Errorf("reading hledger bal output: %w", err)
@@ -178,6 +194,7 @@ func (c *Client) flatBalances(ctx context.Context, extra ...string) ([]domain.Ac
 	for i, row := range rows {
 		balance := make(domain.MultiAmount, len(row.amounts))
 		for j, raw := range row.amounts {
+			var err error
 			if balance[j], err = raw.amount(); err != nil {
 				return nil, fmt.Errorf("reading hledger bal output: %w", err)
 			}

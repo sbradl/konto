@@ -1,0 +1,11 @@
+2026-03-01 Acme GmbH
+    assets:checking  1.500,00 EUR
+    income:salary
+
+2026-12-28 Vermieter Mueller
+    expenses:rent  500,00 EUR
+    assets:checking
+
+2026-12-31 closing balance  ; konto:carry
+    assets:checking  -1.000,00 EUR
+    equity:opening-balances

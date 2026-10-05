@@ -644,6 +644,7 @@ func registerImportWriteSteps(sc *godog.ScenarioContext, w *world) {
 	registerWriteJournalSteps(sc, w)
 	registerWriteFixtureSteps(sc, w)
 	registerWriteAccountSteps(sc, w)
+	registerCarrySteps(sc, w)
 }
 
 func registerWriteFlowSteps(sc *godog.ScenarioContext, w *world) {

@@ -1,0 +1,11 @@
+2027-01-01 opening balance  ; konto:carry
+    assets:checking  1.000,00 EUR
+    equity:opening-balances
+
+2027-06-01 Vermieter Mueller
+    expenses:rent  200,00 EUR
+    assets:checking
+
+2027-12-30 Acme GmbH
+    assets:checking  50,00 EUR
+    income:salary

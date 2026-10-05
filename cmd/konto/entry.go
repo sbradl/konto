@@ -9,6 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sbradl/konto/internal/accounts"
+	"github.com/sbradl/konto/internal/carry"
 	"github.com/sbradl/konto/internal/checks"
 	"github.com/sbradl/konto/internal/config"
 	"github.com/sbradl/konto/internal/csvimport"
@@ -43,10 +44,11 @@ func runProgram(cfg config.Config) error {
 	rulesPath := filepath.Join(filepath.Dir(cfg.JournalPath), "categories.rules")
 	client := hledger.New("hledger", file.Window)
 	loader := ledger.NewLoader(client, file, today)
+	writer := carry.NewWriter(file, client)
 	home, _ := os.UserHomeDir() // without a home the picker falls back to a relative Downloads
 	_, err := tea.NewProgram(ui.New(cfg.JournalPath, ui.Ports{
 		Loader: loader, Checker: checks.NewRunner(client), Creator: file, Editor: openInEditor,
-		Accounts: accounts.NewService(file, today), Writer: file, Verifier: checks.NewVerifier(file, client),
+		Accounts: accounts.NewService(file, today), Writer: writer, Verifier: checks.NewVerifier(writer, client),
 		Reports: report.NewService(client, today), Forecast: forecast.NewService(client, today),
 		Rules:    periodic.NewService(client, today),
 		Importer: csvimport.NewService(files.System{}, client, rulesPath), DownloadDir: downloadDir(os.Getenv, home),

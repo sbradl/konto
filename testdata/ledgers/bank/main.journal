@@ -1,0 +1,18 @@
+decimal-mark ,
+commodity 1.000,00 EUR
+
+account equity:opening-balances
+account assets:transfers  ; konto:source:clearing
+account assets:checking  ; konto:source:import, konto:iban:DE89370400440532013000, konto:format:postbank
+account expenses:groceries
+account expenses:rent
+account income:salary
+
+tag konto
+tag konto-rule
+
+payee Acme GmbH
+payee Vermieter Mueller
+payee REWE Markt
+payee opening balance
+payee closing balance

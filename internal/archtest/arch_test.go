@@ -63,6 +63,7 @@ var layers = map[string]layer{
 	"internal/ledger":    layerUseCase,
 	"internal/accounts":  layerUseCase,
 	"internal/checks":    layerUseCase,
+	"internal/carry":     layerUseCase,
 	"internal/report":    layerUseCase,
 	"internal/csvimport": layerUseCase,
 	"internal/periodic":  layerUseCase,
