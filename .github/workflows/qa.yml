@@ -57,12 +57,13 @@ jobs:
     runs-on: ubuntu-latest
     env:
       KONTO_E2E_ARTIFACTS: ${{ github.workspace }}/e2e-artifacts
-      # 2-vCPU runner x 4 parallel scenarios: the 5s local wait budget flakes
+      # 2-vCPU runner: the 5s local wait budget flakes, and so do 4 parallel
+      # scenarios (the local default), so the run below uses 2
       KONTO_E2E_TIMEOUT: 20s
     steps:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup
-      - run: mise run test:e2e
+      - run: mise run test:e2e -- -godog.concurrency=2
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

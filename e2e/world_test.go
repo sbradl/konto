@@ -317,7 +317,8 @@ func (w *world) session() (*session, error) {
 // sent while "loading journal…" shows are (rightly) ignored; the Reports view fills in a moment later.
 func (w *world) waitLoaded(s *session) {
 	s.waitFor(w.suite.timeout, func(screen string) bool {
-		return !strings.Contains(screen, "loading journal…") && !strings.Contains(screen, "loading the reports…")
+		return !strings.Contains(screen, "loading journal…") && !strings.Contains(screen, "loading the reports…") &&
+			!strings.Contains(screen, "loading the forecast…")
 	})
 }
 
