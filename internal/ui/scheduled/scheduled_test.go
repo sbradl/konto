@@ -240,3 +240,34 @@ func TestSelectedIsTheRuleUnderTheCursor(t *testing.T) {
 		t.Errorf("an empty view has no selection")
 	}
 }
+
+// selectionBackground matches the "sel" background (colour 8, bright 100) in a style sequence, wherever it sits.
+var selectionBackground = regexp.MustCompile(`\x1b\[(?:[0-9]+;)*100(?:;[0-9]+)*m`)
+
+// selectedLines are the rows of the raw view that carry the cursor's highlight.
+func selectedLines(view string) []string {
+	var rows []string
+	for row := range strings.SplitSeq(view, "\n") {
+		if selectionBackground.MatchString(row) {
+			rows = append(rows, plain(row))
+		}
+	}
+	return rows
+}
+
+func TestExactlyTheRowUnderTheCursorIsHighlightedAndAlwaysVisible(t *testing.T) {
+	ledger := domain.Ledger{}
+	for i := range 40 {
+		ledger.Rules = append(ledger.Rules, rule(i+1, "monthly", fmt.Sprintf("Rule %02d", i)))
+	}
+	m := New().Resize(180, 30).WithLedger(ledger)
+
+	for step := range 39 {
+		m = m.Move("down")
+
+		rows := selectedLines(m.View())
+		if len(rows) != 1 || !strings.Contains(rows[0], fmt.Sprintf("Rule %02d", step+1)) {
+			t.Fatalf("after %d downs the highlighted rows are %q", step+1, rows)
+		}
+	}
+}

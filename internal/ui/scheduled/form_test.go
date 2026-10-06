@@ -372,3 +372,27 @@ func TestOtherKeysLeaveADropdownAlone(t *testing.T) {
 		t.Errorf("view:\n%s", view)
 	}
 }
+
+func TestTheCursorCannotRunPastTheLastMatch(t *testing.T) {
+	m, _ := pressed(opened(), "tab", "tab", "tab", "tab", "tab", "tab")
+	m = typed(m, "assets:")
+
+	m, _ = pressed(m, "down", "down", "down", "down", "up", "enter")
+
+	if view := screen(m); !strings.Contains(view, "from account        assets:nothing") {
+		t.Errorf("one up from the end is the middle of three matches:\n%s", view)
+	}
+}
+
+func TestTheHighlightedPickerRowIsTheOneUnderTheCursor(t *testing.T) {
+	m, _ := pressed(opened(), "tab", "tab", "tab", "tab", "tab", "tab")
+	m = typed(m, "assets:")
+
+	m, _ = pressed(m, "down")
+
+	highlighted := strings.Join(selectedLines(m.View()), "\n")
+	if !strings.Contains(highlighted, "assets:nothing") || strings.Contains(highlighted, "assets:checking") ||
+		strings.Contains(highlighted, "assets:wallet") {
+		t.Errorf("highlighted rows:\n%s", highlighted)
+	}
+}

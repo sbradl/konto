@@ -1,0 +1,40 @@
+╭─ RULES ──────────────────────────────────────────────────╮
+│ 2026-10-01  Vermie  monthly f  upcoming                  │
+│ 2026-10-05  Stream  monthly f  upcoming                  │
+│             Old on  2026-01-0  none in the next 12 months│
+╰──────────────────────────────────────────────────────────╯
+╭─ ENTRY ────────────────────╮╭─ OCCURRENCES ──────────────╮
+│ ~ monthly from 2026-10-01  ││ 2026-10-01                 │
+│     expenses:rent  900,00 E││ 2026-11-01                 │
+│     assets:checking        ││ 2026-12-01                 │
+│                            ││ 2027-01-01                 │
+│                            ││ 2027-02-01                 │
+│                            ││ 2027-03-01                 │
+│                            │╰────────────────────────────╯
+│                            │╭─ ANNUAL IMPACT ────────────╮
+│                            ││ Vermieter Mu  -6.300,00 EUR│
+│                            ││ Streaming        -26,00 EUR│
+│                            ││ Old once-off              0│
+│                            ││ Total         -6.326,00 EUR│
+│                            ││                            │
+│                            ││                            │
+│                            ││                            │
+│                            ││                            │
+│                            ││                            │
+│                            ││                            │
+│                            ││                            │
+│                            ││                            │
+│                            ││                            │
+│                            ││                            │
+│                            ││                            │
+│                            ││                            │
+─ new periodic rule ────────────────────────────────────────
+▸next due date       ▏
+ frequency           once  weekly  biweekly  [monthly]  quar
+ remaining payments  
+ description         
+ amount              
+ currency            [EUR]  PLN
+ from account        —
+ to account          —
+ Tab next field · ←/→ choose · Enter save · Esc cancel

@@ -117,9 +117,9 @@ func (f *form) pickerLines() []string {
 	if len(matches) == 0 {
 		return []string{"   " + theme.Dim.Render("no account matches")}
 	}
-	first := max(0, min(f.cursor-pickerRows+1, len(matches)-pickerRows))
+	first := max(0, f.cursor-pickerRows+1)
 	last := min(len(matches), first+pickerRows)
-	lines := make([]string, 0, last-first)
+	lines := make([]string, 0, pickerRows)
 	for i := first; i < last; i++ {
 		text := "   " + matches[i]
 		if i == f.cursor {

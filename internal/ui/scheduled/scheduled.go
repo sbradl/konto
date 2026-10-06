@@ -123,7 +123,7 @@ func (m Model) list(height int) string {
 		return layout.Panel("RULES", m.width, height, theme.Dim.Render(" no rules — press n to add a rule"))
 	}
 	last := min(len(m.schedules), m.offset+m.pageSize())
-	rows := make([]string, 0, last-m.offset)
+	rows := make([]string, 0, m.pageSize())
 	for i := m.offset; i < last; i++ {
 		line := ruleLine(m.schedules[i], inner)
 		if i == m.cursor {

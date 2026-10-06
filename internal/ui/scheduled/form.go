@@ -199,7 +199,7 @@ func (f *form) pick() {
 		f.message = "no account matches " + f.filter
 		return
 	}
-	chosen := matches[min(f.cursor, len(matches)-1)]
+	chosen := matches[f.cursor] // the cursor never leaves the matches
 	if f.focus == fieldFrom {
 		f.input.From = chosen
 		f.input.Currency = f.currencyHeldBy(chosen)
