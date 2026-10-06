@@ -1,0 +1,30 @@
+╭─ EUR ─────────────────╮
+│                       │
+│ ● assets:checking     │
+│ ● assets:savings      │
+│ ● liabilities:creditca│
+│                       │
+│                       │
+│                       │
+│                       │
+│                       │
+│                       │
+│                       │
+│                       │
+│                       │
+│                       │
+│                       │
+│                       │
+│                       │
+│                       │
+│                       │
+│                       │
+│                       │
+╰───────────────────────╯
+╭─ MILESTONES ──────────╮
+│                       │
+│ EUR                   │
+│  assets:checking      │
+│  assets:savings       │
+│  liabilities:creditcar│
+╰───────────────────────╯

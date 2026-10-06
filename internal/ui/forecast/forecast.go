@@ -29,7 +29,6 @@ const (
 	yLabelStep    = 2    // rows between y labels
 	headroom      = 1.1  // the y axis reaches this far beyond the extreme balances
 	labelRoom     = 1.06 // the x axis runs this far beyond the last month, so its label fits
-	hoursPerDay   = 24
 	nameGap       = 2
 	legendGap     = "   "
 	tableTitle    = "MILESTONES"
@@ -148,7 +147,7 @@ func number(amount domain.Amount) float64 {
 func (m Model) plot(chart forecastsvc.Chart, width, height int) string {
 	low, high := bounds(chart)
 	begin, end := m.forecast.Begin, m.forecast.End
-	span := days(begin, end)
+	span := elapsed(begin, end)
 	canvasHeight := max(axisRows+1, height)
 	plot := linechart.New(width, canvasHeight, 0, span*labelRoom, low, high,
 		linechart.WithXYSteps(1, yLabelStep),
@@ -160,7 +159,7 @@ func (m Model) plot(chart forecastsvc.Chart, width, height int) string {
 	labels := monthLabels(plot, begin, chart.Lines[0].Points, span)
 	plot.XLabelFormatter = func(i int, _ float64) string { return labels[i] }
 	plot.DrawXYAxisAndLabel()
-	today := days(begin, m.forecast.Today)
+	today := elapsed(begin, m.forecast.Today)
 	marker := [2]canvas.Float64Point{{X: today, Y: low}, {X: today, Y: high}}
 	plot.DrawBrailleLineWithStyle(marker[0], marker[1], theme.Dim)
 	for _, line := range chart.Lines {
@@ -169,8 +168,8 @@ func (m Model) plot(chart forecastsvc.Chart, width, height int) string {
 	return strings.TrimRight(plot.View(), "\n")
 }
 
-// days is the number of days from one date to another.
-func days(from, to time.Time) float64 { return to.Sub(from).Hours() / hoursPerDay }
+// elapsed is the x coordinate of a date: the hours since the chart begins.
+func elapsed(from, to time.Time) float64 { return to.Sub(from).Hours() }
 
 // bounds are the y range of the chart: from the lowest balance, or zero, to a little above the highest.
 func bounds(chart forecastsvc.Chart) (low, high float64) {
@@ -179,9 +178,7 @@ func bounds(chart forecastsvc.Chart) (low, high float64) {
 			low, high = math.Min(low, number(point.Balance)), math.Max(high, number(point.Balance))
 		}
 	}
-	if low < 0 {
-		low *= headroom
-	}
+	low *= headroom // never above zero
 	return low, math.Max(high*headroom, low+1)
 }
 
@@ -191,10 +188,10 @@ func monthLabels(plot linechart.Model, begin time.Time, points []forecastsvc.Poi
 	column := func(day float64) int {
 		return int(math.Round(day * float64(plot.GraphWidth()-1) / (span * labelRoom)))
 	}
-	labels := make(map[int]string, len(points)+1)
+	labels := make(map[int]string, len(points))
 	labels[0] = begin.Format("Jan")
 	for _, point := range points {
-		labels[column(days(begin, point.End))] = point.End.AddDate(0, 0, -1).Format("Jan")
+		labels[column(elapsed(begin, point.End))] = point.End.AddDate(0, 0, -1).Format("Jan")
 	}
 	return labels
 }
@@ -205,8 +202,8 @@ func drawLine(plot linechart.Model, line forecastsvc.Line, begin time.Time) {
 	for i := 1; i < len(line.Points); i++ {
 		from, to := line.Points[i-1], line.Points[i]
 		plot.DrawBrailleLineWithStyle(
-			canvas.Float64Point{X: days(begin, from.End), Y: number(from.Balance)},
-			canvas.Float64Point{X: days(begin, to.End), Y: number(to.Balance)}, style)
+			canvas.Float64Point{X: elapsed(begin, from.End), Y: number(from.Balance)},
+			canvas.Float64Point{X: elapsed(begin, to.End), Y: number(to.Balance)}, style)
 	}
 }
 

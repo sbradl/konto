@@ -1,0 +1,24 @@
+╭─ EUR ────────────────────────────────────────────────────╮
+│35.2k│  ⢠⣤⣤⣤⣤⣤⣤⣤⣤⣤⣤⣤⣤⣤⣼⣤⣤⣤⣤⣤⣤⣴⣶⣶⣒⣒⣒⣒⣒⣒⣒⣒⣒⣒⣒⣒⣒⣒⣒⣒⣒⣒⣒⣛⣛⣛⣛   │
+│-0.2k└────────────────────────────────────────────────────│
+│     Mar  May   Jul  Sep  Nov   Jan  Mar  May   Jul  Sep  │
+│ ● assets:checking   ● assets:savings                     │
+│ ● liabilities:creditcard   ● assets:extra-01             │
+│ ● assets:extra-02   ● assets:extra-03   ● assets:extra-04│
+│ ● assets:extra-05   ● assets:extra-06   ● assets:extra-07│
+╰──────────────────────────────────────────────────────────╯
+╭─ MILESTONES ─────────────────────────────────────────────╮
+│                                  today      +3 months    │
+│ EUR                                                      │
+│  assets:checking          6.500,00 EUR  11.000,00 EUR  15│
+│  assets:savings          13.500,00 EUR  15.000,00 EUR  16│
+│  liabilities:creditcard    -140,00 EUR    -140,00 EUR    │
+│  assets:extra-01          1.000,00 EUR   1.000,00 EUR   1│
+│  assets:extra-02          1.000,00 EUR   1.000,00 EUR   1│
+│  assets:extra-03          1.000,00 EUR   1.000,00 EUR   1│
+│  assets:extra-04          1.000,00 EUR   1.000,00 EUR   1│
+│  assets:extra-05          1.000,00 EUR   1.000,00 EUR   1│
+│  assets:extra-06          1.000,00 EUR   1.000,00 EUR   1│
+│  assets:extra-07          1.000,00 EUR   1.000,00 EUR   1│
+│  assets:extra-08          1.000,00 EUR   1.000,00 EUR   1│
+╰──────────────────────────────────────────────────────────╯
