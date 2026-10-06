@@ -44,12 +44,8 @@ func (m Model) titleRule(title string) string {
 // windowed cuts the body to capacity lines that keep the selected line in view; the selected line is the
 // one the dialog marks with the cursor.
 func (m Model) windowed(body []string, capacity int) []string {
-	if len(body) <= capacity {
-		return body
-	}
-	selected := m.selectedLine()
-	start := max(0, min(selected-capacity+1, len(body)-capacity))
-	return body[start : start+capacity]
+	start := max(0, m.selectedLine()-capacity+1) // the selected line is never past the body's end
+	return body[start:min(len(body), start+capacity)]
 }
 
 // selectedLine is the index in the dialog body of the entry under the list cursor.
@@ -205,9 +201,8 @@ func (m Model) pickerLines() []string {
 
 // accountLines is the name input for the account a new IBAN stands for.
 func (m Model) accountLines() []string {
-	refusal := m.refusalLines()
-	lines := make([]string, 0, 2+len(refusal))
-	lines = append(lines, field("name", m.dlg.filter, 0, 0),
-		" "+theme.Dim.Render("for "+m.staged.IBAN+" · Enter creates · Esc abandons"))
-	return append(lines, refusal...)
+	return append([]string{
+		field("name", m.dlg.filter, 0, 0),
+		" " + theme.Dim.Render("for "+m.staged.IBAN+" · Enter creates · Esc abandons"),
+	}, m.refusalLines()...)
 }

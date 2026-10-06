@@ -83,11 +83,7 @@ func (m Model) picker(height int) string {
 		if rows[i].IsDir && name != parentEntry {
 			name += "/"
 		}
-		line := " " + name
-		if i == m.pickCursor {
-			line = theme.Selected.Render(fit(line, m.width-panelChrome))
-		}
-		lines = append(lines, line)
+		lines = append(lines, listLine(name, i, m.pickCursor, m.innerWidth()))
 	}
 	return layout.Panel(pickerTitle, m.width, height, strings.Join(lines, "\n"))
 }

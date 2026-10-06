@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/sbradl/konto/internal/csvimport"
 	"github.com/sbradl/konto/internal/domain"
+	"github.com/sbradl/konto/internal/ui/theme"
 )
 
 var euro = domain.AmountStyle{Spaced: true, DecimalMark: ",", GroupMark: ".", GroupSize: 3}
@@ -382,5 +384,102 @@ func TestEnterInAnEmptyPickerDoesNothing(t *testing.T) {
 
 	if _, action := m.Key("enter"); action != (Action{}) {
 		t.Errorf("action = %+v, want none", action)
+	}
+}
+
+// spans are the texts that follow each occurrence of the style's opening sequence, up to its reset.
+func spans(raw string, style lipgloss.Style) []string {
+	opening, _, _ := strings.Cut(style.Render("x"), "x")
+	parts := strings.Split(raw, opening)[1:]
+	found := make([]string, 0, len(parts))
+	for _, part := range parts {
+		text, _, _ := strings.Cut(part, "\x1b[m")
+		found = append(found, text)
+	}
+	return found
+}
+
+func TestExactlyTheRowUnderTheCursorIsHighlightedAndAlwaysVisible(t *testing.T) {
+	m := New("/dl").Resize(100, 30).WithStaged(bigImport(40, 0))
+
+	for step := range 42 {
+		m, _ = m.Key("down")
+
+		highlighted := spans(m.View(), theme.Selected)
+		want := min(step+1, 42)
+		if len(highlighted) != 1 || !strings.Contains(highlighted[0], rowName(want)) ||
+			lipgloss.Width(highlighted[0]) != 100-panelChrome-2 {
+			t.Fatalf("after %d downs the highlighted spans are %q", step+1, highlighted)
+		}
+	}
+}
+
+// rowName is the description of the staged row at the index, after the three of the sample file.
+func rowName(index int) string {
+	if index < 3 {
+		return []string{"REWE Markt", "Bäckerei Schmidt", "Kiosk"}[index]
+	}
+	return fmt.Sprintf("Row %02d", index-3)
+}
+
+func TestSkippedRowsAreCutToTheInnerWidth(t *testing.T) {
+	m := New("/dl").Resize(100, 30).WithStaged(staged())
+
+	var widths []int
+	for row := range strings.SplitSeq(m.View(), "\n") {
+		if strings.Contains(row, "Sparen") || strings.Contains(row, "Acme") {
+			for _, span := range spans(row, theme.Dim) {
+				widths = append(widths, lipgloss.Width(span))
+			}
+		}
+	}
+
+	if !slices.Contains(widths, 100-panelChrome) {
+		t.Errorf("dim span widths = %v, want one of %d", widths, 100-panelChrome)
+	}
+}
+
+func TestExactlyTheEntryUnderThePickersCursorIsHighlightedAndAlwaysVisible(t *testing.T) {
+	entries := make([]domain.FileEntry, 0, 30)
+	for i := range 30 {
+		entries = append(entries, domain.FileEntry{Name: fmt.Sprintf("f%02d.csv", i)})
+	}
+	m, _ := New("/dl").Resize(100, 14).Key("n")
+	m = m.WithListing("/dl", entries, nil)
+
+	for step := range 30 {
+		m, _ = m.Key("down")
+
+		highlighted := spans(m.View(), theme.Selected)
+		if len(highlighted) != 1 || !strings.Contains(highlighted[0], fmt.Sprintf("f%02d.csv", step)) ||
+			lipgloss.Width(highlighted[0]) != 100-panelChrome {
+			t.Fatalf("after %d downs the highlighted spans are %q", step+1, highlighted)
+		}
+	}
+}
+
+func TestHighlightedAndSkippedLinesFillExactlyTheWidthTheyAreGiven(t *testing.T) {
+	row := staged().Rows[1]
+	skipped := staged().Skipped[0]
+	cells := cellsOf(row, 100)
+
+	highlighted := spans(cells.highlighted(100), theme.Selected)
+	dim := spans(skippedLine(&skipped, 100), theme.Dim)
+	entry := spans(listLine("a.csv", 1, 1, 100), theme.Selected)
+
+	if len(highlighted) != 1 || lipgloss.Width(highlighted[0]) != 98 {
+		t.Errorf("highlighted row = %q", highlighted)
+	}
+	if len(dim) != 1 || lipgloss.Width(dim[0]) != 100 {
+		t.Errorf("skipped row = %q", dim)
+	}
+	if len(entry) != 1 || lipgloss.Width(entry[0]) != 100 || listLine("a.csv", 0, 1, 100) != " a.csv" {
+		t.Errorf("picker entry = %q", entry)
+	}
+}
+
+func TestAPanelBodyIsTwoCellsNarrowerThanTheScreen(t *testing.T) {
+	if got := New("/dl").Resize(100, 30).innerWidth(); got != 98 {
+		t.Errorf("innerWidth = %d, want 98", got)
 	}
 }

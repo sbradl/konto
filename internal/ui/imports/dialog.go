@@ -123,7 +123,7 @@ func moveCursor(cursor int, key string, count int) int {
 	case keyHome:
 		cursor = 0
 	case keyEnd:
-		cursor = count - 1
+		cursor = count // clamped below
 	}
 	return max(0, min(cursor, count-1))
 }

@@ -1,0 +1,30 @@
+╭─ IMPORT ─────────────────────────────╮
+│ file      sept.csv                   │
+│ account   assets:checking            │
+│ format    postbank                   │
+│ watermark 2026-09-26                 │
+│ staged    — · net income 0,00 EUR    │
+│           2 need a category          │
+╰──────────────────────────────────────╯
+╭─ ROWS ───────────────────────────────╮
+│ ✓ #2  2026-09-30  REWE Markt  expense│
+│ ?     2026-09-29  Bäckerei Schmidt  n│
+│ ?     2026-09-26  Kiosk  needs a rule│
+│                                      │
+│                                      │
+│                                      │
+│                                      │
+│                                      │
+│                                      │
+│                                      │
+│                                      │
+╰──────────────────────────────────────╯
+╭─ SKIPPED ────────────────────────────╮
+─ new rule ─────────────────────────────
+▸pattern   Kiosk▏
+ purpose   
+ category  —
+ matches 1 row in this file
+   if %payee Kiosk
+       account2 
+       comment2 konto-rule:3

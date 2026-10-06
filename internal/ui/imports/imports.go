@@ -212,10 +212,13 @@ func (m Model) scrollRows() Model {
 
 // layoutHeights are the heights of the row table and the skipped panel below the info block.
 func (m Model) layoutHeights() (rows, skipped int) {
-	room := max(2*minPanel, m.height-infoHeight-m.bannerRows())
+	room := m.height - infoHeight - m.bannerRows()
 	rows = max(minPanel, room*rowsShare/100)
 	return rows, max(minPanel, room-rows)
 }
+
+// innerWidth is the width of a panel's body.
+func (m Model) innerWidth() int { return m.width - panelChrome }
 
 func (m Model) rowPage() int { rows, _ := m.layoutHeights(); return max(1, rows-panelChrome) }
 
@@ -285,7 +288,7 @@ func (m Model) info() string {
 // new accounts, and what the categories do to net income.
 func (m Model) stagedSummary() string {
 	rules := m.staged.StagedRules()
-	items := make([]string, 0, len(rules)+len(m.staged.NewAccounts)+1)
+	items := make([]string, 0, len(rules))
 	if m.staged.Named != "" {
 		items = append(items, "account "+m.staged.Named)
 	}
@@ -304,9 +307,9 @@ func (m Model) stagedSummary() string {
 
 // rowLines are the visible rows of the table, the one under the cursor highlighted.
 func (m Model) rowLines() string {
-	inner := m.width - panelChrome
+	inner := m.innerWidth()
 	last := min(len(m.staged.Rows), m.offset+m.rowPage())
-	lines := make([]string, 0, last-m.offset)
+	lines := make([]string, 0, m.rowPage())
 	for i := m.offset; i < last; i++ {
 		cells := cellsOf(m.staged.Rows[i], inner)
 		if i == m.cursor {
@@ -380,15 +383,19 @@ func (m Model) skippedLines(capacity int) string {
 	}
 	lines := make([]string, 0, capacity)
 	for i := range shown {
-		row := &shown[i]
-		description := fit(row.Description, m.width-panelChrome-1-dateWidth-columnGap-amountWidth-1)
-		line := " " + row.Date.Format(time.DateOnly) + "  " + description + alignRight(row.Amount.Format(), amountWidth)
-		lines = append(lines, theme.Dim.Render(fit(line, m.width-panelChrome)))
+		lines = append(lines, skippedLine(&shown[i], m.innerWidth()))
 	}
 	if hidden := len(skipped) - len(shown); hidden > 0 {
 		lines = append(lines, theme.Dim.Render(fmt.Sprintf(moreTemplate, hidden)))
 	}
 	return strings.Join(lines, "\n")
+}
+
+// skippedLine is a row the journal already has: its date, description and amount, dim, across the width.
+func skippedLine(row *csvimport.Row, width int) string {
+	description := fit(row.Description, width-1-dateWidth-columnGap-amountWidth-1)
+	line := " " + row.Date.Format(time.DateOnly) + "  " + description + alignRight(row.Amount.Format(), amountWidth)
+	return theme.Dim.Render(fit(line, width))
 }
 
 func fit(text string, width int) string {
