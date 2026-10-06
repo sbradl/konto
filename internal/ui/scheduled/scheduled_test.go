@@ -242,7 +242,7 @@ func TestSelectedIsTheRuleUnderTheCursor(t *testing.T) {
 }
 
 // selectionBackground matches the "sel" background (colour 8, bright 100) in a style sequence, wherever it sits.
-var selectionBackground = regexp.MustCompile(`\x1b\[(?:[0-9]+;)*100(?:;[0-9]+)*m`)
+var selectionBackground = regexp.MustCompile(`\x1b\[(?:\d+;)*100(?:;\d+)*m`)
 
 // selectedLines are the rows of the raw view that carry the cursor's highlight.
 func selectedLines(view string) []string {
