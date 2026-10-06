@@ -685,3 +685,30 @@ func TestHiddenPanelsCountWhatTheTerminalIsTooSmallFor(t *testing.T) {
 		}
 	}
 }
+
+func TestSpendPanelDrawsTheChartAtTheSmallestSizeItFits(t *testing.T) {
+	want := "╭─ SPEND ╮\n│    │   │\n│    │   │\n│0.0k└───│\n│    Mar │\n╰────────╯"
+
+	if got := plain(spendPanel(spendHistory(100), minChartSize+panelChrome, minChartSize/2+panelChrome)); got != want {
+		t.Errorf("spend panel =\n%s\nwant\n%s", got, want)
+	}
+}
+
+func TestSpendChartPlacesTheLineAndTheMonthLabelsAlongTheAxes(t *testing.T) {
+	want := "╭─ SPEND ──────────────────────────────╮\n" +
+		"│1.3k│⣀⣀⣀⡀   ⢀⣀⣀⡠⠤⠤⠤⠤⣀⣀⣀⣀⣀⡠⠤⠤⠤⠤⠤⢄⣀⣀⡀   │\n" +
+		"│    │   ⠈⠉⠉⠉⠁                         │\n" +
+		"│0.9k│                                 │\n" +
+		"│    │                                 │\n" +
+		"│0.4k│                                 │\n" +
+		"│    │                                 │\n" +
+		"│0.0k└─────────────────────────────────│\n" +
+		"│    Mar   Apr  May   Jun   Jul   Aug  │\n" +
+		"╰──────────────────────────────────────╯"
+
+	got := plain(spendPanel(spendHistory(117500, 112000, 119500, 115000, 120500, 113000), 40, 10))
+
+	if got != want {
+		t.Errorf("spend panel =\n%s\nwant\n%s", got, want)
+	}
+}

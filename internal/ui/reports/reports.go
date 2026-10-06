@@ -60,12 +60,19 @@ func (m Model) Resize(width, height int) Model {
 // capacity is how many rows each panel shows.
 func (m Model) capacity() int { return max(1, m.height-periodRows-panelChrome) }
 
-func (m Model) longest() int {
-	return max(len(m.report.BalanceSheet), len(m.report.IncomeStatement))
+// room is how many rows of the table fit below its title row, if it has one.
+func (m Model) room(rows []domain.ReportRow) int {
+	if columnsOf(rows).delta > 0 {
+		return max(1, m.capacity()-1)
+	}
+	return m.capacity()
 }
 
-// maxOffset is the furthest the tables scroll: the longest table's last row at the bottom.
-func (m Model) maxOffset() int { return max(0, m.longest()-m.capacity()) }
+// maxOffset is the furthest the tables scroll: the last row of the table with the most to scroll at the bottom.
+func (m Model) maxOffset() int {
+	return max(0, len(m.report.BalanceSheet)-m.room(m.report.BalanceSheet),
+		len(m.report.IncomeStatement)-m.room(m.report.IncomeStatement))
+}
 
 // Move scrolls both tables together: up, down, pgup, pgdown, home or end.
 func (m Model) Move(key string) Model {
@@ -107,11 +114,10 @@ func (m Model) View() string {
 // table that fits does not scroll, so its last row stays in view while a longer one is scrolled.
 func (m Model) table(rows []domain.ReportRow, width int) string {
 	columns := columnsOf(rows)
-	capacity := m.capacity()
-	lines := make([]string, 0, capacity+1)
+	capacity := m.room(rows)
+	lines := make([]string, 0, capacity)
 	if columns.delta > 0 {
 		lines = append(lines, columns.titleRow(width))
-		capacity--
 	}
 	first := min(m.offset, max(0, len(rows)-capacity))
 	last := min(len(rows), first+capacity)

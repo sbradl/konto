@@ -242,3 +242,73 @@ func TestForeignCurrenciesRenderAsTheyAre(t *testing.T) {
 		t.Errorf("view:\n%s", view)
 	}
 }
+
+func TestEndShowsTheLastRowOfABalanceSheetWhoseDeltaTitleTakesALine(t *testing.T) {
+	m := New().Resize(100, 9).WithReport(sample()).Move("end")
+
+	if view := plain(m.View()); !strings.Contains(view, "Net worth") || strings.Contains(view, "more") {
+		t.Errorf("after End:\n%s", view)
+	}
+}
+
+func TestRowsAndColumnsSitWhereTheLayoutPutsThem(t *testing.T) {
+	m := New().Resize(100, 9).WithReport(sample())
+	top := " period  month to date\n" +
+		"╭─ BALANCE SHEET ────────────────────────────────╮╭─ INCOME STATEMENT ─────────────────────────────╮\n" +
+		"│                                       Δ period ││ Income                                         │\n"
+	bottom := "╰────────────────────────────────────────────────╯╰────────────────────────────────────────────────╯"
+	wantTop := top +
+		"│ Assets                                         ││  income:salary                   3.000,00 EUR  │\n" +
+		"│  assets:checking  13.240,00 EUR  1.350,00 EUR  ││ Net                              1.815,00 EUR  │\n" +
+		"│  assets:savings   13.500,00 EUR             0  ││                                                │\n" +
+		"│ Liabilities                                    ││                                                │\n" +
+		"│ … 2 more                                       ││                                                │\n" + bottom
+	wantEnd := top +
+		"│  assets:checking  13.240,00 EUR  1.350,00 EUR  ││  income:salary                   3.000,00 EUR  │\n" +
+		"│  assets:savings   13.500,00 EUR             0  ││ Net                              1.815,00 EUR  │\n" +
+		"│ Liabilities                                    ││                                                │\n" +
+		"│  liabilities:cred   -140,00 EUR    -35,00 EUR  ││                                                │\n" +
+		"│ Net worth         26.600,00 EUR  1.315,00 EUR  ││                                                │\n" + bottom
+
+	if got := plain(m.View()); got != wantTop {
+		t.Errorf("top =\n%s\nwant\n%s", got, wantTop)
+	}
+	if got := plain(m.Move("end").View()); got != wantEnd {
+		t.Errorf("end =\n%s\nwant\n%s", got, wantEnd)
+	}
+}
+
+func TestNarrowPanelsCutLabelsAndLetTheAmountsOverflowTheirColumns(t *testing.T) {
+	want := " period  month to date\n" +
+		"╭─ BALANCE SHEET ─────╮╭─ INCOME STATEMENT ──╮\n" +
+		"│            Δ period ││ Income              │\n" +
+		"│ Assets              ││  inco 3.000,00 EUR  │\n" +
+		"│  assets:checking 13.││ Net   1.815,00 EUR  │\n" +
+		"│  assets:savings 13.5││                     │\n" +
+		"│ Liabilities         ││                     │\n" +
+		"│  liabilities:creditc││                     │\n" +
+		"│ Net worth 26.600,00 ││                     │\n" +
+		"│                     ││                     │\n" +
+		"│                     ││                     │\n" +
+		"│                     ││                     │\n" +
+		"│                     ││                     │\n" +
+		"╰─────────────────────╯╰─────────────────────╯"
+
+	if got := plain(New().Resize(46, 14).WithReport(sample()).View()); got != want {
+		t.Errorf("view =\n%s\nwant\n%s", got, want)
+	}
+}
+
+func TestATableWithoutDeltasUsesEveryRowBelowTheBorder(t *testing.T) {
+	report := domain.Report{Period: domain.MonthToDate}
+	for _, name := range []string{"a", "b", "c", "d", "e", "f"} {
+		report.IncomeStatement = append(report.IncomeStatement,
+			domain.ReportRow{Kind: domain.RowLeaf, Label: name, Amount: eur(100)})
+	}
+
+	view := plain(New().Resize(100, 7).WithReport(report).View())
+
+	if !strings.Contains(view, "… 3 more") {
+		t.Errorf("a four-row panel showing six rows gives its last row to the overflow line:\n%s", view)
+	}
+}
