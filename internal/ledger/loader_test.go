@@ -291,7 +291,8 @@ func TestLoadRejectsAReportWithTheWrongNumberOfMonths(t *testing.T) {
 
 	_, err := NewLoader(gw, present, sept30).Load(context.Background())
 
-	if err == nil || !strings.Contains(err.Error(), "3 months") {
+	if err == nil || !strings.Contains(err.Error(), "3 months") ||
+		!strings.Contains(err.Error(), "want 7") {
 		t.Errorf("expected an error naming the month count, got: %v", err)
 	}
 }

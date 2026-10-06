@@ -420,6 +420,30 @@ func TestAddRuleGoesIntoTheNamedFileAndRefusesAStrangerFile(t *testing.T) {
 	}
 }
 
+func TestAddRuleGoesIntoTheMainJournalWhenNamedByPath(t *testing.T) {
+	file := journalWith(t, rulesAndTransaction)
+
+	apply(t, file, domain.AddRule{File: file.path, Lines: []string{"~ weekly from 2026-11-01  C"}})
+
+	if got := readFile(t, file.path); !strings.HasSuffix(got, "\n\n~ weekly from 2026-11-01  C\n") {
+		t.Errorf("journal = %q", got)
+	}
+}
+
+func TestSetCategoryRuleReplacesABlockWhoseMarkerIsTheFirstLine(t *testing.T) {
+	file := journalWith(t, "x\n")
+	rules := filepath.Join(filepath.Dir(file.path), "categories.rules")
+	if err := os.WriteFile(rules, []byte("comment2 konto-rule:1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	apply(t, file, domain.SetCategoryRule{ID: "1", Text: "comment2 konto-rule:1\naccount2 b"})
+
+	if got, want := readFile(t, rules), "comment2 konto-rule:1\naccount2 b\n"; got != want {
+		t.Errorf("rules = %q, want %q", got, want)
+	}
+}
+
 func TestReplaceRuleSwapsTheBlockInPlaceAndKeepsTheCommentAbove(t *testing.T) {
 	file := journalWith(t, rulesAndTransaction)
 

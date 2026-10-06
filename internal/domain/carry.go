@@ -22,22 +22,20 @@ func (SetCarry) isEdit() {}
 
 // Closing is the transaction that brings the balances to zero on date.
 func (c SetCarry) Closing(date time.Time) NewTransaction {
-	return c.transaction(date, ClosingDescription, -1)
+	return c.transaction(date, ClosingDescription, MultiAmount.Negated)
 }
 
 // Opening is the transaction that gives the balances back on date.
 func (c SetCarry) Opening(date time.Time) NewTransaction {
-	return c.transaction(date, OpeningDescription, 1)
+	return c.transaction(date, OpeningDescription, asBalanced)
 }
 
-func (c SetCarry) transaction(date time.Time, description string, sign int) NewTransaction {
+func asBalanced(m MultiAmount) MultiAmount { return m }
+
+func (c SetCarry) transaction(date time.Time, description string, signed func(MultiAmount) MultiAmount) NewTransaction {
 	var postings []NewPosting
 	for _, account := range c.Balances {
-		balance := account.Balance
-		if sign < 0 {
-			balance = balance.Negated()
-		}
-		for _, amount := range balance {
+		for _, amount := range signed(account.Balance) {
 			postings = append(postings, NewPosting{Account: account.Name, Amount: MultiAmount{amount}})
 		}
 	}

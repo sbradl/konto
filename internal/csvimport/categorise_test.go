@@ -381,6 +381,18 @@ func TestWidenAddsAnAlternativeAndClaimsItsRows(t *testing.T) {
 	}
 }
 
+func TestWidenTakesTheFirstRuleToo(t *testing.T) {
+	s := stagedRows(debit("Vermieter Mueller"))
+	alternative := []Condition{{"payee", "Landlord"}}
+
+	preview, ok := s.Widened("1", alternative)
+	next, err := s.Widen("1", alternative)
+
+	if !ok || len(preview.Alternatives) != 2 || err != nil || len(next.Rules[0].Alternatives) != 2 {
+		t.Errorf("preview %+v (%v), widened %+v, err %v", preview, ok, next.Rules, err)
+	}
+}
+
 func TestWidenRefusesAnOverlapAndAnUnknownRule(t *testing.T) {
 	sparen := debit("Sparen")
 	sparen.Target, sparen.RuleID = "assets:transfers", "5"

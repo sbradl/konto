@@ -37,8 +37,10 @@ func (w *workspace) years() []int {
 
 func (w *workspace) findYear(year int) *source {
 	path := w.yearPath(year)
-	if i := slices.IndexFunc(w.sources, func(s *source) bool { return s.path == path }); i >= 0 {
-		return w.sources[i]
+	for _, s := range w.sources {
+		if s.path == path {
+			return s
+		}
 	}
 	return nil
 }
@@ -96,7 +98,7 @@ func removeCarry(file *source, date time.Time) {
 		}
 		file.lines = slices.Delete(file.lines, i, blockEnd(file.lines, i))
 		file.lines = withoutDoubleBlank(file.lines, i)
-		if i == 0 && len(file.lines) > 1 && file.lines[0] == "" {
+		if i == 0 && len(file.lines) > 0 && file.lines[0] == "" {
 			file.lines = file.lines[1:]
 		}
 		file.dirty = true

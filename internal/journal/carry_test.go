@@ -157,3 +157,38 @@ func TestSetCarryClosesAnOlderYearFileThatIsNotLoaded(t *testing.T) {
 		t.Errorf("2024 =\n%s\nwant\n%s", got, want)
 	}
 }
+
+func TestSetCarryWithoutBalancesEmptiesAYearFileThatHeldOnlyTheCarry(t *testing.T) {
+	file := inJanuary2027(t, map[int]string{2026: carriedYear, 2027: ""})
+	apply(t, file, domain.SetCarry{Year: 2027, Balances: balances(900)})
+
+	apply(t, file, domain.SetCarry{Year: 2027})
+
+	if got := readFile(t, file.yearPath(2027)); got != "" {
+		t.Errorf("2027 = %q, want it empty", got)
+	}
+}
+
+func TestSetCarryRemovesEveryCarryOfTheDay(t *testing.T) {
+	twice := "2027-01-01 opening balance  ; konto:carry\n    assets:checking  9,00 EUR\n    equity:opening-balances\n\n" +
+		"2027-01-01 opening balance  ; konto:carry\n    assets:checking  9,00 EUR\n    equity:opening-balances\n"
+	file := inJanuary2027(t, map[int]string{2026: carriedYear, 2027: twice})
+
+	apply(t, file, domain.SetCarry{Year: 2027, Balances: balances(1200)})
+
+	want := "2027-01-01 opening balance  ; konto:carry\n    assets:checking  12,00 EUR\n    equity:opening-balances\n"
+	if got := readFile(t, file.yearPath(2027)); got != want {
+		t.Errorf("2027 =\n%s\nwant\n%s", got, want)
+	}
+}
+
+func TestSetCarryWithoutBalancesEmptiesAYearFileWhoseCarryHasNoFinalNewline(t *testing.T) {
+	bare := "2027-01-01 opening balance  ; konto:carry\n    assets:checking  9,00 EUR\n    equity:opening-balances"
+	file := inJanuary2027(t, map[int]string{2026: carriedYear, 2027: bare})
+
+	apply(t, file, domain.SetCarry{Year: 2027})
+
+	if got := readFile(t, file.yearPath(2027)); got != "" {
+		t.Errorf("2027 = %q, want it empty", got)
+	}
+}
