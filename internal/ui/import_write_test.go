@@ -260,3 +260,20 @@ func TestOpeningAFileWhileTheJournalReloadsAsksToTryAgain(t *testing.T) {
 		t.Errorf("opened %v; content:\n%s", importer.opened, content)
 	}
 }
+
+func TestAPreviewThatFitsShowsEveryLineOfItIncludingTheLast(t *testing.T) {
+	one := manyRows(1)
+	one.Closing = "13.239,00"
+	model, _ := press(stagedForWrite(t, one).model, "w")
+
+	content := plain(model.View().Content)
+	if model.prompt == nil {
+		t.Fatalf("no prompt:\n%s", content)
+	}
+	lines := model.prompt.preview
+
+	if len(lines) < 2 || !strings.Contains(content, strings.TrimSpace(lines[len(lines)-1])) ||
+		!strings.Contains(content, strings.TrimSpace(lines[0])) {
+		t.Errorf("a preview of %d lines should show in full:\n%s", len(lines), content)
+	}
+}
