@@ -73,6 +73,9 @@ func (w *world) editPeriodicRule() error {
 		if err := w.selectRule("Acme GmbH"); err != nil {
 			return err
 		}
+		if err := w.expectSpinnerGone(); err != nil {
+			return err
+		}
 		if err := w.press("e"); err != nil {
 			return err
 		}
@@ -99,6 +102,11 @@ func (w *world) afterWrite(write func() error) error {
 	if err := write(); err != nil {
 		return err
 	}
+	return w.expectSpinnerGone()
+}
+
+// expectSpinnerGone waits for the reload after a write to end: e and d on Scheduled wait for it.
+func (w *world) expectSpinnerGone() error {
 	return w.eventually(func() error {
 		line, err := w.statusLine()
 		if err == nil && strings.Contains(line, "⣾") {

@@ -44,6 +44,28 @@ func (w *world) formRows() ([]string, error) {
 	return nil, errors.New("no form is open")
 }
 
+// shownFocus is the label of the focused field, once the form shows one.
+func (w *world) shownFocus() (string, error) {
+	var focused string
+	err := w.onForm(func(rows []string) error {
+		if focused = focusedLabel(rows); focused == "" {
+			return errors.New("the form shows no focus yet")
+		}
+		return nil
+	})
+	return focused, err
+}
+
+// waitFocusMovedFrom is best effort: a Tab that moves nothing just times out and the caller reads again.
+func (w *world) waitFocusMovedFrom(label string) {
+	_ = w.onForm(func(rows []string) error {
+		if focusedLabel(rows) == label {
+			return errors.New("the focus has not moved")
+		}
+		return nil
+	})
+}
+
 // onForm waits for the open form to satisfy check.
 func (w *world) onForm(check func(rows []string) error) error {
 	return w.eventually(func() error {
@@ -79,19 +101,21 @@ func focusedLabel(rows []string) string {
 	return ""
 }
 
-// focusField presses Tab until the field has the focus.
+// focusField presses Tab until the field has the focus. A stale frame must not decide: the focus is read once
+// the form shows one, and after each Tab the next read waits for it to move.
 func (w *world) focusField(label string) error {
 	for range len(formLabels()) + 1 {
-		rows, err := w.formRows()
+		focused, err := w.shownFocus()
 		if err != nil {
 			return err
 		}
-		if focusedLabel(rows) == label {
+		if focused == label {
 			return nil
 		}
 		if err := w.press("Tab"); err != nil {
 			return err
 		}
+		w.waitFocusMovedFrom(focused)
 	}
 	return fmt.Errorf("the focus never reached %q", label)
 }

@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/cucumber/godog"
 )
@@ -112,12 +113,26 @@ func (w *world) categoriseRows(table *godog.Table) error {
 
 // writeImport asks to write and confirms; a write that is blocked has no question to answer. A confirmed write
 // is waited for, and then for the views to reload, as the next import reads the journal as it is then.
+// promptShown waits briefly for the y/n question: a starved terminal can draw it after the keys settle.
+func (w *world) promptShown() bool {
+	s, err := w.session()
+	if err != nil {
+		return false
+	}
+	return s.waitFor(min(w.suite.timeout, promptWait), func(string) bool {
+		line, err := w.statusLine()
+		return err == nil && strings.Contains(line, "(y/n)")
+	})
+}
+
+const promptWait = 3 * time.Second
+
 func (w *world) writeImport() error {
 	if err := w.press("w"); err != nil {
 		return err
 	}
-	if line, err := w.statusLine(); err != nil || !strings.Contains(line, "(y/n)") {
-		return err
+	if !w.promptShown() { // the write is blocked: the view says why
+		return nil
 	}
 	if err := w.press("y"); err != nil {
 		return err
@@ -202,6 +217,9 @@ func (w *world) createAccount(name, file string) error {
 
 func (w *world) createAndImport(name, file string) error {
 	if err := w.createAccount(name, file); err != nil {
+		return err
+	}
+	if err := w.expectNoDialog(); err != nil { // the name is checked asynchronously before the dialog closes
 		return err
 	}
 	if err := w.categoriseEveryRow(); err != nil {

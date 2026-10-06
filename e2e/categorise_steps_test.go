@@ -122,24 +122,32 @@ func importRowIndex(rows []recentRow, description, date string) (int, error) {
 }
 
 // chooseOption moves to the option of the open dialog and presses Enter; "+ create" is the last entry.
+// It waits for the dialog to list the option, so a half-drawn frame is not mistaken for the dialog.
 func (w *world) chooseOption(option string) error {
-	d, err := w.dialogNow()
+	if option == "+ create" {
+		if _, err := w.dialogNow(); err != nil {
+			return err
+		}
+		return w.press("End", "Enter")
+	}
+	index := 0
+	err := w.withDialog(func(d dialog) error {
+		rows := d.rows
+		if d.title != "categorise" {
+			rows = d.listRows()
+		}
+		for i, row := range rows {
+			if strings.Contains(row, option) {
+				index = i
+				return nil
+			}
+		}
+		return fmt.Errorf("the dialog does not offer %q", option)
+	})
 	if err != nil {
 		return err
 	}
-	if option == "+ create" {
-		return w.press("End", "Enter")
-	}
-	rows := d.rows
-	if d.title != "categorise" {
-		rows = d.listRows()
-	}
-	for i, row := range rows {
-		if strings.Contains(row, option) {
-			return w.press(append(repeat("↓", i), "Enter")...)
-		}
-	}
-	return fmt.Errorf("the dialog does not offer %q", option)
+	return w.press(append(repeat("↓", index), "Enter")...)
 }
 
 // pickCategory gives the open picker, or the new-rule form's category, the category by typing its name.

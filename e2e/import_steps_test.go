@@ -42,7 +42,16 @@ func (w *world) openInImport(name string) error {
 			return err
 		}
 	}
-	return w.press("Enter")
+	if err := w.press("Enter"); err != nil {
+		return err
+	}
+	s, err := w.session()
+	if err != nil {
+		return err
+	}
+	// opening reads the file asynchronously: what is typed next must not land in the picker
+	s.waitFor(w.suite.timeout, func(screen string) bool { return !strings.Contains(screen, pickerTitle) })
+	return nil
 }
 
 // importRow finds the row of the panel by description, and the date when given.
