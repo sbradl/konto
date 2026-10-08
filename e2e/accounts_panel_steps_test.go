@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 	"unicode/utf8"
 
 	"github.com/cucumber/godog"
@@ -338,8 +337,15 @@ func (w *world) expectPopupRow(severity, account string) error {
 	})
 }
 
+// expectNotInPopup asserts an absence, so it first lets the program finish loading and fall quiet: checking
+// at once could pass before a just-pressed key had its effect.
 func (w *world) expectNotInPopup(text string) error {
-	time.Sleep(settleDelay)
+	s, err := w.session()
+	if err != nil {
+		return err
+	}
+	w.waitLoaded(s)
+	s.settle(w.suite.timeout)
 	return w.withPopup(func(p popup) error {
 		if strings.Contains(strings.Join(p.rows, "\n"), text) {
 			return fmt.Errorf("the checks panel shows %q", text)
@@ -347,9 +353,6 @@ func (w *world) expectNotInPopup(text string) error {
 		return nil
 	})
 }
-
-// settleDelay lets a just-pressed key take effect before asserting something is absent.
-const settleDelay = 50 * time.Millisecond
 
 func (w *world) withDeclared(name string, lines ...string) error {
 	if err := w.useJournal(name, ""); err != nil {
