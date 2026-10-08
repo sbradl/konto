@@ -17,15 +17,15 @@ _.path = ["{{config_root}}/bin"]
 
 [tasks.build]
 description = "Compile every package"
-run = 'if [ -z "$(go list ./... 2>/dev/null)" ]; then echo "no packages yet — skipping"; else go build ./...; fi'
+run = "go build ./..."
 
 [tasks.vet]
 description = "go vet (incl. integration and e2e build tags)"
-run = 'if [ -z "$(go list ./... 2>/dev/null)" ]; then echo "no packages yet — skipping"; else go vet -tags integration,e2e ./...; fi'
+run = "go vet -tags integration,e2e ./..."
 
 [tasks.lint]
 description = "golangci-lint"
-run = 'if [ -z "$(go list ./... 2>/dev/null)" ]; then echo "no packages yet — skipping"; else golangci-lint run; fi'
+run = "golangci-lint run"
 
 [tasks.fmt]
 description = "Format (writes) and list changed files"
@@ -33,11 +33,11 @@ run = "gofmt -w -l ."
 
 [tasks.test]
 description = "Unit tests (race, no hledger integration suite)"
-run = 'if [ -z "$(go list ./... 2>/dev/null)" ]; then echo "no packages yet — skipping"; else gotestsum --format pkgname -- -race -count=1 ./...; fi'
+run = "gotestsum --format pkgname -- -race -count=1 ./..."
 
 [tasks."test:integration"]
 description = "Full suite incl. tests that shell out to the real hledger binary"
-run = 'if [ -z "$(go list ./... 2>/dev/null)" ]; then echo "no packages yet — skipping"; else gotestsum --format standard-verbose -- -race -count=1 -tags integration ./...; fi'
+run = "gotestsum --format standard-verbose -- -race -count=1 -tags integration ./..."
 
 [tasks."test:e2e"]
 description = "Gherkin e2e suite against the compiled binary (needs real hledger). Extra args go to godog: mise run test:e2e -- -godog.tags=@spec-4.5"
@@ -54,7 +54,6 @@ run = "go mod tidy -diff"
 [tasks.cover]
 description = "Write coverage.out and print the total"
 run = '''
-if [ -z "$(go list ./... 2>/dev/null)" ]; then echo "no packages yet — skipping"; exit 0; fi
 go test -race -covermode=atomic -coverpkg=./... -coverprofile=coverage.out ./...
 # cmd/konto/entry.go is only the process entry point (real os.Exit, real tty); its logic lives in
 # main.go and is covered. Recorded reason for the exclusion.
@@ -72,7 +71,6 @@ description = "Fail if total coverage < THRESHOLD (default 100)"
 depends = ["cover"]
 env = { THRESHOLD = "100" }
 run = '''
-if [ ! -f coverage.out ]; then echo "no coverage.out — skipping"; exit 0; fi
 total=$(go tool cover -func=coverage.out | awk '/^total:/ { sub(/%/,"",$3); print $3 }')
 printf 'total coverage: %s%%  (threshold %s%%)\n' "$total" "$THRESHOLD"
 awk -v t="$total" -v th="$THRESHOLD" 'BEGIN { exit (t + 0 < th + 0) }'
