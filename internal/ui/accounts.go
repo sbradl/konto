@@ -80,18 +80,18 @@ func (m Model) onPromptKey(key string) (Model, tea.Cmd) {
 	case "n", "esc":
 		m.prompt = nil
 	case "up":
-		m.prompt = m.prompt.scrolled(-1)
+		m.prompt = m.prompt.scrolled(-1, m.lastPreviewTop())
 	case "down":
-		m.prompt = m.prompt.scrolled(1)
+		m.prompt = m.prompt.scrolled(1, m.lastPreviewTop())
 	}
 	return m, nil
 }
 
-// scrolled is the prompt with its preview moved by lines, never above the first; a new prompt, since the
-// one open is shared with earlier models.
-func (p *prompt) scrolled(lines int) *prompt {
+// scrolled is the prompt with its preview moved by lines, between the first line and last, the last line
+// the preview can start at; a new prompt, since the one open is shared with earlier models.
+func (p *prompt) scrolled(lines, last int) *prompt {
 	next := *p
-	next.top = max(0, p.top+lines)
+	next.top = max(0, min(p.top+lines, last))
 	return &next
 }
 

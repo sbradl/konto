@@ -246,6 +246,21 @@ func TestALongPreviewScrollsWithTheArrowKeys(t *testing.T) {
 	}
 }
 
+// Down past the end stops there, so the first up scrolls at once.
+func TestOneUpAfterScrollingPastTheEndScrollsTheLongPreviewBack(t *testing.T) {
+	model, _ := press(stagedForWrite(t, manyRows(10)).model, "w")
+	for range 40 {
+		model, _ = pressCode(model, tea.KeyDown)
+	}
+	atEnd := plain(model.View().Content)
+
+	model, _ = pressCode(model, tea.KeyUp)
+
+	if plain(model.View().Content) == atEnd {
+		t.Errorf("one up after scrolling past the end did not move the preview:\n%s", atEnd)
+	}
+}
+
 func TestOpeningAFileWhileTheJournalReloadsAsksToTryAgain(t *testing.T) {
 	importer := &fakeImporter{entries: []domain.FileEntry{{Name: "sept.csv"}}, staged: sampleStaged()}
 	model, cmd := press(startedWithImporter(t, importer), "n")
