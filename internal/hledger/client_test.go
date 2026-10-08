@@ -448,3 +448,27 @@ func TestSeveralFilesReportHledgerFailure(t *testing.T) {
 		t.Errorf("expected an error carrying hledger's message, got: %v", err)
 	}
 }
+
+// A hung hledger fails its call instead of keeping the view waiting forever.
+func TestACallThatOutlivesItsTimeLimitFails(t *testing.T) {
+	for name, run := range map[string]func() error{
+		"query": func() error {
+			_, _, err := execRunner("sleep", 20*time.Millisecond)(context.Background(), "5")
+			return err
+		},
+		"with input": func() error {
+			_, _, err := execInputRunner("sleep", 20*time.Millisecond)(context.Background(), "text", "5")
+			return err
+		},
+	} {
+		start := time.Now()
+		err := run()
+
+		if err == nil || !strings.Contains(err.Error(), "did not answer within 20ms") {
+			t.Errorf("%s: error = %v, want it to say hledger did not answer in time", name, err)
+		}
+		if took := time.Since(start); took > 2*time.Second {
+			t.Errorf("%s: the call took %s, want it cut off", name, took)
+		}
+	}
+}

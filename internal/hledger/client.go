@@ -31,11 +31,15 @@ type Client struct {
 	tempRules func(rules string) (path string, err error) // the seam for the CSV rules file
 }
 
+// callTimeout is how long one hledger call may take before it is killed and fails: generous, since a large
+// journal takes about a second a call (ADR 0013), but a hung hledger must not leave a view waiting forever.
+const callTimeout = 2 * time.Minute
+
 // New returns a Client that runs the hledger binary bin on the journal made of the files named by files.
 func New(bin string, files func() []string) *Client {
-	client := newClient(execRunner(bin))
+	client := newClient(execRunner(bin, callTimeout))
 	client.files = files
-	client.runInput = execInputRunner(bin)
+	client.runInput = execInputRunner(bin, callTimeout)
 	return client
 }
 
@@ -43,25 +47,38 @@ func newClient(run runner, files ...string) *Client {
 	return &Client{run: run, files: func() []string { return files }, tempRules: osRules}
 }
 
-func execRunner(bin string) runner {
+func execRunner(bin string, timeout time.Duration) runner {
 	return func(ctx context.Context, args ...string) ([]byte, string, error) {
-		var stderr bytes.Buffer
-		// bin is the hledger binary konto was configured with; args are built by Client, never by the user.
-		cmd := exec.CommandContext(ctx, bin, args...) //nolint:gosec // see above
-		cmd.Stderr = &stderr
-		out, err := cmd.Output()
-		return out, stderr.String(), err
+		return binary{bin, timeout}.run(ctx, nil, args)
 	}
 }
 
-func execInputRunner(bin string) inputRunner {
+func execInputRunner(bin string, timeout time.Duration) inputRunner {
 	return func(ctx context.Context, input string, args ...string) ([]byte, string, error) {
-		var stderr bytes.Buffer
-		cmd := exec.CommandContext(ctx, bin, args...) //nolint:gosec // see execRunner
-		cmd.Stdin, cmd.Stderr = strings.NewReader(input), &stderr
-		out, err := cmd.Output()
-		return out, stderr.String(), err
+		return binary{bin, timeout}.run(ctx, strings.NewReader(input), args)
 	}
+}
+
+// binary is the hledger executable and how long one call of it may take.
+type binary struct {
+	path    string
+	timeout time.Duration
+}
+
+// run runs the binary with args and stdin, killing it once the timeout has passed; it returns stdout and
+// stderr.
+func (b binary) run(ctx context.Context, stdin io.Reader, args []string) (stdout []byte, stderr string, err error) {
+	ctx, cancel := context.WithTimeout(ctx, b.timeout)
+	defer cancel()
+	var captured bytes.Buffer
+	// path is the hledger binary konto was configured with; args are built by Client, never by the user.
+	cmd := exec.CommandContext(ctx, b.path, args...) //nolint:gosec // see above
+	cmd.Stdin, cmd.Stderr = stdin, &captured
+	stdout, err = cmd.Output()
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		err = fmt.Errorf("hledger did not answer within %s: %w", b.timeout, ctx.Err())
+	}
+	return stdout, captured.String(), err
 }
 
 // query runs hledger against the client's journal.
