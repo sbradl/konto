@@ -26,18 +26,12 @@ func (m Model) withForm(base string) string {
 	if m.form.editing != nil {
 		title = "edit periodic rule"
 	}
-	rows := append([]string{m.titleRule(title)}, m.form.lines()...)
+	rows := append([]string{layout.TitleRule(title, m.width)}, m.form.lines()...)
 	rows = rows[:min(len(rows), m.height)]
 	for i, row := range rows[1:] {
-		rows[i+1] = fit(row, m.width)
+		rows[i+1] = layout.Fit(row, m.width)
 	}
 	return layout.OverlayFlush(base, strings.Join(rows, "\n"), m.height)
-}
-
-// titleRule is the form's top edge with the title inset two cells.
-func (m Model) titleRule(title string) string {
-	rule := "─ " + title + " "
-	return theme.Dim.Render(rule + strings.Repeat("─", max(0, m.width-len([]rune(rule)))))
 }
 
 // lines are the form's fields, the picker's matches under the focused account field, the refusal and the hint.

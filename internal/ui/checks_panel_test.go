@@ -26,8 +26,8 @@ func withRun(t *testing.T, calls *[]editorCall, issues ...domain.CheckIssue) Mod
 func TestLoadingTheLedgerRunsTheChecks(t *testing.T) {
 	model := started(t, fakeLoader{})
 
-	if model.run == nil || model.run.Total != 12 {
-		t.Errorf("run = %+v, want the fake run of 12 checks", model.run)
+	if model.checks.run == nil || model.checks.run.Total != 12 {
+		t.Errorf("run = %+v, want the fake run of 12 checks", model.checks.run)
 	}
 }
 
@@ -48,8 +48,8 @@ func TestAFailedCheckRunKeepsTheLastRunAndFlagsTheError(t *testing.T) {
 	updated, _ := model.Update(model.load())
 	model = updated.(Model)
 
-	if len(model.run.Issues) != 1 || model.refreshErr == nil {
-		t.Errorf("run = %+v, refreshErr = %v; want the old run and an error flag", model.run, model.refreshErr)
+	if len(model.checks.run.Issues) != 1 || model.refreshErr == nil {
+		t.Errorf("run = %+v, refreshErr = %v; want the old run and an error flag", model.checks.run, model.refreshErr)
 	}
 	if got := lastLine(model); !strings.Contains(got, "✗ error") {
 		t.Errorf("status bar = %q, want the error indicator", got)
@@ -196,8 +196,8 @@ func TestOtherKeysDoNothingInTheChecksPanel(t *testing.T) {
 func TestArrowsDoNothingInTheKeysPopup(t *testing.T) {
 	model, _ := press(withRun(t, nil, issue(domain.SeverityWarn, "one", "", 0)), "?")
 
-	if got := pressKey(model, tea.KeyDown); got.checkCursor != 0 || got.popup != popupKeys {
-		t.Errorf("cursor = %d, popup = %v; want the keys popup untouched", got.checkCursor, got.popup)
+	if got := pressKey(model, tea.KeyDown); got.checks.cursor.Row != 0 || got.popup != popupKeys {
+		t.Errorf("cursor = %d, popup = %v; want the keys popup untouched", got.checks.cursor.Row, got.popup)
 	}
 }
 
@@ -208,7 +208,7 @@ func TestTheCursorStaysInRangeWhenIssuesDisappear(t *testing.T) {
 
 	updated, _ := model.Update(ledgerLoadedMsg{run: domain.CheckRun{Total: 12}})
 
-	if got := updated.(Model).checkCursor; got != 0 {
+	if got := updated.(Model).checks.cursor.Row; got != 0 {
 		t.Errorf("cursor = %d, want 0 once the issues are gone", got)
 	}
 }
@@ -232,8 +232,8 @@ func TestPanelKeysAreHarmlessWithoutACheckRun(t *testing.T) {
 	model = pressKey(model, tea.KeyDown)
 	_, cmd := model.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 
-	if cmd != nil || model.checkCursor != 0 {
-		t.Errorf("cmd = %v, cursor = %d; want nothing to happen", cmd, model.checkCursor)
+	if cmd != nil || model.checks.cursor.Row != 0 {
+		t.Errorf("cmd = %v, cursor = %d; want nothing to happen", cmd, model.checks.cursor.Row)
 	}
 }
 

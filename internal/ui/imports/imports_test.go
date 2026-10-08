@@ -354,7 +354,7 @@ func TestViewNeverGetsWiderThanTheTerminal(t *testing.T) {
 func TestKeysWithNothingStagedMoveNothing(t *testing.T) {
 	m, action := New("/dl").Resize(180, 40).Key("down")
 
-	if action != (Action{}) || m.cursor != 0 {
+	if action != (Action{}) || m.table.Row != 0 {
 		t.Errorf("nothing to move over: %+v", m)
 	}
 }
@@ -372,8 +372,8 @@ func TestThePickerCursorJumpsToTheEndsAndByPages(t *testing.T) {
 		want int
 	}{{"end", 60}, {"home", 0}, {"pgdown", 17}, {"pgup", 0}} {
 		m, _ = m.Key(step.key)
-		if m.pickCursor != step.want {
-			t.Errorf("after %s the picker cursor is %d, want %d", step.key, m.pickCursor, step.want)
+		if m.browse.Row != step.want {
+			t.Errorf("after %s the picker cursor is %d, want %d", step.key, m.browse.Row, step.want)
 		}
 	}
 }

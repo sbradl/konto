@@ -37,6 +37,23 @@ func New() Model { return Model{} }
 // Period is the period the view shows; the Dashboard's month to date is separate.
 func (m Model) Period() domain.Period { return m.period }
 
+// Action is what a key asks the root model to do.
+type Action int
+
+// The Reports view's actions.
+const (
+	NoAction   Action = iota
+	LoadReport        // p moved to the next period: its report is to be built
+)
+
+// Key applies a key: p moves to the next period and asks for its report, the other keys scroll.
+func (m Model) Key(key string) (Model, Action) {
+	if key == "p" {
+		return m.NextPeriod(), LoadReport
+	}
+	return m.Move(key), NoAction
+}
+
 // NextPeriod moves to the next period (month, quarter, year, all time, month).
 func (m Model) NextPeriod() Model {
 	m.period = m.period.Next()
@@ -158,7 +175,7 @@ func deltaText(delta domain.MultiAmount) string {
 }
 
 func (c columns) titleRow(width int) string {
-	return strings.Repeat(" ", max(0, width-c.delta-1)) + theme.Dim.Render(padLeft(deltaTitle, c.delta)) + " "
+	return strings.Repeat(" ", max(0, width-c.delta-1)) + theme.Dim.Render(layout.AlignRight(deltaTitle, c.delta)) + " "
 }
 
 // line is one row: label at the left, the amount and the change right-aligned.
@@ -170,12 +187,14 @@ func (c columns) line(row domain.ReportRow, width int) string {
 	if c.delta > 0 {
 		change = strings.Repeat(" ", columnGap+c.delta)
 		if row.Delta != nil {
-			change = strings.Repeat(" ", columnGap) + alignRight(deltaText(*row.Delta), c.delta, deltaStyle(*row.Delta))
+			delta := deltaStyle(*row.Delta).Render(deltaText(*row.Delta))
+			change = strings.Repeat(" ", columnGap) + layout.AlignRight(delta, c.delta)
 		}
 	}
 	room := max(0, width-c.amount-columnGap-lipgloss.Width(change)-columnGap)
-	label := " " + indent(row) + rowStyle(row).Render(fit(row.Label, room-lipgloss.Width(indent(row))))
-	return label + strings.Repeat(" ", columnGap-1) + alignRight(amount, c.amount, amountStyle(row)) + change + " "
+	label := " " + indent(row) + rowStyle(row).Render(layout.Fit(row.Label, room-lipgloss.Width(indent(row))))
+	figure := layout.AlignRight(amountStyle(row).Render(amount), c.amount)
+	return label + strings.Repeat(" ", columnGap-1) + figure + change + " "
 }
 
 func indent(row domain.ReportRow) string {
@@ -210,18 +229,4 @@ func deltaStyle(delta domain.MultiAmount) lipgloss.Style {
 		return theme.Negative
 	}
 	return theme.Ok
-}
-
-// alignRight pads text to width on the left, the padding outside the style.
-func alignRight(text string, width int, style lipgloss.Style) string {
-	return strings.Repeat(" ", max(0, width-lipgloss.Width(text))) + style.Render(text)
-}
-
-func padLeft(text string, width int) string {
-	return strings.Repeat(" ", max(0, width-lipgloss.Width(text))) + text
-}
-
-func fit(text string, width int) string {
-	cut := lipgloss.NewStyle().MaxWidth(width).Render(text)
-	return cut + strings.Repeat(" ", max(0, width-lipgloss.Width(cut)))
 }

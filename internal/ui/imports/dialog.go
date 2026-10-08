@@ -81,7 +81,7 @@ func edit(text, key string) (string, bool) {
 
 // choices are the categorise popup's options for the row under the cursor.
 func (m Model) choices() []string {
-	if m.staged.Rows[m.cursor].NeedsCategory() {
+	if m.staged.Rows[m.table.Row].NeedsCategory() {
 		return []string{choiceNewRule, choiceAddToRule, choiceOnce}
 	}
 	return []string{choiceOnce}
@@ -136,7 +136,7 @@ func (m Model) choiceKey(key string) Model {
 	}
 	switch options[m.dlg.cursor] {
 	case choiceNewRule:
-		m.dlg = dialog{kind: dialogRuleForm, draft: m.staged.DraftFor(m.cursor)}
+		m.dlg = dialog{kind: dialogRuleForm, draft: m.staged.DraftFor(m.table.Row)}
 	case choiceAddToRule:
 		m.dlg = dialog{kind: dialogRuleList}
 	default:
@@ -204,7 +204,7 @@ func (m Model) ruleListKey(key string) Model {
 		if len(rules) == 0 {
 			return m
 		}
-		row := m.staged.Rows[m.cursor]
+		row := m.staged.Rows[m.table.Row]
 		m.dlg = dialog{
 			kind: dialogAddForm, ruleID: rules[m.dlg.cursor].ID, matcher: regexp.QuoteMeta(row.Description),
 		}
@@ -221,7 +221,7 @@ func (m Model) ruleListKey(key string) Model {
 // addition is the alternative the add-to-rule form would append: the row's payee (else type) matching
 // the pattern typed.
 func (m Model) addition() []csvimport.Condition {
-	return []csvimport.Condition{{Field: m.staged.Rows[m.cursor].MatchField(), Pattern: m.dlg.matcher}}
+	return []csvimport.Condition{{Field: m.staged.Rows[m.table.Row].MatchField(), Pattern: m.dlg.matcher}}
 }
 
 func (m Model) addFormKey(key string) Model {
@@ -258,7 +258,7 @@ func (m Model) accountKey(key string) Model {
 // pickerEntries are what the picker lists for the filter: the matching candidates, then "+ create" when
 // nothing matches or nothing has been typed yet.
 func (m Model) pickerEntries() (candidates []csvimport.Candidate, create bool) {
-	row := m.staged.Rows[m.cursor]
+	row := m.staged.Rows[m.table.Row]
 	candidates = csvimport.Matching(m.staged.Candidates(row), m.dlg.filter)
 	return candidates, len(candidates) == 0 || m.dlg.filter == ""
 }
@@ -285,7 +285,7 @@ func (m Model) pick(candidates []csvimport.Candidate) Model {
 	if m.dlg.cursor < len(candidates) {
 		return m.picked(*m.staged, candidates[m.dlg.cursor])
 	}
-	row := m.staged.Rows[m.cursor]
+	row := m.staged.Rows[m.table.Row]
 	staged, candidate, err := m.staged.Create(csvimport.SuggestName(row, m.dlg.filter))
 	if err != nil {
 		m.dlg.refusal = err.Error()
@@ -302,7 +302,7 @@ func (m Model) picked(staged csvimport.Staged, candidate csvimport.Candidate) Mo
 		m.staged = &staged
 		return m
 	}
-	once := staged.Once(m.cursor, candidate)
+	once := staged.Once(m.table.Row, candidate)
 	m.staged, m.dlg = &once, dialog{}
 	return m
 }

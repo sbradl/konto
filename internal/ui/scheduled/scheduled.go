@@ -32,8 +32,7 @@ type Model struct {
 	form      *form // the open new-rule or edit-rule form
 	schedules []domain.RuleSchedule
 	total     domain.MultiAmount
-	cursor    int
-	offset    int // the first visible rule
+	cursor    layout.Cursor
 	width     int
 	height    int
 }
@@ -47,14 +46,14 @@ func (m Model) WithLedger(ledger domain.Ledger) Model {
 	next.ledger = ledger
 	next.schedules = ledger.Schedules()
 	next.total = ledger.AnnualImpact()
-	return next.moveTo(next.cursor)
+	return next.moveTo(next.cursor.Row)
 }
 
 // Resize gives the view the content area below the tab bar and above the status bar.
 func (m Model) Resize(width, height int) Model {
 	next := m
 	next.width, next.height = width, height
-	return next.moveTo(next.cursor)
+	return next.moveTo(next.cursor.Row)
 }
 
 // Position is the 1-based cursor row and the row count; (0, 0) when there are no rules.
@@ -62,35 +61,48 @@ func (m Model) Position() (row, total int) {
 	if len(m.schedules) == 0 {
 		return 0, 0
 	}
-	return m.cursor + 1, len(m.schedules)
+	return m.cursor.Row + 1, len(m.schedules)
+}
+
+// ListAction is what a key on the rule list asks the root model to do.
+type ListAction int
+
+// The Scheduled list's actions; editing and deleting are asked for only with a rule selected.
+const (
+	NoAction       ListAction = iota
+	NewRule                   // n: open the form on a new rule
+	EditSelected              // e: open the form on the selected rule
+	DeleteSelected            // d: ask whether to delete the selected rule
+)
+
+// Key applies a key: n, e and d ask for a new rule or for the selected one to be edited or deleted, the
+// cursor keys move.
+func (m Model) Key(key string) (Model, ListAction) {
+	if key == "n" {
+		return m, NewRule
+	}
+	if _, selected := m.Selected(); !selected {
+		return m.Move(key), NoAction
+	}
+	switch key {
+	case "e":
+		return m, EditSelected
+	case "d":
+		return m, DeleteSelected
+	}
+	return m.Move(key), NoAction
 }
 
 // Move applies a cursor key: up, down, home, end, pgup or pgdown. The cursor stops at both ends.
 func (m Model) Move(key string) Model {
-	switch key {
-	case "up":
-		return m.moveTo(m.cursor - 1)
-	case "down":
-		return m.moveTo(m.cursor + 1)
-	case "home":
-		return m.moveTo(0)
-	case "end":
-		return m.moveTo(len(m.schedules))
-	case "pgup":
-		return m.moveTo(m.cursor - m.pageSize())
-	case "pgdown":
-		return m.moveTo(m.cursor + m.pageSize())
-	}
-	return m
+	next := m
+	next.cursor = m.cursor.Move(key, len(m.schedules), m.pageSize())
+	return next
 }
 
 func (m Model) moveTo(row int) Model {
 	next := m
-	next.cursor = max(0, min(row, len(m.schedules)-1))
-	next.offset = max(0, min(m.offset, next.cursor))
-	if next.cursor >= next.offset+m.pageSize() {
-		next.offset = next.cursor - m.pageSize() + 1
-	}
+	next.cursor = m.cursor.To(row, len(m.schedules), m.pageSize())
 	return next
 }
 
@@ -122,12 +134,12 @@ func (m Model) list(height int) string {
 	if len(m.schedules) == 0 {
 		return layout.Panel("RULES", m.width, height, theme.Dim.Render(" no rules — press n to add a rule"))
 	}
-	last := min(len(m.schedules), m.offset+m.pageSize())
+	last := min(len(m.schedules), m.cursor.Offset+m.pageSize())
 	rows := make([]string, 0, m.pageSize())
-	for i := m.offset; i < last; i++ {
+	for i := m.cursor.Offset; i < last; i++ {
 		line := ruleLine(m.schedules[i], inner)
-		if i == m.cursor {
-			rows = append(rows, theme.Selected.Render(fit(line.text(), inner)))
+		if i == m.cursor.Row {
+			rows = append(rows, theme.Selected.Render(layout.Fit(line.text(), inner)))
 		} else {
 			rows = append(rows, line.styled())
 		}
@@ -141,8 +153,10 @@ type listRow struct {
 	statusStyle    lipgloss.Style
 }
 
-func (r listRow) text() string   { return r.prefix + r.status }
-func (r listRow) styled() string { return r.prefix + r.statusStyle.Render(fit(r.status, statusWidth)) }
+func (r listRow) text() string { return r.prefix + r.status }
+func (r listRow) styled() string {
+	return r.prefix + r.statusStyle.Render(layout.Fit(r.status, statusWidth))
+}
 
 func ruleLine(schedule domain.RuleSchedule, width int) listRow {
 	spare := max(0, width-1-nextWidth-3*columnGap-statusWidth)
@@ -152,8 +166,8 @@ func ruleLine(schedule domain.RuleSchedule, width int) listRow {
 		next, status, style = date.Format(time.DateOnly), "upcoming", theme.Ok
 	}
 	gap := strings.Repeat(" ", columnGap)
-	prefix := " " + fit(next, nextWidth) + gap + fit(schedule.Rule.Description, description) + gap +
-		fit(schedule.Rule.Period, spare-description) + gap
+	prefix := " " + layout.Fit(next, nextWidth) + gap + layout.Fit(schedule.Rule.Description, description) + gap +
+		layout.Fit(schedule.Rule.Period, spare-description) + gap
 	return listRow{prefix: prefix, status: status, statusStyle: style}
 }
 
@@ -168,7 +182,7 @@ func (m Model) current() (domain.RuleSchedule, bool) {
 	if len(m.schedules) == 0 {
 		return domain.RuleSchedule{}, false
 	}
-	return m.schedules[m.cursor], true
+	return m.schedules[m.cursor.Row], true
 }
 
 // entry is the selected rule as written: the ~ line magenta, comments dim.
@@ -241,10 +255,5 @@ func impactLine(label string, amount domain.MultiAmount, width int, labelStyle l
 		style = theme.Negative
 	}
 	room := max(0, width-lipgloss.Width(text)-columnGap-1)
-	return " " + labelStyle.Render(fit(label, room)) + strings.Repeat(" ", columnGap) + style.Render(text)
-}
-
-func fit(text string, width int) string {
-	cut := lipgloss.NewStyle().MaxWidth(max(0, width)).Render(text)
-	return cut + strings.Repeat(" ", max(0, width-lipgloss.Width(cut)))
+	return " " + labelStyle.Render(layout.Fit(label, room)) + strings.Repeat(" ", columnGap) + style.Render(text)
 }

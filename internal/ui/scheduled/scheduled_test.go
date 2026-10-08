@@ -104,7 +104,7 @@ func TestEmptyViewHasNoPositionAndSaysHowToAddARule(t *testing.T) {
 	if view := plain(m.View()); !strings.Contains(view, "press n to add a rule") {
 		t.Errorf("empty state should hint at n:\n%s", view)
 	}
-	if got := m.Move("down"); got.cursor != 0 {
+	if got := m.Move("down"); got.cursor.Row != 0 {
 		t.Errorf("nothing to move over")
 	}
 }
@@ -195,8 +195,8 @@ func TestLongRuleListsScrollWithTheCursorAndPageByTheListHeight(t *testing.T) {
 	if !strings.Contains(end, "Rule 39") || strings.Contains(end, "Rule 00") {
 		t.Errorf("End shows the last rule and scrolls the first away:\n%s", end)
 	}
-	if paged := m.Move("pgdown"); paged.cursor <= 1 {
-		t.Errorf("pgdown should jump a page, cursor %d", paged.cursor)
+	if paged := m.Move("pgdown"); paged.cursor.Row <= 1 {
+		t.Errorf("pgdown should jump a page, cursor %d", paged.cursor.Row)
 	}
 	down := m
 	for range 20 {
@@ -205,7 +205,7 @@ func TestLongRuleListsScrollWithTheCursorAndPageByTheListHeight(t *testing.T) {
 	if !strings.Contains(plain(down.View()), "Rule 20") {
 		t.Errorf("the selected row is always visible")
 	}
-	if back := down.Move("home"); back.offset != 0 {
+	if back := down.Move("home"); back.cursor.Offset != 0 {
 		t.Errorf("home scrolls back to the top")
 	}
 }
@@ -269,5 +269,22 @@ func TestExactlyTheRowUnderTheCursorIsHighlightedAndAlwaysVisible(t *testing.T) 
 		if len(rows) != 1 || !strings.Contains(rows[0], fmt.Sprintf("Rule %02d", step+1)) {
 			t.Fatalf("after %d downs the highlighted rows are %q", step+1, rows)
 		}
+	}
+}
+
+func TestKeyAsksForNewEditOrDeleteOnlyWithARuleForEditAndDelete(t *testing.T) {
+	for key, want := range map[string]ListAction{"n": NewRule, "e": EditSelected, "d": DeleteSelected, "x": NoAction} {
+		if _, got := loaded().Key(key); got != want {
+			t.Errorf("%s: action = %v, want %v", key, got, want)
+		}
+	}
+	empty := New().Resize(180, 30)
+	for key, want := range map[string]ListAction{"n": NewRule, "e": NoAction, "d": NoAction} {
+		if _, got := empty.Key(key); got != want {
+			t.Errorf("no rules, %s: action = %v, want %v", key, got, want)
+		}
+	}
+	if moved, _ := loaded().Key("down"); moved.cursor.Row != 1 {
+		t.Errorf("down: row = %d, want the cursor moved", moved.cursor.Row)
 	}
 }

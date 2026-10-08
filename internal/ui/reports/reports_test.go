@@ -312,3 +312,15 @@ func TestATableWithoutDeltasUsesEveryRowBelowTheBorder(t *testing.T) {
 		t.Errorf("a four-row panel showing six rows gives its last row to the overflow line:\n%s", view)
 	}
 }
+
+func TestKeyPMovesToTheNextPeriodAndAsksForItsReport(t *testing.T) {
+	m := New().Resize(180, 40)
+
+	next, action := m.Key("p")
+	if action != LoadReport || next.Period() != domain.QuarterToDate {
+		t.Errorf("p: action = %v, period = %v; want the quarter's report asked for", action, next.Period())
+	}
+	if _, action := m.Key("down"); action != NoAction {
+		t.Errorf("down: action = %v, want none", action)
+	}
+}

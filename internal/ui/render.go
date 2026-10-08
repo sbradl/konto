@@ -60,7 +60,7 @@ func (m Model) body() string {
 		return m.loadErr.Error()
 	}
 	switch m.active {
-	case 0:
+	case dashboardTab:
 		return m.dash.View()
 	case importTab:
 		return m.imports.View()
@@ -182,7 +182,7 @@ func (m Model) statusLeft() string {
 // hiddenPanels is how many panels of the active view the terminal is too small to show.
 func (m Model) hiddenPanels() int {
 	switch m.active {
-	case 0:
+	case dashboardTab:
 		return m.dash.HiddenPanels()
 	case forecastTab:
 		return m.forecasts.HiddenPanels()
@@ -201,7 +201,7 @@ func hiddenNotice(hidden int) string {
 // position is the active view's cursor row and row count; views without a cursor have none.
 func (m Model) position() (row, total int) {
 	switch m.active {
-	case 0:
+	case dashboardTab:
 		return m.dash.Position()
 	case importTab:
 		return m.imports.Position()

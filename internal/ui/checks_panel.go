@@ -13,42 +13,63 @@ import (
 	"github.com/sbradl/konto/internal/ui/theme"
 )
 
-// issues are the open issues of the latest check run.
-func (m Model) issues() []domain.CheckIssue {
-	if m.run == nil {
-		return nil
-	}
-	return m.run.Issues
+// checksPanel is the latest check run and the checks panel's cursor over its issues.
+type checksPanel struct {
+	run    *domain.CheckRun // nil until the first run lands
+	cursor layout.Cursor    // the selected issue, and the first one shown
 }
 
-// checkPage is how many issues the panel shows at once: what fits under its title in half the screen.
-func (m Model) checkPage() int {
-	return max(1, layout.PopupHeight(max(1, len(m.issues()))+1, m.height)-1)
+// issues are the open issues of the run.
+func (p checksPanel) issues() []domain.CheckIssue {
+	if p.run == nil {
+		return nil
+	}
+	return p.run.Issues
+}
+
+// page is how many issues the panel shows at once on a screen height rows tall: what fits under its title in
+// half the screen.
+func (p checksPanel) page(height int) int {
+	return max(1, layout.PopupHeight(max(1, len(p.issues()))+1, height)-1)
+}
+
+// withRun shows a new run, the cursor kept on its row, or on the last issue when the run has fewer.
+func (p checksPanel) withRun(run domain.CheckRun, height int) checksPanel {
+	next := checksPanel{run: &run, cursor: p.cursor}
+	next.cursor = p.cursor.To(p.cursor.Row, len(run.Issues), next.page(height))
+	return next
+}
+
+// moved applies up or down; any other key only keeps the selected issue in view.
+func (p checksPanel) moved(key string, height int) checksPanel {
+	next, count, page := p, len(p.issues()), p.page(height)
+	switch key {
+	case "up":
+		next.cursor = p.cursor.To(p.cursor.Row-1, count, page)
+	case "down":
+		next.cursor = p.cursor.To(p.cursor.Row+1, count, page)
+	default:
+		next.cursor = p.cursor.Scrolled(page)
+	}
+	return next
+}
+
+// selected is the issue under the cursor; false when there are none.
+func (p checksPanel) selected() (domain.CheckIssue, bool) {
+	issues := p.issues()
+	if len(issues) == 0 {
+		return domain.CheckIssue{}, false
+	}
+	return issues[p.cursor.Row], true
 }
 
 // onChecksKey moves the panel's cursor, or jumps to the selected issue in the editor.
 func (m Model) onChecksKey(key string) (Model, tea.Cmd) {
-	issues := m.issues()
-	switch key {
-	case "up":
-		m.checkCursor = max(0, m.checkCursor-1)
-	case "down":
-		m.checkCursor = max(0, min(m.checkCursor+1, len(issues)-1))
-	case "enter":
-		if len(issues) > 0 && issues[m.checkCursor].File != "" {
-			return m, m.openEditor(issues[m.checkCursor])
-		}
+	if issue, ok := m.checks.selected(); key == "enter" && ok && issue.File != "" {
+		return m, m.openEditor(issue)
 	}
-	return m.scrollChecks(), nil
-}
-
-// scrollChecks keeps the selected issue inside the visible window.
-func (m Model) scrollChecks() Model {
-	m.checkOffset = max(0, min(m.checkOffset, m.checkCursor))
-	if m.checkCursor >= m.checkOffset+m.checkPage() {
-		m.checkOffset = m.checkCursor - m.checkPage() + 1
-	}
-	return m
+	m.checks = m.checks.moved(key, m.height)
+	return m, nil
 }
 
 // checksBody is the panel's rows: what went wrong with the last reload, if anything, then the
@@ -72,19 +93,19 @@ func (m Model) failureRows() []string {
 
 // runRows are the rows of the latest check run.
 func (m Model) runRows() []string {
-	if m.run == nil {
+	if m.checks.run == nil {
 		return []string{"no checks have run yet"}
 	}
-	if m.run.IsClean() {
-		return []string{" " + theme.Ok.Render(fmt.Sprintf("✓ all %d checks pass", m.run.Total))}
+	if m.checks.run.IsClean() {
+		return []string{" " + theme.Ok.Render(fmt.Sprintf("✓ all %d checks pass", m.checks.run.Total))}
 	}
-	last := min(len(m.run.Issues), m.checkOffset+m.checkPage())
-	visible := m.run.Issues[m.checkOffset:last]
+	last := min(len(m.checks.run.Issues), m.checks.cursor.Offset+m.checks.page(m.height))
+	visible := m.checks.run.Issues[m.checks.cursor.Offset:last]
 	rows := make([]string, len(visible))
 	for i, issue := range visible {
 		rows[i] = m.issueLine(issue)
-		if m.checkOffset+i == m.checkCursor {
-			rows[i] = theme.Selected.Render(fit(" "+m.issueText(issue), m.width))
+		if m.checks.cursor.Offset+i == m.checks.cursor.Row {
+			rows[i] = theme.Selected.Render(layout.Fit(" "+m.issueText(issue), m.width))
 		}
 	}
 	return rows
@@ -112,21 +133,21 @@ func (m Model) issueLine(issue domain.CheckIssue) string {
 // checkStatus is the check indicator for the status bar, with the style it is drawn in.
 // Nothing shows until the first run lands.
 func (m Model) checkStatus() (string, lipgloss.Style) {
-	if m.run == nil {
+	if m.checks.run == nil {
 		return "", theme.StatusBar
 	}
-	if m.run.IsClean() {
+	if m.checks.run.IsClean() {
 		return "● clean   ", theme.StatusOk
 	}
 	var parts []string
-	if n := m.run.Count(domain.SeverityErr); n > 0 {
+	if n := m.checks.run.Count(domain.SeverityErr); n > 0 {
 		parts = append(parts, fmt.Sprintf("%d err", n))
 	}
-	if n := m.run.Count(domain.SeverityWarn); n > 0 {
+	if n := m.checks.run.Count(domain.SeverityWarn); n > 0 {
 		parts = append(parts, fmt.Sprintf("%d warn", n))
 	}
 	text := "● " + strings.Join(parts, " · ") + "   "
-	if m.run.Count(domain.SeverityErr) > 0 {
+	if m.checks.run.Count(domain.SeverityErr) > 0 {
 		return text, theme.StatusErr
 	}
 	return text, theme.StatusWarn

@@ -105,12 +105,9 @@ type Model struct {
 	scheduled   scheduled.Model
 	importer    csvImporter
 	imports     imports.Model
-	prompt      *prompt          // the y/n question awaiting an answer
-	previewTop  int              // the first line of the prompt's preview on screen
-	notice      string           // a one-line message shown until the next key
-	run         *domain.CheckRun // the latest check run; nil until the first one lands
-	checkCursor int              // the selected issue in the checks panel
-	checkOffset int              // the first visible issue in the checks panel
+	prompt      *prompt     // the y/n question awaiting an answer
+	notice      string      // a one-line message shown until the next key
+	checks      checksPanel // the latest check run and the panel's cursor over it
 	creator     journalCreator
 	editor      func(file string, line int) *exec.Cmd
 	ledger      *domain.Ledger
@@ -293,9 +290,7 @@ func (m Model) onLoaded(loaded ledgerLoadedMsg) Model {
 	m.dash = m.dash.WithLedger(loaded.ledger)
 	m.scheduled = m.scheduled.WithLedger(loaded.ledger)
 	if loaded.err == nil {
-		m.run = &loaded.run
-		m.checkCursor = max(0, min(m.checkCursor, len(loaded.run.Issues)-1))
-		m = m.scrollChecks()
+		m.checks = m.checks.withRun(loaded.run, m.height)
 	}
 	m.firstRun = errors.Is(loaded.err, ledger.ErrNoJournal)
 	m.parseIssue = issueOf(loaded.err)
@@ -451,7 +446,7 @@ func (m Model) onViewKey(key string) (Model, tea.Cmd) {
 // onActiveViewKey hands a key to the view on screen.
 func (m Model) onActiveViewKey(key string) (Model, tea.Cmd) {
 	switch m.active {
-	case 0:
+	case dashboardTab:
 		return m.onDashboardKey(key), nil
 	case importTab:
 		return m.onImportKey(key)
@@ -465,20 +460,21 @@ func (m Model) onActiveViewKey(key string) (Model, tea.Cmd) {
 
 // Tab indices of the views.
 const (
+	dashboardTab = 0
 	importTab    = 1
 	scheduledTab = 2
 	forecastTab  = 3
 	reportsTab   = 4
 )
 
-// onReportsKey scrolls the tables, or on p moves to the next period and builds its report.
+// onReportsKey hands a key to the Reports view and builds the report it asks for.
 func (m Model) onReportsKey(key string) (Model, tea.Cmd) {
-	if key != "p" {
-		m.reports = m.reports.Move(key)
-		return m, nil
+	var action reports.Action
+	m.reports, action = m.reports.Key(key)
+	if action == reports.LoadReport {
+		return m, m.loadReport(nil)
 	}
-	m.reports = m.reports.NextPeriod()
-	return m, m.loadReport(nil)
+	return m, nil
 }
 
 // openEditor suspends konto while the user's editor shows the issue.

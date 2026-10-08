@@ -24,22 +24,12 @@ func (m Model) pickerKey(key string) (Model, Action) {
 	switch key {
 	case keyEsc:
 		m.picking = false
-	case keyUp:
-		m = m.pickerTo(m.pickCursor - 1)
-	case keyDown:
-		m = m.pickerTo(m.pickCursor + 1)
-	case keyHome:
-		m = m.pickerTo(0)
-	case keyEnd:
-		m = m.pickerTo(len(rows))
-	case "pgup":
-		m = m.pickerTo(m.pickCursor - m.pickerPage())
-	case "pgdown":
-		m = m.pickerTo(m.pickCursor + m.pickerPage())
 	case keyEnter:
 		if len(rows) > 0 {
-			return m, m.activate(rows[m.pickCursor])
+			return m, m.activate(rows[m.browse.Row])
 		}
+	default:
+		m.browse = m.browse.Move(key, len(rows), m.pickerPage())
 	}
 	return m, Action{}
 }
@@ -55,18 +45,9 @@ func (m Model) activate(entry domain.FileEntry) Action {
 	return Action{Open: filepath.Join(m.dir, entry.Name)}
 }
 
-func (m Model) pickerTo(row int) Model {
-	next := m
-	next.pickCursor = max(0, min(row, len(m.pickerRows())-1))
-	return next.scrollPicker()
-}
-
 func (m Model) scrollPicker() Model {
 	next := m
-	next.pickOffset = max(0, min(m.pickOffset, m.pickCursor))
-	if m.pickCursor >= next.pickOffset+m.pickerPage() {
-		next.pickOffset = m.pickCursor - m.pickerPage() + 1
-	}
+	next.browse = m.browse.Scrolled(m.pickerPage())
 	return next
 }
 
@@ -78,12 +59,12 @@ func (m Model) picker(height int) string {
 		return layout.Panel(pickerTitle, m.width, height, strings.Join(lines, "\n"))
 	}
 	rows := m.pickerRows()
-	for i := m.pickOffset; i < min(len(rows), m.pickOffset+m.pickerPage()); i++ {
+	for i := m.browse.Offset; i < min(len(rows), m.browse.Offset+m.pickerPage()); i++ {
 		name := rows[i].Name
 		if rows[i].IsDir && name != parentEntry {
 			name += "/"
 		}
-		lines = append(lines, listLine(name, i, m.pickCursor, m.innerWidth()))
+		lines = append(lines, listLine(name, i, m.browse.Row, m.innerWidth()))
 	}
 	return layout.Panel(pickerTitle, m.width, height, strings.Join(lines, "\n"))
 }

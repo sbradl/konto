@@ -3,14 +3,15 @@ package ui
 import (
 	"context"
 	"errors"
-	"strconv"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sbradl/konto/internal/csvimport"
 	"github.com/sbradl/konto/internal/domain"
+	"github.com/sbradl/konto/internal/ui/dashboard"
 	"github.com/sbradl/konto/internal/ui/imports"
+	"github.com/sbradl/konto/internal/ui/layout"
 )
 
 // prompt is a y/n question about a planned write; y applies the changeset. An import's prompt also shows
@@ -19,6 +20,7 @@ type prompt struct {
 	question  string
 	changeset domain.Changeset
 	preview   []string
+	top       int    // the first line of the preview on screen
 	imported  string // the confirmation shown once an import is written
 	quit      bool   // y leaves konto: the question is about discarding the staged import
 }
@@ -30,26 +32,28 @@ type pendingWrite struct {
 	rule      string // the confirmation of a saved rule
 }
 
-// onDashboardKey moves the Accounts cursor, or starts closing (c) or reopening (o) the selected account.
+// onDashboardKey hands a key to the Dashboard and carries out what it asks for: closing or reopening the
+// selected account.
 func (m Model) onDashboardKey(key string) Model {
-	m.dash = m.dash.Move(key)
-	if key == "c" || key == "o" {
-		return m.planAccountChange(key)
+	var action dashboard.Action
+	m.dash, action = m.dash.Key(key)
+	switch action {
+	case dashboard.CloseSelected:
+		return m.planAccountChange(m.accounts.Close, "close")
+	case dashboard.ReopenSelected:
+		return m.planAccountChange(m.accounts.Reopen, "reopen")
+	case dashboard.NoAction:
 	}
 	return m
 }
 
-// planAccountChange handles c (close) and o (reopen) on the Dashboard's selected account:
-// a refusal becomes a notice, a plan becomes a y/n prompt. Refusals that only mean "nothing to
-// do" (closing a closed account, reopening an open one) stay quiet.
-func (m Model) planAccountChange(key string) Model {
+// planAccountChange plans closing or reopening the Dashboard's selected account: a refusal becomes a notice,
+// a plan becomes a y/n prompt. Refusals that only mean "nothing to do" (closing a closed account, reopening
+// an open one) stay quiet.
+func (m Model) planAccountChange(plan func(domain.Account) (domain.Changeset, error), verb string) Model {
 	account, ok := m.dash.Selected()
 	if !ok {
 		return m
-	}
-	plan, verb := m.accounts.Close, "close"
-	if key == "o" {
-		plan, verb = m.accounts.Reopen, "reopen"
 	}
 	changeset, err := plan(account)
 	if errors.Is(err, domain.ErrAlreadyClosed) || errors.Is(err, domain.ErrNotClosed) {
@@ -76,11 +80,19 @@ func (m Model) onPromptKey(key string) (Model, tea.Cmd) {
 	case "n", "esc":
 		m.prompt = nil
 	case "up":
-		m.previewTop = max(0, m.previewTop-1)
+		m.prompt = m.prompt.scrolled(-1)
 	case "down":
-		m.previewTop++
+		m.prompt = m.prompt.scrolled(1)
 	}
 	return m, nil
+}
+
+// scrolled is the prompt with its preview moved by lines, never above the first; a new prompt, since the
+// one open is shared with earlier models.
+func (p *prompt) scrolled(lines int) *prompt {
+	next := *p
+	next.top = max(0, p.top+lines)
+	return &next
 }
 
 // writeCmd writes the changeset; an import's and a rule's is checked first, so a journal that would fail its
@@ -149,20 +161,12 @@ func (m Model) planImport() Model {
 		m.imports = m.imports.WithMessage(err.Error())
 		return m
 	}
-	transactions := plural(plan.Count, "transaction")
+	transactions := layout.Plural(plan.Count, "transaction")
 	m.prompt = &prompt{
 		question: "write " + transactions + " into " + plan.Account + "?", changeset: plan.Changeset,
 		preview: plan.Preview, imported: "imported " + transactions + " into " + plan.Account,
 	}
-	m.previewTop = 0
 	return m
-}
-
-func plural(n int, noun string) string {
-	if n == 1 {
-		return "1 " + noun
-	}
-	return strconv.Itoa(n) + " " + noun + "s"
 }
 
 // reopen reads the staged export again against the reloaded journal, so what is skipped follows the journal.

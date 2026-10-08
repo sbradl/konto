@@ -14,10 +14,10 @@ func (m Model) withPreview(base string) string {
 	}
 	lines := m.prompt.preview
 	capacity := max(1, layout.PopupHeight(len(lines)+1, m.height)-1)
-	first := max(0, min(m.previewTop, len(lines)-capacity))
-	rows := []string{m.titleRule("write")}
+	first := max(0, min(m.prompt.top, len(lines)-capacity))
+	rows := []string{layout.TitleRule("write", m.width)}
 	for _, line := range lines[first : first+capacity] {
-		rows = append(rows, fit(" "+line, m.width))
+		rows = append(rows, layout.Fit(" "+line, m.width))
 	}
 	return layout.Overlay(base, strings.Join(rows, "\n"), m.height)
 }

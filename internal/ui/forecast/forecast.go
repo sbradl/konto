@@ -213,7 +213,7 @@ func (m Model) table() string {
 	var header strings.Builder
 	header.WriteString("  " + strings.Repeat(" ", nameWidth))
 	for _, months := range forecastsvc.Milestones() {
-		header.WriteString(alignRight(milestoneTitle(months), cell))
+		header.WriteString(layout.AlignRight(milestoneTitle(months), cell))
 	}
 	rows := []string{theme.Dim.Render(header.String())}
 	for _, chart := range m.forecast.Charts {
@@ -244,7 +244,7 @@ func tableRow(line forecastsvc.Line, nameWidth, cell int) string {
 	var row strings.Builder
 	fmt.Fprintf(&row, "  %-*s", nameWidth, line.Account)
 	for _, milestone := range line.Milestones {
-		text := alignRight(milestone.Format(), cell)
+		text := layout.AlignRight(milestone.Format(), cell)
 		if milestone.IsNegative() {
 			text = theme.Negative.Render(text)
 		}
@@ -259,8 +259,4 @@ func milestoneTitle(months int) string {
 		return "today"
 	}
 	return fmt.Sprintf("+%d months", months)
-}
-
-func alignRight(text string, width int) string {
-	return strings.Repeat(" ", max(0, width-lipgloss.Width(text))) + text
 }

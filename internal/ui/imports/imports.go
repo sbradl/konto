@@ -7,8 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"charm.land/lipgloss/v2"
-
 	"github.com/sbradl/konto/internal/csvimport"
 	"github.com/sbradl/konto/internal/domain"
 	"github.com/sbradl/konto/internal/ui/layout"
@@ -53,13 +51,11 @@ type Model struct {
 	dir         string
 	entries     []domain.FileEntry
 	listErr     error
-	pickCursor  int
-	pickOffset  int
+	browse      layout.Cursor // the file picker's selected entry
 	staged      *csvimport.Staged
-	dlg         dialog // the categorising dialog over the rows
-	parent      dialog // the form waiting while its category picker is open
-	cursor      int
-	offset      int
+	dlg         dialog        // the categorising dialog over the rows
+	parent      dialog        // the form waiting while its category picker is open
+	table       layout.Cursor // the row table's selected row
 	message     string
 	width       int
 	height      int
@@ -80,7 +76,7 @@ func (m Model) WithStaged(staged csvimport.Staged) Model {
 	next := m
 	next.staged, next.picking, next.message = &staged, false, ""
 	next.dlg, next.parent = dialog{}, dialog{}
-	next.cursor, next.offset = 0, 0
+	next.table = layout.Cursor{}
 	if staged.NewAccount && staged.Named == "" {
 		next.dlg = dialog{kind: dialogAccount, filter: csvimport.SuggestAccountName(staged.IBAN)}
 	}
@@ -95,7 +91,7 @@ func (m Model) WithRefreshed(staged csvimport.Staged) Model {
 	if next.dlg.kind != dialogAccount {
 		next.dlg, next.parent = dialog{}, dialog{}
 	}
-	return next.rowsTo(m.cursor)
+	return next.rowsTo(m.table.Row)
 }
 
 // Staged is the import being worked on; false when there is none.
@@ -110,7 +106,7 @@ func (m Model) Staged() (csvimport.Staged, bool) {
 func (m Model) Cleared() Model {
 	next := m
 	next.staged, next.dlg, next.parent = nil, dialog{}, dialog{}
-	next.cursor, next.offset = 0, 0
+	next.table = layout.Cursor{}
 	return next
 }
 
@@ -125,7 +121,7 @@ func (m Model) WithMessage(text string) Model {
 func (m Model) WithListing(dir string, entries []domain.FileEntry, err error) Model {
 	next := m
 	next.dir, next.entries, next.listErr = dir, entries, err
-	next.pickCursor, next.pickOffset = 0, 0
+	next.browse = layout.Cursor{}
 	return next
 }
 
@@ -134,7 +130,7 @@ func (m Model) Position() (row, total int) {
 	if m.picking || m.staged == nil || len(m.staged.Rows) == 0 {
 		return 0, 0
 	}
-	return m.cursor + 1, len(m.staged.Rows)
+	return m.table.Row + 1, len(m.staged.Rows)
 }
 
 // Key applies a key to the view; n, the cursor keys, Enter in the picker and Esc are its own.
@@ -150,7 +146,7 @@ func (m Model) Key(key string) (Model, Action) {
 	switch key {
 	case "n":
 		next.picking, next.dir, next.entries, next.listErr = true, m.downloadDir, nil, nil
-		next.pickCursor, next.pickOffset = 0, 0
+		next.browse = layout.Cursor{}
 		return next, Action{Browse: m.downloadDir}
 	case keyEnter:
 		return next.openChoice(), Action{}
@@ -178,35 +174,20 @@ func (m Model) rowCount() int {
 }
 
 func (m Model) moveRows(key string) Model {
-	switch key {
-	case keyUp:
-		return m.rowsTo(m.cursor - 1)
-	case keyDown:
-		return m.rowsTo(m.cursor + 1)
-	case keyHome:
-		return m.rowsTo(0)
-	case keyEnd:
-		return m.rowsTo(m.rowCount())
-	case "pgup":
-		return m.rowsTo(m.cursor - m.rowPage())
-	case "pgdown":
-		return m.rowsTo(m.cursor + m.rowPage())
-	}
-	return m
+	next := m
+	next.table = m.table.Move(key, m.rowCount(), m.rowPage())
+	return next
 }
 
 func (m Model) rowsTo(row int) Model {
 	next := m
-	next.cursor = max(0, min(row, m.rowCount()-1))
-	return next.scrollRows()
+	next.table = m.table.To(row, m.rowCount(), m.rowPage())
+	return next
 }
 
 func (m Model) scrollRows() Model {
 	next := m
-	next.offset = max(0, min(m.offset, m.cursor))
-	if m.cursor >= next.offset+m.rowPage() {
-		next.offset = m.cursor - m.rowPage() + 1
-	}
+	next.table = m.table.Scrolled(m.rowPage())
 	return next
 }
 
@@ -308,11 +289,11 @@ func (m Model) stagedSummary() string {
 // rowLines are the visible rows of the table, the one under the cursor highlighted.
 func (m Model) rowLines() string {
 	inner := m.innerWidth()
-	last := min(len(m.staged.Rows), m.offset+m.rowPage())
+	last := min(len(m.staged.Rows), m.table.Offset+m.rowPage())
 	lines := make([]string, 0, m.rowPage())
-	for i := m.offset; i < last; i++ {
+	for i := m.table.Offset; i < last; i++ {
 		cells := cellsOf(m.staged.Rows[i], inner)
-		if i == m.cursor {
+		if i == m.table.Row {
 			lines = append(lines, cells.highlighted(inner))
 		} else {
 			lines = append(lines, cells.styled())
@@ -330,7 +311,7 @@ type rowCells struct {
 func cellsOf(row csvimport.Row, width int) rowCells {
 	cells := rowCells{
 		mark: "?", date: row.Date.Format(time.DateOnly), target: needsARule, needsCategory: row.NeedsCategory(),
-		amount: alignRight(row.Amount.Format(), amountWidth),
+		amount: layout.AlignRight(row.Amount.Format(), amountWidth),
 	}
 	if !row.NeedsCategory() {
 		cells.mark, cells.target = "✓", row.Target
@@ -341,10 +322,10 @@ func cellsOf(row csvimport.Row, width int) rowCells {
 			cells.rule = "#" + row.RuleID
 		}
 	}
-	cells.rule = fit(cells.rule, ruleIDWidth)
-	cells.target = fit(cells.target, targetWidth)
+	cells.rule = layout.Fit(cells.rule, ruleIDWidth)
+	cells.target = layout.Fit(cells.target, targetWidth)
 	room := width - 3 - ruleIDWidth - dateWidth - columnGap - columnGap - targetWidth - amountWidth
-	cells.description = fit(row.Description, max(0, room))
+	cells.description = layout.Fit(row.Description, max(0, room))
 	return cells
 }
 
@@ -355,7 +336,7 @@ func (c rowCells) highlighted(width int) string {
 	if c.needsCategory {
 		markStyle = theme.Warn
 	}
-	return " " + markStyle.Render(c.mark) + theme.Selected.Render(fit(c.rest(), max(0, width-2)))
+	return " " + markStyle.Render(c.mark) + theme.Selected.Render(layout.Fit(c.rest(), max(0, width-2)))
 }
 
 // rest is everything after the match mark.
@@ -393,16 +374,8 @@ func (m Model) skippedLines(capacity int) string {
 
 // skippedLine is a row the journal already has: its date, description and amount, dim, across the width.
 func skippedLine(row *csvimport.Row, width int) string {
-	description := fit(row.Description, width-1-dateWidth-columnGap-amountWidth-1)
-	line := " " + row.Date.Format(time.DateOnly) + "  " + description + alignRight(row.Amount.Format(), amountWidth)
-	return theme.Dim.Render(fit(line, width))
-}
-
-func fit(text string, width int) string {
-	cut := lipgloss.NewStyle().MaxWidth(max(0, width)).Render(text)
-	return cut + strings.Repeat(" ", max(0, width-lipgloss.Width(cut)))
-}
-
-func alignRight(text string, width int) string {
-	return strings.Repeat(" ", max(0, width-lipgloss.Width(text))) + text
+	description := layout.Fit(row.Description, width-1-dateWidth-columnGap-amountWidth-1)
+	amount := layout.AlignRight(row.Amount.Format(), amountWidth)
+	line := " " + row.Date.Format(time.DateOnly) + "  " + description + amount
+	return theme.Dim.Render(layout.Fit(line, width))
 }

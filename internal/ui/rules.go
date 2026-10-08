@@ -34,26 +34,27 @@ type ruleSavedMsg struct {
 	err       error
 }
 
-// onScheduledKey moves the rule cursor, opens the form with n and e, or on d asks whether to delete the
-// selected rule.
+// onScheduledKey hands a key to the rule list and carries out what it asks for: the form on a new rule or
+// the selected one, or the question whether to delete the selected rule.
 func (m Model) onScheduledKey(key string) (Model, tea.Cmd) {
-	m.scheduled = m.scheduled.Move(key)
-	if key == "n" && m.rules != nil {
+	var action scheduled.ListAction
+	m.scheduled, action = m.scheduled.Key(key)
+	if action == scheduled.NewRule && m.rules != nil {
 		m.scheduled = m.scheduled.OpenNew()
 		return m, nil
 	}
-	rule, selected := m.scheduled.Selected()
-	if !selected || (key != "e" && key != "d") {
+	rule, _ := m.scheduled.Selected() // edit and delete come only with a rule selected
+	if action != scheduled.EditSelected && action != scheduled.DeleteSelected {
 		return m, nil
 	}
 	if m.refreshing {
 		m.notice = "the journal is reloading — try again in a moment" // the rule's place may have moved
 		return m, nil
 	}
-	if key == "e" && m.rules != nil {
+	if action == scheduled.EditSelected && m.rules != nil {
 		return m, m.readRule(rule)
 	}
-	if key == "d" {
+	if action == scheduled.DeleteSelected {
 		m.prompt = &prompt{question: `delete rule "` + rule.Description + `"?`, changeset: rule.Delete()}
 	}
 	return m, nil

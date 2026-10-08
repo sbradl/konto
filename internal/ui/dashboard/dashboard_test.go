@@ -712,3 +712,15 @@ func TestSpendChartPlacesTheLineAndTheMonthLabelsAlongTheAxes(t *testing.T) {
 		t.Errorf("spend panel =\n%s\nwant\n%s", got, want)
 	}
 }
+
+func TestKeyAsksToCloseOrReopenAndMovesOnCursorKeys(t *testing.T) {
+	m := loaded(20)
+	for key, want := range map[string]Action{"c": CloseSelected, "o": ReopenSelected, "x": NoAction} {
+		if _, got := m.Key(key); got != want {
+			t.Errorf("%s: action = %v, want %v", key, got, want)
+		}
+	}
+	if moved, action := m.Key("down"); action != NoAction || moved.cursor.Row != 1 {
+		t.Errorf("down: action = %v, row = %d; want the cursor moved", action, moved.cursor.Row)
+	}
+}

@@ -59,9 +59,7 @@ func Panel(title string, w, h int, body string) string {
 		if i < len(rows) {
 			row = rows[i]
 		}
-		row = lipgloss.NewStyle().MaxWidth(inner).Render(row)
-		row += strings.Repeat(" ", inner-lipgloss.Width(row))
-		lines = append(lines, "│"+row+"│")
+		lines = append(lines, "│"+Fit(row, inner)+"│")
 	}
 	lines = append(lines, "╰"+strings.Repeat("─", inner)+"╯")
 	return strings.Join(lines, "\n")

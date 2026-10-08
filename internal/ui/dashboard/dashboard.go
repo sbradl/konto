@@ -39,8 +39,7 @@ type Model struct {
 	upcoming []domain.RecentEntry
 	spend    []domain.MonthSpend
 	figures  figures
-	cursor   int
-	offset   int // the first visible row
+	cursor   layout.Cursor
 	width    int
 	height   int
 }
@@ -83,7 +82,7 @@ func (m Model) WithAccounts(accounts []domain.Account) Model {
 	slices.SortStableFunc(listed, compareAccounts)
 	next := m
 	next.accounts = listed
-	return next.moveTo(next.cursor)
+	return next.moveTo(next.cursor.Row)
 }
 
 // compareAccounts orders open accounts before closed ones, each group by name.
@@ -101,36 +100,41 @@ func compareAccounts(a, b domain.Account) int {
 func (m Model) Resize(width, height int) Model {
 	next := m
 	next.width, next.height = width, height
-	return next.moveTo(next.cursor)
+	return next.moveTo(next.cursor.Row)
+}
+
+// Action is what a key asks the root model to do with the selected account.
+type Action int
+
+// The Dashboard's actions.
+const (
+	NoAction       Action = iota
+	CloseSelected         // c: plan closing the selected account
+	ReopenSelected        // o: plan reopening it
+)
+
+// Key applies a key: c and o ask for the selected account to be closed or reopened, the cursor keys move.
+func (m Model) Key(key string) (Model, Action) {
+	switch key {
+	case "c":
+		return m, CloseSelected
+	case "o":
+		return m, ReopenSelected
+	}
+	return m.Move(key), NoAction
 }
 
 // Move applies a cursor key: up, down, home, end, pgup or pgdown. The cursor stops at both ends.
 func (m Model) Move(key string) Model {
-	switch key {
-	case "up":
-		return m.moveTo(m.cursor - 1)
-	case "down":
-		return m.moveTo(m.cursor + 1)
-	case "home":
-		return m.moveTo(0)
-	case "end":
-		return m.moveTo(len(m.accounts)) // moveTo clamps to the last row
-	case "pgup":
-		return m.moveTo(m.cursor - m.pageSize())
-	case "pgdown":
-		return m.moveTo(m.cursor + m.pageSize())
-	}
-	return m
+	next := m
+	next.cursor = m.cursor.Move(key, len(m.accounts), m.pageSize())
+	return next
 }
 
 // moveTo puts the cursor on row i, clamped, and scrolls to keep it visible.
 func (m Model) moveTo(i int) Model {
 	next := m
-	next.cursor = max(0, min(i, len(m.accounts)-1))
-	next.offset = max(0, min(m.offset, next.cursor))
-	if next.cursor >= next.offset+m.pageSize() {
-		next.offset = next.cursor - m.pageSize() + 1
-	}
+	next.cursor = m.cursor.To(i, len(m.accounts), m.pageSize())
 	return next
 }
 
@@ -142,7 +146,7 @@ func (m Model) Position() (row, total int) {
 	if len(m.accounts) == 0 {
 		return 0, 0
 	}
-	return m.cursor + 1, len(m.accounts)
+	return m.cursor.Row + 1, len(m.accounts)
 }
 
 // Selected is the account under the cursor; false when the panel is empty.
@@ -150,7 +154,7 @@ func (m Model) Selected() (domain.Account, bool) {
 	if len(m.accounts) == 0 {
 		return domain.Account{}, false
 	}
-	return m.accounts[m.cursor], true
+	return m.accounts[m.cursor.Row], true
 }
 
 // View draws the Accounts panel in the left column and the stat cards above whatever fills the right.
@@ -245,16 +249,10 @@ func (c columns) line(entry domain.RecentEntry) string {
 	if entry.Amount.IsAllNegative() {
 		style = theme.Negative
 	}
-	left := " " + entry.Date.Format(time.DateOnly) + "  " + fit(entry.Description, c.description)
-	left += "  " + fit(entry.Category, c.category)
+	left := " " + entry.Date.Format(time.DateOnly) + "  " + layout.Fit(entry.Description, c.description)
+	left += "  " + layout.Fit(entry.Category, c.category)
 	gap := strings.Repeat(" ", max(1, c.width-lipgloss.Width(left)-lipgloss.Width(amount)-1))
 	return left + gap + style.Render(amount)
-}
-
-// fit pads text to width, or cuts it off there.
-func fit(text string, width int) string {
-	cut := lipgloss.NewStyle().MaxWidth(width).Render(text)
-	return cut + strings.Repeat(" ", width-lipgloss.Width(cut))
 }
 
 // cards are the two stat cards sharing width between them.
@@ -295,11 +293,11 @@ func (m Model) accountsWidth() int { return min(m.width, max(minAccountsWidth, m
 func (m Model) accountsPanel() string {
 	width := m.accountsWidth()
 	inner := max(0, width-panelChrome)
-	last := min(len(m.accounts), m.offset+m.pageSize())
-	visible := m.accounts[m.offset:last]
+	last := min(len(m.accounts), m.cursor.Offset+m.pageSize())
+	visible := m.accounts[m.cursor.Offset:last]
 	rows := make([]string, len(visible))
 	for i, account := range visible {
-		rows[i] = accountLine(account, inner, m.offset+i == m.cursor)
+		rows[i] = accountLine(account, inner, m.cursor.Offset+i == m.cursor.Row)
 	}
 	return layout.Panel("ACCOUNTS", width, m.height, strings.Join(rows, "\n"))
 }

@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	"charm.land/lipgloss/v2"
-
 	"github.com/sbradl/konto/internal/csvimport"
 	"github.com/sbradl/konto/internal/ui/layout"
 	"github.com/sbradl/konto/internal/ui/theme"
@@ -28,17 +26,11 @@ func (m Model) overlay(base string) string {
 	}
 	title, body := m.dialogBody()
 	capacity := max(1, layout.PopupHeight(len(body)+boxChromeLines, m.height)-boxChromeLines)
-	rows := []string{m.titleRule(title)}
+	rows := []string{layout.TitleRule(title, m.width)}
 	for _, line := range m.windowed(body, capacity) {
-		rows = append(rows, fit(line, m.width))
+		rows = append(rows, layout.Fit(line, m.width))
 	}
 	return layout.OverlayFlush(base, strings.Join(rows, "\n"), m.height)
-}
-
-// titleRule is the dialog's top edge with the title inset two cells.
-func (m Model) titleRule(title string) string {
-	rule := "─ " + title + " "
-	return theme.Dim.Render(rule + strings.Repeat("─", max(0, m.width-lipgloss.Width(rule))))
 }
 
 // windowed cuts the body to capacity lines that keep the selected line in view; the selected line is the
@@ -76,7 +68,7 @@ func (m Model) dialogBody() (title string, body []string) {
 func listLine(text string, index, cursor, width int) string {
 	line := " " + text
 	if index == cursor {
-		return theme.Selected.Render(fit(line, width))
+		return theme.Selected.Render(layout.Fit(line, width))
 	}
 	return line
 }
@@ -131,19 +123,12 @@ func (m Model) impactLine(rule csvimport.Rule) string {
 		return theme.Dim.Render("enter a pattern")
 	}
 	impact := m.staged.Impact(rule)
-	line := "matches " + plural(impact.Matches, "row") + " in this file"
+	line := "matches " + layout.Plural(impact.Matches, "row") + " in this file"
 	if impact.Takes == 0 {
 		return line
 	}
-	taken := "would take " + plural(impact.Takes, "row") + " from rule " + strings.Join(impact.From, ", ")
+	taken := "would take " + layout.Plural(impact.Takes, "row") + " from rule " + strings.Join(impact.From, ", ")
 	return line + " · " + theme.Negative.Render(taken+" — saving is blocked")
-}
-
-func plural(n int, noun string) string {
-	if n == 1 {
-		return "1 " + noun
-	}
-	return fmt.Sprintf("%d %ss", n, noun)
 }
 
 func (m Model) ruleListLines() []string {
@@ -172,7 +157,7 @@ func ruleSummary(rule csvimport.Rule) string {
 func (m Model) addFormLines() []string {
 	widened, _ := m.staged.Widened(m.dlg.ruleID, m.addition())
 	lines := []string{
-		field("match "+m.staged.Rows[m.cursor].MatchField(), m.dlg.matcher, 0, 0),
+		field("match "+m.staged.Rows[m.table.Row].MatchField(), m.dlg.matcher, 0, 0),
 		" " + m.impactLine(widened),
 	}
 	for line := range strings.SplitSeq(widened.Text(), "\n") {
@@ -192,7 +177,7 @@ func (m Model) pickerLines() []string {
 		lines = append(lines, listLine(text, i, m.dlg.cursor, m.width))
 	}
 	if create {
-		row := m.staged.Rows[m.cursor]
+		row := m.staged.Rows[m.table.Row]
 		text := createLabel + " " + csvimport.SuggestName(row, m.dlg.filter)
 		lines = append(lines, listLine(strings.TrimSpace(text), len(candidates), m.dlg.cursor, m.width))
 	}

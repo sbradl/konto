@@ -89,18 +89,12 @@ func (m Model) popupBox() string {
 	if m.popup == popupChecks {
 		title, body = "checks", m.checksBody()
 	}
-	rows := append([]string{m.titleRule(title)}, body...)
+	rows := append([]string{layout.TitleRule(title, m.width)}, body...)
 	rows = rows[:layout.PopupHeight(len(rows), m.height)]
 	for i, row := range rows[1:] {
-		rows[i+1] = fit(row, m.width)
+		rows[i+1] = layout.Fit(row, m.width)
 	}
 	return strings.Join(rows, "\n")
-}
-
-// titleRule is the popup's top edge with the title inset two cells.
-func (m Model) titleRule(title string) string {
-	rule := "─ " + title + " "
-	return theme.Dim.Render(rule + strings.Repeat("─", max(0, m.width-lipgloss.Width(rule))))
 }
 
 // keysColumns is how many columns the keys popup uses at the given width.
@@ -119,10 +113,4 @@ func (m Model) keysBody() []string {
 		body[i%rows] += columnCell.Render(cell)
 	}
 	return body
-}
-
-// fit cuts row off at width or pads it with blanks to width.
-func fit(row string, width int) string {
-	row = lipgloss.NewStyle().MaxWidth(width).Render(row)
-	return row + strings.Repeat(" ", width-lipgloss.Width(row))
 }
