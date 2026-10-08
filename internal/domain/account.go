@@ -17,18 +17,28 @@ const (
 	SourceClearing
 )
 
+// tagValue is the source as a konto:source tag value; the unclassified source has none.
+func (s Source) tagValue() string {
+	return [...]string{SourceManual: "manual", SourceImport: "import", SourceClearing: "clearing"}[s]
+}
+
 // ParseSource reads the value of a konto:source tag; anything unknown is unclassified.
 func ParseSource(value string) Source {
-	switch value {
-	case "manual":
-		return SourceManual
-	case "import":
-		return SourceImport
-	case "clearing":
-		return SourceClearing
+	for _, source := range []Source{SourceManual, SourceImport, SourceClearing} {
+		if source.tagValue() == value {
+			return source
+		}
 	}
 	return SourceNone
 }
+
+// The keys of the tags konto keeps on an account directive (spec §5.3); a tag is key:value.
+const (
+	SourceTagKey = "konto:source"
+	IBANTagKey   = "konto:iban"
+	FormatTagKey = "konto:format"
+	ClosedTagKey = "konto:closed" // when the account was closed
+)
 
 // Account is one postable account with its current balance.
 type Account struct {
@@ -54,25 +64,48 @@ type Declaration struct {
 	Name   string
 	Source Source
 	IBAN   string
+	Format string // the bank format an import-fed account's exports come in
 	Closed time.Time
 }
 
-// ApplyTag records one konto tag from the directive's comment; other tags are ignored.
-func (d *Declaration) ApplyTag(tag string) {
-	switch {
-	case strings.HasPrefix(tag, "konto:source:"):
-		d.Source = ParseSource(strings.TrimPrefix(tag, "konto:source:"))
-	case strings.HasPrefix(tag, "konto:iban:"):
-		d.IBAN = strings.TrimPrefix(tag, "konto:iban:")
-	case strings.HasPrefix(tag, "konto:closed:"):
-		if date, err := time.Parse(time.DateOnly, strings.TrimPrefix(tag, "konto:closed:")); err == nil {
+// WithTag is the declaration with one konto tag from the directive's comment recorded; other tags change
+// nothing.
+func (d Declaration) WithTag(tag string) Declaration {
+	key, value := splitTag(tag)
+	switch key {
+	case SourceTagKey:
+		d.Source = ParseSource(value)
+	case IBANTagKey:
+		d.IBAN = value
+	case FormatTagKey:
+		d.Format = value
+	case ClosedTagKey:
+		if date, err := time.Parse(time.DateOnly, value); err == nil {
 			d.Closed = date
 		}
 	}
+	return d
 }
 
-// ClosedTagKey is the directive tag that records when an account was closed.
-const ClosedTagKey = "konto:closed"
+// splitTag splits a konto tag at the colon after its key: "konto:iban:DE12" is "konto:iban" and "DE12".
+func splitTag(tag string) (key, value string) {
+	namespace, rest, _ := strings.Cut(tag, ":")
+	name, value, _ := strings.Cut(rest, ":")
+	return namespace + ":" + name, value
+}
+
+// Comment is the directive comment that declares the source, IBAN and format, the tags konto writes when it
+// creates an account; WithTag reads them back.
+func (d Declaration) Comment() string {
+	var tags []string
+	pairs := [][2]string{{SourceTagKey, d.Source.tagValue()}, {IBANTagKey, d.IBAN}, {FormatTagKey, d.Format}}
+	for _, tag := range pairs {
+		if tag[1] != "" {
+			tags = append(tags, tag[0]+":"+tag[1])
+		}
+	}
+	return strings.Join(tags, ", ")
+}
 
 // RefusalError is why an account invariant forbids a change; its text is for the user.
 type RefusalError struct{ Reason string }

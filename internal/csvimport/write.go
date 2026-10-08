@@ -174,7 +174,7 @@ func (s Staged) openingBalance(closing domain.Amount) domain.NewTransaction {
 func (s Staged) declarations() []domain.Edit {
 	var edits []domain.Edit
 	if s.NewAccount {
-		comment := "konto:source:import, konto:iban:" + s.IBAN + ", konto:format:" + s.Format
+		comment := domain.Declaration{Source: domain.SourceImport, IBAN: s.IBAN, Format: s.Format}.Comment()
 		edits = append(edits, domain.Declare{Directive: "account", Name: s.Named, Comment: comment})
 	}
 	for _, name := range s.usedNewAccounts() {

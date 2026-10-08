@@ -54,21 +54,43 @@ func TestUnclassifiedIsAClassifiableAccountWithoutASource(t *testing.T) {
 	}
 }
 
-func TestDeclarationApplyTag(t *testing.T) {
+func TestDeclarationWithTag(t *testing.T) {
 	var d Declaration
 	for _, tag := range []string{"konto:source:import", "konto:iban:DE12", "konto:closed:2026-03-01", "konto:format:postbank", ""} {
-		d.ApplyTag(tag)
+		d = d.WithTag(tag)
 	}
 
-	want := Declaration{Source: SourceImport, IBAN: "DE12", Closed: time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)}
+	want := Declaration{
+		Source: SourceImport, IBAN: "DE12", Format: "postbank", Closed: time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC),
+	}
 	if d != want {
 		t.Errorf("declaration = %+v, want %+v", d, want)
 	}
 }
 
+func TestDeclarationCommentIsTheTagsWithTagReadsBack(t *testing.T) {
+	for want, comment := range map[Declaration]string{
+		{Source: SourceImport, IBAN: "DE12", Format: "postbank"}: "konto:source:import, konto:iban:DE12, konto:format:postbank",
+		{Source: SourceManual}:   "konto:source:manual",
+		{Source: SourceClearing}: "konto:source:clearing",
+		{}:                       "",
+	} {
+		if got := want.Comment(); got != comment {
+			t.Errorf("%+v: comment = %q, want %q", want, got, comment)
+		}
+		var read Declaration
+		for tag := range strings.SplitSeq(comment, ", ") {
+			read = read.WithTag(tag)
+		}
+		if read != want {
+			t.Errorf("%q reads back as %+v, want %+v", comment, read, want)
+		}
+	}
+}
+
 func TestDeclarationIgnoresAnInvalidClosedDate(t *testing.T) {
 	var d Declaration
-	d.ApplyTag("konto:closed:someday")
+	d = d.WithTag("konto:closed:someday")
 
 	if !d.Closed.IsZero() {
 		t.Errorf("Closed = %v, want zero", d.Closed)

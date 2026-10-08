@@ -36,7 +36,7 @@ func parseDeclaration(line string) (domain.Declaration, bool) {
 	name, _, _ := strings.Cut(strings.TrimSpace(head), "  ")
 	declaration := domain.Declaration{Name: strings.TrimSpace(name)}
 	for tag := range strings.SplitSeq(comment, ",") {
-		declaration.ApplyTag(strings.TrimSpace(tag))
+		declaration = declaration.WithTag(strings.TrimSpace(tag))
 	}
 	return declaration, true
 }

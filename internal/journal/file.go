@@ -10,17 +10,19 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/sbradl/konto/internal/domain"
 )
 
 // skeleton is a new journal: the declarations konto's own writes rely on, so
 // the journal passes every hledger check from the start.
-const skeleton = `decimal-mark ,
-commodity 1.000,00 EUR
-account equity:opening-balances
-account assets:transfers  ; konto:source:clearing
-tag konto
-tag konto-rule
-`
+func skeleton() string {
+	clearing := domain.Declaration{Source: domain.SourceClearing}.Comment()
+	return strings.Join([]string{
+		"decimal-mark ,", "commodity 1.000,00 EUR", "account " + domain.CarryAccount,
+		"account assets:transfers  ; " + clearing, "tag konto", "tag konto-rule", "",
+	}, "\n")
+}
 
 const (
 	dirMode  = 0o755
@@ -56,7 +58,7 @@ func (f File) Create() error {
 	if err := os.MkdirAll(dir, dirMode); err != nil {
 		return fmt.Errorf("creating %s: %w", dir, err)
 	}
-	if err := writeNew(f.path, skeleton); err != nil {
+	if err := writeNew(f.path, skeleton()); err != nil {
 		return err
 	}
 	return touch(filepath.Join(dir, "categories.rules"))

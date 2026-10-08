@@ -47,7 +47,7 @@ func TestAccountDeclarationsReadsTheTags(t *testing.T) {
 	want := []domain.Declaration{
 		{Name: "equity:opening-balances"},
 		{Name: "assets:transfers", Source: domain.SourceClearing},
-		{Name: "assets:checking", Source: domain.SourceImport, IBAN: "DE89370400440532013000"},
+		{Name: "assets:checking", Source: domain.SourceImport, IBAN: "DE89370400440532013000", Format: "postbank"},
 		{Name: "assets:old-account", Source: domain.SourceImport, Closed: time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)},
 		{Name: "assets:cash", Source: domain.SourceManual},
 		{Name: "assets:odd name"},
