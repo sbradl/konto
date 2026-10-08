@@ -176,24 +176,31 @@ func TestApplyReportsAFailedWrite(t *testing.T) {
 	}
 }
 
-func TestReplaceFileReportsAMissingFile(t *testing.T) {
-	if err := replaceFile(filepath.Join(t.TempDir(), "missing"), "x"); err == nil {
-		t.Error("expected an error replacing a file that is not there")
+func TestStageReportsAPathThatCannotBeLookedAt(t *testing.T) {
+	notADirectory := filepath.Join(t.TempDir(), "file")
+	if err := os.WriteFile(notADirectory, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := stage(&source{path: filepath.Join(notADirectory, "x")}); err == nil {
+		t.Error("expected an error for a path under a file")
 	}
 }
 
-func TestReplaceFileLeavesNoTempFileWhenTheRenameFails(t *testing.T) {
+func TestCommitAllLeavesNoTempFileWhenARenameFails(t *testing.T) {
 	dir := t.TempDir()
-	target := filepath.Join(dir, "target")
+	first, target := filepath.Join(dir, "first"), filepath.Join(dir, "target")
 	if err := os.Mkdir(target, 0o755); err != nil { // a directory cannot be replaced by a file
 		t.Fatal(err)
 	}
 
-	if err := replaceFile(target, "x"); err == nil {
+	err := commitAll([]*source{{path: first, lines: []string{"x"}}, {path: target, lines: []string{"x"}}})
+
+	if err == nil {
 		t.Error("expected an error renaming a file over a directory")
 	}
-	if entries, _ := os.ReadDir(dir); len(entries) != 1 {
-		t.Errorf("directory holds %d entries, want only the target", len(entries))
+	if entries, _ := os.ReadDir(dir); len(entries) != 2 {
+		t.Errorf("directory holds %d entries, want the first file and the target only", len(entries))
 	}
 }
 

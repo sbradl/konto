@@ -474,3 +474,27 @@ func TestRenderIncludesTheOlderYearFileTheEditsTouch(t *testing.T) {
 		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
 }
+
+// A changeset is written whole or not at all: a file that cannot be written keeps the others from changing.
+func TestApplyChangesNoFileWhenOneOfThemCannotBeWritten(t *testing.T) {
+	file := withYear(t, "2026-09-10 A\n")
+	if err := os.Chmod(file.yearPath(2026), 0o444); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(file.yearPath(2026), 0o644) })
+
+	err := file.Apply(domain.Changeset{Edits: []domain.Edit{
+		domain.Declare{Directive: "account", Name: "expenses:x"},
+		domain.AddTransactions{Transactions: []domain.NewTransaction{spend(day(28), "B")}},
+	}})
+
+	if err == nil {
+		t.Skip("running as a user that ignores file permissions")
+	}
+	if got := readFile(t, file.path); got != "decimal-mark ,\n" {
+		t.Errorf("main journal = %q, want it untouched", got)
+	}
+	if entries, _ := os.ReadDir(filepath.Dir(file.path)); len(entries) != 2 {
+		t.Errorf("directory holds %d files, want the two journal files alone (no temp file left)", len(entries))
+	}
+}

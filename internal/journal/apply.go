@@ -1,10 +1,7 @@
 package journal
 
 import (
-	"errors"
 	"fmt"
-	"io/fs"
-	"os"
 	"slices"
 	"strings"
 
@@ -41,29 +38,25 @@ func (f File) plan(changeset domain.Changeset) (*workspace, error) {
 	return work, nil
 }
 
-// files are the sources the edits changed.
+// dirty is the sources the edits changed, in the order they are put in place: categories.rules, then the
+// main journal and its includes (directives), then the year files (transactions). Rules and directives
+// are harmless without the transactions they were written for, so a write cut short leaves no broken file.
 func (w *workspace) dirty() []*source {
 	changed := slices.DeleteFunc(slices.Clone(w.sources), func(s *source) bool { return !s.dirty })
 	if w.rules != nil && w.rules.dirty {
-		changed = append(changed, w.rules)
+		changed = slices.Insert(changed, 0, w.rules)
 	}
 	return changed
 }
 
-// Apply writes a changeset into the journal's files and categories.rules. Each touched file is replaced in
-// one go (temp file, then rename), so a failed write never leaves a half-edited file; lines the edits do
-// not name stay byte for byte as they were.
+// Apply writes a changeset into the journal's files and categories.rules, all of them or none (see
+// commitAll); lines the edits do not name stay byte for byte as they were.
 func (f File) Apply(changeset domain.Changeset) error {
 	work, err := f.plan(changeset)
 	if err != nil {
 		return err
 	}
-	for _, source := range work.dirty() {
-		if err := writeSource(source); err != nil {
-			return err
-		}
-	}
-	return nil
+	return commitAll(work.dirty())
 }
 
 // Render is the journal as it would read after the changeset, its included files spliced in where they are
@@ -106,15 +99,6 @@ func flatten(byPath map[string]*source, file *source, seen map[string]bool) stri
 		}
 	}
 	return strings.Join(lines, "\n")
-}
-
-// writeSource replaces the file, or creates it when it is not there yet.
-func writeSource(file *source) error {
-	content := strings.Join(file.lines, "\n")
-	if _, err := os.Stat(file.path); errors.Is(err, fs.ErrNotExist) {
-		return writeNew(file.path, content)
-	}
-	return replaceFile(file.path, content)
 }
 
 // apply makes one edit in the workspace; nothing is written until every edit has gone through.
@@ -253,27 +237,4 @@ func joinTags(tags []string) string {
 // withoutTag drops the tags with the given key.
 func withoutTag(tags []string, key string) []string {
 	return slices.DeleteFunc(slices.Clone(tags), func(tag string) bool { return strings.HasPrefix(tag, key+":") })
-}
-
-// ownerWrite is the permission bit that lets the owner write a file.
-const ownerWrite = 0o200
-
-// replaceFile writes content to path through a temp file beside it, keeping its mode.
-func replaceFile(path, content string) error {
-	info, err := os.Stat(path)
-	if err != nil {
-		return fmt.Errorf("writing %s: %w", path, err)
-	}
-	if info.Mode().Perm()&ownerWrite == 0 { // the rename below would replace even a read-only file
-		return fmt.Errorf("writing %s: %w", path, fs.ErrPermission)
-	}
-	temp := path + ".konto-tmp"
-	if err := os.WriteFile(temp, []byte(content), info.Mode().Perm()); err != nil {
-		return fmt.Errorf("writing %s: %w", path, err)
-	}
-	if err := os.Rename(temp, path); err != nil {
-		_ = os.Remove(temp)
-		return fmt.Errorf("writing %s: %w", path, err)
-	}
-	return nil
 }
