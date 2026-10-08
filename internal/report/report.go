@@ -26,18 +26,16 @@ type Service struct {
 // NewService returns a Service that reads through gw; today is the day every period ends.
 func NewService(gw gateway, today func() time.Time) *Service { return &Service{gw: gw, today: today} }
 
-const (
-	assetsPrefix      = "assets:"
-	liabilitiesPrefix = "liabilities:"
-	incomePrefix      = "income:"
-	expensesPrefix    = "expenses:"
-)
-
 // query is the hledger account pattern for the accounts under prefix.
 func query(prefix string) string { return "^" + prefix }
 
-func sheetQueries() []string     { return []string{query(assetsPrefix), query(liabilitiesPrefix)} }
-func statementQueries() []string { return []string{query(incomePrefix), query(expensesPrefix)} }
+func sheetQueries() []string {
+	return []string{query(domain.AssetsPrefix), query(domain.LiabilitiesPrefix)}
+}
+
+func statementQueries() []string {
+	return []string{query(domain.IncomePrefix), query(domain.ExpensesPrefix)}
+}
 
 // Report builds both tables for the period, ending today.
 func (s *Service) Report(ctx context.Context, period domain.Period) (domain.Report, error) {
@@ -92,7 +90,7 @@ func balanceSheet(balances []domain.Account, delta map[string]domain.MultiAmount
 	var rows []domain.ReportRow
 	var worth total
 	for _, sec := range []section{
-		{"Assets", "Total assets", assetsPrefix}, {"Liabilities", "Total liabilities", liabilitiesPrefix},
+		{"Assets", "Total assets", domain.AssetsPrefix}, {"Liabilities", "Total liabilities", domain.LiabilitiesPrefix},
 	} {
 		leaves, sum := sheetLeaves(balances, delta, sec.prefix)
 		if len(leaves) == 0 {
@@ -146,8 +144,8 @@ func totalRow(kind domain.RowKind, label string, sum total) domain.ReportRow {
 
 // incomeStatement lists income, then expenses, as positive figures, and the net.
 func incomeStatement(activity []domain.Account) []domain.ReportRow {
-	income, incomeRows := statementSection(activity, section{"Income", "Total income", incomePrefix})
-	expenses, expenseRows := statementSection(activity, section{"Expenses", "Total expenses", expensesPrefix})
+	income, incomeRows := statementSection(activity, section{"Income", "Total income", domain.IncomePrefix})
+	expenses, expenseRows := statementSection(activity, section{"Expenses", "Total expenses", domain.ExpensesPrefix})
 	rows := slices.Concat(incomeRows, expenseRows)
 	if len(rows) == 0 {
 		return nil
@@ -165,7 +163,7 @@ func statementSection(activity []domain.Account, sec section) (domain.MultiAmoun
 			continue
 		}
 		amount := account.Balance
-		if sec.prefix == incomePrefix {
+		if sec.prefix == domain.IncomePrefix {
 			amount = amount.Negated() // hledger books income as credits
 		}
 		sum = sum.Plus(amount)

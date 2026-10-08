@@ -6,7 +6,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -171,9 +170,9 @@ func summarise(activity []domain.Account, month time.Time) domain.MonthSummary {
 	summary := domain.MonthSummary{Month: month.Month()}
 	for _, account := range activity {
 		switch {
-		case strings.HasPrefix(account.Name, "income:"):
+		case domain.IsIncome(account.Name):
 			summary.Income = summary.Income.Plus(account.Balance.Negated())
-		case strings.HasPrefix(account.Name, "expenses:"):
+		case domain.IsExpense(account.Name):
 			summary.Expenses = summary.Expenses.Plus(account.Balance)
 		}
 	}

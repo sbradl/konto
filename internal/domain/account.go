@@ -44,9 +44,7 @@ func (a Account) IsClosed() bool { return !a.Closed.IsZero() }
 
 // IsClassifiable reports whether the account needs a source: only assets and
 // liabilities do; categories and equity never do.
-func (a Account) IsClassifiable() bool {
-	return strings.HasPrefix(a.Name, "assets:") || strings.HasPrefix(a.Name, "liabilities:")
-}
+func (a Account) IsClassifiable() bool { return HoldsMoney(a.Name) }
 
 // IsUnclassified reports an asset or liability without a source.
 func (a Account) IsUnclassified() bool { return a.IsClassifiable() && a.Source == SourceNone }

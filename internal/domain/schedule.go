@@ -41,7 +41,7 @@ func (s RuleSchedule) Impact() MultiAmount {
 	var total MultiAmount
 	for _, occurrence := range s.Occurrences {
 		for _, posting := range occurrence.Postings {
-			if (Account{Name: posting.Account}).IsClassifiable() {
+			if HoldsMoney(posting.Account) {
 				total = total.Plus(posting.Amounts)
 			}
 		}

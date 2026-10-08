@@ -35,9 +35,7 @@ func (r Row) MatchField() string {
 }
 
 // IsTransfer reports a row posted against an asset or liability account instead of a category.
-func (r Row) IsTransfer() bool {
-	return strings.HasPrefix(r.Target, "assets:") || strings.HasPrefix(r.Target, "liabilities:")
-}
+func (r Row) IsTransfer() bool { return domain.HoldsMoney(r.Target) }
 
 // Candidate is an account a row can be posted to. Target is where the posting really goes: the clearing
 // account stands in for an import-fed account, which imports its own leg of a transfer.
@@ -45,14 +43,6 @@ type Candidate struct {
 	Name     string
 	Target   string
 	Transfer bool
-}
-
-func isCategory(name string) bool {
-	return strings.HasPrefix(name, "expenses:") || strings.HasPrefix(name, "income:")
-}
-
-func isBalanceAccount(name string) bool {
-	return strings.HasPrefix(name, "assets:") || strings.HasPrefix(name, "liabilities:")
 }
 
 // clearing is the clearing account's name.
@@ -69,7 +59,7 @@ func (s Staged) clearing() string {
 // categories of the other direction (refunds), then the other open accounts as transfer targets.
 func (s Staged) Candidates(row Row) []Candidate {
 	inflow := !row.Amount.IsAllNegative()
-	first, second := "expenses:", "income:"
+	first, second := domain.ExpensesPrefix, domain.IncomePrefix
 	if inflow {
 		first, second = second, first
 	}
@@ -99,12 +89,12 @@ func (s Staged) Candidates(row Row) []Candidate {
 func (s Staged) categoryNames() []string {
 	var names []string
 	for _, account := range s.Known {
-		if isCategory(account.Name) && !account.IsClosed() {
+		if domain.IsCategory(account.Name) && !account.IsClosed() {
 			names = append(names, account.Name)
 		}
 	}
 	for _, name := range s.NewAccounts {
-		if isCategory(name) {
+		if domain.IsCategory(name) {
 			names = append(names, name)
 		}
 	}
@@ -114,7 +104,7 @@ func (s Staged) categoryNames() []string {
 // transferTo is the account as a transfer target; false for the account being imported, closed accounts,
 // the clearing account and anything that is no asset or liability.
 func (s Staged) transferTo(account domain.Account) (Candidate, bool) {
-	if !isBalanceAccount(account.Name) || account.IsClosed() || account.Source == domain.SourceClearing ||
+	if !domain.HoldsMoney(account.Name) || account.IsClosed() || account.Source == domain.SourceClearing ||
 		account.Name == s.Account.Name {
 		return Candidate{}, false
 	}
@@ -141,9 +131,9 @@ func SuggestName(row Row, typed string) string {
 		return typed
 	}
 	if row.Amount.IsAllNegative() {
-		return "expenses:" + typed
+		return domain.ExpensesPrefix + typed
 	}
-	return "income:" + typed
+	return domain.IncomePrefix + typed
 }
 
 // leaf is the last part of an account name.
@@ -186,7 +176,7 @@ func (s Staged) Name(name string) (Staged, error) {
 	switch {
 	case name == "":
 		return s, domain.RefusalError{Reason: "the account needs a name"}
-	case !isBalanceAccount(name):
+	case !domain.HoldsMoney(name):
 		return s, domain.RefusalError{Reason: "the account must be an assets: or liabilities: account"}
 	}
 	if err := s.checkLeaf(name); err != nil {
@@ -359,7 +349,7 @@ func (s Staged) NetIncomeChange() domain.MultiAmount {
 	}
 	total := s.Zero
 	for i := range s.Rows {
-		if row := &s.Rows[i]; isCategory(row.Target) && (row.Once || staged[row.RuleID]) {
+		if row := &s.Rows[i]; domain.IsCategory(row.Target) && (row.Once || staged[row.RuleID]) {
 			total = total.Plus(row.Amount)
 		}
 	}

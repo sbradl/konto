@@ -65,7 +65,7 @@ func (l Ledger) clearingAccounts() map[string]bool {
 func (t Transaction) recentEntry(clearing map[string]bool) RecentEntry {
 	entry := RecentEntry{Date: t.Date, Description: t.Description}
 	subject := slices.IndexFunc(t.Postings, func(p Posting) bool {
-		return (Account{Name: p.Account}).IsClassifiable() && !clearing[p.Account]
+		return HoldsMoney(p.Account) && !clearing[p.Account]
 	})
 	subject = max(subject, 0)
 	if len(t.Postings) == 0 {
