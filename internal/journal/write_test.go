@@ -399,37 +399,6 @@ func TestAddRuleAppendsTheBlockAtTheEndOfTheMainJournal(t *testing.T) {
 	}
 }
 
-func TestAddRuleGoesIntoTheNamedFileAndRefusesAStrangerFile(t *testing.T) {
-	dir := t.TempDir()
-	sub := filepath.Join(dir, "rules.journal")
-	if err := os.WriteFile(sub, []byte("~ monthly from 2026-10-01  A\n    expenses:x  1,00 EUR\n    assets:checking\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	file := writeJournal(t, dir, "main.journal", "include rules.journal\n")
-
-	apply(t, file, domain.AddRule{File: sub, Lines: []string{"~ weekly from 2026-11-01  C"}})
-
-	if got := readFile(t, sub); !strings.HasSuffix(got, "\n\n~ weekly from 2026-11-01  C\n") {
-		t.Errorf("rules.journal = %q", got)
-	}
-	if got := readFile(t, file.path); got != "include rules.journal\n" {
-		t.Errorf("main journal = %q, want it untouched", got)
-	}
-	if err := file.Apply(domain.Changeset{Edits: []domain.Edit{domain.AddRule{File: "/elsewhere"}}}); err == nil {
-		t.Error("expected an error for a file outside the journal")
-	}
-}
-
-func TestAddRuleGoesIntoTheMainJournalWhenNamedByPath(t *testing.T) {
-	file := journalWith(t, rulesAndTransaction)
-
-	apply(t, file, domain.AddRule{File: file.path, Lines: []string{"~ weekly from 2026-11-01  C"}})
-
-	if got := readFile(t, file.path); !strings.HasSuffix(got, "\n\n~ weekly from 2026-11-01  C\n") {
-		t.Errorf("journal = %q", got)
-	}
-}
-
 func TestSetCategoryRuleReplacesABlockWhoseMarkerIsTheFirstLine(t *testing.T) {
 	file := journalWith(t, "x\n")
 	rules := filepath.Join(filepath.Dir(file.path), "categories.rules")

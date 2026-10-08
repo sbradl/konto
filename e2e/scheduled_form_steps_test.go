@@ -359,14 +359,14 @@ func (w *world) expectJournalHas(text string, want bool) error {
 	})
 }
 
-func (w *world) expectFileHas(name, text string) error {
+func (w *world) expectFileHas(name, text string, want bool) error {
 	return w.eventually(func() error {
 		content, err := os.ReadFile(filepath.Join(filepath.Dir(w.journal), name))
 		if err != nil {
 			return err
 		}
-		if !strings.Contains(string(content), text) {
-			return fmt.Errorf("%s lacks %q", name, text)
+		if strings.Contains(string(content), text) != want {
+			return fmt.Errorf("%s: contains %q is %v, want %v", name, text, !want, want)
 		}
 		return nil
 	})
@@ -646,7 +646,10 @@ func registerFormWriteSteps(sc *godog.ScenarioContext, w *world) {
 
 func registerFormResultSteps(sc *godog.ScenarioContext, w *world) {
 	step(sc, `^the occurrences panel for "([^"]*)" lists exactly$`, w.expectOccurrencesFor)
-	step(sc, `^"([^"]*)" contains "([^"]*)"$`, w.expectFileHas)
+	step(sc, `^"([^"]*)" contains "([^"]*)"$`, func(name, text string) error { return w.expectFileHas(name, text, true) })
+	step(sc, `^"([^"]*)" does not contain "([^"]*)"$`, func(name, text string) error {
+		return w.expectFileHas(name, text, false)
+	})
 	step(sc, `^the main journal ends with the new rule$`, w.expectMainEndsWithRule)
 	step(sc, `^the rule list shows "([^"]*)" with next date "([^"]*)"$`, w.expectRuleListRow)
 	step(sc, `^the Upcoming panel lists "([^"]*)" on "([^"]*)"$`, w.expectUpcomingLists)

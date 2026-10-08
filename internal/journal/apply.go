@@ -135,7 +135,7 @@ func (w *workspace) apply(edit domain.Edit) error {
 	case domain.SetCarry:
 		return w.setCarry(change)
 	case domain.AddRule:
-		return addRule(w.sources, change)
+		addRule(w.sources, change)
 	case domain.ReplaceRule:
 		return replaceRule(w.sources, change)
 	}

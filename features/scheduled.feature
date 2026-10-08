@@ -336,14 +336,14 @@ Feature: Scheduled — periodic rules (forecast-only)
             assets:checking  1.234,50 EUR
             income:salary
         """
-    Scenario: the new rule is appended to the file of the last existing rule
+    Scenario: the new rule goes to the main journal even when other rules live in an included file
       Given the journal "household" with a rule in included file "rules.journal"
       And I start konto
       And I press "3"
       When I press "n"
       And I create a rule with next due date 2026-10-15, frequency monthly, description "Book club", amount "12,00", currency "EUR", from "assets:checking", to "expenses:books"
-      Then "rules.journal" contains "~ monthly from 2026-10-15  Book club"
-      And the main journal is unchanged
+      Then the main journal ends with the new rule
+      And "rules.journal" does not contain "Book club"
     Scenario: with no rules yet it goes to the main journal
       Given the journal "household"
       And I start konto

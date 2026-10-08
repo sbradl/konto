@@ -36,17 +36,13 @@ type Service struct {
 // NewService returns a Service that asks gw which dates a rule gives rise to, with today read from the clock today.
 func NewService(gw gateway, today func() time.Time) *Service { return &Service{gw: gw, today: today} }
 
-// Add plans a new rule, appended to the file of the last rule of the journal, else the main journal.
+// Add plans a new rule, appended to the main journal (ADR 0013: rules go to main.journal).
 func (s *Service) Add(ctx context.Context, input Input, ledger domain.Ledger) (domain.Changeset, error) {
 	lines, err := s.block(ctx, input, ledger)
 	if err != nil {
 		return domain.Changeset{}, err
 	}
-	file := ""
-	if len(ledger.Rules) > 0 {
-		file = ledger.Rules[len(ledger.Rules)-1].Pos.File
-	}
-	return domain.Changeset{Edits: []domain.Edit{domain.AddRule{File: file, Lines: lines}}}, nil
+	return domain.Changeset{Edits: []domain.Edit{domain.AddRule{Lines: lines}}}, nil
 }
 
 // Replace plans the new text of an existing rule, in place.

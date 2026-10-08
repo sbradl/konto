@@ -83,20 +83,6 @@ func TestEachFrequencyWritesItsPeriodExpression(t *testing.T) {
 	}
 }
 
-func TestAddAppendsToTheFileOfTheLastRuleElseTheMainJournal(t *testing.T) {
-	service := NewService(&fakeGateway{}, today)
-
-	withRules, _ := service.Add(context.Background(), valid(), ledger())
-	without, _ := service.Add(context.Background(), valid(), domain.Ledger{})
-
-	if got := withRules.Edits[0].(domain.AddRule).File; got != "/j/rules.journal" {
-		t.Errorf("file = %q, want the last rule's", got)
-	}
-	if got := without.Edits[0].(domain.AddRule).File; got != "" {
-		t.Errorf("file = %q, want the main journal", got)
-	}
-}
-
 func TestTheAmountIsWrittenInTheJournalsStyle(t *testing.T) {
 	for typed, want := range map[string]string{"1.234,50": "1.234,50 EUR", "12": "12,00 EUR", "0,5": "0,50 EUR"} {
 		input := valid()

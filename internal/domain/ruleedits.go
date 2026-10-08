@@ -6,10 +6,8 @@ type DeleteRule struct {
 	Pos SourcePos
 }
 
-// AddRule appends a `~` block to a journal file after a blank line. File is the path hledger reports for the
-// file; empty means the main journal.
+// AddRule appends a `~` block to the main journal after a blank line (ADR 0013: rules go to main.journal).
 type AddRule struct {
-	File  string
 	Lines []string
 }
 

@@ -99,26 +99,9 @@ func (w *workspace) yearFile(year int) (*source, error) {
 	return created, nil
 }
 
-// fileNamed is the journal file at the path; the main journal when the path is empty.
-func fileNamed(sources []*source, path string) (*source, error) {
-	if path == "" {
-		return sources[0], nil
-	}
-	i := slices.IndexFunc(sources, func(s *source) bool { return samePath(s.path, path) })
-	if i < 0 {
-		return nil, fmt.Errorf("%s is not part of the journal", path)
-	}
-	return sources[i], nil
-}
-
-// addRule appends the `~` block to the file after a blank line.
-func addRule(sources []*source, edit domain.AddRule) error {
-	target, err := fileNamed(sources, edit.File)
-	if err != nil {
-		return err
-	}
-	appendBlock(target, edit.Lines)
-	return nil
+// addRule appends the `~` block to the main journal after a blank line.
+func addRule(sources []*source, edit domain.AddRule) {
+	appendBlock(sources[0], edit.Lines)
 }
 
 // insertTransaction puts the transaction above the first transaction dated after it, or at the end.
@@ -182,11 +165,4 @@ func (w *workspace) setCategoryRule(edit domain.SetCategoryRule) error {
 	w.rules.lines = slices.Replace(w.rules.lines, first, last+1, block...)
 	w.rules.dirty = true
 	return nil
-}
-
-// samePath reports two spellings of one file: hledger reports the path as it opened it.
-func samePath(a, b string) bool {
-	absA, errA := filepath.Abs(a)
-	absB, errB := filepath.Abs(b)
-	return errA == nil && errB == nil && absA == absB
 }
