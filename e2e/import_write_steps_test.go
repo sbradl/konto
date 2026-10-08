@@ -11,7 +11,6 @@ import (
 	"regexp"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/cucumber/godog"
 )
@@ -113,26 +112,39 @@ func (w *world) categoriseRows(table *godog.Table) error {
 
 // writeImport asks to write and confirms; a write that is blocked has no question to answer. A confirmed write
 // is waited for, and then for the views to reload, as the next import reads the journal as it is then.
-// promptShown waits briefly for the y/n question: a starved terminal can draw it after the keys settle.
-func (w *world) promptShown() bool {
+// writeAsked waits for the answer to w: the y/n question, or the message above the Import panel that says why
+// the write is blocked. It reports whether the question came, and fails when neither shows.
+func (w *world) writeAsked() (bool, error) {
 	s, err := w.session()
 	if err != nil {
-		return false
+		return false, err
 	}
-	return s.waitFor(min(w.suite.timeout, promptWait), func(string) bool {
+	asked := false
+	answered := s.waitFor(w.suite.timeout, func(string) bool {
 		line, err := w.statusLine()
-		return err == nil && strings.Contains(line, "(y/n)")
+		asked = err == nil && strings.Contains(line, "(y/n)")
+		return asked || importBlocked(s.screenLines())
 	})
+	if !answered {
+		return false, fmt.Errorf("w neither asked to write nor said why not:\n%s", s.screenText())
+	}
+	return asked, nil
 }
 
-const promptWait = 3 * time.Second
+// importBlocked reports a message above the Import panel: the line under the tab bar is text, not the panel's
+// top border.
+func importBlocked(lines []string) bool {
+	const underTabBar = 2
+	return len(lines) > underTabBar && strings.HasPrefix(lines[underTabBar], " ") &&
+		strings.TrimSpace(lines[underTabBar]) != ""
+}
 
 func (w *world) writeImport() error {
 	if err := w.press("w"); err != nil {
 		return err
 	}
-	if !w.promptShown() { // the write is blocked: the view says why
-		return nil
+	if asked, err := w.writeAsked(); err != nil || !asked { // not asked: the write is blocked, the view says why
+		return err
 	}
 	if err := w.press("y"); err != nil {
 		return err
