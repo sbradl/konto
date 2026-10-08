@@ -60,7 +60,7 @@ func TestRulesReferencingFindsRulesInIncludedFiles(t *testing.T) {
 }
 
 func TestRulesReferencingReportsAnUnreadableJournal(t *testing.T) {
-	if _, err := NewFile("/nonexistent/main.journal").RulesReferencing("assets:spare"); err == nil {
+	if _, err := NewFile("/nonexistent/main.journal", septemberOf(2026)).RulesReferencing("assets:spare"); err == nil {
 		t.Error("expected an error")
 	}
 }
@@ -131,7 +131,7 @@ func TestPeriodicRulesFollowIncludesAndReportUnreadableJournals(t *testing.T) {
 	if err != nil || len(got) != 1 || filepath.Base(got[0].Pos.File) != "rules.journal" {
 		t.Errorf("rules = %+v, %v; want the included one", got, err)
 	}
-	if _, err := NewFile("/nonexistent/main.journal").PeriodicRules(); err == nil {
+	if _, err := NewFile("/nonexistent/main.journal", septemberOf(2026)).PeriodicRules(); err == nil {
 		t.Error("expected an error")
 	}
 }

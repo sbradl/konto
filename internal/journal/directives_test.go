@@ -22,7 +22,7 @@ func writeJournal(t *testing.T, dir, name, text string) File {
 	if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	return NewFile(path).WithToday(func() time.Time { return time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC) })
+	return NewFile(path, func() time.Time { return time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC) })
 }
 
 const directivesJournal = `decimal-mark ,
@@ -59,7 +59,7 @@ func TestAccountDeclarationsReadsTheTags(t *testing.T) {
 }
 
 func TestAccountDeclarationsReportsAnUnreadableFile(t *testing.T) {
-	if _, err := NewFile(filepath.Join(t.TempDir(), "missing.journal")).AccountDeclarations(); err == nil {
+	if _, err := NewFile(filepath.Join(t.TempDir(), "missing.journal"), septemberOf(2026)).AccountDeclarations(); err == nil {
 		t.Error("expected an error for a missing file")
 	}
 }
@@ -79,7 +79,7 @@ func TestAccountDeclarationsFollowIncludes(t *testing.T) {
 	write("sub/one.journal", "account assets:one  ; konto:source:import\n")
 	write("sub/two.journal", "account assets:two\n")
 
-	got, err := NewFile(filepath.Join(dir, "main.journal")).AccountDeclarations()
+	got, err := NewFile(filepath.Join(dir, "main.journal"), septemberOf(2026)).AccountDeclarations()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -109,7 +109,7 @@ func TestAccountDeclarationsReportsAnUnreadableInclude(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := NewFile(main).AccountDeclarations(); err == nil {
+	if _, err := NewFile(main, septemberOf(2026)).AccountDeclarations(); err == nil {
 		t.Error("expected an error for an include that cannot be read")
 	}
 }
@@ -130,7 +130,7 @@ func TestCommoditiesAreTheDeclaredCurrenciesOnceEachInOrder(t *testing.T) {
 }
 
 func TestCommoditiesReportAnUnreadableJournal(t *testing.T) {
-	if _, err := NewFile(filepath.Join(t.TempDir(), "missing.journal")).Commodities(); err == nil {
+	if _, err := NewFile(filepath.Join(t.TempDir(), "missing.journal"), septemberOf(2026)).Commodities(); err == nil {
 		t.Error("expected an error")
 	}
 }

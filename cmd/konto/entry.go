@@ -40,7 +40,7 @@ func main() {
 
 func runProgram(cfg config.Config) error {
 	today := todayFunc(os.Getenv, time.Now)
-	file := journal.NewFile(cfg.JournalPath).WithToday(today)
+	file := journal.NewFile(cfg.JournalPath, today)
 	rulesPath := filepath.Join(filepath.Dir(cfg.JournalPath), "categories.rules")
 	client := hledger.New("hledger", file.Window)
 	loader := ledger.NewLoader(client, file, today)

@@ -33,14 +33,8 @@ type File struct {
 	today func() time.Time // decides which years are the window
 }
 
-// NewFile returns the journal file at path; the window follows the clock.
-func NewFile(path string) File { return File{path: path, today: time.Now} }
-
-// WithToday returns the file with today as the day the window is counted from.
-func (f File) WithToday(today func() time.Time) File {
-	f.today = today
-	return f
-}
+// NewFile returns the journal file at path, its window counted from the day today returns.
+func NewFile(path string, today func() time.Time) File { return File{path: path, today: today} }
 
 // Exists reports whether the journal file is there.
 func (f File) Exists() (bool, error) {

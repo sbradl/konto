@@ -15,7 +15,7 @@ func TestExistsForAnExistingFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	exists, err := NewFile(path).Exists()
+	exists, err := NewFile(path, septemberOf(2026)).Exists()
 
 	if err != nil || !exists {
 		t.Errorf("Exists = %v, %v; want true, nil", exists, err)
@@ -24,7 +24,7 @@ func TestExistsForAnExistingFile(t *testing.T) {
 
 // A journal file that is not there does not exist, and that is not an error.
 func TestDoesNotExistForAMissingFile(t *testing.T) {
-	exists, err := NewFile(filepath.Join(t.TempDir(), "nope.journal")).Exists()
+	exists, err := NewFile(filepath.Join(t.TempDir(), "nope.journal"), septemberOf(2026)).Exists()
 
 	if err != nil || exists {
 		t.Errorf("Exists = %v, %v; want false, nil", exists, err)
@@ -38,7 +38,7 @@ func TestExistsReportsUnreadablePath(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err := NewFile(filepath.Join(blocker, "main.journal")).Exists()
+	_, err := NewFile(filepath.Join(blocker, "main.journal"), septemberOf(2026)).Exists()
 
 	if err == nil {
 		t.Error("expected an error for a path below a regular file, got nil")
@@ -58,7 +58,7 @@ tag konto-rule
 func TestCreateWritesSkeletonAndEmptyRules(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "a", "b")
 
-	if err := NewFile(filepath.Join(dir, "main.journal")).Create(); err != nil {
+	if err := NewFile(filepath.Join(dir, "main.journal"), septemberOf(2026)).Create(); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -79,7 +79,7 @@ func TestCreateRefusesToOverwriteExistingJournal(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := NewFile(path).Create(); err == nil {
+	if err := NewFile(path, septemberOf(2026)).Create(); err == nil {
 		t.Error("Create over an existing journal should fail, got nil")
 	}
 
@@ -96,7 +96,7 @@ func TestCreateKeepsExistingRules(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := NewFile(filepath.Join(dir, "main.journal")).Create(); err != nil {
+	if err := NewFile(filepath.Join(dir, "main.journal"), septemberOf(2026)).Create(); err != nil {
 		t.Fatalf("Create failed: %v", err)
 	}
 
@@ -112,7 +112,7 @@ func TestCreateFailsWhenDirectoryCannotBeMade(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := NewFile(filepath.Join(blocker, "sub", "main.journal")).Create(); err == nil {
+	if err := NewFile(filepath.Join(blocker, "sub", "main.journal"), septemberOf(2026)).Create(); err == nil {
 		t.Error("expected an error for a directory below a regular file, got nil")
 	}
 }
@@ -124,7 +124,7 @@ func TestCreateFailsWhenRulesCannotBeWritten(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := NewFile(filepath.Join(dir, "main.journal")).Create(); err == nil {
+	if err := NewFile(filepath.Join(dir, "main.journal"), septemberOf(2026)).Create(); err == nil {
 		t.Error("expected an error when categories.rules is a directory, got nil")
 	}
 }
@@ -148,7 +148,7 @@ func septemberOf(year int) func() time.Time {
 func TestWindowIsTheMainJournalAndTheLastTwoYears(t *testing.T) {
 	dir := windowDir(t, "2024.journal", "2025.journal", "2026.journal", "2027.journal")
 
-	got := NewFile(filepath.Join(dir, "main.journal")).WithToday(septemberOf(2026)).Window()
+	got := NewFile(filepath.Join(dir, "main.journal"), septemberOf(2026)).Window()
 
 	want := []string{"main.journal", "2025.journal", "2026.journal"}
 	for i := range want {
@@ -164,10 +164,10 @@ func TestWindowSkipsMissingYearFiles(t *testing.T) {
 	dir := windowDir(t, "2026.journal")
 	main := filepath.Join(dir, "main.journal")
 
-	if got, want := NewFile(main).WithToday(septemberOf(2026)).Window(), []string{main, filepath.Join(dir, "2026.journal")}; !slices.Equal(got, want) {
+	if got, want := NewFile(main, septemberOf(2026)).Window(), []string{main, filepath.Join(dir, "2026.journal")}; !slices.Equal(got, want) {
 		t.Errorf("Window = %v, want %v", got, want)
 	}
-	if got := NewFile(main).WithToday(septemberOf(2030)).Window(); !slices.Equal(got, []string{main}) {
+	if got := NewFile(main, septemberOf(2030)).Window(); !slices.Equal(got, []string{main}) {
 		t.Errorf("Window in a year without files = %v, want only the main journal", got)
 	}
 }
@@ -180,7 +180,7 @@ func TestWindowIgnoresADirectoryNamedLikeAYear(t *testing.T) {
 	}
 	main := filepath.Join(dir, "main.journal")
 
-	if got := NewFile(main).WithToday(septemberOf(2026)).Window(); !slices.Equal(got, []string{main}) {
+	if got := NewFile(main, septemberOf(2026)).Window(); !slices.Equal(got, []string{main}) {
 		t.Errorf("Window = %v, want only the main journal", got)
 	}
 }

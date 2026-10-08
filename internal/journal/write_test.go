@@ -317,7 +317,7 @@ func TestRenderReportsAnEditThatDoesNotApply(t *testing.T) {
 }
 
 func TestRenderReportsAnUnreadableJournal(t *testing.T) {
-	if _, err := NewFile(filepath.Join(t.TempDir(), "missing")).Render(domain.Changeset{}); err == nil {
+	if _, err := NewFile(filepath.Join(t.TempDir(), "missing"), septemberOf(2026)).Render(domain.Changeset{}); err == nil {
 		t.Error("expected an error")
 	}
 }

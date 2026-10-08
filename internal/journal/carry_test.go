@@ -21,7 +21,8 @@ const carriedYear = `2026-01-01 opening balance  ; konto:carry
 // inJanuary2027 is a ledger whose window is 2026 and 2027, with the given year files.
 func inJanuary2027(t *testing.T, years map[int]string) File {
 	t.Helper()
-	file := journalWith(t, "decimal-mark ,\n").WithToday(func() time.Time { return time.Date(2027, 1, 15, 0, 0, 0, 0, time.UTC) })
+	main := journalWith(t, "decimal-mark ,\n").path
+	file := NewFile(main, func() time.Time { return time.Date(2027, 1, 15, 0, 0, 0, 0, time.UTC) })
 	for year, text := range years {
 		if err := os.WriteFile(file.yearPath(year), []byte(text), 0o644); err != nil {
 			t.Fatal(err)

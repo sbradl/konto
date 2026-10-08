@@ -91,7 +91,7 @@ func TestApplyEditsTheDirectiveInTheFileThatHoldsIt(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := NewFile(mainPath).Apply(closeEdit()); err != nil {
+	if err := NewFile(mainPath, septemberOf(2026)).Apply(closeEdit()); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -152,14 +152,14 @@ func TestApplyKeepsTheFileMode(t *testing.T) {
 }
 
 func TestApplyReportsAnUnreadableJournal(t *testing.T) {
-	if err := NewFile(filepath.Join(t.TempDir(), "missing.journal")).Apply(closeEdit()); err == nil {
+	if err := NewFile(filepath.Join(t.TempDir(), "missing.journal"), septemberOf(2026)).Apply(closeEdit()); err == nil {
 		t.Error("expected an error for a missing journal")
 	}
 }
 
 func TestApplyReportsAFailedWrite(t *testing.T) {
 	dir := t.TempDir()
-	file := NewFile(filepath.Join(dir, "main.journal"))
+	file := NewFile(filepath.Join(dir, "main.journal"), septemberOf(2026))
 	if err := os.WriteFile(file.path, []byte(directive+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
