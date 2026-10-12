@@ -112,7 +112,7 @@ type Model struct {
 	editor      func(file string, line int) *exec.Cmd
 	ledger      *domain.Ledger
 	loadErr     error
-	refreshing  bool  // a reload is in flight; the held snapshot stays on screen
+	refreshing  bool  // a write or reload is in flight; the held snapshot stays on screen
 	refreshErr  error // the last reload failed; the snapshot is stale
 	active      int   // index into tabNames
 	popup       popupKind

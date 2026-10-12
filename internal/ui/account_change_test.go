@@ -81,13 +81,27 @@ func TestYAppliesThePlannedChangeAndRefreshes(t *testing.T) {
 	}
 }
 
+func TestTheSpinnerShowsFromYOnSoTheWriteIsNeverMistakenForDone(t *testing.T) {
+	model, _ := press(withAccounts(t, &fakePlanner{changeset: closeSpare}, &fakeWriter{}), "c")
+
+	model, _ = press(model, "y")
+
+	if !model.refreshing || !strings.Contains(plain(model.View().Content), "⣾") {
+		t.Error("the spinner should show while the write is in flight")
+	}
+}
+
 func TestAFailedWriteIsReportedAndNotRefreshed(t *testing.T) {
-	model := withAccounts(t, &fakePlanner{}, &fakeWriter{})
+	model, _ := press(withAccounts(t, &fakePlanner{changeset: closeSpare}, &fakeWriter{}), "c")
+	model, _ = press(model, "y")
 
 	updated, cmd := model.Update(writtenMsg{err: errors.New("disk full")})
 
 	if got := lastLine(updated.(Model)); !strings.Contains(got, "write failed: disk full") || cmd != nil {
 		t.Errorf("status bar = %q, cmd = %v; want the failure shown and no refresh", got, cmd)
+	}
+	if updated.(Model).refreshing {
+		t.Error("the spinner should stop once the write has failed")
 	}
 }
 

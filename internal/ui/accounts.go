@@ -76,7 +76,7 @@ func (m Model) onPromptKey(key string) (Model, tea.Cmd) {
 		if pending.quit {
 			return m, tea.Quit
 		}
-		return m, m.writeCmd(pendingWrite{changeset: pending.changeset, imported: pending.imported})
+		return m.write(pendingWrite{changeset: pending.changeset, imported: pending.imported})
 	case "n", "esc":
 		m.prompt = nil
 	case "up":
@@ -95,10 +95,11 @@ func (p *prompt) scrolled(lines, last int) *prompt {
 	return &next
 }
 
-// writeCmd writes the changeset; an import's and a rule's is checked first, so a journal that would fail its
-// checks is never written.
-func (m Model) writeCmd(pending pendingWrite) tea.Cmd {
-	return func() tea.Msg {
+// write writes the changeset; an import's and a rule's is checked first, so a journal that would fail its
+// checks is never written. The spinner shows from now until the reload after it lands.
+func (m Model) write(pending pendingWrite) (Model, tea.Cmd) {
+	m.refreshing = true
+	return m, func() tea.Msg {
 		if (pending.imported != "" || pending.rule != "") && m.verifier != nil {
 			if err := m.verifier.Verify(context.Background(), pending.changeset); err != nil {
 				return writtenMsg{err: err}
@@ -112,7 +113,7 @@ func (m Model) writeCmd(pending pendingWrite) tea.Cmd {
 // leaves the Import view empty.
 func (m Model) onWritten(written writtenMsg) (Model, tea.Cmd) {
 	if written.err != nil {
-		m.notice = "write failed: " + written.err.Error()
+		m.notice, m.refreshing = "write failed: "+written.err.Error(), false
 		return m, nil
 	}
 	if written.imported != "" {
@@ -121,7 +122,6 @@ func (m Model) onWritten(written writtenMsg) (Model, tea.Cmd) {
 	if written.rule != "" {
 		m.notice = written.rule
 	}
-	m.refreshing = true
 	return m, m.load
 }
 

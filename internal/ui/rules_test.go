@@ -125,6 +125,9 @@ func TestSavingPlansTheRuleThenChecksAndWritesItAndRefreshes(t *testing.T) {
 	model, cmd := press(model, "enter")
 	updated, write := model.Update(cmd())
 	model = updated.(Model)
+	if !model.refreshing {
+		t.Error("the spinner should show while the rule is written")
+	}
 	written := write()
 	done, reload := model.Update(written)
 

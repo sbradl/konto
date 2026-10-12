@@ -115,7 +115,7 @@ func (m Model) onRuleSaved(saved ruleSavedMsg) (Model, tea.Cmd) {
 	if saved.editing {
 		notice = "rule updated"
 	}
-	return m, m.writeCmd(pendingWrite{changeset: saved.changeset, rule: notice})
+	return m.write(pendingWrite{changeset: saved.changeset, rule: notice})
 }
 
 // onCapturedKey hands a key to the view that has the keyboard: the Scheduled form or the Import dialog.
