@@ -67,7 +67,9 @@ type Declaration struct {
 	Name   string
 	Source Source
 	IBAN   string
-	Format string // the bank format an import-fed account's exports come in
+	// Format is the bank format an import-fed account's exports come in. Written now, read by nothing yet: Open must
+	// parse an export before it knows the account, and Postbank is the only format (spec §4.9).
+	Format string
 	Closed time.Time
 }
 

@@ -120,6 +120,21 @@ func TestWatermarkLeavesTheCarryOut(t *testing.T) {
 	}
 }
 
+func TestWatermarkOfAnAccountWithOnlyTheCarryIsTheCarry(t *testing.T) {
+	day := func(y, m, d int) time.Time { return time.Date(y, time.Month(m), d, 0, 0, 0, 0, time.UTC) }
+	ledger := Ledger{Transactions: []Transaction{
+		{Date: day(2026, 1, 1), Comment: CarryTag, Postings: []Posting{{Account: "assets:b"}}},
+		{Date: day(2025, 1, 1), Comment: CarryTag, Postings: []Posting{{Account: "assets:b"}}},
+		{Date: day(2026, 3, 1), Postings: []Posting{{Account: "assets:other"}}},
+	}}
+
+	got, ok := ledger.Watermark("assets:b")
+
+	if !ok || !got.Equal(day(2026, 1, 1)) {
+		t.Errorf("watermark = %v, %v; want 2026-01-01, the carry stands in for rows older than the journal", got, ok)
+	}
+}
+
 func TestAmountLikeTakesTheStyleOfAnAccountHoldingTheCommodity(t *testing.T) {
 	style := AmountStyle{SymbolLeft: true, DecimalMark: ".", GroupMark: ",", GroupSize: 3}
 	ledger := Ledger{Accounts: []Account{

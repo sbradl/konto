@@ -87,22 +87,36 @@ func (l Ledger) UnclassifiedIssues() []CheckIssue {
 	return issues
 }
 
-// Watermark is the date of the account's latest transaction (ADR 0009), the carry left out; false when it has
-// none.
+// Watermark is the date of the account's latest transaction (ADR 0009), the carry left out: another account's
+// import can write it. An account with nothing but the carry in the loaded years takes the carry's date, as
+// the carry stands in for its older rows. False when it has neither.
 func (l Ledger) Watermark(account string) (time.Time, bool) {
-	var latest time.Time
-	found := false
+	var latest, carried time.Time
+	found, carry := false, false
 	for i := range l.Transactions {
-		if l.Transactions[i].IsCarry() {
-			continue
-		}
-		for _, posting := range l.Transactions[i].Postings {
-			if posting.Account == account && !l.Transactions[i].Date.Before(latest) {
-				latest, found = l.Transactions[i].Date, true
+		transaction := &l.Transactions[i]
+		for _, posting := range transaction.Postings {
+			if posting.Account != account {
+				continue
+			}
+			if transaction.IsCarry() {
+				carried, carry = laterOf(carried, transaction.Date), true
+			} else {
+				latest, found = laterOf(latest, transaction.Date), true
 			}
 		}
 	}
-	return latest, found
+	if !found {
+		return carried, carry
+	}
+	return latest, true
+}
+
+func laterOf(a, b time.Time) time.Time {
+	if b.After(a) {
+		return b
+	}
+	return a
 }
 
 const defaultGroupSize = 3 // digits per group of thousands
