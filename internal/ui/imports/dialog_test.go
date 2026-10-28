@@ -297,26 +297,6 @@ func TestWideningIntoAnotherRulesRowsIsRefused(t *testing.T) {
 	}
 }
 
-func TestEditHandlesTextBackspaceClearAndOtherKeys(t *testing.T) {
-	for _, c := range []struct {
-		text, key, want string
-		ok              bool
-	}{
-		{"ab", "c", "abc", true},
-		{"ab", "ä", "abä", true},
-		{"abä", "backspace", "ab", true},
-		{"", "backspace", "", true},
-		{"ab", "ctrl+u", "", true},
-		{"ab", " ", "ab ", true},
-		{"ab", "enter", "ab", false},
-		{"ab", "tab", "ab", false},
-	} {
-		if got, ok := edit(c.text, c.key); got != c.want || ok != c.ok {
-			t.Errorf("edit(%q, %q) = %q, %v", c.text, c.key, got, ok)
-		}
-	}
-}
-
 func TestDialogsLeaveTheTableAloneWhenTheyListManyEntries(t *testing.T) {
 	s := categorisable()
 	for i := range 40 {

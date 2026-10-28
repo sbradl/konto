@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	forecastsvc "github.com/sbradl/konto/internal/forecast"
+	"github.com/sbradl/konto/internal/ui/layout"
 )
 
 // golden compares the plain view with testdata/<name>.txt; KONTO_UPDATE_GOLDEN=1 rewrites the file.
@@ -51,9 +52,9 @@ func manyLines() forecastsvc.Forecast {
 }
 
 func TestTheViewIsLaidOutAsTheGoldenFilesShow(t *testing.T) {
-	smallest := New().Resize(minChartWidth+panelChrome, 0).WithForecast(sample())
-	smallest = smallest.Resize(minChartWidth+panelChrome, smallest.tableLines()+panelChrome+minChartPanel)
-	tooNarrow := New().Resize(minChartWidth+panelChrome-1, 30).WithForecast(sample())
+	smallest := New().Resize(minChartWidth+layout.PanelChrome, 0).WithForecast(sample())
+	smallest = smallest.Resize(minChartWidth+layout.PanelChrome, smallest.tableLines()+layout.PanelChrome+minChartPanel)
+	tooNarrow := New().Resize(minChartWidth+layout.PanelChrome-1, 30).WithForecast(sample())
 	oddSplit := New().Resize(100, 41).WithForecast(twoCurrencies())
 
 	flat := forecastsvc.Forecast{
@@ -61,7 +62,7 @@ func TestTheViewIsLaidOutAsTheGoldenFilesShow(t *testing.T) {
 		Charts: []forecastsvc.Chart{{Commodity: "EUR", Lines: []forecastsvc.Line{course("assets:spare", 0, 0, 0)}}},
 	}
 	short := New().Resize(60, 0).WithForecast(manyLines())
-	short = short.Resize(60, short.tableLines()+panelChrome+minChartPanel)
+	short = short.Resize(60, short.tableLines()+layout.PanelChrome+minChartPanel)
 
 	golden(t, "one-chart-100x30", showing(100, 30))
 	golden(t, "legend-fits-exactly", New().Resize(39, 40).WithForecast(sample()))
@@ -78,7 +79,7 @@ func TestTheViewIsLaidOutAsTheGoldenFilesShow(t *testing.T) {
 
 func TestOneRowLessThanTheSmallestChartShowsNoChart(t *testing.T) {
 	smallest := New().Resize(60, 0).WithForecast(sample())
-	height := smallest.tableLines() + panelChrome + minChartPanel
+	height := smallest.tableLines() + layout.PanelChrome + minChartPanel
 
 	if got := smallest.Resize(60, height).HiddenPanels(); got != 0 {
 		t.Errorf("hidden at the smallest height = %d", got)

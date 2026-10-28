@@ -46,15 +46,18 @@ func Columns(width, minWidth, maxCols int) int {
 	return max(1, min(maxCols, width/minWidth))
 }
 
+// PanelChrome is the border rows or columns around a panel body.
+const PanelChrome = 2
+
 // Panel draws body in a rounded border w×h cells in all, the title inset two cells.
 // Body lines wider than the inside are cut off; missing lines are blank.
 func Panel(title string, w, h int, body string) string {
-	inner := max(0, w-2)
+	inner := max(0, w-PanelChrome)
 	rows := strings.Split(body, "\n")
 	lines := make([]string, 0, h)
 	top := "╭─ " + theme.PanelTitle.Render(title) + " "
 	lines = append(lines, top+strings.Repeat("─", max(0, w-lipgloss.Width(top)-1))+"╮")
-	for i := range max(0, h-2) {
+	for i := range max(0, h-PanelChrome) {
 		row := ""
 		if i < len(rows) {
 			row = rows[i]

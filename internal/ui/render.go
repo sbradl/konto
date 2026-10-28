@@ -59,24 +59,14 @@ func (m Model) body() string {
 	if m.loadErr != nil {
 		return m.loadErr.Error()
 	}
-	switch m.active {
-	case dashboardTab:
-		return m.dash.View()
-	case importTab:
-		return m.imports.View()
-	case scheduledTab:
-		return m.scheduled.View()
-	case forecastTab:
-		return m.forecasts.View()
-	default: // reportsTab
-		return m.reports.View()
-	}
+	return m.activeTab().view(m)
 }
 
 // hint is the active view's keys as the status bar shows them.
 func (m Model) hint() string {
-	parts := make([]string, 0, len(viewKeys()[m.active]))
-	for _, binding := range viewKeys()[m.active] {
+	keys := m.activeTab().keys
+	parts := make([]string, 0, len(keys))
+	for _, binding := range keys {
 		parts = append(parts, binding.key+" "+binding.action)
 	}
 	return strings.Join(parts, "   ")
@@ -109,7 +99,7 @@ func (m Model) indicator() string {
 	if m.refreshing {
 		return "⣾ "
 	}
-	if m.refreshErr != nil {
+	if m.failure != nil {
 		return "✗ error   "
 	}
 	return ""
@@ -130,10 +120,9 @@ func (m Model) tabBar() string {
 
 // renderTabs draws the tab labels, the active one selected.
 func (m Model) renderTabs() string {
-	names := tabNames()
-	labels := make([]string, len(names))
-	for i, name := range names {
-		label := fmt.Sprintf(" %d %s ", i+1, name)
+	labels := make([]string, tabCount)
+	for i, tab := range tabs() {
+		label := fmt.Sprintf(" %d %s ", i+1, tab.name)
 		if i == m.active {
 			labels[i] = theme.Selected.Render(label)
 		} else {
@@ -166,7 +155,7 @@ func (m Model) statusLeft() string {
 	if m.notice != "" {
 		return " " + m.notice
 	}
-	left := " " + tabNames()[m.active]
+	left := " " + m.activeTab().name
 	if hint := m.hint(); hint != "" {
 		left += "   " + hint
 	}
@@ -179,34 +168,10 @@ func (m Model) statusLeft() string {
 	return left
 }
 
-// hiddenPanels is how many panels of the active view the terminal is too small to show.
-func (m Model) hiddenPanels() int {
-	switch m.active {
-	case dashboardTab:
-		return m.dash.HiddenPanels()
-	case forecastTab:
-		return m.forecasts.HiddenPanels()
-	}
-	return 0
-}
-
-// hiddenNotice says how many Dashboard panels did not fit.
+// hiddenNotice says how many panels of the active view did not fit.
 func hiddenNotice(hidden int) string {
 	if hidden == 1 {
 		return "1 panel hidden · widen terminal"
 	}
 	return fmt.Sprintf("%d panels hidden · widen terminal", hidden)
-}
-
-// position is the active view's cursor row and row count; views without a cursor have none.
-func (m Model) position() (row, total int) {
-	switch m.active {
-	case dashboardTab:
-		return m.dash.Position()
-	case importTab:
-		return m.imports.Position()
-	case scheduledTab:
-		return m.scheduled.Position()
-	}
-	return 0, 0
 }

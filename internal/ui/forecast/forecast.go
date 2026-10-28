@@ -12,21 +12,17 @@ import (
 	"github.com/NimbleMarkets/ntcharts/v2/canvas"
 	"github.com/NimbleMarkets/ntcharts/v2/linechart"
 
-	"github.com/sbradl/konto/internal/domain"
 	forecastsvc "github.com/sbradl/konto/internal/forecast"
 	"github.com/sbradl/konto/internal/ui/layout"
 	"github.com/sbradl/konto/internal/ui/theme"
 )
 
 const (
-	panelChrome   = 2 // border rows or columns around a panel body
 	axisRows      = 2 // the x axis and its labels
 	legendRows    = 1
 	minPlotRows   = 4
-	minChartPanel = panelChrome + legendRows + axisRows + minPlotRows
+	minChartPanel = layout.PanelChrome + legendRows + axisRows + minPlotRows
 	minChartWidth = 24
-	thousand      = 1000 // the y axis labels count thousands
-	yLabelStep    = 2    // rows between y labels
 	headroom      = 1.1  // the y axis reaches this far beyond the extreme balances
 	labelRoom     = 1.06 // the x axis runs this far beyond the last month, so its label fits
 	nameGap       = 2
@@ -75,7 +71,7 @@ func (m Model) tableLines() int {
 
 // shownCharts is how many charts fit above the milestone table.
 func (m Model) shownCharts() int {
-	room := m.height - m.tableLines() - panelChrome
+	room := m.height - m.tableLines() - layout.PanelChrome
 	return max(0, min(len(m.forecast.Charts), room/minChartPanel))
 }
 
@@ -89,7 +85,7 @@ func (m Model) View() string {
 			theme.Dim.Render(" nothing to forecast — no open asset or liability account"))
 	}
 	shown := m.shownCharts()
-	tableHeight := m.tableLines() + panelChrome
+	tableHeight := m.tableLines() + layout.PanelChrome
 	room := m.height - tableHeight
 	panels := make([]string, 0, shown+1)
 	for i := range shown {
@@ -98,7 +94,7 @@ func (m Model) View() string {
 			height++
 		}
 		chart := m.forecast.Charts[i]
-		body := m.chartBody(chart, m.width-panelChrome, height-panelChrome)
+		body := m.chartBody(chart, m.width-layout.PanelChrome, height-layout.PanelChrome)
 		panels = append(panels, layout.Panel(chart.Commodity, m.width, height, body))
 	}
 	table := layout.Panel(tableTitle, m.width, min(tableHeight, m.height), m.table())
@@ -138,24 +134,13 @@ func legendLines(chart forecastsvc.Chart, width int) []string {
 	return rows
 }
 
-// number is the balance as a plain number of its currency's units.
-func number(amount domain.Amount) float64 {
-	return float64(amount.Mantissa) / math.Pow10(amount.Places)
-}
-
 // plot draws every account's line over the six months behind and the twelve ahead, with a dim line at today.
 func (m Model) plot(chart forecastsvc.Chart, width, height int) string {
 	low, high := bounds(chart)
 	begin, end := m.forecast.Begin, m.forecast.End
 	span := elapsed(begin, end)
 	canvasHeight := max(axisRows+1, height)
-	plot := linechart.New(width, canvasHeight, 0, span*labelRoom, low, high,
-		linechart.WithXYSteps(1, yLabelStep),
-		linechart.WithStyles(theme.Dim, theme.Dim, theme.Dim),
-		linechart.WithYLabelFormatter(func(_ int, value float64) string {
-			return fmt.Sprintf("%.1fk", value/thousand)
-		}),
-	)
+	plot := linechart.New(width, canvasHeight, 0, span*labelRoom, low, high, layout.ChartStyle()...)
 	labels := monthLabels(plot, begin, chart.Lines[0].Points, span)
 	plot.XLabelFormatter = func(i int, _ float64) string { return labels[i] }
 	plot.DrawXYAxisAndLabel()
@@ -175,7 +160,7 @@ func elapsed(from, to time.Time) float64 { return to.Sub(from).Hours() }
 func bounds(chart forecastsvc.Chart) (low, high float64) {
 	for _, line := range chart.Lines {
 		for _, point := range line.Points {
-			low, high = math.Min(low, number(point.Balance)), math.Max(high, number(point.Balance))
+			low, high = math.Min(low, layout.Number(point.Balance)), math.Max(high, layout.Number(point.Balance))
 		}
 	}
 	low *= headroom // never above zero
@@ -202,8 +187,8 @@ func drawLine(plot linechart.Model, line forecastsvc.Line, begin time.Time) {
 	for i := 1; i < len(line.Points); i++ {
 		from, to := line.Points[i-1], line.Points[i]
 		plot.DrawBrailleLineWithStyle(
-			canvas.Float64Point{X: elapsed(begin, from.End), Y: number(from.Balance)},
-			canvas.Float64Point{X: elapsed(begin, to.End), Y: number(to.Balance)}, style)
+			canvas.Float64Point{X: elapsed(begin, from.End), Y: layout.Number(from.Balance)},
+			canvas.Float64Point{X: elapsed(begin, to.End), Y: layout.Number(to.Balance)}, style)
 	}
 }
 

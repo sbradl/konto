@@ -72,18 +72,18 @@ func (m Model) onChecksKey(key string) (Model, tea.Cmd) {
 	return m, nil
 }
 
-// checksBody is the panel's rows: what went wrong with the last reload, if anything, then the
+// checksBody is the panel's rows: the last failure of hledger, if any, then the
 // issues, one clean line, or a note that nothing ran.
 func (m Model) checksBody() []string {
 	return append(m.failureRows(), m.runRows()...)
 }
 
-// failureRows are the lines of the error that made the last reload fail, one row per line.
+// failureRows are the lines of the last hledger call that failed, one row per line.
 func (m Model) failureRows() []string {
-	if m.refreshErr == nil {
+	if m.failure == nil {
 		return nil
 	}
-	lines := strings.Split(strings.TrimSpace(m.refreshErr.Error()), "\n")
+	lines := strings.Split(strings.TrimSpace(m.failure.Error()), "\n")
 	lines[0] = "✗ " + lines[0]
 	for i, line := range lines {
 		lines[i] = " " + theme.Negative.Render(line)

@@ -14,24 +14,6 @@ import (
 	"github.com/sbradl/konto/internal/ui/layout"
 )
 
-// prompt is a y/n question about a planned write; y applies the changeset. An import's prompt also shows
-// what will be written, and is checked before it is applied.
-type prompt struct {
-	question  string
-	changeset domain.Changeset
-	preview   []string
-	top       int    // the first line of the preview on screen
-	imported  string // the confirmation shown once an import is written
-	quit      bool   // y leaves konto: the question is about discarding the staged import
-}
-
-// pendingWrite is a changeset on its way to the journal and what to say once it is there.
-type pendingWrite struct {
-	changeset domain.Changeset
-	imported  string // the confirmation of an import: it also empties the Import view
-	rule      string // the confirmation of a saved rule
-}
-
 // onDashboardKey hands a key to the Dashboard and carries out what it asks for: closing or reopening the
 // selected account.
 func (m Model) onDashboardKey(key string) Model {
@@ -63,66 +45,8 @@ func (m Model) planAccountChange(plan func(domain.Account) (domain.Changeset, er
 		m.notice = "cannot " + verb + " " + account.Name + ": " + err.Error()
 		return m
 	}
-	m.prompt = &prompt{question: verb + " " + account.Name + "?", changeset: changeset}
+	m.prompt = &prompt{question: verb + " " + account.Name + "?", write: pendingWrite{changeset: changeset}}
 	return m
-}
-
-// onPromptKey answers the open y/n prompt; every other key leaves it open.
-func (m Model) onPromptKey(key string) (Model, tea.Cmd) {
-	switch key {
-	case "y":
-		pending := *m.prompt
-		m.prompt = nil
-		if pending.quit {
-			return m, tea.Quit
-		}
-		return m.write(pendingWrite{changeset: pending.changeset, imported: pending.imported})
-	case "n", "esc":
-		m.prompt = nil
-	case "up":
-		m.prompt = m.prompt.scrolled(-1, m.lastPreviewTop())
-	case "down":
-		m.prompt = m.prompt.scrolled(1, m.lastPreviewTop())
-	}
-	return m, nil
-}
-
-// scrolled is the prompt with its preview moved by lines, between the first line and last, the last line
-// the preview can start at; a new prompt, since the one open is shared with earlier models.
-func (p *prompt) scrolled(lines, last int) *prompt {
-	next := *p
-	next.top = max(0, min(p.top+lines, last))
-	return &next
-}
-
-// write writes the changeset; an import's and a rule's is checked first, so a journal that would fail its
-// checks is never written. The spinner shows from now until the reload after it lands.
-func (m Model) write(pending pendingWrite) (Model, tea.Cmd) {
-	m.refreshing = true
-	return m, func() tea.Msg {
-		if (pending.imported != "" || pending.rule != "") && m.verifier != nil {
-			if err := m.verifier.Verify(context.Background(), pending.changeset); err != nil {
-				return writtenMsg{err: err}
-			}
-		}
-		return writtenMsg{err: m.writer.Apply(pending.changeset), imported: pending.imported, rule: pending.rule}
-	}
-}
-
-// onWritten refreshes after a successful write and reports a failed one. A written import is confirmed and
-// leaves the Import view empty.
-func (m Model) onWritten(written writtenMsg) (Model, tea.Cmd) {
-	if written.err != nil {
-		m.notice, m.refreshing = "write failed: "+written.err.Error(), false
-		return m, nil
-	}
-	if written.imported != "" {
-		m.notice, m.imports = written.imported, m.imports.Cleared()
-	}
-	if written.rule != "" {
-		m.notice = written.rule
-	}
-	return m, m.load
 }
 
 // onImportKey hands a key to the Import view and runs what it asks for: listing a folder or opening a file.
@@ -163,8 +87,11 @@ func (m Model) planImport() Model {
 	}
 	transactions := layout.Plural(plan.Count, "transaction")
 	m.prompt = &prompt{
-		question: "write " + transactions + " into " + plan.Account + "?", changeset: plan.Changeset,
-		preview: plan.Preview, imported: "imported " + transactions + " into " + plan.Account,
+		question: "write " + transactions + " into " + plan.Account + "?", preview: plan.Preview,
+		write: pendingWrite{
+			changeset: plan.Changeset, verify: true, notice: "imported " + transactions + " into " + plan.Account,
+			written: clearImport,
+		},
 	}
 	return m
 }
@@ -177,19 +104,19 @@ func (m Model) reopen(loaded ledgerLoadedMsg) tea.Cmd {
 	}
 	return func() tea.Msg {
 		fresh, err := m.importer.Open(context.Background(), staged.Path, loaded.ledger)
-		return openedMsg{staged: fresh, err: err, earlier: &staged}
+		return openedMsg{staged: fresh, err: err, earlier: &staged, load: loaded.load}
 	}
 }
 
 // onReopened takes the staged export read again in: what was staged carries over. An export read again
-// after the import was written or replaced is dropped, and one that cannot be read leaves the import as it
-// was, with the error flagged.
+// for an earlier load, or after the import was written or replaced, is dropped, and one that cannot be read
+// leaves the import as it was, with the error flagged.
 func (m Model) onReopened(opened openedMsg) Model {
 	current, ok := m.imports.Staged()
 	switch {
-	case !ok || current.Path != opened.earlier.Path:
+	case !ok || current.Path != opened.earlier.Path || opened.load != m.loads:
 	case opened.err != nil:
-		m.refreshErr = opened.err
+		m.failure = opened.err
 	default:
 		m.imports = m.imports.WithRefreshed(opened.staged.Restage(*opened.earlier))
 	}
@@ -207,7 +134,7 @@ func (m Model) onOpened(opened openedMsg) Model {
 	case opened.err == nil:
 		m.imports = m.imports.WithStaged(opened.staged)
 	case errors.As(opened.err, &convertErr):
-		m.refreshErr = convertErr
+		m.failure = convertErr
 		first, _, _ := strings.Cut(strings.TrimSpace(convertErr.Error()), "\n")
 		m.imports = m.imports.WithMessage("unreadable row or file: " + first)
 	default:

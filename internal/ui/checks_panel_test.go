@@ -48,8 +48,8 @@ func TestAFailedCheckRunKeepsTheLastRunAndFlagsTheError(t *testing.T) {
 	updated, _ := model.Update(model.load())
 	model = updated.(Model)
 
-	if len(model.checks.run.Issues) != 1 || model.refreshErr == nil {
-		t.Errorf("run = %+v, refreshErr = %v; want the old run and an error flag", model.checks.run, model.refreshErr)
+	if len(model.checks.run.Issues) != 1 || model.failure == nil {
+		t.Errorf("run = %+v, failure = %v; want the old run and an error flag", model.checks.run, model.failure)
 	}
 	if got := lastLine(model); !strings.Contains(got, "✗ error") {
 		t.Errorf("status bar = %q, want the error indicator", got)

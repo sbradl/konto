@@ -8,6 +8,7 @@ import (
 
 	"github.com/sbradl/konto/internal/csvimport"
 	"github.com/sbradl/konto/internal/domain"
+	"github.com/sbradl/konto/internal/ui/layout"
 )
 
 // golden compares the plain view with testdata/<name>.txt; KONTO_UPDATE_GOLDEN=1 rewrites the file.
@@ -54,7 +55,7 @@ func TestTheStagedViewIsLaidOutAsTheGoldenFilesShow(t *testing.T) {
 
 	probe := New("/dl").Resize(100, 30).WithStaged(staged())
 	_, skippedRoom := probe.layoutHeights()
-	capacity := skippedRoom - panelChrome
+	capacity := skippedRoom - layout.PanelChrome
 	for _, skipped := range []int{capacity - 1, capacity, capacity + 1} {
 		golden(t, fmt.Sprintf("skipped-%d-of-%d", skipped, capacity), New("/dl").Resize(100, 30).WithStaged(bigImport(0, skipped-2)))
 	}

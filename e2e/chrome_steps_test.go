@@ -122,7 +122,8 @@ func registerLayoutSteps(sc *godog.ScenarioContext, w *world) {
 
 var quoted = regexp.MustCompile(`"([^"]*)"`)
 
-func registerChromeSteps(sc *godog.ScenarioContext, w *world) {
+// registerFeatureSteps binds every view's and the chrome's own phrasings, then the tab bar's.
+func registerFeatureSteps(sc *godog.ScenarioContext, w *world) {
 	registerLayoutSteps(sc, w)
 	registerStatusBarSteps(sc, w)
 	registerThemeSteps(sc, w)

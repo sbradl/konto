@@ -35,17 +35,6 @@ func globalKeys() []keyBinding {
 	}
 }
 
-// viewKeys are the keys each view answers to, by tab index.
-func viewKeys() [tabCount][]keyBinding {
-	return [tabCount][]keyBinding{
-		{{"c", "close"}, {"o", "reopen"}},
-		{{"n", "new file"}, {"Enter", "categorise"}, {"w", "write"}},
-		{{"n", "new"}, {"e", "edit"}, {"d", "delete"}},
-		nil,
-		{{"p", "period"}},
-	}
-}
-
 // onPopupKey handles a key while a popup is open: the opening keys toggle, Esc
 // closes, the checks panel has its own cursor keys, and everything else is swallowed
 // so view keys never leak through.
@@ -102,7 +91,7 @@ func keysColumns(width int) int { return layout.Columns(width, minKeyColumnWidth
 
 // keysBody lays the global keys, then the active view's, out column by column.
 func (m Model) keysBody() []string {
-	bindings := append(globalKeys(), viewKeys()[m.active]...)
+	bindings := append(globalKeys(), m.activeTab().keys...)
 	columns := keysColumns(m.width)
 	rows := (len(bindings) + columns - 1) / columns
 	keyCell := lipgloss.NewStyle().Width(keyWidth)

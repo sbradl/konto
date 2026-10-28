@@ -105,6 +105,26 @@ func TestAnUnusableFileIsAMessageAndNothingIsStaged(t *testing.T) {
 	}
 }
 
+func TestGlobalKeysNeverReachTheView(t *testing.T) {
+	importer := &fakeImporter{err: csvimport.ErrNoIBAN, entries: []domain.FileEntry{{Name: "x.csv"}}}
+	model := startedWithImporter(t, importer)
+	model, cmd := press(model, "n")
+	model = deliver(model, cmd)
+	model, _ = pressCode(model, tea.KeyDown)
+	model, cmd = pressCode(model, tea.KeyEnter)
+	model = deliver(model, cmd)
+
+	for _, key := range []string{"?", "!", "1"} {
+		model, _ = press(model, key)
+		model = pressEsc(model)
+		model, _ = press(model, "2")
+	}
+
+	if content := plain(model.View().Content); !strings.Contains(content, csvimport.ErrNoIBAN.Error()) {
+		t.Errorf("a global key reached the Import view and cleared its message:\n%s", content)
+	}
+}
+
 func TestHledgerFailingOnTheConversionFlagsTheErrorAndFillsTheChecksPanel(t *testing.T) {
 	importer := &fakeImporter{err: csvimport.ConvertError{Err: errors.New("hledger: boom\nsecond")}, entries: []domain.FileEntry{{Name: "x.csv"}}}
 	model := startedWithImporter(t, importer)

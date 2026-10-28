@@ -14,9 +14,8 @@ import (
 )
 
 const (
-	panelChrome  = 2
 	infoLines    = 6
-	infoHeight   = infoLines + panelChrome
+	infoHeight   = infoLines + layout.PanelChrome
 	minPanel     = 4
 	rowsShare    = 60 // percent of the room below the info block the row table takes
 	columnGap    = 2
@@ -31,7 +30,6 @@ const (
 	nothingNew   = "nothing new"
 	createHint   = "create account"
 	noWatermark  = "no watermark"
-	moreTemplate = " … %d more"
 	noItems      = "—"
 	transferMark = " ⇄"
 )
@@ -199,9 +197,9 @@ func (m Model) layoutHeights() (rows, skipped int) {
 }
 
 // innerWidth is the width of a panel's body.
-func (m Model) innerWidth() int { return m.width - panelChrome }
+func (m Model) innerWidth() int { return m.width - layout.PanelChrome }
 
-func (m Model) rowPage() int { rows, _ := m.layoutHeights(); return max(1, rows-panelChrome) }
+func (m Model) rowPage() int { rows, _ := m.layoutHeights(); return max(1, rows-layout.PanelChrome) }
 
 func (m Model) bannerRows() int {
 	if m.message == "" {
@@ -235,7 +233,7 @@ func (m Model) stagedView(height int) string {
 	rowsHeight, skippedHeight := m.layoutHeights()
 	rowsPanel := layout.Panel("ROWS", m.width, rowsHeight, m.rowLines())
 	skippedPanelHeight := max(0, height-infoHeight-rowsHeight)
-	skipped := layout.Panel("SKIPPED", m.width, skippedPanelHeight, m.skippedLines(skippedHeight-panelChrome))
+	skipped := layout.Panel("SKIPPED", m.width, skippedPanelHeight, m.skippedLines(skippedHeight-layout.PanelChrome))
 	return strings.Join([]string{m.info(), rowsPanel, skipped}, "\n")
 }
 
@@ -367,7 +365,7 @@ func (m Model) skippedLines(capacity int) string {
 		lines = append(lines, skippedLine(&shown[i], m.innerWidth()))
 	}
 	if hidden := len(skipped) - len(shown); hidden > 0 {
-		lines = append(lines, theme.Dim.Render(fmt.Sprintf(moreTemplate, hidden)))
+		lines = append(lines, layout.More(hidden))
 	}
 	return strings.Join(lines, "\n")
 }

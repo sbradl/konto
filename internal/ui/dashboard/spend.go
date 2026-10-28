@@ -1,7 +1,6 @@
 package dashboard
 
 import (
-	"fmt"
 	"math"
 	"strings"
 
@@ -14,17 +13,15 @@ import (
 )
 
 const (
-	axisRows     = 2    // the x axis and its labels
-	labelPad     = 0.6  // x range beyond the last month, leaving room for its label
-	headroom     = 1.1  // the y axis reaches this far above the highest month
-	thousand     = 1000 // the y axis labels count thousands
-	yLabelStep   = 2    // rows between y labels
-	minChartSize = 8    // narrower or shorter than this the chart gives way
+	axisRows     = 2   // the x axis and its labels
+	labelPad     = 0.6 // x range beyond the last month, leaving room for its label
+	headroom     = 1.1 // the y axis reaches this far above the highest month
+	minChartSize = 8   // narrower or shorter than this the chart gives way
 )
 
 // spendPanel is the monthly spend chart: one braille line, a point per complete month.
 func spendPanel(spend []domain.MonthSpend, width, height int) string {
-	inner, rows := max(0, width-panelChrome), max(0, height-panelChrome)
+	inner, rows := max(0, width-layout.PanelChrome), max(0, height-layout.PanelChrome)
 	if len(spend) == 0 || inner < minChartSize || rows < minChartSize/2 {
 		return layout.Panel("SPEND", width, height, "")
 	}
@@ -35,11 +32,7 @@ func spendPanel(spend []domain.MonthSpend, width, height int) string {
 func spendChart(spend []domain.MonthSpend, width, height int) string {
 	values, top := spendValues(spend)
 	last := float64(len(spend) - 1)
-	chart := linechart.New(width, height, 0, last+labelPad, 0, top*headroom,
-		linechart.WithXYSteps(1, yLabelStep),
-		linechart.WithStyles(theme.Dim, theme.Dim, theme.Dim),
-		linechart.WithYLabelFormatter(func(_ int, v float64) string { return fmt.Sprintf("%.1fk", v/thousand) }),
-	)
+	chart := linechart.New(width, height, 0, last+labelPad, 0, top*headroom, layout.ChartStyle()...)
 	column := func(i int) int {
 		return int(math.Round(float64(i) * float64(chart.GraphWidth()-1) / (last + labelPad)))
 	}
@@ -70,7 +63,7 @@ func spendValues(spend []domain.MonthSpend) (values []float64, top float64) {
 	for i, month := range spend {
 		for _, amount := range month.Total {
 			if amount.Commodity == commodity {
-				values[i] = float64(amount.Mantissa) / math.Pow10(amount.Places)
+				values[i] = layout.Number(amount)
 			}
 		}
 		top = math.Max(top, values[i])

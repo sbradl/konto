@@ -17,7 +17,8 @@ const (
 	formHint   = "Tab next field · ←/→ choose · Enter save · Esc cancel"
 )
 
-// withForm draws the open form over the view, bottom-anchored like the other popups.
+// withForm draws the open form over the view, bottom-anchored like the other popups but, unlike them, not
+// capped at half the screen: every field stays in view.
 func (m Model) withForm(base string) string {
 	if m.form == nil {
 		return base

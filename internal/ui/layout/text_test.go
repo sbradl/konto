@@ -47,10 +47,36 @@ func TestTitleRuleInsetsTheTitleAndRunsToTheWidth(t *testing.T) {
 	}
 }
 
+func TestMoreSaysHowManyRowsAreLeftOut(t *testing.T) {
+	if got := plain(More(3)); got != " … 3 more" {
+		t.Errorf("More(3) = %q", got)
+	}
+}
+
 func TestPluralCountsTheNoun(t *testing.T) {
 	for n, want := range map[int]string{0: "0 rows", 1: "1 row", 2: "2 rows"} {
 		if got := Plural(n, "row"); got != want {
 			t.Errorf("Plural(%d) = %q, want %q", n, got, want)
+		}
+	}
+}
+
+func TestEditHandlesTextBackspaceClearAndOtherKeys(t *testing.T) {
+	for _, c := range []struct {
+		text, key, want string
+		ok              bool
+	}{
+		{"ab", "c", "abc", true},
+		{"ab", "ä", "abä", true},
+		{"abä", "backspace", "ab", true},
+		{"", "backspace", "", true},
+		{"ab", "ctrl+u", "", true},
+		{"ab", " ", "ab ", true},
+		{"ab", "enter", "ab", false},
+		{"ab", "tab", "ab", false},
+	} {
+		if got, ok := Edit(c.text, c.key); got != c.want || ok != c.ok {
+			t.Errorf("Edit(%q, %q) = %q, %v", c.text, c.key, got, ok)
 		}
 	}
 }

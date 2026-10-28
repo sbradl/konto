@@ -3,7 +3,6 @@
 package reports
 
 import (
-	"fmt"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -14,11 +13,10 @@ import (
 )
 
 const (
-	panelChrome = 2 // border rows or columns around a panel body
-	periodRows  = 1 // the period bar above the panels
-	panelCount  = 2
-	columnGap   = 2
-	deltaTitle  = "Δ period"
+	periodRows = 1 // the period bar above the panels
+	panelCount = 2
+	columnGap  = 2
+	deltaTitle = "Δ period"
 )
 
 // Model is the Reports view's local state: the period it shows and how far the tables are scrolled.
@@ -75,7 +73,7 @@ func (m Model) Resize(width, height int) Model {
 }
 
 // capacity is how many rows each panel shows.
-func (m Model) capacity() int { return max(1, m.height-periodRows-panelChrome) }
+func (m Model) capacity() int { return max(1, m.height-periodRows-layout.PanelChrome) }
 
 // room is how many rows of the table fit below its title row, if it has one.
 func (m Model) room(rows []domain.ReportRow) int {
@@ -120,10 +118,11 @@ func (m Model) View() string {
 	}
 	sheetWidth := m.width / panelCount
 	height := m.height - periodRows
-	sheet := layout.Panel("BALANCE SHEET", sheetWidth, height, m.table(m.report.BalanceSheet, sheetWidth-panelChrome))
+	sheet := layout.Panel("BALANCE SHEET", sheetWidth, height,
+		m.table(m.report.BalanceSheet, sheetWidth-layout.PanelChrome))
 	statementWidth := m.width - sheetWidth
 	statement := layout.Panel("INCOME STATEMENT", statementWidth, height,
-		m.table(m.report.IncomeStatement, statementWidth-panelChrome))
+		m.table(m.report.IncomeStatement, statementWidth-layout.PanelChrome))
 	return bar + "\n" + lipgloss.JoinHorizontal(lipgloss.Top, sheet, statement)
 }
 
@@ -145,7 +144,7 @@ func (m Model) table(rows []domain.ReportRow, width int) string {
 		lines = append(lines, columns.line(row, width))
 	}
 	if hidden := len(rows) - last; hidden > 0 {
-		lines = append(lines, theme.Dim.Render(fmt.Sprintf(" … %d more", hidden)))
+		lines = append(lines, layout.More(hidden))
 	}
 	return strings.Join(lines, "\n")
 }

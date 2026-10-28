@@ -17,7 +17,7 @@ func (m Model) pickerRows() []domain.FileEntry {
 	return append([]domain.FileEntry{{Name: parentEntry, IsDir: true}}, m.entries...)
 }
 
-func (m Model) pickerPage() int { return max(1, m.height-panelChrome-1) }
+func (m Model) pickerPage() int { return max(1, m.height-layout.PanelChrome-1) }
 
 func (m Model) pickerKey(key string) (Model, Action) {
 	rows := m.pickerRows()

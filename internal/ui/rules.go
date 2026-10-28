@@ -55,7 +55,8 @@ func (m Model) onScheduledKey(key string) (Model, tea.Cmd) {
 		return m, m.readRule(rule)
 	}
 	if action == scheduled.DeleteSelected {
-		m.prompt = &prompt{question: `delete rule "` + rule.Description + `"?`, changeset: rule.Delete()}
+		question := `delete rule "` + rule.Description + `"?`
+		m.prompt = &prompt{question: question, write: pendingWrite{changeset: rule.Delete()}}
 	}
 	return m, nil
 }
@@ -78,11 +79,16 @@ func (m Model) onFormReady(ready formReadyMsg) Model {
 	return m
 }
 
-// onFormKey hands a key to the open form; saving asks for the rule to be planned.
+// onFormKey hands a key to the open form; saving asks for the rule to be planned, once no write or reload
+// is in flight.
 func (m Model) onFormKey(key string) (Model, tea.Cmd) {
 	var action scheduled.Action
 	m.scheduled, action = m.scheduled.FormKey(key)
 	if action.Save == nil {
+		return m, nil
+	}
+	if m.refreshing {
+		m.scheduled = m.scheduled.WithFormError("the journal is reloading — try again in a moment")
 		return m, nil
 	}
 	save := *action.Save
@@ -100,28 +106,25 @@ func (m Model) onFormKey(key string) (Model, tea.Cmd) {
 	}
 }
 
-// onRuleSaved writes the planned rule and closes the form, or keeps the form open with the reason the rule was
-// refused; a failure of hledger or the journal is flagged as an error as well.
+// onRuleSaved writes the planned rule, closing the form once it is written, or keeps the form open with the
+// reason the rule was refused; a failure of hledger or the journal is flagged as an error as well.
 func (m Model) onRuleSaved(saved ruleSavedMsg) (Model, tea.Cmd) {
 	if saved.err != nil {
 		if _, refused := errors.AsType[domain.RefusalError](saved.err); !refused {
-			m.refreshErr = saved.err
+			m.failure = saved.err
 		}
 		m.scheduled = m.scheduled.WithFormError(saved.err.Error())
 		return m, nil
 	}
-	m.scheduled = m.scheduled.CloseForm()
 	notice := "rule added"
 	if saved.editing {
 		notice = "rule updated"
 	}
-	return m.write(pendingWrite{changeset: saved.changeset, rule: notice})
+	return m.write(pendingWrite{changeset: saved.changeset, verify: true, notice: notice, written: closeForm})
 }
 
-// onCapturedKey hands a key to the view that has the keyboard: the Scheduled form or the Import dialog.
-func (m Model) onCapturedKey(key string) (Model, tea.Cmd) {
-	if m.active == scheduledTab {
-		return m.onFormKey(key)
-	}
-	return m.onImportKey(key)
+// closeForm closes the Scheduled form on the rule just written.
+func closeForm(m Model) Model {
+	m.scheduled = m.scheduled.CloseForm()
+	return m
 }

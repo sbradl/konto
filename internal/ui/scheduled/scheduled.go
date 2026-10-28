@@ -3,7 +3,6 @@
 package scheduled
 
 import (
-	"fmt"
 	"strings"
 	"time"
 
@@ -15,14 +14,13 @@ import (
 )
 
 const (
-	panelChrome    = 2
 	minListHeight  = 5
 	nextWidth      = 10
 	statusWidth    = 26 // "none in the next 12 months"
 	columnGap      = 2
 	descShare      = 40 // percent of the room between date and status that description takes
 	occurrenceRows = 6
-	occurrenceBox  = occurrenceRows + panelChrome
+	occurrenceBox  = occurrenceRows + layout.PanelChrome
 	noneUpcoming   = "none in the next 12 months"
 )
 
@@ -108,29 +106,30 @@ func (m Model) moveTo(row int) Model {
 
 // listHeight is the RULES panel's height: its rules, but never more than half the view.
 func (m Model) listHeight() int {
-	return min(max(len(m.schedules)+panelChrome, minListHeight), max(minListHeight, m.height/panelChrome))
+	return min(max(len(m.schedules)+layout.PanelChrome, minListHeight), max(minListHeight, m.height/2))
 }
 
 // pageSize is how many rules the list shows at once.
-func (m Model) pageSize() int { return max(1, m.listHeight()-panelChrome) }
+func (m Model) pageSize() int { return max(1, m.listHeight()-layout.PanelChrome) }
 
 // View draws the list on top, then the entry panel beside the occurrences and the annual impact.
 func (m Model) View() string {
 	listHeight := m.listHeight()
 	bottom := max(0, m.height-listHeight)
-	entryWidth := m.width / panelChrome
+	entryWidth := m.width / 2
 	right := m.width - entryWidth
-	occurrencesHeight := min(occurrenceBox, bottom/panelChrome)
+	occurrencesHeight := min(occurrenceBox, bottom/2)
 	impactHeight := bottom - occurrencesHeight
 	column := layout.Panel("OCCURRENCES", right, occurrencesHeight, m.occurrences()) + "\n" +
-		layout.Panel("ANNUAL IMPACT", right, impactHeight, m.impact(right-panelChrome, impactHeight-panelChrome))
+		layout.Panel("ANNUAL IMPACT", right, impactHeight,
+			m.impact(right-layout.PanelChrome, impactHeight-layout.PanelChrome))
 	lower := lipgloss.JoinHorizontal(lipgloss.Top, layout.Panel("ENTRY", entryWidth, bottom, m.entry()), column)
 	return m.withForm(m.list(listHeight) + "\n" + lower)
 }
 
 // list is the RULES panel: next date, description, raw cadence and status of each rule.
 func (m Model) list(height int) string {
-	inner := max(0, m.width-panelChrome)
+	inner := max(0, m.width-layout.PanelChrome)
 	if len(m.schedules) == 0 {
 		return layout.Panel("RULES", m.width, height, theme.Dim.Render(" no rules — press n to add a rule"))
 	}
@@ -239,7 +238,7 @@ func (m Model) impact(width, capacity int) string {
 	}
 	if len(rows) > capacity && capacity > 0 {
 		hidden := len(rows) - (capacity - 1)
-		rows = append(rows[:capacity-1], theme.Dim.Render(fmt.Sprintf(" … %d more", hidden)))
+		rows = append(rows[:capacity-1], layout.More(hidden))
 	}
 	return strings.Join(rows, "\n")
 }

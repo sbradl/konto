@@ -27,14 +27,6 @@ const (
 	minHeight = 30
 )
 
-// tabCount is the number of v1 views.
-const tabCount = 5
-
-// tabNames are the five v1 views, in tab order; number key i+1 selects tab i.
-func tabNames() [tabCount]string {
-	return [tabCount]string{"dash", "import", "sched", "forecast", "reports"}
-}
-
 type ledgerLoader interface {
 	Load(ctx context.Context) (domain.Ledger, error)
 }
@@ -82,8 +74,10 @@ type journalCreator interface {
 // journalCreateFailedMsg reports that the first-run journal could not be written.
 type journalCreateFailedMsg struct{ err error }
 
-// ledgerLoadedMsg carries the result of loading the journal and checking it.
+// ledgerLoadedMsg carries the result of loading the journal and checking it; load numbers the load, so the
+// result of one asked for before the latest is dropped (ADR 0004).
 type ledgerLoadedMsg struct {
+	load   int
 	ledger domain.Ledger
 	run    domain.CheckRun
 	err    error
@@ -113,8 +107,9 @@ type Model struct {
 	ledger      *domain.Ledger
 	loadErr     error
 	refreshing  bool  // a write or reload is in flight; the held snapshot stays on screen
-	refreshErr  error // the last reload failed; the snapshot is stale
-	active      int   // index into tabNames
+	loads       int   // the number of the latest load asked for; results of earlier ones are stale
+	failure     error // the last hledger call that failed, flagged until a reload succeeds
+	active      int   // index into tabs
 	popup       popupKind
 	dash        dashboard.Model
 	firstRun    bool
@@ -132,32 +127,33 @@ type browsedMsg struct {
 }
 
 // openedMsg carries an export read against the journal. When the staged import was read again after the
-// journal changed, earlier is what had been staged.
+// journal changed, earlier is what had been staged and load the load it was read again for.
 type openedMsg struct {
 	staged  csvimport.Staged
 	err     error
 	earlier *csvimport.Staged
+	load    int
 }
 
-// forecastLoadedMsg carries a built forecast, or why it could not be built.
+// forecastLoadedMsg carries a forecast built from the journal of a load, or why it could not be built.
 type forecastLoadedMsg struct {
+	load     int
 	forecast forecastsvc.Forecast
 	err      error
 }
 
-// reportLoadedMsg carries a built report for the period it was asked for.
+// reportLoadedMsg carries a built report for the period and load it was asked for.
 type reportLoadedMsg struct {
+	load   int
 	period domain.Period
 	report domain.Report
 	err    error
 }
 
-// writtenMsg reports that a changeset was applied (or why it was not); imported is the confirmation of an
-// import's write.
+// writtenMsg reports that a changeset was applied, and what was to follow, or why it was not.
 type writtenMsg struct {
-	err      error
-	imported string
-	rule     string
+	err     error
+	pending pendingWrite
 }
 
 // editorClosedMsg reports that the user's editor has exited.
@@ -202,10 +198,16 @@ func (m Model) load() tea.Msg {
 	ctx := context.Background()
 	snapshot, err := m.loader.Load(ctx)
 	if err != nil {
-		return ledgerLoadedMsg{ledger: snapshot, err: err}
+		return ledgerLoadedMsg{load: m.loads, ledger: snapshot, err: err}
 	}
 	run, err := m.checker.Run(ctx, snapshot)
-	return ledgerLoadedMsg{ledger: snapshot, run: run, err: err}
+	return ledgerLoadedMsg{load: m.loads, ledger: snapshot, run: run, err: err}
+}
+
+// reload loads the journal again; whatever an earlier load still in flight finds out is dropped.
+func (m Model) reload() (Model, tea.Cmd) {
+	m.loads++
+	return m, m.load
 }
 
 // create writes the first-run journal, then loads it.
@@ -222,6 +224,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m = m.resize(size)
 	}
 	if loaded, ok := msg.(ledgerLoadedMsg); ok {
+		if loaded.load != m.loads {
+			return m, nil
+		}
 		m = m.onLoaded(loaded)
 		return m, tea.Batch(m.loadReport(loaded.err), m.reopen(loaded), m.loadForecast(loaded))
 	}
@@ -229,7 +234,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return updated, nil
 	}
 	if _, ok := msg.(editorClosedMsg); ok {
-		return m, m.load
+		return m.reload()
 	}
 	if saved, ok := msg.(ruleSavedMsg); ok {
 		return m.onRuleSaved(saved)
@@ -247,11 +252,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m Model) resize(size tea.WindowSizeMsg) Model {
 	m.width, m.height = size.Width, size.Height
 	content := max(0, m.height-chromeRows)
-	m.dash = m.dash.Resize(m.width, content)
-	m.reports = m.reports.Resize(m.width, content)
-	m.scheduled = m.scheduled.Resize(m.width, content)
-	m.imports = m.imports.Resize(m.width, content)
-	m.forecasts = m.forecasts.Resize(m.width, content)
+	for _, tab := range tabs() {
+		m = tab.resize(m, m.width, content)
+	}
 	return m
 }
 
@@ -282,10 +285,10 @@ func (m Model) onResult(msg tea.Msg) (updated Model, handled bool) {
 func (m Model) onLoaded(loaded ledgerLoadedMsg) Model {
 	m.refreshing = false
 	if m.hasSnapshot() && loaded.err != nil {
-		m.refreshErr = loaded.err
+		m.failure = loaded.err
 		return m
 	}
-	m.refreshErr = nil
+	m.failure = nil
 	m.ledger, m.loadErr = &loaded.ledger, loaded.err
 	m.dash = m.dash.WithLedger(loaded.ledger)
 	m.scheduled = m.scheduled.WithLedger(loaded.ledger)
@@ -305,17 +308,17 @@ func (m Model) loadReport(loadErr error) tea.Cmd {
 	period := m.reports.Period()
 	return func() tea.Msg {
 		report, err := m.reporter.Report(context.Background(), period)
-		return reportLoadedMsg{period: period, report: report, err: err}
+		return reportLoadedMsg{load: m.loads, period: period, report: report, err: err}
 	}
 }
 
-// onReport takes a built report in; one for a period no longer shown is dropped, and a failed one
-// leaves the old report on screen with the error flagged.
+// onReport takes a built report in; one for a period no longer shown or of an earlier load is dropped, and a
+// failed one leaves the old report on screen with the error flagged.
 func (m Model) onReport(loaded reportLoadedMsg) Model {
 	switch {
-	case loaded.period != m.reports.Period():
+	case loaded.period != m.reports.Period() || loaded.load != m.loads:
 	case loaded.err != nil:
-		m.refreshErr = loaded.err
+		m.failure = loaded.err
 	default:
 		m.reports = m.reports.WithReport(loaded.report)
 	}
@@ -329,14 +332,18 @@ func (m Model) loadForecast(loaded ledgerLoadedMsg) tea.Cmd {
 	}
 	return func() tea.Msg {
 		built, err := m.forecaster.Forecast(context.Background(), loaded.ledger)
-		return forecastLoadedMsg{forecast: built, err: err}
+		return forecastLoadedMsg{load: loaded.load, forecast: built, err: err}
 	}
 }
 
-// onForecast takes a built forecast in; a failed one leaves the last projection on screen with the error flagged.
+// onForecast takes a built forecast in; one of an earlier load is dropped, and a failed one leaves the last
+// projection on screen with the error flagged.
 func (m Model) onForecast(built forecastLoadedMsg) Model {
+	if built.load != m.loads {
+		return m
+	}
 	if built.err != nil {
-		m.refreshErr = built.err
+		m.failure = built.err
 		return m
 	}
 	m.forecasts = m.forecasts.WithForecast(built.forecast)
@@ -390,14 +397,14 @@ func keyName(key tea.KeyPressMsg) string {
 	return " "
 }
 
-// capturing reports whether the Import view's dialog or the Scheduled form has the keyboard: every key is then
-// text for it.
+// capturing reports whether a dialog of the view on screen, the Import dialog or the Scheduled form, has the
+// keyboard: every key is then text for it.
 func (m Model) capturing() bool {
 	if m.ledger == nil || m.prompt != nil || m.popup != popupNone || m.tooSmall() {
 		return false
 	}
-	importing := m.active == importTab && m.importer != nil && m.imports.Capturing()
-	return importing || m.active == scheduledTab && m.scheduled.Capturing()
+	captures := m.activeTab().captures
+	return captures != nil && captures(m)
 }
 
 func (m Model) onFirstRunKey(key string) tea.Cmd {
@@ -417,55 +424,45 @@ func (m Model) onParseErrorKey(key string) tea.Cmd {
 	return nil
 }
 
-// onViewKey handles the global keys of the normal views: 1–5 switch the view, r reloads, ? and ! open the popups.
+// onViewKey handles a key of the normal views: the open prompt or popup takes it first, then the root's own
+// keys, and only then the view on screen.
 func (m Model) onViewKey(key string) (Model, tea.Cmd) {
 	if m.prompt != nil {
 		return m.onPromptKey(key)
 	}
 	m.notice = ""
-	if key == "r" {
-		m.refreshing = true
-		return m, m.load
-	}
-	if m.popup != popupNone {
+	if m.popup != popupNone && key != "r" {
 		return m.onPopupKey(key)
 	}
+	if updated, cmd, global := m.onGlobalKey(key); global {
+		return updated, cmd
+	}
+	m, cmd := m.onActiveViewKey(key)
+	return m, cmd
+}
+
+// onGlobalKey handles the keys the root keeps from every view (spec §6.4): r reloads, ? and ! open the popups,
+// 1–5 switch the view; q and Ctrl+C are handled before, since they work on every screen. global is false
+// for any other key.
+func (m Model) onGlobalKey(key string) (updated Model, cmd tea.Cmd, global bool) {
 	switch key {
+	case "r":
+		m.refreshing = true
+		updated, cmd = m.reload()
+		return updated, cmd, true
 	case "?":
 		m.popup = popupKeys
 	case "!":
 		m.popup = popupChecks
-	}
-	m, cmd := m.onActiveViewKey(key)
-	if number, err := strconv.Atoi(key); err == nil && number >= 1 && number <= tabCount {
+	default:
+		number, err := strconv.Atoi(key)
+		if err != nil || number < 1 || number > tabCount {
+			return m, nil, false
+		}
 		m.active = number - 1
 	}
-	return m, cmd
+	return m, nil, true
 }
-
-// onActiveViewKey hands a key to the view on screen.
-func (m Model) onActiveViewKey(key string) (Model, tea.Cmd) {
-	switch m.active {
-	case dashboardTab:
-		return m.onDashboardKey(key), nil
-	case importTab:
-		return m.onImportKey(key)
-	case scheduledTab:
-		return m.onScheduledKey(key)
-	case reportsTab:
-		return m.onReportsKey(key)
-	}
-	return m, nil
-}
-
-// Tab indices of the views.
-const (
-	dashboardTab = 0
-	importTab    = 1
-	scheduledTab = 2
-	forecastTab  = 3
-	reportsTab   = 4
-)
 
 // onReportsKey hands a key to the Reports view and builds the report it asks for.
 func (m Model) onReportsKey(key string) (Model, tea.Cmd) {

@@ -4,9 +4,9 @@ import (
 	"regexp"
 	"slices"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/sbradl/konto/internal/csvimport"
+	"github.com/sbradl/konto/internal/ui/layout"
 )
 
 // dialogKind is which categorising dialog, if any, is open over the row table.
@@ -63,21 +63,6 @@ type dialog struct {
 
 // Capturing reports whether a dialog has the keyboard: letters then are text, not view keys.
 func (m Model) Capturing() bool { return m.dlg.kind != dialogNone }
-
-// edit applies a key to a text input: a printable character is appended, backspace removes one and
-// ctrl+u clears it; false when the key is none of those.
-func edit(text, key string) (string, bool) {
-	switch {
-	case key == "backspace":
-		_, size := utf8.DecodeLastRuneInString(text)
-		return text[:len(text)-size], true
-	case key == "ctrl+u":
-		return "", true
-	case utf8.RuneCountInString(key) == 1:
-		return text + key, true
-	}
-	return text, false
-}
 
 // choices are the categorise popup's options for the row under the cursor.
 func (m Model) choices() []string {
@@ -162,9 +147,9 @@ func (m Model) formKey(key string) Model {
 	m.dlg.refusal = ""
 	switch m.dlg.focus {
 	case fieldPattern:
-		m.dlg.draft.Pattern, _ = edit(m.dlg.draft.Pattern, key)
+		m.dlg.draft.Pattern, _ = layout.Edit(m.dlg.draft.Pattern, key)
 	case fieldPurpose:
-		m.dlg.draft.Purpose, _ = edit(m.dlg.draft.Purpose, key)
+		m.dlg.draft.Purpose, _ = layout.Edit(m.dlg.draft.Purpose, key)
 	}
 	return m
 }
@@ -210,7 +195,7 @@ func (m Model) ruleListKey(key string) Model {
 		}
 		return m
 	}
-	if text, ok := edit(m.dlg.filter, key); ok {
+	if text, ok := layout.Edit(m.dlg.filter, key); ok {
 		m.dlg.filter, m.dlg.cursor = text, 0
 		return m
 	}
@@ -235,14 +220,14 @@ func (m Model) addFormKey(key string) Model {
 		return m
 	}
 	m.dlg.refusal = ""
-	m.dlg.matcher, _ = edit(m.dlg.matcher, key)
+	m.dlg.matcher, _ = layout.Edit(m.dlg.matcher, key)
 	return m
 }
 
 // accountKey edits the new account's name; Enter gives the account the name, or shows why it cannot have it.
 func (m Model) accountKey(key string) Model {
 	if key != keyEnter {
-		m.dlg.filter, _ = edit(m.dlg.filter, key)
+		m.dlg.filter, _ = layout.Edit(m.dlg.filter, key)
 		m.dlg.refusal = ""
 		return m
 	}
@@ -272,7 +257,7 @@ func (m Model) pickerDialogKey(key string) Model {
 	if key == keyEnter {
 		return m.pick(candidates)
 	}
-	if text, ok := edit(m.dlg.filter, key); ok {
+	if text, ok := layout.Edit(m.dlg.filter, key); ok {
 		m.dlg.filter, m.dlg.cursor, m.dlg.refusal = text, 0, ""
 		return m
 	}

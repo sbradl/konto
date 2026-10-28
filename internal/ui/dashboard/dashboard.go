@@ -1,8 +1,8 @@
-// Package dashboard is the Dashboard view: the Accounts panel with its cursor.
+// Package dashboard is the Dashboard view: the Accounts panel with its cursor, and beside it the stat cards,
+// Recent, Upcoming and the monthly spend chart as far as the terminal has room for them.
 package dashboard
 
 import (
-	"fmt"
 	"slices"
 	"strings"
 	"time"
@@ -17,7 +17,6 @@ import (
 const (
 	minAccountsWidth    = 50 // the Accounts column is a third of the screen, but never narrower than this
 	columnDivisor       = 3
-	panelChrome         = 2 // border rows or columns around the panel body
 	cardHeight          = 4 // a stat card: border, figure, note, border
 	cardCount           = 2
 	minCardWidth        = 24 // narrower than this the cards give way
@@ -139,7 +138,7 @@ func (m Model) moveTo(i int) Model {
 }
 
 // pageSize is how many account rows the panel shows at once.
-func (m Model) pageSize() int { return max(1, m.height-panelChrome) }
+func (m Model) pageSize() int { return max(1, m.height-layout.PanelChrome) }
 
 // Position is the 1-based cursor row and the row count; (0, 0) when there are no accounts.
 func (m Model) Position() (row, total int) {
@@ -160,41 +159,53 @@ func (m Model) Selected() (domain.Account, bool) {
 // View draws the Accounts panel in the left column and the stat cards above whatever fills the right.
 func (m Model) View() string {
 	left := m.accountsPanel()
-	width := lipgloss.Width(left)
-	if m.width-width < 2*minCardWidth {
+	fit := m.fit()
+	if !fit.right {
 		return left
 	}
-	right := m.width - width
+	right := m.width - m.accountsWidth()
 	cards := lipgloss.JoinHorizontal(lipgloss.Top, m.cards(right)...)
-	column := cards + "\n" + m.listPanels(right, m.height-cardHeight)
+	column := cards + "\n" + m.listPanels(fit, right, m.height-cardHeight)
 	return lipgloss.JoinHorizontal(lipgloss.Top, left, column)
 }
 
 // extraPanels are the panels beside Accounts: the two stat cards, Recent, Upcoming and the spend chart.
 const extraPanels = 5
 
+// fitting is which of the panels beside Accounts the terminal has room for: the right column (the stat
+// cards over Recent), the lower band below Recent (Upcoming) and, beside Upcoming, the spend chart.
+type fitting struct{ right, band, chart bool }
+
+// fit decides which panels beside Accounts are shown; View draws them and HiddenPanels counts the others.
+func (m Model) fit() fitting {
+	right := m.width - m.accountsWidth()
+	var fit fitting
+	fit.right = right >= cardCount*minCardWidth
+	fit.band = fit.right && m.height-cardHeight >= upcomingHeight+minRecentHeight
+	fit.chart = fit.band && right >= bandPanels*minBandWidth
+	return fit
+}
+
 // HiddenPanels is how many of the panels beside Accounts the terminal is too small to show.
 func (m Model) HiddenPanels() int {
-	right := m.width - m.accountsWidth()
-	switch {
-	case right < cardCount*minCardWidth:
+	switch fit := m.fit(); {
+	case !fit.right:
 		return extraPanels
-	case m.height-cardHeight < upcomingHeight+minRecentHeight:
+	case !fit.band:
 		return 2 // Upcoming and the chart
-	case right < bandPanels*minBandWidth:
+	case !fit.chart:
 		return 1 // the chart
 	}
 	return 0
 }
 
-// listPanels stacks Recent over Upcoming beside the spend chart; the lower band is left out when there is
-// no room for both.
-func (m Model) listPanels(width, height int) string {
-	if height < upcomingHeight+minRecentHeight {
+// listPanels stacks Recent over Upcoming beside the spend chart, leaving out what does not fit.
+func (m Model) listPanels(fit fitting, width, height int) string {
+	if !fit.band {
 		return entriesPanel("RECENT", m.recent, width, height)
 	}
 	recent := entriesPanel("RECENT", m.recent, width, height-upcomingHeight)
-	if width < 2*minBandWidth {
+	if !fit.chart {
 		return recent + "\n" + entriesPanel("UPCOMING", m.upcoming, width, upcomingHeight)
 	}
 	half := width / bandPanels
@@ -207,7 +218,7 @@ func (m Model) listPanels(width, height int) string {
 // entriesPanel lists transactions one per row: date, description, category, amount. When they do not
 // all fit, the last row says how many more there are. Rows are not selectable.
 func entriesPanel(title string, entries []domain.RecentEntry, width, height int) string {
-	inner, capacity := max(0, width-panelChrome), max(0, height-panelChrome)
+	inner, capacity := max(0, width-layout.PanelChrome), max(0, height-layout.PanelChrome)
 	shown := entries
 	if len(shown) > capacity {
 		shown = shown[:max(0, capacity-1)]
@@ -218,7 +229,7 @@ func entriesPanel(title string, entries []domain.RecentEntry, width, height int)
 		rows = append(rows, columns.line(entry))
 	}
 	if hidden := len(entries) - len(shown); hidden > 0 {
-		rows = append(rows, theme.Dim.Render(fmt.Sprintf(" … %d more", hidden)))
+		rows = append(rows, layout.More(hidden))
 	}
 	return layout.Panel(title, width, height, strings.Join(rows, "\n"))
 }
@@ -292,7 +303,7 @@ func (m Model) accountsWidth() int { return min(m.width, max(minAccountsWidth, m
 // accountsPanel is the Accounts panel, a third of the screen wide.
 func (m Model) accountsPanel() string {
 	width := m.accountsWidth()
-	inner := max(0, width-panelChrome)
+	inner := max(0, width-layout.PanelChrome)
 	last := min(len(m.accounts), m.cursor.Offset+m.pageSize())
 	visible := m.accounts[m.cursor.Offset:last]
 	rows := make([]string, len(visible))

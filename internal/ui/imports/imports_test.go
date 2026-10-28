@@ -13,6 +13,7 @@ import (
 
 	"github.com/sbradl/konto/internal/csvimport"
 	"github.com/sbradl/konto/internal/domain"
+	"github.com/sbradl/konto/internal/ui/layout"
 	"github.com/sbradl/konto/internal/ui/theme"
 )
 
@@ -408,7 +409,7 @@ func TestExactlyTheRowUnderTheCursorIsHighlightedAndAlwaysVisible(t *testing.T) 
 		highlighted := spans(m.View(), theme.Selected)
 		want := min(step+1, 42)
 		if len(highlighted) != 1 || !strings.Contains(highlighted[0], rowName(want)) ||
-			lipgloss.Width(highlighted[0]) != 100-panelChrome-2 {
+			lipgloss.Width(highlighted[0]) != 100-layout.PanelChrome-2 {
 			t.Fatalf("after %d downs the highlighted spans are %q", step+1, highlighted)
 		}
 	}
@@ -434,8 +435,8 @@ func TestSkippedRowsAreCutToTheInnerWidth(t *testing.T) {
 		}
 	}
 
-	if !slices.Contains(widths, 100-panelChrome) {
-		t.Errorf("dim span widths = %v, want one of %d", widths, 100-panelChrome)
+	if !slices.Contains(widths, 100-layout.PanelChrome) {
+		t.Errorf("dim span widths = %v, want one of %d", widths, 100-layout.PanelChrome)
 	}
 }
 
@@ -452,7 +453,7 @@ func TestExactlyTheEntryUnderThePickersCursorIsHighlightedAndAlwaysVisible(t *te
 
 		highlighted := spans(m.View(), theme.Selected)
 		if len(highlighted) != 1 || !strings.Contains(highlighted[0], fmt.Sprintf("f%02d.csv", step)) ||
-			lipgloss.Width(highlighted[0]) != 100-panelChrome {
+			lipgloss.Width(highlighted[0]) != 100-layout.PanelChrome {
 			t.Fatalf("after %d downs the highlighted spans are %q", step+1, highlighted)
 		}
 	}

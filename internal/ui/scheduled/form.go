@@ -3,10 +3,10 @@ package scheduled
 import (
 	"slices"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/sbradl/konto/internal/domain"
 	"github.com/sbradl/konto/internal/periodic"
+	"github.com/sbradl/konto/internal/ui/layout"
 )
 
 // The fields of the form, in focus order.
@@ -230,7 +230,8 @@ func (f *form) edit(key string) {
 	case fieldFrom, fieldTo:
 		f.editPicker(key)
 	default:
-		f.setText(typedInto(f.value(), key))
+		text, _ := layout.Edit(f.value(), key)
+		f.setText(text)
 	}
 }
 
@@ -256,7 +257,7 @@ func (f *form) editPicker(key string) {
 	case keyDown:
 		f.cursor, f.browsing = min(len(f.matches())-1, f.cursor+1), true
 	default:
-		f.filter = typedInto(f.filter, key)
+		f.filter, _ = layout.Edit(f.filter, key)
 		f.cursor, f.browsing = 0, false
 	}
 }
@@ -276,19 +277,4 @@ func cycle[T comparable](choices []T, current T, key string) T {
 		return current
 	}
 	return choices[max(0, min(index, len(choices)-1))]
-}
-
-// typedInto is the text after a key: a printable character is appended, backspace removes one and ctrl+u clears
-// it; any other key leaves it as it is.
-func typedInto(text, key string) string {
-	switch {
-	case key == "backspace":
-		_, size := utf8.DecodeLastRuneInString(text)
-		return text[:len(text)-size]
-	case key == "ctrl+u":
-		return ""
-	case utf8.RuneCountInString(key) == 1:
-		return text + key
-	}
-	return text
 }

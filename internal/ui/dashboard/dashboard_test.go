@@ -10,6 +10,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/sbradl/konto/internal/domain"
+	"github.com/sbradl/konto/internal/ui/layout"
 )
 
 var euro = domain.AmountStyle{Spaced: true, DecimalMark: ",", GroupMark: ".", GroupSize: 3}
@@ -536,7 +537,7 @@ func TestUpcomingWithoutRulesIsAnEmptyPanel(t *testing.T) {
 	rows := upcomingRows(New().Resize(180, 20).WithLedger(withUpcoming()))
 
 	_, panel, _ := strings.Cut(strings.Join(rows, ""), "││")
-	if len(rows) != upcomingHeight-panelChrome || strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(panel, "││", ""), "│", "")) != "" {
+	if len(rows) != upcomingHeight-layout.PanelChrome || strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(panel, "││", ""), "│", "")) != "" {
 		t.Errorf("rows = %q, want an empty panel", rows)
 	}
 }
@@ -689,7 +690,7 @@ func TestHiddenPanelsCountWhatTheTerminalIsTooSmallFor(t *testing.T) {
 func TestSpendPanelDrawsTheChartAtTheSmallestSizeItFits(t *testing.T) {
 	want := "╭─ SPEND ╮\n│    │   │\n│    │   │\n│0.0k└───│\n│    Mar │\n╰────────╯"
 
-	if got := plain(spendPanel(spendHistory(100), minChartSize+panelChrome, minChartSize/2+panelChrome)); got != want {
+	if got := plain(spendPanel(spendHistory(100), minChartSize+layout.PanelChrome, minChartSize/2+layout.PanelChrome)); got != want {
 		t.Errorf("spend panel =\n%s\nwant\n%s", got, want)
 	}
 }

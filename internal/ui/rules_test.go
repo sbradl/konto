@@ -134,7 +134,10 @@ func TestSavingPlansTheRuleThenChecksAndWritesItAndRefreshes(t *testing.T) {
 	if len(rig.rules.saved) != 1 || len(rig.verifier.checked) != 1 || len(rig.writer.applied) != 1 {
 		t.Fatalf("planned %d, checked %d, written %d; want one each", len(rig.rules.saved), len(rig.verifier.checked), len(rig.writer.applied))
 	}
-	if model.scheduled.Capturing() || !done.(Model).refreshing || reload == nil {
+	if !model.scheduled.Capturing() {
+		t.Error("the form should stay open until the rule is written")
+	}
+	if done.(Model).scheduled.Capturing() || !done.(Model).refreshing || reload == nil {
 		t.Error("the form should close and the journal reload")
 	}
 	if got := lastLine(done.(Model)); !strings.Contains(got, "rule added") {
@@ -152,8 +155,8 @@ func TestARefusedRuleKeepsTheFormOpenWithTheReason(t *testing.T) {
 	shown := updated.(Model)
 	content := plain(shown.View().Content)
 	if next != nil || !shown.scheduled.Capturing() || !strings.Contains(content, "description is required") ||
-		len(rig.writer.applied) != 0 || shown.refreshErr != nil {
-		t.Errorf("next %v, error %v; view:\n%s", next, shown.refreshErr, content)
+		len(rig.writer.applied) != 0 || shown.failure != nil {
+		t.Errorf("next %v, error %v; view:\n%s", next, shown.failure, content)
 	}
 }
 
@@ -165,12 +168,12 @@ func TestAFailureOfHledgerWhilePlanningIsShownInTheFormAndFlagged(t *testing.T) 
 	updated, _ := model.Update(cmd())
 
 	shown := updated.(Model)
-	if !strings.Contains(plain(shown.View().Content), "hledger failed") || shown.refreshErr == nil {
-		t.Errorf("error %v; view:\n%s", shown.refreshErr, plain(shown.View().Content))
+	if !strings.Contains(plain(shown.View().Content), "hledger failed") || shown.failure == nil {
+		t.Errorf("error %v; view:\n%s", shown.failure, plain(shown.View().Content))
 	}
 }
 
-func TestAFailedPreCheckOrWriteIsReported(t *testing.T) {
+func TestAFailedPreCheckOrWriteIsReportedAndKeepsTheForm(t *testing.T) {
 	for name, arrange := range map[string]func(ruleRig){
 		"check": func(rig ruleRig) { rig.verifier.err = errors.New("the journal would fail its checks") },
 		"write": func(rig ruleRig) { rig.writer.err = errors.New("disk full") },
@@ -178,6 +181,7 @@ func TestAFailedPreCheckOrWriteIsReported(t *testing.T) {
 		rig := scheduledWithForm(t, &fakeRules{changeset: addRuleEdit})
 		arrange(rig)
 		model, _ := press(rig.model, "n")
+		model, _ = press(model, "B")
 		model, cmd := press(model, "enter")
 		updated, write := model.Update(cmd())
 
@@ -186,6 +190,23 @@ func TestAFailedPreCheckOrWriteIsReported(t *testing.T) {
 		if got := lastLine(done.(Model)); !strings.Contains(got, "write failed") {
 			t.Errorf("%s: status bar = %q", name, got)
 		}
+		if content := plain(done.View().Content); !strings.Contains(content, "new periodic rule") ||
+			!strings.Contains(content, "B▏") {
+			t.Errorf("%s: the form and what was typed into it should survive; view:\n%s", name, content)
+		}
+	}
+}
+
+func TestSavingAgainWhileTheRuleIsWrittenAsksToWait(t *testing.T) {
+	rig := scheduledWithForm(t, &fakeRules{changeset: addRuleEdit})
+	model, _ := press(rig.model, "n")
+	model, cmd := press(model, "enter")
+	updated, _ := model.Update(cmd())
+
+	again, cmd := press(updated.(Model), "enter")
+
+	if cmd != nil || !strings.Contains(plain(again.View().Content), "try again in a moment") {
+		t.Errorf("cmd %v; view:\n%s", cmd, plain(again.View().Content))
 	}
 }
 

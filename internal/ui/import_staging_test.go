@@ -119,8 +119,8 @@ func TestAFailedRereadKeepsTheStagedImportAndFlagsTheError(t *testing.T) {
 	model = deliver(model, cmd)
 
 	staged, ok := model.imports.Staged()
-	if !ok || staged.Rows[1].Target != "expenses:books" || model.refreshErr == nil {
-		t.Errorf("staged %v, error %v; want the import kept and the error flagged", ok, model.refreshErr)
+	if !ok || staged.Rows[1].Target != "expenses:books" || model.failure == nil {
+		t.Errorf("staged %v, error %v; want the import kept and the error flagged", ok, model.failure)
 	}
 }
 
