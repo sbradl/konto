@@ -87,7 +87,7 @@ func ParseRules(text string) []Rule {
 		case strings.HasPrefix(line, "if "):
 			flush()
 			current, open = current.orCondition(strings.TrimPrefix(line, "if ")), true
-		case strings.TrimSpace(line) == "":
+		case domain.IsBlankLine(line):
 			flush()
 		case open:
 			current = current.withLine(line)

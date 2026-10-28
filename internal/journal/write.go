@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -41,23 +42,12 @@ func appendBlock(file *source, block []string) {
 func declare(sources []*source, edit domain.Declare) {
 	for _, source := range sources {
 		for _, line := range source.lines {
-			if declares(line, edit.Directive, edit.Name) {
+			if directive, ok := parseDirective(line, edit.Directive); ok && directive.name == edit.Name {
 				return
 			}
 		}
 	}
 	appendLine(sources[0], edit.Line())
-}
-
-// declares reports a line that is the directive naming exactly name, whatever follows the name.
-func declares(line, directive, name string) bool {
-	rest, ok := strings.CutPrefix(line, directive+" ")
-	if !ok {
-		return false
-	}
-	head, _, _ := strings.Cut(rest, ";")
-	declared, _, _ := strings.Cut(strings.TrimSpace(head), "  ")
-	return strings.TrimSpace(declared) == name
 }
 
 // addTransactions writes each transaction into the year file of its date, at its date position. A year
@@ -77,9 +67,9 @@ func (w *workspace) addTransactions(edit domain.AddTransactions) error {
 // yearFile is the source of the year's file: read when it is on disk and not loaded yet, started in memory
 // when the year has none.
 func (w *workspace) yearFile(year int) (*source, error) {
-	if year > w.lastYear {
+	if year > w.thisYear {
 		return nil, domain.RefusalError{Reason: fmt.Sprintf(
-			"a transaction dated %d is after this year, %d", year, w.lastYear)}
+			"a transaction dated %d is after this year, %d", year, w.thisYear)}
 	}
 	if found := w.findYear(year); found != nil {
 		return found, nil
@@ -124,14 +114,14 @@ func firstDatedAfter(lines []string, date time.Time) int {
 	return -1
 }
 
-// headerDate is the date a transaction's first line starts with.
+// headerDate is the date a transaction's first line starts with, its parts separated by -, / or . as hledger
+// reads them (2026-09-30, 2026/9/30, 2026.09.30), for a file edited by hand.
 func headerDate(line string) (time.Time, bool) {
-	if len(line) < len(time.DateOnly) {
-		return time.Time{}, false
-	}
-	date, err := time.Parse(time.DateOnly, line[:len(time.DateOnly)])
+	date, err := time.Parse("2006-1-2", strings.NewReplacer("/", "-", ".", "-").Replace(leadingDate.FindString(line)))
 	return date, err == nil
 }
+
+var leadingDate = regexp.MustCompile(`^\d{4}[-/.]\d{1,2}[-/.]\d{1,2}`)
 
 // setCategoryRule replaces the rule block with the id, or adds the block at the end of categories.rules.
 func (w *workspace) setCategoryRule(edit domain.SetCategoryRule) error {

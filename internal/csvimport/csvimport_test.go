@@ -62,8 +62,17 @@ func service(files fakeFiles, conv *fakeConverter) *Service {
 func open(t *testing.T, iban string, ledger domain.Ledger, transactions ...domain.Transaction) (Staged, *fakeConverter, error) {
 	t.Helper()
 	conv := &fakeConverter{transactions: transactions}
-	staged, err := service(fakeFiles{data: map[string][]byte{"/dl/sept.csv": export(iban)}}, conv).Open(context.Background(), "/dl/sept.csv", ledger)
+	staged, err := service(fakeFiles{data: map[string][]byte{"/dl/sept.csv": exportOf(iban, transactions)}}, conv).Open(context.Background(), "/dl/sept.csv", ledger)
 	return staged, conv, err
+}
+
+// exportOf is the export with a line for each converted transaction, its description the payee.
+func exportOf(iban string, transactions []domain.Transaction) []byte {
+	var lines strings.Builder
+	for _, transaction := range transactions {
+		lines.WriteString("\n" + transaction.Date.Format("2.1.2006") + ";;;" + transaction.Description + ";" + transaction.Comment)
+	}
+	return []byte(strings.Replace(string(export(iban)), "\nKontostand;", lines.String()+"\nKontostand;", 1))
 }
 
 // booking builds a converted transaction seen from checking, categorised as target (empty: not yet).
@@ -131,7 +140,7 @@ func TestOpenRefusesAccountsThatCannotBeImportedInto(t *testing.T) {
 		account domain.Account
 		want    string
 	}{
-		"closed": {closed, "account closed — reopen with o"}, "manual": {manual, "manual"},
+		"closed": {closed, "account closed"}, "manual": {manual, "manual"},
 		"unclassified": {unclassified, "unclassified"}, "clearing": {clearing, "assets:transfers"},
 	} {
 		_, conv, err := open(t, iban, ledgerWith(tc.account))
@@ -205,8 +214,8 @@ func TestRowsAreNewestFirstWithTheirCategoryRuleAndPurpose(t *testing.T) {
 	}
 
 	want := []Row{
-		{Date: day("2026-09-30"), Description: "REWE Markt", Purpose: "Einkauf", Amount: eur(-4217), Target: "expenses:groceries", RuleID: "2"},
-		{Date: day("2026-09-29"), Description: "Bäckerei", Purpose: "Brötchen", Amount: eur(-650)},
+		{Date: day("2026-09-30"), Description: "REWE Markt", Purpose: "Einkauf", Amount: eur(-4217), Payee: "REWE Markt", Target: "expenses:groceries", RuleID: "2"},
+		{Date: day("2026-09-29"), Description: "Bäckerei", Purpose: "Brötchen", Amount: eur(-650), Payee: "Bäckerei"},
 	}
 	if !reflect.DeepEqual(staged.Rows, want) {
 		t.Errorf("rows = %+v, want %+v", staged.Rows, want)
@@ -309,6 +318,22 @@ func TestTheWatermarkIgnoresOtherAccountsTransactions(t *testing.T) {
 
 	if staged.Watermark != day("2026-09-26") {
 		t.Errorf("watermark = %v, want 2026-09-26", staged.Watermark)
+	}
+}
+
+func TestTheCarryMovesNoWatermarkAndIsNoBooking(t *testing.T) {
+	ledger := sept()
+	carry := journalTxn("2026-09-30", "opening balance", -50000)
+	carry.Comment = domain.CarryTag
+	ledger.Transactions = append(ledger.Transactions, carry)
+
+	staged, _, _ := open(t, "DE89370400440532013000", ledger,
+		converted("2026-09-28", "Kiosk", "Zeitung", -200, "", ""),
+		converted("2026-09-30", "opening balance", "", -50000, "", ""),
+	)
+
+	if staged.Watermark != day("2026-09-26") || len(staged.Rows) != 2 || len(staged.Skipped) != 0 {
+		t.Errorf("watermark = %v, rows = %d, skipped = %d; want 2026-09-26 with both rows new", staged.Watermark, len(staged.Rows), len(staged.Skipped))
 	}
 }
 

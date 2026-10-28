@@ -12,8 +12,23 @@ var (
 	periodHeader = regexp.MustCompile(`^~ (weekly|biweekly|monthly|quarterly|every 6 months|yearly)` +
 		` from (\d{4}-\d{2}-\d{2})(?: to (\d{4}-\d{2}-\d{2}))? {2}(\S.*)$`)
 	postingLine = regexp.MustCompile(`^[ \t]+(\S(?:.*?\S)?)(?: {2,}(\S.*))?$`)
-	plainAmount = regexp.MustCompile(`^(-?[\d.,]+) ([A-Za-z]+)$`)
+	// rightAmount and leftAmount are a single-commodity amount the way domain.Amount.Format writes it: the
+	// symbol after the number or before it, spaced or not. The symbol is anything but digits, spaces, the
+	// number's marks and the characters of a price, an assertion or a comment.
+	rightAmount = regexp.MustCompile(`^(-?[\d.,]+) ?([^\d\s.,;"=@*()+-]+)$`)
+	leftAmount  = regexp.MustCompile(`^([^\d\s.,;"=@*()+-]+) ?(-?[\d.,]+)$`)
 )
+
+// readAmount splits an amount into its number and its commodity; false for anything more than one amount.
+func readAmount(text string) (number, symbol string, ok bool) {
+	if match := rightAmount.FindStringSubmatch(text); match != nil {
+		return match[1], match[2], true
+	}
+	if match := leftAmount.FindStringSubmatch(text); match != nil {
+		return match[2], match[1], true
+	}
+	return "", "", false
+}
 
 // parsed is a rule of the journal read as the form shows it: what the form fields hold, and the exclusive end
 // date the rule has, if any.
@@ -72,12 +87,12 @@ func readPostings(first, second string, found parsed) (parsed, bool) {
 	if amounts[0] == "" {
 		which = 1
 	}
-	amount := plainAmount.FindStringSubmatch(amounts[which])
-	if amount == nil {
+	signed, symbol, ok := readAmount(amounts[which])
+	if !ok {
 		return parsed{}, false
 	}
-	number, negative := strings.CutPrefix(amount[1], "-")
-	found.input.Amount, found.input.Currency = number, amount[2]
+	number, negative := strings.CutPrefix(signed, "-")
+	found.input.Amount, found.input.Currency = number, symbol
 	other := accounts[1-which]
 	if negative {
 		found.input.From, found.input.To = accounts[which], other

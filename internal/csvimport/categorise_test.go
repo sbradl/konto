@@ -432,7 +432,6 @@ func TestNetIncomeChangeCountsWhatWasChosenHereAndNotTransfers(t *testing.T) {
 func TestOpenReadsTheRulesAndGivesRowsTheirRawTypeAndPayee(t *testing.T) {
 	conv := &fakeConverter{transactions: []domain.Transaction{
 		converted("2026-09-30", "Kiosk", "Zeitung", -200, "", ""),
-		converted("2026-09-29", "Other", "x", -100, "", ""),
 	}}
 	files := fakeFiles{data: map[string][]byte{"/dl/sept.csv": export("DE89370400440532013000"), "/data/categories.rules": []byte(rulesText)}}
 	ledger := ledgerWith(importAccount())
@@ -444,11 +443,41 @@ func TestOpenReadsTheRulesAndGivesRowsTheirRawTypeAndPayee(t *testing.T) {
 	if len(staged.Rules) != 3 || staged.Rules[1].ID != "2" || len(staged.Known) != 1 || staged.Zero.Format() != "0,00 EUR" {
 		t.Errorf("staged = %+v", staged)
 	}
-	if got := staged.Rows[1]; got.Type != "Kartenzahlung" || got.Payee != "Kiosk" {
+	if got := staged.Rows[0]; got.Type != "Kartenzahlung" || got.Payee != "Kiosk" {
 		t.Errorf("row = %+v, want its raw fields", got)
 	}
-	if got := staged.Rows[0]; got.Type != "" || got.Payee != "" {
-		t.Errorf("a row with no export line has raw fields: %+v", got)
+}
+
+func TestOpenRefusesARowWithNoLineInTheExport(t *testing.T) {
+	conv := &fakeConverter{transactions: []domain.Transaction{converted("2026-09-29", "Other", "x", -100, "", "")}}
+	files := fakeFiles{data: map[string][]byte{"/dl/sept.csv": export("DE89370400440532013000")}}
+
+	_, err := service(files, conv).Open(context.Background(), "/dl/sept.csv", ledgerWith(importAccount()))
+
+	if !errors.Is(err, errUnmatchedRow) {
+		t.Errorf("err = %v, want the unmatched row refused", err)
+	}
+}
+
+func TestOpenStagesTheExportsCurrencyWhateverTheLedgerHoldsFirst(t *testing.T) {
+	czk := domain.MultiAmount{{Commodity: "CZK", Mantissa: 100, Places: 2}}
+	ledger := ledgerWith(domain.Account{Name: "assets:a-koruna", Balance: czk}, importAccount())
+	ledger.Accounts[1].Balance = eur(100)
+
+	staged, _, err := open(t, "DE89370400440532013000", ledger)
+
+	if err != nil || staged.Zero.Format() != "0,00 EUR" {
+		t.Errorf("zero = %s, err = %v; want euros, the export's currency", staged.Zero.Format(), err)
+	}
+}
+
+func TestTheRulesConvertTheColumnsKontoReads(t *testing.T) {
+	want := "skip 7\nseparator ;\ndecimal-mark ,\ndate-format %-d.%-m.%Y\nnewest-first\n" +
+		"fields date, , type, payee, purpose, , , , , , , betrag\nif ^Buchungstag\n skip\nif ^Kontostand\n skip\n" +
+		"description %payee\nif %payee ^$\n description %type\ncomment %purpose\namount %betrag EUR\n" +
+		"account2 konto:uncategorised\n"
+	if got := postbank().rules(); got != want {
+		t.Errorf("rules =\n%s\nwant\n%s", got, want)
 	}
 }
 
@@ -485,12 +514,27 @@ func TestRecordsSkipLinesThatAreNoBookings(t *testing.T) {
 }
 
 func TestRawFieldsOfABookingWithoutPayeeCarryTheTypeAsDescription(t *testing.T) {
-	rows := withRawFields(
+	rows, err := withRawFields(
 		[]Row{{Date: day("2026-09-29"), Description: "Auszahlung", Purpose: "Geldautomat"}},
 		[]record{{date: "2026-09-29", kind: "Auszahlung", purpose: "Geldautomat"}},
 	)
-	if rows[0].Type != "Auszahlung" || rows[0].Payee != "" {
-		t.Errorf("row = %+v", rows[0])
+	if err != nil || rows[0].Type != "Auszahlung" || rows[0].Payee != "" {
+		t.Errorf("row = %+v, err = %v", rows[0], err)
+	}
+}
+
+func TestRecordsAreTrimmedAsHledgerTrimsThem(t *testing.T) {
+	lines := []string{"Buchungstag;Wert", "1.9.2026;1.9.2026; Auszahlung ;  ; Geldautomat "}
+	want := []record{{date: "2026-09-01", kind: "Auszahlung", purpose: "Geldautomat"}}
+	if got := postbank().recordsOf(lines); !reflect.DeepEqual(got, want) {
+		t.Errorf("records = %+v, want %+v", got, want)
+	}
+}
+
+func TestARowNoLineOfTheExportMatchesIsAnError(t *testing.T) {
+	_, err := withRawFields([]Row{{Date: day("2026-09-29"), Description: "Other"}}, nil)
+	if !errors.Is(err, errUnmatchedRow) || !strings.Contains(err.Error(), "2026-09-29 Other") {
+		t.Errorf("err = %v, want the unmatched row named", err)
 	}
 }
 

@@ -1,6 +1,9 @@
 package domain
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 // KontoTag is the tag konto marks the transactions it manages with.
 const KontoTag = "konto"
@@ -33,6 +36,10 @@ func (c SetCarry) Closing(date time.Time) NewTransaction {
 func (c SetCarry) Opening(date time.Time) NewTransaction {
 	return c.transaction(date, OpeningDescription, asBalanced)
 }
+
+// IsCarry reports a managed carry transaction: konto writes it, no account's source does, so it is no
+// booking and moves no watermark.
+func (t Transaction) IsCarry() bool { return strings.Contains(t.Comment, CarryTag) }
 
 func asBalanced(m MultiAmount) MultiAmount { return m }
 

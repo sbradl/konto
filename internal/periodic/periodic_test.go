@@ -274,6 +274,22 @@ func TestFormRefusesARuleThatDoesNotFit(t *testing.T) {
 	}
 }
 
+// The form reads every style the amount is written in: the symbol left or right, spaced or not, any commodity.
+func TestFormReadsTheAmountInEveryStyleItIsWritten(t *testing.T) {
+	for text, want := range map[string][2]string{
+		"25,00 EUR": {"25,00", "EUR"}, "$25.00": {"25.00", "$"}, "$ 1,025.00": {"1,025.00", "$"},
+		"25,00€": {"25,00", "€"}, "-25,00 Kč": {"25,00", "Kč"}, "€-25": {"25", "€"},
+	} {
+		gym := rule("~ monthly from 2026-10-20  Gym", "    expenses:rent  "+text, "    assets:checking")
+
+		got, err := NewService(&fakeGateway{}, today).Form(context.Background(), gym, domain.Ledger{})
+
+		if err != nil || got.Amount != want[0] || got.Currency != want[1] {
+			t.Errorf("%q: form = %+v, %v; want %v", text, got, err, want)
+		}
+	}
+}
+
 func TestFormNormalisesAnAmountOnTheSecondPosting(t *testing.T) {
 	cases := map[string]struct{ from, to string }{
 		"negative second": {"    expenses:rent|    assets:checking  -25,00 EUR", "assets:checking→expenses:rent"},

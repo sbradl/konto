@@ -19,9 +19,9 @@ import (
 func skeleton() string {
 	clearing := domain.Declaration{Source: domain.SourceClearing}.Comment()
 	return strings.Join([]string{
-		"decimal-mark ,", "commodity 1.000,00 EUR", "account " + domain.OpeningBalanceAccount,
-		domain.Declare{Directive: "account", Name: domain.ClearingAccount, Comment: clearing}.Line(),
-		"tag " + domain.KontoTag, "tag " + domain.RuleTag, "",
+		"decimal-mark ,", "commodity 1.000,00 EUR", domain.DeclareAccount(domain.OpeningBalanceAccount, "").Line(),
+		domain.DeclareAccount(domain.ClearingAccount, clearing).Line(),
+		domain.DeclareTag(domain.KontoTag).Line(), domain.DeclareTag(domain.RuleTag).Line(), "",
 	}, "\n")
 }
 
@@ -69,7 +69,7 @@ func (f File) Create() error {
 // exist, oldest first (ADR 0013). Files of older years stay on disk, unloaded.
 func (f File) Window() []string {
 	files := []string{f.path}
-	for year := f.firstYear(); year <= f.lastYear(); year++ {
+	for year := f.firstYear(); year <= f.thisYear(); year++ {
 		if path := f.yearPath(year); isFile(path) {
 			files = append(files, path)
 		}
@@ -77,9 +77,9 @@ func (f File) Window() []string {
 	return files
 }
 
-// firstYear and lastYear bound the window: last year and this year.
+// firstYear and thisYear bound the window: last year and this year.
 func (f File) firstYear() int { return f.today().Year() - 1 }
-func (f File) lastYear() int  { return f.today().Year() }
+func (f File) thisYear() int  { return f.today().Year() }
 
 // yearPath is where the transactions of a year live.
 func (f File) yearPath(year int) string {

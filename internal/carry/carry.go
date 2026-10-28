@@ -79,10 +79,10 @@ func (w *Writer) complete(ctx context.Context, changeset domain.Changeset) (doma
 	}
 	if carried {
 		edits = append(edits,
-			domain.Declare{Directive: "account", Name: domain.OpeningBalanceAccount},
-			domain.Declare{Directive: "payee", Name: domain.OpeningDescription},
-			domain.Declare{Directive: "payee", Name: domain.ClosingDescription},
-			domain.Declare{Directive: "tag", Name: domain.KontoTag},
+			domain.DeclareAccount(domain.OpeningBalanceAccount, ""),
+			domain.DeclarePayee(domain.OpeningDescription),
+			domain.DeclarePayee(domain.ClosingDescription),
+			domain.DeclareTag(domain.KontoTag),
 		)
 	}
 	return domain.Changeset{Edits: edits}, nil

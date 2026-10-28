@@ -9,11 +9,11 @@ import (
 	"github.com/sbradl/konto/internal/domain"
 )
 
-// payeeKey names the payee directive.
-const payeeKey = "payee"
-
 // ErrNothingToWrite is the refusal to write an import that has no new rows.
 var ErrNothingToWrite = domain.RefusalError{Reason: "nothing new to write"}
+
+// errUnnamedAccount is the refusal of an account without a name, which the import cannot create.
+var errUnnamedAccount = domain.RefusalError{Reason: "the account needs a name"}
 
 // BalanceMismatchError blocks a write: the journal, with the rows added, would not end at the bank's balance,
 // so the export is missing rows or the journal has drifted from the bank.
@@ -53,6 +53,9 @@ func (s Staged) Plan() (Plan, error) {
 	if missing := s.NeedCategory(); missing > 0 {
 		return Plan{}, domain.RefusalError{Reason: needCategory(missing)}
 	}
+	if s.AccountName() == "" {
+		return Plan{}, errUnnamedAccount
+	}
 	closing, err := s.closing()
 	if err != nil {
 		return Plan{}, err
@@ -79,27 +82,18 @@ func needCategory(rows int) string {
 	return strconv.Itoa(rows) + " rows need a category"
 }
 
-// closing is the bank's closing balance in the ledger's currency and style.
+// closing is the bank's closing balance in the export's currency, in the journal's style.
 func (s Staged) closing() (domain.Amount, error) {
-	like := domain.DefaultAmount("EUR")
+	format := postbank()
+	like := domain.DefaultAmount(format.currency)
 	if len(s.Zero) > 0 {
 		like = s.Zero[0]
 	}
-	amount, err := parseAmount(like, s.Closing)
+	amount, err := format.amount(like, s.Closing)
 	if err != nil {
 		return domain.Amount{}, fmt.Errorf("the bank's closing balance %q is unreadable: %w", s.Closing, err)
 	}
 	return amount, nil
-}
-
-// parseAmount reads the German-formatted number the bank prints (13.182,03) in the commodity and style of like.
-func parseAmount(like domain.Amount, text string) (domain.Amount, error) {
-	mantissa, err := domain.ParseNumber(text, ",", ".", like.Places)
-	if err != nil {
-		return domain.Amount{}, err //nolint:wrapcheck // the number's own words are the answer
-	}
-	like.Mantissa = mantissa
-	return like, nil
 }
 
 // total is the sum of the rows' amounts.
@@ -163,19 +157,19 @@ func (s Staged) declarations() []domain.Edit {
 	var edits []domain.Edit
 	if s.NewAccount {
 		comment := domain.Declaration{Source: domain.SourceImport, IBAN: s.IBAN, Format: s.Format}.Comment()
-		edits = append(edits, domain.Declare{Directive: "account", Name: s.Named, Comment: comment})
+		edits = append(edits, domain.DeclareAccount(s.Named, comment))
 	}
 	for _, name := range s.usedNewAccounts() {
-		edits = append(edits, domain.Declare{Directive: "account", Name: name})
+		edits = append(edits, domain.DeclareAccount(name, ""))
 	}
 	if s.NewAccount {
-		edits = append(edits, domain.Declare{Directive: payeeKey, Name: domain.OpeningDescription})
+		edits = append(edits, domain.DeclarePayee(domain.OpeningDescription))
 	}
 	for _, payee := range s.payees() {
-		edits = append(edits, domain.Declare{Directive: payeeKey, Name: payee})
+		edits = append(edits, domain.DeclarePayee(payee))
 	}
 	if len(s.StagedRules()) > 0 || s.usesRules() {
-		edits = append(edits, domain.Declare{Directive: "tag", Name: domain.RuleTag})
+		edits = append(edits, domain.DeclareTag(domain.RuleTag))
 	}
 	return edits
 }

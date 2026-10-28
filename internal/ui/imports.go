@@ -8,6 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sbradl/konto/internal/csvimport"
+	"github.com/sbradl/konto/internal/domain"
 	"github.com/sbradl/konto/internal/ui/imports"
 	"github.com/sbradl/konto/internal/ui/layout"
 )
@@ -100,6 +101,8 @@ func (m Model) onOpened(opened openedMsg) Model {
 		m.failure = convertErr
 		first, _, _ := strings.Cut(strings.TrimSpace(convertErr.Error()), "\n")
 		m.imports = m.imports.WithMessage("unreadable row or file: " + first)
+	case errors.Is(opened.err, domain.ErrAccountClosed):
+		m.imports = m.imports.WithMessage(opened.err.Error() + " — reopen with o")
 	default:
 		m.imports = m.imports.WithMessage(opened.err.Error())
 	}

@@ -26,16 +26,29 @@ func (f File) AccountDeclarations() ([]domain.Declaration, error) {
 	return declarations, nil
 }
 
-// parseDeclaration reads `account NAME  ; tag, tag` into a Declaration.
-func parseDeclaration(line string) (domain.Declaration, bool) {
-	rest, found := strings.CutPrefix(line, "account ")
+// directiveLine is a `KEYWORD NAME  ; comment` line split up: the head is all before the comment, trailing
+// space aside, and the name its first part, which two spaces end.
+type directiveLine struct{ head, name, comment string }
+
+// parseDirective splits a line of the keyword's directive; false for any other line.
+func parseDirective(line, keyword string) (directiveLine, bool) {
+	rest, found := strings.CutPrefix(line, keyword+" ")
 	if !found {
-		return domain.Declaration{}, false
+		return directiveLine{}, false
 	}
 	head, comment, _ := strings.Cut(rest, ";")
 	name, _, _ := strings.Cut(strings.TrimSpace(head), "  ")
-	declaration := domain.Declaration{Name: strings.TrimSpace(name)}
-	for tag := range strings.SplitSeq(comment, ",") {
+	return directiveLine{head: strings.TrimRight(head, " \t"), name: strings.TrimSpace(name), comment: comment}, true
+}
+
+// parseDeclaration reads `account NAME  ; tag, tag` into a Declaration.
+func parseDeclaration(line string) (domain.Declaration, bool) {
+	directive, found := parseDirective(line, domain.DirectiveAccount)
+	if !found {
+		return domain.Declaration{}, false
+	}
+	declaration := domain.Declaration{Name: directive.name}
+	for tag := range strings.SplitSeq(directive.comment, ",") {
 		declaration = declaration.WithTag(strings.TrimSpace(tag))
 	}
 	return declaration, true

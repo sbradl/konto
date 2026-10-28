@@ -2,34 +2,48 @@ package csvimport
 
 import (
 	"bytes"
-	_ "embed" // the bank format ships inside the binary
+	"errors"
+	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/sbradl/konto/internal/domain"
 )
 
-//go:embed postbank.rules
-var postbankRules string
-
 // FormatPostbank names the one bank format konto understands.
 const FormatPostbank = "postbank"
 
-// bankFormat is how one bank lays out its export: the hledger rules that convert the bookings, and where konto
-// itself finds the IBAN, the closing balance and the raw columns rules are matched against.
+// The fields of a booking as the hledger rules name them; a Condition tests type, payee and purpose.
+const (
+	fieldType    = "type"
+	fieldPayee   = "payee"
+	fieldPurpose = "purpose"
+	fieldAmount  = "betrag"
+)
+
+// bankFormat is how one bank lays out its export: konto finds the IBAN, the closing balance and the raw columns
+// rules are matched against in it, and the hledger rules that convert the bookings are written from it, so the
+// two readings never disagree.
 type bankFormat struct {
 	name          string
-	rules         string // the hledger rules preamble; its field names are the ones a Condition tests
+	currency      string // the commodity of every amount in the export
+	skip          int    // the preamble lines above the header
 	header        string // the start of the line the bookings follow
 	trailer       string // the first field of the line with the closing balance
-	dateLayout    string
+	dateLayout    string // the booking date, as Go reads it
+	dateFormat    string // the same, as hledger reads it
+	decimalMark   string
+	groupMark     string
 	ibanLine      int
 	ibanColumn    int
 	balanceColumn int
+	dateColumn    int
 	typeColumn    int
 	payeeColumn   int
 	purposeColumn int
+	amountColumn  int
 }
 
 // postbank is the Postbank layout: the IBAN on the third line, the closing balance on the trailer.
@@ -37,10 +51,36 @@ type bankFormat struct {
 //nolint:mnd // the numbers are the layout
 func postbank() bankFormat {
 	return bankFormat{
-		name: FormatPostbank, rules: postbankRules, header: "Buchungstag;", trailer: "Kontostand",
-		dateLayout: "2.1.2006", ibanLine: 2, ibanColumn: 2, balanceColumn: 4,
-		typeColumn: 2, payeeColumn: 3, purposeColumn: 4,
+		name: FormatPostbank, currency: "EUR", skip: 7, header: "Buchungstag;", trailer: "Kontostand",
+		dateLayout: "2.1.2006", dateFormat: "%-d.%-m.%Y", decimalMark: ",", groupMark: ".",
+		ibanLine: 2, ibanColumn: 2, balanceColumn: 4,
+		dateColumn: 0, typeColumn: 2, payeeColumn: 3, purposeColumn: 4, amountColumn: 11,
 	}
+}
+
+// rules is the hledger rules preamble that converts the bookings: the header and the trailer are skipped,
+// the payee, else the type, is the description, the purpose the comment, and no row has a category yet.
+func (b bankFormat) rules() string {
+	fields := make([]string, b.amountColumn+1)
+	fields[b.dateColumn], fields[b.typeColumn], fields[b.payeeColumn] = "date", fieldType, fieldPayee
+	fields[b.purposeColumn], fields[b.amountColumn] = fieldPurpose, fieldAmount
+	return strings.Join([]string{
+		"skip " + strconv.Itoa(b.skip), "separator " + separator, "decimal-mark " + b.decimalMark,
+		"date-format " + b.dateFormat, "newest-first", "fields " + strings.Join(fields, ", "),
+		"if ^" + strings.TrimSuffix(b.header, separator), " skip", "if ^" + b.trailer, " skip",
+		"description %" + fieldPayee, "if %" + fieldPayee + " ^$", " description %" + fieldType,
+		"comment %" + fieldPurpose, "amount %" + fieldAmount + " " + b.currency, "account2 " + Uncategorised, "",
+	}, "\n")
+}
+
+// amount reads a number as the export prints it (13.182,03) in the commodity and style of like.
+func (b bankFormat) amount(like domain.Amount, text string) (domain.Amount, error) {
+	mantissa, err := domain.ParseNumber(text, b.decimalMark, b.groupMark, like.Places)
+	if err != nil {
+		return domain.Amount{}, err //nolint:wrapcheck // the number's own words are the answer
+	}
+	like.Mantissa = mantissa
+	return like, nil
 }
 
 const separator = ";"
@@ -90,7 +130,7 @@ func (b bankFormat) recordsOf(lines []string) []record {
 		if !inBody || fields[0] == b.trailer {
 			continue
 		}
-		date, err := time.Parse(b.dateLayout, fields[0])
+		date, err := time.Parse(b.dateLayout, column(fields, b.dateColumn))
 		if err != nil {
 			continue
 		}
@@ -110,26 +150,31 @@ func (r record) descriptionOf() string {
 	return r.payee
 }
 
+// errUnmatchedRow is konto reading a line of the export other than hledger did, so the rules konto drafts
+// would test fields the row does not have.
+var errUnmatchedRow = errors.New("a converted row matches no line of the export")
+
 // withRawFields gives each row the transaction type and payee of the export line it came from, found by
 // date, description and purpose.
-func withRawFields(rows []Row, records []record) []Row {
+func withRawFields(rows []Row, records []record) ([]Row, error) {
 	for i := range rows {
 		row := &rows[i]
-		for _, rec := range records {
-			if rec.date == row.Date.Format(time.DateOnly) && rec.descriptionOf() == row.Description &&
-				rec.purpose == row.Purpose {
-				row.Type, row.Payee = rec.kind, rec.payee
-				break
-			}
+		at := slices.IndexFunc(records, func(rec record) bool {
+			return rec.date == row.Date.Format(time.DateOnly) && rec.descriptionOf() == row.Description &&
+				rec.purpose == row.Purpose
+		})
+		if at < 0 {
+			return nil, fmt.Errorf("%w: %s %s", errUnmatchedRow, row.Date.Format(time.DateOnly), row.Description)
 		}
+		row.Type, row.Payee = records[at].kind, records[at].payee
 	}
-	return rows
+	return rows, nil
 }
 
-// column is the field of a split line, empty when the line is too short to have it.
+// column is the field of a split line, empty when the line is too short to have it, trimmed as hledger trims it.
 func column(fields []string, index int) string {
 	if index >= len(fields) {
 		return ""
 	}
-	return fields[index]
+	return strings.TrimSpace(fields[index])
 }

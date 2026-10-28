@@ -84,7 +84,7 @@ type Staged struct {
 	Rules       []Rule         // the categorisation rules, those staged by this import included
 	Known       []domain.Account
 	NewAccounts []string           // categories this import declares
-	Zero        domain.MultiAmount // a zero in the ledger's currency and style
+	Zero        domain.MultiAmount // a zero in the export's currency, in the style the journal writes it
 }
 
 // NeedCategory counts the new rows no rule has claimed.
@@ -101,31 +101,33 @@ func (s *Service) Open(ctx context.Context, path string, ledger domain.Ledger) (
 	if err != nil {
 		return Staged{}, fmt.Errorf("reading %s: %w", path, err)
 	}
-	preamble, err := postbank().readPreamble(data)
+	format := postbank()
+	preamble, err := format.readPreamble(data)
 	if err != nil {
 		return Staged{}, err
 	}
 	staged := Staged{
-		Path: path, File: filepath.Base(path), IBAN: preamble.iban, Format: postbank().name, Closing: preamble.closing,
-		Known: ledger.Accounts, Zero: ledger.Zero(),
+		Path: path, File: filepath.Base(path), IBAN: preamble.iban, Format: format.name, Closing: preamble.closing,
+		Known: ledger.Accounts, Zero: domain.MultiAmount{ledger.AmountLike(format.currency)},
 	}
 	staged.Rules = s.readRules()
 	staged.Account, staged.NewAccount = accountOf(ledger, preamble.iban)
+	name := newAccountName
 	if !staged.NewAccount {
 		if err := staged.Account.ImportRefusal(); err != nil {
 			return Staged{}, err //nolint:wrapcheck // the refusal is the answer, in the words the user reads
 		}
+		name = staged.Account.Name
 	}
-	name := staged.Account.Name
-	if staged.NewAccount {
-		name = newAccountName
-	}
-	transactions, err := s.converter.ConvertCSV(ctx, path, s.rules(name))
+	transactions, err := s.converter.ConvertCSV(ctx, path, s.rules(format, name))
 	if err != nil {
 		return Staged{}, ConvertError{Err: err}
 	}
-	rows := withRawFields(rowsOf(transactions, name), preamble.records)
-	staged.Rows, staged.Skipped, staged.Watermark = classify(rows, journalBookings(ledger, name))
+	rows, err := withRawFields(rowsOf(transactions, name), preamble.records)
+	if err != nil {
+		return Staged{}, err
+	}
+	staged.Rows, staged.Skipped, staged.Watermark = classify(rows, ledger, name)
 	return staged, nil
 }
 
@@ -140,8 +142,8 @@ func (s *Service) readRules() []Rule {
 }
 
 // rules is the bank format, then the account the export belongs to, then the categorisation rules.
-func (s *Service) rules(account string) string {
-	return postbank().rules + "account1 " + account + "\ninclude " + s.rulesPath + "\n"
+func (s *Service) rules(format bankFormat, account string) string {
+	return format.rules() + "account1 " + account + "\ninclude " + s.rulesPath + "\n"
 }
 
 // accountOf is the account the IBAN belongs to; false when no account has it.
@@ -181,10 +183,13 @@ type booking struct {
 	description string
 }
 
-// journalBookings are the account's transactions in the journal, as bookings.
-func journalBookings(ledger domain.Ledger, account string) []booking {
+// journalBookings are the account's transactions in the journal on the day, as bookings; the carry is none.
+func journalBookings(ledger domain.Ledger, account string, day time.Time) []booking {
 	var bookings []booking
 	for _, transaction := range ledger.Transactions {
+		if transaction.IsCarry() || !transaction.Date.Equal(day) {
+			continue
+		}
 		for _, posting := range transaction.Postings {
 			if posting.Account == account {
 				bookings = append(bookings, booking{
@@ -199,20 +204,14 @@ func journalBookings(ledger domain.Ledger, account string) []booking {
 // classify splits the rows by the journal as watermark (ADR 0009): D is the account's latest transaction;
 // rows before D are skipped, rows after D are new, and rows on D are matched against the journal's
 // transactions of that day by date, amount and description, as a multiset.
-func classify(rows []Row, bookings []booking) (fresh, skipped []Row, watermark time.Time) {
-	var latest string
-	for _, b := range bookings {
-		latest = max(latest, b.date)
-	}
-	if latest == "" {
+func classify(rows []Row, ledger domain.Ledger, account string) (fresh, skipped []Row, watermark time.Time) {
+	watermark, found := ledger.Watermark(account)
+	if !found {
 		return rows, nil, time.Time{}
 	}
-	watermark, _ = time.Parse(time.DateOnly, latest)
 	remaining := map[booking]int{}
-	for _, b := range bookings {
-		if b.date == latest {
-			remaining[b]++
-		}
+	for _, b := range journalBookings(ledger, account, watermark) {
+		remaining[b]++
 	}
 	for i := range rows {
 		row := &rows[i]

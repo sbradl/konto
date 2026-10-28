@@ -13,11 +13,11 @@ import (
 // field is what the row says in the named export column.
 func (r Row) field(name string) string {
 	switch name {
-	case payeeKey:
+	case fieldPayee:
 		return r.Payee
-	case "type":
+	case fieldType:
 		return r.Type
-	case "purpose":
+	case fieldPurpose:
 		return r.Purpose
 	}
 	return ""
@@ -26,9 +26,9 @@ func (r Row) field(name string) string {
 // MatchField is the column a rule for this row tests by default: the payee, else the transaction type.
 func (r Row) MatchField() string {
 	if r.Payee == "" {
-		return "type"
+		return fieldType
 	}
-	return payeeKey
+	return fieldPayee
 }
 
 // IsTransfer reports a row posted against an asset or liability account instead of a category.
@@ -172,7 +172,7 @@ const suffixDigits = 4
 func (s Staged) WithName(name string) (Staged, error) {
 	switch {
 	case name == "":
-		return s, domain.RefusalError{Reason: "the account needs a name"}
+		return s, errUnnamedAccount
 	case !domain.HoldsMoney(name):
 		return s, domain.RefusalError{Reason: "the account must be an assets: or liabilities: account"}
 	}
@@ -220,7 +220,7 @@ func (s Staged) DraftFor(index int) Draft {
 func (d Draft) Alternative() []Condition {
 	conditions := []Condition{{Field: d.Field, Pattern: d.Pattern}}
 	if d.Purpose != "" {
-		conditions = append(conditions, Condition{Field: "purpose", Pattern: d.Purpose})
+		conditions = append(conditions, Condition{Field: fieldPurpose, Pattern: d.Purpose})
 	}
 	return conditions
 }
@@ -296,12 +296,10 @@ func (s Staged) AddRule(rule Rule) (Staged, error) {
 
 // Widen adds an alternative to a rule, which then claims the rows it now matches.
 func (s Staged) Widen(id string, alternative []Condition) (Staged, error) {
-	index := slices.IndexFunc(s.Rules, func(r Rule) bool { return r.ID == id })
+	rule, index := s.withAlternative(id, alternative)
 	if index < 0 {
 		return s, domain.RefusalError{Reason: "rule " + id + " does not exist"}
 	}
-	rule := s.Rules[index]
-	rule.Alternatives = append(slices.Clone(rule.Alternatives), alternative)
 	rule.Staged = true
 	if err := checkPattern(rule); err != nil {
 		return s, err
@@ -317,13 +315,19 @@ func (s Staged) Widen(id string, alternative []Condition) (Staged, error) {
 
 // Widened is the rule as it would read after adding the alternative.
 func (s Staged) Widened(id string, alternative []Condition) (Rule, bool) {
-	index := slices.IndexFunc(s.Rules, func(r Rule) bool { return r.ID == id })
+	rule, index := s.withAlternative(id, alternative)
+	return rule, index >= 0
+}
+
+// withAlternative is Widened with where the rule is among the rules; -1 when no rule has the id.
+func (s Staged) withAlternative(id string, alternative []Condition) (rule Rule, index int) {
+	index = slices.IndexFunc(s.Rules, func(r Rule) bool { return r.ID == id })
 	if index < 0 {
-		return Rule{}, false
+		return Rule{}, index
 	}
-	rule := s.Rules[index]
+	rule = s.Rules[index]
 	rule.Alternatives = append(slices.Clone(rule.Alternatives), alternative)
-	return rule, true
+	return rule, index
 }
 
 // apply gives the rule's category to every row it matches that no rule or choice has claimed.

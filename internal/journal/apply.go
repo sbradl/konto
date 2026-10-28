@@ -13,7 +13,7 @@ type workspace struct {
 	sources   []*source
 	rulesPath string
 	rules     *source // read when an edit first needs it
-	lastYear  int     // this year: nothing is written after it
+	thisYear  int     // nothing is written after it
 	yearPath  func(year int) string
 	onDisk    []int        // the years that have a file, loaded or not
 	touched   []int        // the years transactions were added to
@@ -28,7 +28,7 @@ func (f File) plan(changeset domain.Changeset) (*workspace, error) {
 	}
 	work := &workspace{
 		sources: sources, rulesPath: f.RulesPath(),
-		lastYear: f.lastYear(), yearPath: f.yearPath, onDisk: f.yearsOnDisk(), created: map[int]bool{},
+		thisYear: f.thisYear(), yearPath: f.yearPath, onDisk: f.yearsOnDisk(), created: map[int]bool{},
 	}
 	for _, edit := range changeset.Edits {
 		if err := work.apply(edit); err != nil {
@@ -72,10 +72,16 @@ func (f File) Render(changeset domain.Changeset) (string, error) {
 		byPath[file.path] = file
 	}
 	var text strings.Builder
-	text.WriteString(flatten(byPath, work.sources[0], map[string]bool{}))
+	writeFile := func(content string) {
+		text.WriteString(content)
+		if !strings.HasSuffix(content, "\n") { // a file without its final newline would run into the next
+			text.WriteString("\n")
+		}
+	}
+	writeFile(flatten(byPath, work.sources[0], map[string]bool{}))
 	for _, year := range work.years() {
 		if file := work.findYear(year); file != nil {
-			text.WriteString(strings.Join(file.lines, "\n"))
+			writeFile(strings.Join(file.lines, "\n"))
 		}
 	}
 	return text.String(), nil
@@ -200,31 +206,24 @@ func setTag(sources []*source, edit domain.SetAccountTag) {
 	if editDirective(sources, edit.Account, update) {
 		return
 	}
-	appendLine(sources[0], domain.Declare{Directive: "account", Name: edit.Account, Comment: tag}.Line())
+	appendLine(sources[0], domain.DeclareAccount(edit.Account, tag).Line())
 }
 
 // editDirective rewrites the tags of the account's directive; false when no file declares it.
 func editDirective(sources []*source, account string, update func(tags []string) []string) bool {
 	for _, source := range sources {
 		for i, line := range source.lines {
-			name, ok := directiveName(line)
-			if !ok || name != account {
+			directive, ok := parseDirective(line, domain.DirectiveAccount)
+			if !ok || directive.name != account {
 				continue
 			}
-			rest, _ := strings.CutPrefix(line, "account ")
-			head, comment, _ := strings.Cut(rest, ";")
-			source.lines[i] = "account " + strings.TrimRight(head, " \t") + joinTags(update(splitTags(comment)))
+			tags := update(splitTags(directive.comment))
+			source.lines[i] = domain.DirectiveAccount + " " + directive.head + joinTags(tags)
 			source.dirty = true
 			return true
 		}
 	}
 	return false
-}
-
-// directiveName is the account an `account` directive line declares.
-func directiveName(line string) (string, bool) {
-	declaration, ok := parseDeclaration(line)
-	return declaration.Name, ok
 }
 
 func splitTags(comment string) []string {

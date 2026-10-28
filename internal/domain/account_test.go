@@ -203,7 +203,7 @@ func TestImportRefusalNamesWhyAnAccountCannotBeImportedInto(t *testing.T) {
 		account Account
 		want    string
 	}{
-		"closed":       {closed, "account closed — reopen with o"},
+		"closed":       {closed, "account closed"},
 		"clearing":     {Account{Name: "assets:transfers", Source: SourceClearing}, "assets:transfers is the transfer clearing account"},
 		"manual":       {Account{Name: "assets:cash", Source: SourceManual}, "assets:cash is a manual account"},
 		"unclassified": {Account{Name: "assets:odd"}, "assets:odd is unclassified"},
@@ -224,7 +224,7 @@ func TestImportRefusalNamesWhyAnAccountIsNoImportTarget(t *testing.T) {
 		account Account
 		want    string
 	}{
-		"closed":       {Account{Name: "assets:a", Source: SourceImport, Closed: closed}, "account closed — reopen with o"},
+		"closed":       {Account{Name: "assets:a", Source: SourceImport, Closed: closed}, "account closed"},
 		"clearing":     {Account{Name: "assets:a", Source: SourceClearing}, "assets:a is the transfer clearing account — it is never an import target"},
 		"manual":       {Account{Name: "assets:a", Source: SourceManual}, "assets:a is a manual account — only import-fed accounts can be imported into"},
 		"unclassified": {Account{Name: "assets:a"}, "assets:a is unclassified (no konto:source tag) — it cannot be an import target"},

@@ -78,3 +78,15 @@ func TestBlockIsTheParagraphAroundTheRulesIDLine(t *testing.T) {
 		}
 	}
 }
+
+// A line of nothing but spaces ends a block too, as it does when the rules are read.
+func TestBlockEndsAtALineOfSpaces(t *testing.T) {
+	lines := []string{"if %payee A", "    comment2 konto-rule:1", "  ", "if %payee B", "    comment2 konto-rule:2", "\t"}
+
+	if first, end, found := (SetCategoryRule{ID: "2"}).Block(lines); !found || first != 3 || end != 5 {
+		t.Errorf("Block = %d, %d, %v; want 3, 5", first, end, found)
+	}
+	if !IsBlankLine(" \t") || IsBlankLine(" x") {
+		t.Error("only a line of spaces is blank")
+	}
+}

@@ -304,6 +304,37 @@ func TestRenderAppendsTheYearFilesAndWritesNothing(t *testing.T) {
 	}
 }
 
+func TestRenderEndsEachFileOnANewline(t *testing.T) {
+	file := journalWith(t, "decimal-mark ,")
+	if err := os.WriteFile(file.yearPath(2025), []byte("2025-01-01 Z"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := file.Render(domain.Changeset{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if want := "decimal-mark ,\n2025-01-01 Z\n"; got != want {
+		t.Errorf("rendered = %q, want %q", got, want)
+	}
+}
+
+func TestTransactionsGoAboveTheFirstLaterOneWhateverItsDateSeparator(t *testing.T) {
+	file := withYear(t, "2026/09/20 B\n\n2026.9.25 C\n")
+
+	apply(t, file,
+		domain.AddTransactions{Transactions: []domain.NewTransaction{spend(day(10), "A")}},
+		domain.AddTransactions{Transactions: []domain.NewTransaction{spend(day(22), "M")}},
+	)
+
+	want := "2026-09-10 A\n    expenses:x\n    assets:checking\n\n2026/09/20 B\n\n" +
+		"2026-09-22 M\n    expenses:x\n    assets:checking\n\n2026.9.25 C\n"
+	if got := readFile(t, file.yearPath(2026)); got != want {
+		t.Errorf("year file =\n%q\nwant\n%q", got, want)
+	}
+}
+
 func TestRenderReportsAnEditThatDoesNotApply(t *testing.T) {
 	file := journalWith(t, "x\n")
 

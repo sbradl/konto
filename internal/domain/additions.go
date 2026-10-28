@@ -33,16 +33,20 @@ func (t NewTransaction) Lines() []string {
 	return lines
 }
 
+// amountGap ends the account name: hledger reads a single space as part of the name.
+const amountGap = "  "
+
 func (p NewPosting) text() string {
-	text := p.Account
-	if len(p.Amount) > 0 || len(p.Assertion) > 0 {
-		text += " "
-	}
+	var after []string
 	if len(p.Amount) > 0 {
-		text += " " + p.Amount[0].Format()
+		after = append(after, p.Amount[0].Format())
 	}
 	if len(p.Assertion) > 0 {
-		text += " = " + p.Assertion[0].Format()
+		after = append(after, "= "+p.Assertion[0].Format())
+	}
+	text := p.Account
+	if len(after) > 0 {
+		text += amountGap + strings.Join(after, " ")
 	}
 	return text + TrailingComment(p.Comment)
 }
@@ -64,10 +68,28 @@ type AddTransactions struct {
 
 // Declare puts a directive on the main journal unless some file of the journal already has it.
 type Declare struct {
-	Directive string // "account", "payee" or "tag"
+	Directive string // DirectiveAccount, DirectivePayee or DirectiveTag
 	Name      string
 	Comment   string // the directive's comment, without the semicolon; empty for none
 }
+
+// The directives konto declares names with.
+const (
+	DirectiveAccount = "account"
+	DirectivePayee   = "payee"
+	DirectiveTag     = "tag"
+)
+
+// DeclareAccount declares the account, the comment carrying its tags.
+func DeclareAccount(name, comment string) Declare {
+	return Declare{Directive: DirectiveAccount, Name: name, Comment: comment}
+}
+
+// DeclarePayee declares the payee.
+func DeclarePayee(name string) Declare { return Declare{Directive: DirectivePayee, Name: name} }
+
+// DeclareTag declares the tag.
+func DeclareTag(name string) Declare { return Declare{Directive: DirectiveTag, Name: name} }
 
 // Line is the directive as the journal writes it.
 func (d Declare) Line() string { return d.Directive + " " + d.Name + TrailingComment(d.Comment) }
@@ -94,14 +116,17 @@ func (e SetCategoryRule) Block(lines []string) (first, end int, found bool) {
 		return 0, 0, false
 	}
 	first, end = at, at+1
-	for first > 0 && lines[first-1] != "" {
+	for first > 0 && !IsBlankLine(lines[first-1]) {
 		first--
 	}
-	for end < len(lines) && lines[end] != "" {
+	for end < len(lines) && !IsBlankLine(lines[end]) {
 		end++
 	}
 	return first, end, true
 }
+
+// IsBlankLine reports a line of nothing but spaces, the line that ends a block of categories.rules.
+func IsBlankLine(line string) bool { return strings.TrimSpace(line) == "" }
 
 func (Declare) isEdit()         {}
 func (AddTransactions) isEdit() {}

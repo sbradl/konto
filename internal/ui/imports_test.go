@@ -89,7 +89,10 @@ func TestNBrowsesTheDownloadDirectoryAndEnterOpensTheFile(t *testing.T) {
 }
 
 func TestAnUnusableFileIsAMessageAndNothingIsStaged(t *testing.T) {
-	for _, failure := range []error{csvimport.ErrNotAnExport, csvimport.ErrNoIBAN, domain.RefusalError{Reason: "account closed — reopen with o"}} {
+	for failure, message := range map[error]string{
+		csvimport.ErrNotAnExport: csvimport.ErrNotAnExport.Error(), csvimport.ErrNoIBAN: csvimport.ErrNoIBAN.Error(),
+		domain.ErrAccountClosed: "account closed — reopen with o",
+	} {
 		importer := &fakeImporter{err: failure, entries: []domain.FileEntry{{Name: "x.csv"}}}
 		model := startedWithImporter(t, importer)
 		model, cmd := press(model, "n")
@@ -99,7 +102,7 @@ func TestAnUnusableFileIsAMessageAndNothingIsStaged(t *testing.T) {
 		model = deliver(model, cmd)
 
 		content := plain(model.View().Content)
-		if !strings.Contains(content, failure.Error()) || strings.Contains(content, "ROWS") || strings.Contains(lastLine(model), "✗") {
+		if !strings.Contains(content, message) || strings.Contains(content, "ROWS") || strings.Contains(lastLine(model), "✗") {
 			t.Errorf("%v: the message should show and nothing be staged:\n%s", failure, content)
 		}
 	}

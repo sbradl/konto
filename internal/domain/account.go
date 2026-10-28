@@ -121,6 +121,9 @@ var (
 	ErrNotClosed     = RefusalError{"the account is not closed"}
 )
 
+// ErrAccountClosed is the refusal to import into a closed account; the UI says how to reopen it.
+var ErrAccountClosed = RefusalError{"account closed"}
+
 // Close returns the changeset that closes the account on the given day. It refuses the clearing
 // account, an account that is already closed, one with a balance, and one a periodic rule still
 // references (rules lists their descriptions).
@@ -160,7 +163,7 @@ func NormalizeIBAN(iban string) string {
 func (a Account) ImportRefusal() error {
 	switch {
 	case a.IsClosed():
-		return RefusalError{"account closed — reopen with o"}
+		return ErrAccountClosed
 	case a.Source == SourceClearing:
 		return RefusalError{a.Name + " is the transfer clearing account — it is never an import target"}
 	case a.Source == SourceManual:

@@ -53,6 +53,17 @@ func TestPlanRefusesAnImportWithNoRows(t *testing.T) {
 	}
 }
 
+func TestPlanRefusesANewAccountWithoutAName(t *testing.T) {
+	staged := stagedRows(debit("A"))
+	staged.Rows[0].Target, staged.NewAccount = "expenses:x", true
+
+	_, err := staged.Plan()
+
+	if !errors.Is(err, errUnnamedAccount) {
+		t.Errorf("err = %v, want the account to need a name", err)
+	}
+}
+
 func TestPlanRefusesWhileRowsNeedACategory(t *testing.T) {
 	for want, rows := range map[string][]Row{
 		"1 row needs a category": {debit("A")},
@@ -191,10 +202,10 @@ func TestPlanReportsAnUnreadableClosingBalance(t *testing.T) {
 func TestParseAmountReadsGermanNumbersInTheStyleOfTheLedger(t *testing.T) {
 	like := eur(0)[0]
 	for text, want := range map[string]int64{"13.182,03": 1318203, "-5,5": -550, "7": 700, "0,01": 1} {
-		got, err := parseAmount(like, text)
+		got, err := postbank().amount(like, text)
 
 		if err != nil || got.Mantissa != want || got.Format() != euroFormat(want) {
-			t.Errorf("parseAmount(%q) = %v, %v; want mantissa %d", text, got, err, want)
+			t.Errorf("amount(%q) = %v, %v; want mantissa %d", text, got, err, want)
 		}
 	}
 }
