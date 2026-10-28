@@ -28,8 +28,8 @@ description = "golangci-lint"
 run = "golangci-lint run"
 
 [tasks.fmt]
-description = "Format (writes) and list changed files"
-run = "gofmt -w -l ."
+description = "Format (writes) with the formatters lint enforces (gofumpt, goimports)"
+run = "golangci-lint fmt"
 
 [tasks.test]
 description = "Unit tests (race, no hledger integration suite)"
@@ -85,8 +85,15 @@ usage = 'arg "[dir]" default="."'
 run = 'gremlins unleash --coverpkg=./... --timeout-coefficient=4 --threshold-efficacy=100 --threshold-mcover=100 "${usage_dir:-.}"'
 
 [tasks."mutation:diff"]
-description = "Mutation testing only on lines changed vs main (fast, for pre-push / CI)"
-run = "gremlins unleash --diff main --coverpkg=./... --timeout-coefficient=4 --threshold-efficacy=100 --threshold-mcover=100 ."
+description = "Mutation testing only on lines changed since the branch left main, or in the last commit on a clean main (fast, for pre-push / CI)"
+run = '''
+ref=main
+# On main with nothing changed the diff would be empty and check nothing: check the last commit instead.
+if [ "$(git merge-base main HEAD)" = "$(git rev-parse HEAD)" ] && git diff --quiet HEAD; then
+  ref=HEAD~1
+fi
+gremlins unleash --diff "$ref" --coverpkg=./... --timeout-coefficient=4 --threshold-efficacy=100 --threshold-mcover=100 .
+'''
 
 [tasks.check]
 description = "Fast gate: build, vet, lint (Clean Code), archtest + unit tests with 100% coverage"

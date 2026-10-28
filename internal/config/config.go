@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"strings"
 )
 
 // Config is what konto needs to know before it starts.
@@ -38,10 +39,18 @@ func Resolve(args []string, env Environment) (Config, error) {
 	}
 	for _, path := range []string{*file, env.Getenv("LEDGER_FILE")} {
 		if path != "" {
-			return Config{JournalPath: absolute(env.Cwd, path), Home: env.Home}, nil
+			return Config{JournalPath: absolute(env.Cwd, expandHome(env.Home, path)), Home: env.Home}, nil
 		}
 	}
 	return Config{JournalPath: filepath.Join(env.Home, ".hledger.journal"), Home: env.Home}, nil
+}
+
+// expandHome puts the home directory in place of a leading ~ or ~/, as the shell would; ~user is left alone.
+func expandHome(home, path string) string {
+	if path == "~" || strings.HasPrefix(path, "~/") {
+		return home + path[1:]
+	}
+	return path
 }
 
 func absolute(cwd, path string) string {

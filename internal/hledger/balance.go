@@ -111,6 +111,17 @@ func (c *Client) MonthlyActivity(ctx context.Context, first, last time.Time) ([]
 	return report.months()
 }
 
+// multiPeriodReport is the part of `hledger bal -M -O json` konto reads.
+type multiPeriodReport struct {
+	Dates [][]struct {
+		Contents string `json:"contents"`
+	} `json:"prDates"`
+	Rows []struct {
+		Name    string         `json:"prrName"`
+		Amounts [][]jsonAmount `json:"prrAmounts"`
+	} `json:"prRows"`
+}
+
 // months splits the report's rows into the accounts active in each month's column.
 func (r multiPeriodReport) months() ([][]domain.Account, error) {
 	months := make([][]domain.Account, len(r.Dates))
@@ -165,6 +176,9 @@ func under(prefixes ...string) []string {
 	return queries
 }
 
+// exactly is the hledger query for the one account and none under it.
+func exactly(account string) string { return "acct:^" + regexp.QuoteMeta(account) + "$" }
+
 // flatBalances runs `hledger bal` as a flat JSON report with the given extra arguments.
 func (c *Client) flatBalances(ctx context.Context, extra ...string) ([]domain.Account, error) {
 	out, err := c.query(ctx, flatReport(extra...)...)
@@ -177,7 +191,7 @@ func (c *Client) flatBalances(ctx context.Context, extra ...string) ([]domain.Ac
 // TextBalances returns the asset and liability balances of journal text given on standard input, counting
 // every transaction dated before the day; zero balances are left out. Nothing on disk is read.
 func (c *Client) TextBalances(ctx context.Context, text string, before time.Time) ([]domain.Account, error) {
-	out, err := c.queryText(ctx, text, firstMessageLine,
+	out, err := c.queryText(ctx, text,
 		flatReport(append([]string{"-e", day(before)}, under(domain.AssetsPrefix, domain.LiabilitiesPrefix)...)...)...)
 	if err != nil {
 		return nil, err

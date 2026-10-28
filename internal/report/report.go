@@ -5,6 +5,7 @@ package report
 import (
 	"context"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 	"time"
@@ -86,13 +87,13 @@ func balanceSheet(balances []domain.Account, delta map[string]domain.MultiAmount
 		{"Assets", "Total assets", domain.AssetsPrefix}, {"Liabilities", "Total liabilities", domain.LiabilitiesPrefix},
 	} {
 		leaves, sum := sheetLeaves(balances, delta, sec.prefix)
+		worth = total{worth.amount.Plus(sum.amount), worth.change.Plus(sum.change)}
 		if len(leaves) == 0 {
 			continue
 		}
 		rows = append(rows, domain.ReportRow{Kind: domain.RowHeader, Label: sec.title})
 		rows = append(rows, leaves...)
 		rows = append(rows, totalRow(domain.RowSubtotal, sec.total, sum))
-		worth = total{worth.amount.Plus(sum.amount), worth.change.Plus(sum.change)}
 	}
 	if len(rows) == 0 {
 		return nil
@@ -106,7 +107,8 @@ func balanceSheet(balances []domain.Account, delta map[string]domain.MultiAmount
 	return rows
 }
 
-// sheetLeaves are the rows of the non-zero accounts under prefix, and their sum.
+// sheetLeaves are the rows of the non-zero accounts under prefix, and the sum. The change sums every account
+// under prefix: one that ends the period at zero has no row, but what it gave or took still counts.
 func sheetLeaves(
 	balances []domain.Account, delta map[string]domain.MultiAmount, prefix string,
 ) ([]domain.ReportRow, total) {
@@ -124,8 +126,13 @@ func sheetLeaves(
 		if delta != nil {
 			row.Delta = &change
 		}
-		sum = total{sum.amount.Plus(account.Balance), sum.change.Plus(change)}
+		sum = total{sum.amount.Plus(account.Balance), sum.change.Plus(account.Balance.Zeroed())}
 		leaves = append(leaves, row)
+	}
+	for _, name := range slices.Sorted(maps.Keys(delta)) {
+		if strings.HasPrefix(name, prefix) {
+			sum.change = sum.change.Plus(delta[name])
+		}
 	}
 	return leaves, sum
 }

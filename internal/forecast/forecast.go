@@ -103,7 +103,8 @@ func forecastable(ledger domain.Ledger) []domain.Account {
 }
 
 // start is the day the periodic rules' occurrences count from: the day after the latest transaction of an
-// import-fed account, since its balance is only as fresh as the last import, and today for any other.
+// import-fed account, since its balance is only as fresh as the last import, and today for any other: the
+// rules never post, so today's occurrence is in no balance yet (the Upcoming list, by contrast, starts tomorrow).
 func start(account domain.Account, ledger domain.Ledger, today time.Time) time.Time {
 	if account.Source == domain.SourceImport {
 		if watermark, ok := ledger.Watermark(account.Name); ok {

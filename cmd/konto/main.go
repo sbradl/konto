@@ -103,13 +103,15 @@ func editorCommand(getenv func(string) string, file string, line int) *exec.Cmd 
 }
 
 // todayFunc is konto's "today": the local date now, or the day $KONTO_TODAY names (a test seam
-// for the e2e suite). A value that is not a date falls back to the clock.
+// for the e2e suite). A value that is not a date falls back to the clock. Either way it is that calendar
+// date at midnight UTC, as hledger's dates are read, so every date comparison is by day alone.
 func todayFunc(getenv func(string) string, now func() time.Time) func() time.Time {
 	return func() time.Time {
 		if day, err := time.Parse(time.DateOnly, getenv("KONTO_TODAY")); err == nil {
 			return day
 		}
-		return now()
+		year, month, day := now().Date()
+		return time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
 	}
 }
 

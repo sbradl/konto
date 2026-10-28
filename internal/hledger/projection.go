@@ -5,22 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"regexp"
 	"time"
 
 	"github.com/sbradl/konto/internal/domain"
 )
-
-// multiPeriodReport is the part of `hledger bal -M -O json` konto reads.
-type multiPeriodReport struct {
-	Dates [][]struct {
-		Contents string `json:"contents"`
-	} `json:"prDates"`
-	Rows []struct {
-		Name    string         `json:"prrName"`
-		Amounts [][]jsonAmount `json:"prrAmounts"`
-	} `json:"prRows"`
-}
 
 // Projection returns the account's balance at the end of each month from the query's Begin on. Months from
 // ForecastFrom up to, not including, ForecastTo include the occurrences of the periodic rules; the forecast
@@ -28,7 +16,7 @@ type multiPeriodReport struct {
 // forecast that starts before the latest transaction would break the journal's balance assertions, which the
 // projection has no use for, so they are ignored.
 func (c *Client) Projection(ctx context.Context, query domain.ProjectionQuery) (domain.Projection, error) {
-	out, err := c.query(ctx, "bal", "acct:^"+regexp.QuoteMeta(query.Account)+"$",
+	out, err := c.query(ctx, "bal", exactly(query.Account),
 		"-M", "-H", "-E", "-I", "--layout=bare", "-b", day(query.Begin),
 		span{query.ForecastFrom, query.ForecastTo}.forecast(), "-O", "json")
 	if err != nil {
@@ -74,7 +62,7 @@ func periodEnd(text string) (time.Time, error) {
 // including, until, as hledger projects them. The text goes to hledger on standard input; no file is read or
 // written.
 func (c *Client) Occurrences(ctx context.Context, text string, begin, until time.Time) ([]time.Time, error) {
-	out, err := c.queryText(ctx, text, firstMessageLine, "print", span{begin, until}.forecast(), "-O", "json")
+	out, err := c.queryText(ctx, text, "print", span{begin, until}.forecast(), "-O", "json")
 	if err != nil {
 		return nil, err
 	}

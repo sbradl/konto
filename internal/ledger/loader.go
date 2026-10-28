@@ -69,7 +69,8 @@ func (l *Loader) Load(ctx context.Context) (domain.Ledger, error) {
 
 // fromHledger is what hledger reports: the transactions, the balances (returned apart: the directives
 // complete them), the month to date, the spend history and the projected occurrences. The queries are
-// independent, so they run side by side.
+// independent, so they run side by side. The occurrences start tomorrow: one due today is not upcoming any
+// more, unlike in a forecast, whose balance still has to count it (forecast.start).
 func (l *Loader) fromHledger(ctx context.Context) (domain.Ledger, []domain.Account, error) {
 	var (
 		snapshot domain.Ledger

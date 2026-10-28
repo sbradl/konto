@@ -23,7 +23,7 @@ type runner func(ctx context.Context, args ...string) (stdout []byte, stderr str
 // inputRunner is the seam for hledger reading journal text from standard input.
 type inputRunner func(ctx context.Context, input string, args ...string) (stdout []byte, stderr string, err error)
 
-// Client asks hledger about one journal. Every call names each file of it with -f.
+// Client asks hledger about one journal, made of one file or several (runJournal says how they are passed).
 type Client struct {
 	run       runner
 	runInput  inputRunner
@@ -77,29 +77,31 @@ func (b binary) run(ctx context.Context, stdin io.Reader, args []string) (stdout
 	return stdout, captured.String(), err
 }
 
-// query runs hledger against the client's journal.
+// query runs the hledger command args[0] against the client's journal.
 func (c *Client) query(ctx context.Context, args ...string) ([]byte, error) {
-	return c.queryMessage(ctx, firstMessageLine, args...)
-}
-
-// queryMessage is query with its own reading of a located failure's message.
-func (c *Client) queryMessage(ctx context.Context, messageOf func(string) string, args ...string) ([]byte, error) {
 	out, stderr, err := c.runJournal(ctx, args)
 	if err != nil {
-		return nil, failure(stderr, err, messageOf, "hledger "+args[0])
+		return nil, failure(stderr, err, messageOf(args[0]), "hledger "+args[0])
 	}
 	return out, nil
 }
 
-// queryText is queryMessage on journal text given on standard input instead of the client's journal.
-func (c *Client) queryText(
-	ctx context.Context, text string, messageOf func(string) string, args ...string,
-) ([]byte, error) {
+// queryText is query on journal text given on standard input instead of the client's journal.
+func (c *Client) queryText(ctx context.Context, text string, args ...string) ([]byte, error) {
 	out, stderr, err := c.runInput(ctx, text, append([]string{"-f", "-"}, args...)...)
 	if err != nil {
-		return nil, failure(stderr, err, messageOf, "hledger "+args[0])
+		return nil, failure(stderr, err, messageOf(args[0]), "hledger "+args[0])
 	}
 	return out, nil
+}
+
+// messageOf is how a located failure of the hledger command explains itself: a check over several lines,
+// anything else on its first line.
+func messageOf(command string) func(text string) string {
+	if command == "check" {
+		return firstParagraph
+	}
+	return firstMessageLine
 }
 
 // failure is why a run of hledger failed: the located issue when stderr names one, read with messageOf, else

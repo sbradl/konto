@@ -6,7 +6,8 @@ import (
 )
 
 func TestTodayFollowsTheEnvironmentOverrideElseTheClock(t *testing.T) {
-	clock := func() time.Time { return time.Date(2030, 1, 2, 15, 4, 5, 0, time.UTC) }
+	east := time.FixedZone("UTC+2", 2*60*60)
+	clock := func() time.Time { return time.Date(2030, 1, 2, 0, 30, 0, 0, east) } // still Jan 1st in UTC
 	env := func(value string) func(string) string { return func(string) string { return value } }
 
 	for name, tc := range map[string]struct {
@@ -14,10 +15,10 @@ func TestTodayFollowsTheEnvironmentOverrideElseTheClock(t *testing.T) {
 		want  time.Time
 	}{
 		"override":   {"2026-09-30", time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC)},
-		"unset":      {"", clock()},
-		"not a date": {"tomorrow", clock()},
+		"unset":      {"", time.Date(2030, 1, 2, 0, 0, 0, 0, time.UTC)},
+		"not a date": {"tomorrow", time.Date(2030, 1, 2, 0, 0, 0, 0, time.UTC)},
 	} {
-		if got := todayFunc(env(tc.value), clock)(); !got.Equal(tc.want) {
+		if got := todayFunc(env(tc.value), clock)(); !got.Equal(tc.want) || got.Location() != time.UTC {
 			t.Errorf("%s: today = %v, want %v", name, got, tc.want)
 		}
 	}

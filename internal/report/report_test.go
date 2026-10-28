@@ -188,6 +188,27 @@ func TestOnlyExpensesStillGiveANet(t *testing.T) {
 	}
 }
 
+func TestAnAccountThatEndsAtZeroStillCountsItsChange(t *testing.T) {
+	gw := &fakeGateway{
+		until: map[string][]domain.Account{"assets:": {account("assets:checking", 1324000)}},
+		activity: map[string][]domain.Account{"assets:": {
+			account("assets:checking", 500000), account("assets:savings", -500000), account("liabilities:card", 14000),
+		}},
+	}
+
+	got, _ := NewService(gw, sept30).Report(context.Background(), domain.MonthToDate)
+
+	want := []string{
+		"Assets|",
+		"assets:checking|13.240,00 EUR|5.000,00 EUR",
+		"Total assets|13.240,00 EUR|0,00 EUR",
+		"Net worth|13.240,00 EUR|140,00 EUR",
+	}
+	if !reflect.DeepEqual(rows(got.BalanceSheet), want) {
+		t.Errorf("balance sheet = %q, want %q", rows(got.BalanceSheet), want)
+	}
+}
+
 func TestReportPassesOnGatewayFailures(t *testing.T) {
 	for _, period := range []domain.Period{domain.MonthToDate, domain.AllTime} {
 		_, err := NewService(&fakeGateway{err: errors.New("boom")}, sept30).Report(context.Background(), period)

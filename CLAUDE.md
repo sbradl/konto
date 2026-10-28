@@ -61,13 +61,13 @@ Toolchain (go, golangci-lint, gotestsum, gremlins, hledger) is pinned in `mise.t
 `mise install` provisions it. `mise tasks` lists every task.
 
 - `mise run build` — `go build ./...`
-- `mise run vet` — `go vet ./...`
+- `mise run vet` — `go vet -tags integration,e2e ./...`
 - `mise run lint` — `golangci-lint run`
 - `mise run check` — build + vet + lint + cover:check (fast gate; archtest runs inside the tests)
 - `mise run qa` — everything CI runs on a PR: tidy, check, vuln, test:integration, test:e2e,
   mutation:diff (`.github/workflows/qa.yml` calls the same tasks)
 - `mise run test:e2e` — Gherkin suite (`features/`, harness in `e2e/`); godog flags after `--`,
-  e.g. `mise run test:e2e -- -godog.tags=@spec-4.5`. Every scenario is `@wip` until built.
+  e.g. `mise run test:e2e -- -godog.tags=@spec-4.5`.
 
 Thresholds start maxed by user directive — loosen a threshold in `mise.toml` only with a
 recorded reason, never silently.
@@ -84,7 +84,7 @@ Verified against this repo's `mise.toml` / installed toolchain.
   whole file's worth by `-run` over its test names, or pass the files explicitly:
   `go test ./internal/pkg/foo.go ./internal/pkg/foo_test.go`
 - **Build / typecheck** — `mise run build` (`go build ./...`) · `mise run vet`
-  (`go vet ./...`). Single package: `go build ./internal/pkg`
+  (`go vet -tags integration,e2e ./...`). Single package: `go build ./internal/pkg`
 - **Coverage for a single file** — profile the package, then filter the per-function report
   to that file:
   `go test -coverprofile=coverage.out ./internal/pkg && go tool cover -func=coverage.out | grep 'foo\.go'`

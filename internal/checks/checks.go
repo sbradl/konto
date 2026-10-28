@@ -9,9 +9,6 @@ import (
 	"github.com/sbradl/konto/internal/domain"
 )
 
-// ownChecks is how many checks konto runs itself over the Ledger.
-const ownChecks = 1
-
 type gateway interface {
 	Check(ctx context.Context, name string) (*domain.CheckIssue, error)
 }
@@ -28,7 +25,7 @@ func NewRunner(gw gateway) *Runner { return &Runner{gw: gw} }
 // first failure per check, so each contributes at most one issue; konto's own checks list all.
 func (r *Runner) Run(ctx context.Context, ledger domain.Ledger) (domain.CheckRun, error) {
 	checks := domain.HledgerChecks()
-	run := domain.CheckRun{Total: len(checks) + ownChecks}
+	run := domain.CheckRun{Total: len(checks) + len(domain.KontoChecks())}
 	issues := make([]*domain.CheckIssue, len(checks))
 	runs := make([]func() error, len(checks))
 	for i, check := range checks {

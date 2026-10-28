@@ -213,7 +213,7 @@ ADR 0013) and works per file. It never needs to understand transactions, amounts
 
 | Situation | Behaviour |
 |---|---|
-| `hledger` missing on `PATH`, or version `< 1.32` | **Refuse to start.** Preflight in `main` before the TUI: `exec.LookPath` → `hledger --version` → parse `hledger X.Y(.Z)` → compare. Print problem + minimum to stderr, exit non-zero. Version also stored in `LedgerMeta`. |
+| `hledger` missing on `PATH`, or version `< 1.32` | **Refuse to start.** Preflight in `main` before the TUI: `exec.LookPath` → `hledger --version` → parse `hledger X.Y(.Z)` → compare. Print problem + minimum to stderr, exit non-zero. |
 | No journal file configured / file absent | **First-run screen**: shows the resolved path (§7.1); `y` creates the skeleton there (parent dirs too), `n` quits. No path input — another location is chosen via `$LEDGER_FILE` / `--file` (no config file). Skeleton: `decimal-mark ,`, `commodity 1.000,00 EUR`, `account equity:opening-balances`, `account assets:transfers  ; konto:source:clearing` (transfer clearing account), `tag konto:source` / `konto:iban` / `konto:format` / `konto:closed` / `konto-rule`; plus an empty `categories.rules` beside it. Check-clean from the first write. |
 | Journal exists but `hledger` cannot parse it | Show the parse error as a top-severity `CheckIssue`; offer jump-to-`$EDITOR`; do not enter the normal views until it parses. |
 | Runtime `hledger` call fails / unparseable output | Keep the last good `Ledger`; error indicator in the status bar + detail in the `!` panel; never crash. |

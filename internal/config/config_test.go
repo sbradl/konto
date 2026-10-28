@@ -92,6 +92,24 @@ func TestRelativeJournalPathBecomesAbsolute(t *testing.T) {
 	}
 }
 
+// A leading ~ is the home directory, as a shell would expand it; ~user and a ~ further in are left alone.
+func TestTildeJournalPathStartsAtHome(t *testing.T) {
+	for path, want := range map[string]string{
+		"~/books/j.journal": "/home/alex/books/j.journal",
+		"~":                 "/home/alex",
+		"~bob/j.journal":    "/work/~bob/j.journal",
+		"sub/~/j.journal":   "/work/sub/~/j.journal",
+	} {
+		for _, cfg := range []Config{
+			mustResolve(t, []string{"--file", path}, nil), mustResolve(t, nil, map[string]string{"LEDGER_FILE": path}),
+		} {
+			if cfg.JournalPath != want {
+				t.Errorf("%q: JournalPath = %q, want %q", path, cfg.JournalPath, want)
+			}
+		}
+	}
+}
+
 // The home directory is kept, whichever journal path wins, for what else starts from it.
 func TestResolveKeepsTheHomeDirectory(t *testing.T) {
 	for _, args := range [][]string{nil, {"--file", "/data/flag.journal"}} {
