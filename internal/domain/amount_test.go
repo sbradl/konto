@@ -142,6 +142,25 @@ func TestZeroedKeepsCommoditiesAndStylesButNotQuantities(t *testing.T) {
 	}
 }
 
+func TestValueIsTheSameHoweverTheAmountIsStyled(t *testing.T) {
+	plain := MultiAmount{{Commodity: "EUR", Mantissa: 1234560, Places: 3, Style: AmountStyle{DecimalMark: "."}}}
+	if got, want := plain.Value(), (MultiAmount{eur(123456)}).Value(); got != want {
+		t.Errorf("Value = %q and %q, want them equal", got, want)
+	}
+	for _, tt := range []struct {
+		amounts MultiAmount
+		want    string
+	}{
+		{MultiAmount{eur(123456), {Commodity: "PLN", Mantissa: 10}}, "1234.56EUR 10PLN"},
+		{MultiAmount{eur(0)}, "0EUR"},
+		{MultiAmount{eur(-100)}, "-1EUR"},
+	} {
+		if got := tt.amounts.Value(); got != tt.want {
+			t.Errorf("Value of %+v = %q, want %q", tt.amounts, got, tt.want)
+		}
+	}
+}
+
 func TestParseNumberReadsThePlacesTheStyleHas(t *testing.T) {
 	for text, want := range map[string]int64{
 		"1.234,5": 123450, "12": 1200, "-0,07": -7, "3.100,00": 310000, "0,5": 50, "1,234": 0,

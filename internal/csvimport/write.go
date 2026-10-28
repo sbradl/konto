@@ -9,11 +9,6 @@ import (
 	"github.com/sbradl/konto/internal/domain"
 )
 
-// OpeningBalanceAccount is the counter-account of a new account's opening balance.
-const OpeningBalanceAccount = "equity:opening-balances"
-
-const openingBalancePayee = "opening balance"
-
 // payeeKey names the payee directive.
 const payeeKey = "payee"
 
@@ -86,7 +81,7 @@ func needCategory(rows int) string {
 
 // closing is the bank's closing balance in the ledger's currency and style.
 func (s Staged) closing() (domain.Amount, error) {
-	like := domain.Amount{Commodity: "EUR", Places: 2, Style: euroStyle()}
+	like := domain.DefaultAmount("EUR")
 	if len(s.Zero) > 0 {
 		like = s.Zero[0]
 	}
@@ -95,13 +90,6 @@ func (s Staged) closing() (domain.Amount, error) {
 		return domain.Amount{}, fmt.Errorf("the bank's closing balance %q is unreadable: %w", s.Closing, err)
 	}
 	return amount, nil
-}
-
-const groupSize = 3 // digits per group of thousands
-
-// euroStyle is how an amount is written when the journal has no balance to take a style from.
-func euroStyle() domain.AmountStyle {
-	return domain.AmountStyle{Spaced: true, DecimalMark: ",", GroupMark: ".", GroupSize: groupSize}
 }
 
 // parseAmount reads the German-formatted number the bank prints (13.182,03) in the commodity and style of like.
@@ -141,7 +129,7 @@ func (s Staged) transactions(closing domain.Amount) []domain.NewTransaction {
 		row := &s.Rows[i]
 		counter := domain.NewPosting{Account: row.Target, Amount: row.Amount.Negated()}
 		if row.RuleID != "" {
-			counter.Comment = RuleTag + ":" + row.RuleID
+			counter.Comment = domain.RuleTag + ":" + row.RuleID
 		}
 		own := domain.NewPosting{Account: s.AccountName()}
 		if i == 0 {
@@ -161,10 +149,10 @@ func (s Staged) openingBalance(closing domain.Amount) domain.NewTransaction {
 	opening := domain.MultiAmount{closing}.Plus(s.total().Negated())
 	oldest := s.Rows[len(s.Rows)-1].Date
 	return domain.NewTransaction{
-		Date: oldest.AddDate(0, 0, -1), Description: openingBalancePayee,
+		Date: oldest.AddDate(0, 0, -1), Description: domain.OpeningDescription,
 		Postings: []domain.NewPosting{
 			{Account: s.AccountName(), Amount: opening, Assertion: opening},
-			{Account: OpeningBalanceAccount},
+			{Account: domain.OpeningBalanceAccount},
 		},
 	}
 }
@@ -181,13 +169,13 @@ func (s Staged) declarations() []domain.Edit {
 		edits = append(edits, domain.Declare{Directive: "account", Name: name})
 	}
 	if s.NewAccount {
-		edits = append(edits, domain.Declare{Directive: payeeKey, Name: openingBalancePayee})
+		edits = append(edits, domain.Declare{Directive: payeeKey, Name: domain.OpeningDescription})
 	}
 	for _, payee := range s.payees() {
 		edits = append(edits, domain.Declare{Directive: payeeKey, Name: payee})
 	}
 	if len(s.StagedRules()) > 0 || s.usesRules() {
-		edits = append(edits, domain.Declare{Directive: "tag", Name: RuleTag})
+		edits = append(edits, domain.Declare{Directive: "tag", Name: domain.RuleTag})
 	}
 	return edits
 }
@@ -239,11 +227,7 @@ func preview(changeset domain.Changeset) []string {
 				transactions = append(transactions, transaction.Lines()...)
 			}
 		case domain.Declare:
-			line := change.Directive + " " + change.Name
-			if change.Comment != "" {
-				line += "  ; " + change.Comment
-			}
-			others = append(others, line)
+			others = append(others, change.Line())
 		case domain.SetCategoryRule:
 			others = append(others, strings.Split(change.Text, "\n")...)
 		}

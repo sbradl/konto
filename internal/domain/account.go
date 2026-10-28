@@ -32,6 +32,9 @@ func ParseSource(value string) Source {
 	return SourceNone
 }
 
+// ClearingAccount is the transfer clearing account a new journal declares.
+const ClearingAccount = "assets:transfers"
+
 // The keys of the tags konto keeps on an account directive (spec §5.3); a tag is key:value.
 const (
 	SourceTagKey = "konto:source"
@@ -118,16 +121,6 @@ var (
 	ErrNotClosed     = RefusalError{"the account is not closed"}
 )
 
-// IsZero reports whether every commodity balance is zero.
-func (m MultiAmount) IsZero() bool {
-	for _, amount := range m {
-		if amount.Mantissa != 0 {
-			return false
-		}
-	}
-	return true
-}
-
 // Close returns the changeset that closes the account on the given day. It refuses the clearing
 // account, an account that is already closed, one with a balance, and one a periodic rule still
 // references (rules lists their descriptions).
@@ -176,10 +169,4 @@ func (a Account) ImportRefusal() error {
 		return RefusalError{a.Name + " is unclassified (no konto:source tag) — it cannot be an import target"}
 	}
 	return nil
-}
-
-// FileEntry is one item of a directory listing.
-type FileEntry struct {
-	Name  string
-	IsDir bool
 }

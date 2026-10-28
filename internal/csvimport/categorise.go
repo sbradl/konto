@@ -10,9 +10,6 @@ import (
 	"github.com/sbradl/konto/internal/domain"
 )
 
-// ClearingAccount is the transfer clearing account when the journal does not name one.
-const ClearingAccount = "assets:transfers"
-
 // field is what the row says in the named export column.
 func (r Row) field(name string) string {
 	switch name {
@@ -52,7 +49,7 @@ func (s Staged) clearing() string {
 			return account.Name
 		}
 	}
-	return ClearingAccount
+	return domain.ClearingAccount
 }
 
 // Candidates are the accounts the row can go to, best first: the categories of its direction, the
@@ -170,9 +167,9 @@ func SuggestAccountName(iban string) string {
 
 const suffixDigits = 4
 
-// Name gives the account a new IBAN stands for its name: an asset or a liability, with a leaf no other
+// WithName gives the account a new IBAN stands for its name: an asset or a liability, with a leaf no other
 // account has.
-func (s Staged) Name(name string) (Staged, error) {
+func (s Staged) WithName(name string) (Staged, error) {
 	switch {
 	case name == "":
 		return s, domain.RefusalError{Reason: "the account needs a name"}
@@ -243,9 +240,10 @@ type Impact struct {
 // Impact tells how many rows the rule matches and how many it would take from other rules.
 func (s Staged) Impact(rule Rule) Impact {
 	var impact Impact
+	matches := rule.matcher()
 	for i := range s.Rows {
 		row := &s.Rows[i]
-		if !rule.Matches(*row) {
+		if !matches(*row) {
 			continue
 		}
 		impact.Matches++
@@ -330,9 +328,9 @@ func (s Staged) Widened(id string, alternative []Condition) (Rule, bool) {
 
 // apply gives the rule's category to every row it matches that no rule or choice has claimed.
 func (s Staged) apply(rule Rule) Staged {
-	rows := slices.Clone(s.Rows)
+	rows, matches := slices.Clone(s.Rows), rule.matcher()
 	for i := range rows {
-		if rows[i].Target == "" && rule.Matches(rows[i]) {
+		if rows[i].Target == "" && matches(rows[i]) {
 			rows[i].Target, rows[i].RuleID = rule.Category, rule.ID
 		}
 	}
@@ -363,14 +361,14 @@ func (s Staged) StagedRules() []Rule {
 
 // identity is what makes a row the same row when the export is read again.
 func (r Row) identity() string {
-	return r.Date.Format(time.DateOnly) + "|" + r.Description + "|" + r.Amount.Format() + "|" + r.Purpose
+	return r.Date.Format(time.DateOnly) + "|" + r.Description + "|" + r.Amount.Value() + "|" + r.Purpose
 }
 
-// Carry brings what was staged in the earlier reading of this export over to this one, read again against a
+// Restage brings what was staged in the earlier reading of this export over to this one, read again against a
 // journal that has since changed: the rules this import staged, the categories it created, the name it
 // gave the new account and the choices made for single rows. Rows the staged rules now match are
 // categorised by them.
-func (s Staged) Carry(earlier Staged) Staged {
+func (s Staged) Restage(earlier Staged) Staged {
 	next := s
 	next.NewAccounts = earlier.NewAccounts
 	if next.NewAccount {

@@ -23,6 +23,10 @@ type balances interface {
 }
 
 // Writer is a journal file whose writes keep the carry right.
+//
+// shortcut: Apply and Render take no context, as the ui and checks ports they satisfy have none, so the
+// hledger calls run on context.Background (each still has hledger's own time limit); thread a ctx through
+// those ports to make a write cancellable.
 type Writer struct {
 	file journalFile
 	gw   balances
@@ -75,10 +79,10 @@ func (w *Writer) complete(ctx context.Context, changeset domain.Changeset) (doma
 	}
 	if carried {
 		edits = append(edits,
-			domain.Declare{Directive: "account", Name: domain.CarryAccount},
+			domain.Declare{Directive: "account", Name: domain.OpeningBalanceAccount},
 			domain.Declare{Directive: "payee", Name: domain.OpeningDescription},
 			domain.Declare{Directive: "payee", Name: domain.ClosingDescription},
-			domain.Declare{Directive: "tag", Name: "konto"},
+			domain.Declare{Directive: "tag", Name: domain.KontoTag},
 		)
 	}
 	return domain.Changeset{Edits: edits}, nil

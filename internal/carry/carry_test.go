@@ -69,7 +69,7 @@ func carries(years ...domain.SetCarry) domain.Changeset {
 		edits = append(edits, year)
 	}
 	return domain.Changeset{Edits: append(edits,
-		domain.Declare{Directive: "account", Name: domain.CarryAccount},
+		domain.Declare{Directive: "account", Name: domain.OpeningBalanceAccount},
 		domain.Declare{Directive: "payee", Name: domain.OpeningDescription},
 		domain.Declare{Directive: "payee", Name: domain.ClosingDescription},
 		domain.Declare{Directive: "tag", Name: "konto"},

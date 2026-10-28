@@ -41,6 +41,19 @@ func TestApplySetsATagAndTouchesOnlyThatLine(t *testing.T) {
 	}
 }
 
+func TestApplyRefusesAnEditItDoesNotKnowAndWritesNothing(t *testing.T) {
+	file := journalWith(t, directive+"\n")
+	changeset := closeEdit()
+	changeset.Edits = append(changeset.Edits, struct{ domain.Edit }{})
+
+	if err := file.Apply(changeset); err == nil || !strings.Contains(err.Error(), "unsupported edit") {
+		t.Errorf("err = %v, want the unsupported edit", err)
+	}
+	if got := readFile(t, file.path); got != directive+"\n" {
+		t.Errorf("journal = %q, want it untouched", got)
+	}
+}
+
 func TestApplyReplacesATagWithTheSameKey(t *testing.T) {
 	file := journalWith(t, directive+", konto:closed:2026-01-01\n")
 

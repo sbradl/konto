@@ -231,7 +231,7 @@ func TestPlanForANewAccountOpensItsBalanceTheDayBeforeTheOldestRow(t *testing.T)
 	}
 }
 
-func TestNameChecksTheLeafAndTheKindOfAccount(t *testing.T) {
+func TestWithNameChecksTheLeafAndTheKindOfAccount(t *testing.T) {
 	staged := stagedRows()
 	staged.NewAccounts = []string{"expenses:cafe"}
 	for name, want := range map[string]string{
@@ -241,19 +241,19 @@ func TestNameChecksTheLeafAndTheKindOfAccount(t *testing.T) {
 		"assets:giro:checking": "checking",
 		"assets:cafe":          "cafe",
 	} {
-		_, err := staged.Name(name)
+		_, err := staged.WithName(name)
 
 		if got := refusal(t, err); !strings.Contains(got, want) {
-			t.Errorf("Name(%q) refused with %q, want it to mention %q", name, got, want)
+			t.Errorf("WithName(%q) refused with %q, want it to mention %q", name, got, want)
 		}
 	}
 }
 
-func TestNameStagesAFreshAccountName(t *testing.T) {
+func TestWithNameStagesAFreshAccountName(t *testing.T) {
 	staged := stagedRows()
 	staged.NewAccount = true
 
-	named, err := staged.Name("assets:holiday")
+	named, err := staged.WithName("assets:holiday")
 
 	if err != nil || named.AccountName() != "assets:holiday" || staged.Named != "" {
 		t.Errorf("named = %q, %v (original %q)", named.AccountName(), err, staged.Named)
@@ -290,33 +290,33 @@ func reread() Staged {
 	return fresh
 }
 
-func TestCarryKeepsTheStagedRulesNewCategoriesAndChoicesOfTheEarlierImport(t *testing.T) {
-	carried := reread().Carry(weekImport())
+func TestRestageKeepsTheStagedRulesNewCategoriesAndChoicesOfTheEarlierImport(t *testing.T) {
+	restaged := reread().Restage(weekImport())
 
 	want := weekImport().Rows
-	if !reflect.DeepEqual(carried.Rows, want) {
-		t.Errorf("rows =\n%+v\nwant\n%+v", carried.Rows, want)
+	if !reflect.DeepEqual(restaged.Rows, want) {
+		t.Errorf("rows =\n%+v\nwant\n%+v", restaged.Rows, want)
 	}
-	if rules := carried.StagedRules(); len(rules) != 1 || rules[0].ID != "7" {
+	if rules := restaged.StagedRules(); len(rules) != 1 || rules[0].ID != "7" {
 		t.Errorf("staged rules = %+v, want rule 7", rules)
 	}
-	if !slices.Equal(carried.NewAccounts, []string{"expenses:cafe", "expenses:unused"}) {
-		t.Errorf("new accounts = %v", carried.NewAccounts)
+	if !slices.Equal(restaged.NewAccounts, []string{"expenses:cafe", "expenses:unused"}) {
+		t.Errorf("new accounts = %v", restaged.NewAccounts)
 	}
 }
 
-func TestCarryKeepsAChoiceMadeOnceEvenOverARule(t *testing.T) {
+func TestRestageKeepsAChoiceMadeOnceEvenOverARule(t *testing.T) {
 	earlier := weekImport()
 	earlier.Rows[0].Target, earlier.Rows[0].RuleID, earlier.Rows[0].Once = "expenses:books", "", true
 
-	carried := reread().Carry(earlier)
+	restaged := reread().Restage(earlier)
 
-	if row := carried.Rows[0]; row.Target != "expenses:books" || row.RuleID != "" || !row.Once {
+	if row := restaged.Rows[0]; row.Target != "expenses:books" || row.RuleID != "" || !row.Once {
 		t.Errorf("row = %+v, want the once choice", row)
 	}
 }
 
-func TestCarryReplacesAWidenedRuleAndLeavesNewlyMatchedRowsToIt(t *testing.T) {
+func TestRestageReplacesAWidenedRuleAndLeavesNewlyMatchedRowsToIt(t *testing.T) {
 	earlier := weekImport()
 	earlier.Rules = ParseRules(rulesText)
 	widened := earlier.Rules[0]
@@ -324,37 +324,37 @@ func TestCarryReplacesAWidenedRuleAndLeavesNewlyMatchedRowsToIt(t *testing.T) {
 	widened.Staged = true
 	earlier.Rules[0] = widened
 
-	carried := reread().Carry(earlier)
+	restaged := reread().Restage(earlier)
 
-	if row := carried.Rows[1]; row.Target != widened.Category || row.RuleID != widened.ID {
+	if row := restaged.Rows[1]; row.Target != widened.Category || row.RuleID != widened.ID {
 		t.Errorf("row = %+v, want the widened rule's category", row)
 	}
-	if !reflect.DeepEqual(carried.Rules[0], widened) {
-		t.Errorf("rule = %+v, want the widened one", carried.Rules[0])
+	if !reflect.DeepEqual(restaged.Rules[0], widened) {
+		t.Errorf("rule = %+v, want the widened one", restaged.Rules[0])
 	}
 }
 
-func TestCarryKeepsTheNameOfANewAccount(t *testing.T) {
+func TestRestageKeepsTheNameOfANewAccount(t *testing.T) {
 	earlier := weekImport()
 	earlier.Named = "assets:holiday"
 	fresh := reread()
 	fresh.NewAccount = true
 
-	if got := fresh.Carry(earlier).Named; got != "assets:holiday" {
+	if got := fresh.Restage(earlier).Named; got != "assets:holiday" {
 		t.Errorf("named = %q", got)
 	}
 }
 
-func TestCarryDoesNotMatchTwoRowsToOneChoice(t *testing.T) {
+func TestRestageDoesNotMatchTwoRowsToOneChoice(t *testing.T) {
 	earlier := reread()
 	earlier.Rows = []Row{{Date: day("2026-09-26"), Description: "Kiosk", Purpose: "Zeitung", Amount: eur(-200), Target: "expenses:books", Once: true}}
 	fresh := reread()
 	fresh.Rows = []Row{fresh.Rows[2], fresh.Rows[2]}
 
-	carried := fresh.Carry(earlier)
+	restaged := fresh.Restage(earlier)
 
-	if !carried.Rows[0].Once || carried.Rows[1].Once {
-		t.Errorf("rows = %+v, want only the first to take the choice", carried.Rows)
+	if !restaged.Rows[0].Once || restaged.Rows[1].Once {
+		t.Errorf("rows = %+v, want only the first to take the choice", restaged.Rows)
 	}
 }
 

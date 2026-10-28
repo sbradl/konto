@@ -70,7 +70,7 @@ func open(t *testing.T, iban string, ledger domain.Ledger, transactions ...domai
 func converted(date, description, comment string, mantissa int64, target, rule string) domain.Transaction {
 	counter := domain.Posting{Account: Uncategorised, Amounts: eur(-mantissa)}
 	if target != "" {
-		counter = domain.Posting{Account: target, Amounts: eur(-mantissa), Tags: map[string]string{RuleTag: rule}}
+		counter = domain.Posting{Account: target, Amounts: eur(-mantissa), Tags: map[string]string{domain.RuleTag: rule}}
 	}
 	return domain.Transaction{Date: day(date), Description: description, Comment: comment, Postings: []domain.Posting{
 		{Account: checking, Amounts: eur(mantissa)}, counter,
@@ -272,6 +272,19 @@ func TestRowsOnTheWatermarkAreMatchedAsAMultiset(t *testing.T) {
 
 	if len(staged.Skipped) != 1 || len(staged.Rows) != 1 {
 		t.Errorf("two identical rows against one in the journal: skipped = %d, new = %d, want 1 and 1", len(staged.Skipped), len(staged.Rows))
+	}
+}
+
+func TestRowsOnTheWatermarkMatchTheJournalByValueNotByStyle(t *testing.T) {
+	ledger := sept()
+	ledger.Transactions = []domain.Transaction{journalTxn("2026-09-26", "Vermieter", -123456)}
+	row := converted("2026-09-26", "Vermieter", "Miete", -123456, "", "")
+	row.Postings[0].Amounts[0].Style = domain.AmountStyle{Spaced: true, DecimalMark: ","}
+
+	staged, _, _ := open(t, "DE89370400440532013000", ledger, row)
+
+	if len(staged.Skipped) != 1 || len(staged.Rows) != 0 {
+		t.Errorf("1.234,56 against 1234,56: skipped = %d, new = %d, want the row skipped", len(staged.Skipped), len(staged.Rows))
 	}
 }
 

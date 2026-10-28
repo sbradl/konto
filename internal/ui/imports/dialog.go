@@ -246,7 +246,7 @@ func (m Model) accountKey(key string) Model {
 		m.dlg.refusal = ""
 		return m
 	}
-	named, err := m.staged.Name(m.dlg.filter)
+	named, err := m.staged.WithName(m.dlg.filter)
 	if err != nil {
 		m.dlg.refusal = err.Error()
 		return m

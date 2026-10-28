@@ -2,12 +2,16 @@ package domain
 
 import "time"
 
-// Names of the managed carry transactions (ADR 0013).
+// KontoTag is the tag konto marks the transactions it manages with.
+const KontoTag = "konto"
+
+// Names of the managed carry transactions (ADR 0013); an import's opening balance shares the account and the
+// description.
 const (
-	CarryTag           = "konto:carry"
-	CarryAccount       = "equity:opening-balances"
-	ClosingDescription = "closing balance"
-	OpeningDescription = "opening balance"
+	CarryTag              = "konto:carry" // the konto tag, valued carry
+	OpeningBalanceAccount = "equity:opening-balances"
+	ClosingDescription    = "closing balance"
+	OpeningDescription    = "opening balance"
 )
 
 // SetCarry rewrites the managed carry into Year: the closing transaction at the end of the year file before it
@@ -41,6 +45,6 @@ func (c SetCarry) transaction(date time.Time, description string, signed func(Mu
 	}
 	return NewTransaction{
 		Date: date, Description: description, Comment: CarryTag,
-		Postings: append(postings, NewPosting{Account: CarryAccount}),
+		Postings: append(postings, NewPosting{Account: OpeningBalanceAccount}),
 	}
 }

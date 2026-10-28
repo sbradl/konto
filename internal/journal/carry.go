@@ -77,7 +77,10 @@ func (w *workspace) setCarry(edit domain.SetCarry) error {
 	if prior == 0 {
 		return nil
 	}
-	closing, _ := w.yearFile(prior) // the prior year has its file
+	closing, err := w.yearFile(prior)
+	if err != nil {
+		return err
+	}
 	removeCarry(closing, lastDayOf(prior))
 	if len(edit.Balances) == 0 {
 		return nil

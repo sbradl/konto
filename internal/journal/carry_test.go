@@ -56,6 +56,18 @@ func TestSetCarryClosesTheYearBeforeAndOpensTheYear(t *testing.T) {
 	}
 }
 
+func TestSetCarryReportsAPriorYearFileThatCannotBeRead(t *testing.T) {
+	file := inJanuary2027(t, map[int]string{2025: carriedYear, 2026: carriedYear})
+	if err := os.Chmod(file.yearPath(2025), 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(file.yearPath(2025), 0o644) })
+
+	if err := file.Apply(domain.Changeset{Edits: []domain.Edit{domain.SetCarry{Year: 2026}}}); err == nil {
+		t.Error("expected an error for the closing year's file that cannot be read")
+	}
+}
+
 func TestSetCarryReplacesTheCarryItWroteBeforeAndKeepsTheYearsOwnOpening(t *testing.T) {
 	file := inJanuary2027(t, map[int]string{2026: carriedYear, 2027: ""})
 	apply(t, file, domain.SetCarry{Year: 2027, Balances: balances(900)})

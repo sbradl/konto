@@ -11,10 +11,8 @@ import (
 	"github.com/sbradl/konto/internal/domain"
 )
 
-// rulesFile is the categorisation rules file beside the journal.
-const rulesFile = "categories.rules"
-
-func (f File) rulesPath() string { return filepath.Join(filepath.Dir(f.path), rulesFile) }
+// RulesPath is the categorisation rules file beside the journal.
+func (f File) RulesPath() string { return filepath.Join(filepath.Dir(f.path), "categories.rules") }
 
 // appendLine adds a line at the end of the file, keeping its final newline last.
 func appendLine(file *source, line string) {
@@ -48,11 +46,7 @@ func declare(sources []*source, edit domain.Declare) {
 			}
 		}
 	}
-	line := edit.Directive + " " + edit.Name
-	if edit.Comment != "" {
-		line += "  ; " + edit.Comment
-	}
-	appendLine(sources[0], line)
+	appendLine(sources[0], edit.Line())
 }
 
 // declares reports a line that is the directive naming exactly name, whatever follows the name.
@@ -149,20 +143,12 @@ func (w *workspace) setCategoryRule(edit domain.SetCategoryRule) error {
 		w.rules = &source{path: w.rulesPath, lines: strings.Split(string(text), "\n")}
 	}
 	block := strings.Split(edit.Text, "\n")
-	marker := "comment2 konto-rule:" + edit.ID
-	at := slices.IndexFunc(w.rules.lines, func(line string) bool { return strings.TrimSpace(line) == marker })
-	if at < 0 {
+	first, end, found := edit.Block(w.rules.lines)
+	if !found {
 		appendBlock(w.rules, block)
 		return nil
 	}
-	first, last := at, at
-	for first > 0 && w.rules.lines[first-1] != "" {
-		first--
-	}
-	for last+1 < len(w.rules.lines) && w.rules.lines[last+1] != "" {
-		last++
-	}
-	w.rules.lines = slices.Replace(w.rules.lines, first, last+1, block...)
+	w.rules.lines = slices.Replace(w.rules.lines, first, end, block...)
 	w.rules.dirty = true
 	return nil
 }

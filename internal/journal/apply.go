@@ -27,7 +27,7 @@ func (f File) plan(changeset domain.Changeset) (*workspace, error) {
 		return nil, err
 	}
 	work := &workspace{
-		sources: sources, rulesPath: f.rulesPath(),
+		sources: sources, rulesPath: f.RulesPath(),
 		lastYear: f.lastYear(), yearPath: f.yearPath, onDisk: f.yearsOnDisk(), created: map[int]bool{},
 	}
 	for _, edit := range changeset.Edits {
@@ -108,8 +108,6 @@ func (w *workspace) apply(edit domain.Edit) error {
 		setTag(w.sources, change)
 	case domain.RemoveAccountTag:
 		editDirective(w.sources, change.Account, func(tags []string) []string { return withoutTag(tags, change.Key) })
-	case domain.DeleteRule:
-		return deleteRule(w.sources, change.Pos)
 	case domain.Declare:
 		declare(w.sources, change)
 	case domain.AddTransactions:
@@ -118,12 +116,24 @@ func (w *workspace) apply(edit domain.Edit) error {
 		return w.setCategoryRule(change)
 	case domain.SetCarry:
 		return w.setCarry(change)
-	case domain.AddRule:
-		addRule(w.sources, change)
-	case domain.ReplaceRule:
-		return replaceRule(w.sources, change)
+	default:
+		return applyRuleEdit(w.sources, edit)
 	}
 	return nil
+}
+
+// applyRuleEdit makes an edit of a `~` rule; any other edit is one konto does not know.
+func applyRuleEdit(sources []*source, edit domain.Edit) error {
+	switch change := edit.(type) {
+	case domain.DeleteRule:
+		return deleteRule(sources, change.Pos)
+	case domain.AddRule:
+		addRule(sources, change)
+		return nil
+	case domain.ReplaceRule:
+		return replaceRule(sources, change)
+	}
+	return fmt.Errorf("unsupported edit %T", edit)
 }
 
 // ruleAt is the file and the first line index of the `~` block that starts at pos. The line there must be a
@@ -190,7 +200,7 @@ func setTag(sources []*source, edit domain.SetAccountTag) {
 	if editDirective(sources, edit.Account, update) {
 		return
 	}
-	appendLine(sources[0], "account "+edit.Account+"  ; "+tag)
+	appendLine(sources[0], domain.Declare{Directive: "account", Name: edit.Account, Comment: tag}.Line())
 }
 
 // editDirective rewrites the tags of the account's directive; false when no file declares it.
@@ -227,12 +237,7 @@ func splitTags(comment string) []string {
 	return tags
 }
 
-func joinTags(tags []string) string {
-	if len(tags) == 0 {
-		return ""
-	}
-	return "  ; " + strings.Join(tags, ", ")
-}
+func joinTags(tags []string) string { return domain.TrailingComment(strings.Join(tags, ", ")) }
 
 // withoutTag drops the tags with the given key.
 func withoutTag(tags []string, key string) []string {

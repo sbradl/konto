@@ -1,6 +1,10 @@
 package domain
 
-import "time"
+import (
+	"slices"
+	"strings"
+	"time"
+)
 
 // NewPosting is one posting of a transaction to be written. An empty Amount is left for hledger to infer.
 type NewPosting struct {
@@ -22,7 +26,7 @@ type NewTransaction struct {
 func (t NewTransaction) Lines() []string {
 	header := t.Date.Format(time.DateOnly) + " " + t.Description
 	lines := make([]string, 0, 1+len(t.Postings))
-	lines = append(lines, header+commentOf(t.Comment))
+	lines = append(lines, header+TrailingComment(t.Comment))
 	for _, posting := range t.Postings {
 		lines = append(lines, "    "+posting.text())
 	}
@@ -40,10 +44,12 @@ func (p NewPosting) text() string {
 	if len(p.Assertion) > 0 {
 		text += " = " + p.Assertion[0].Format()
 	}
-	return text + commentOf(p.Comment)
+	return text + TrailingComment(p.Comment)
 }
 
-func commentOf(comment string) string {
+// TrailingComment is the comment as it ends a journal line, two spaces and a semicolon before it; nothing for
+// no comment.
+func TrailingComment(comment string) string {
 	if comment == "" {
 		return ""
 	}
@@ -63,11 +69,38 @@ type Declare struct {
 	Comment   string // the directive's comment, without the semicolon; empty for none
 }
 
+// Line is the directive as the journal writes it.
+func (d Declare) Line() string { return d.Directive + " " + d.Name + TrailingComment(d.Comment) }
+
+// RuleTag is the posting tag that carries the id of the import rule that categorised a row.
+const RuleTag = "konto-rule"
+
 // SetCategoryRule adds the rule block, or replaces the block whose `konto-rule` id is ID, in the
 // categories.rules file beside the journal.
 type SetCategoryRule struct {
 	ID   string
 	Text string
+}
+
+// RuleIDLine is the line of a categories.rules block that tags the posting with the rule's id, indentation
+// aside. Blank lines separate the blocks.
+func RuleIDLine(id string) string { return "comment2 " + RuleTag + ":" + id }
+
+// Block is where the rule's block is among the lines of categories.rules: its first line and the index after
+// its last; false when no block has the rule's id.
+func (e SetCategoryRule) Block(lines []string) (first, end int, found bool) {
+	at := slices.IndexFunc(lines, func(line string) bool { return strings.TrimSpace(line) == RuleIDLine(e.ID) })
+	if at < 0 {
+		return 0, 0, false
+	}
+	first, end = at, at+1
+	for first > 0 && lines[first-1] != "" {
+		first--
+	}
+	for end < len(lines) && lines[end] != "" {
+		end++
+	}
+	return first, end, true
 }
 
 func (Declare) isEdit()         {}

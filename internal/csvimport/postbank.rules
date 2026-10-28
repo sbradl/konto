@@ -3,14 +3,15 @@ separator ;
 decimal-mark ,
 date-format %-d.%-m.%Y
 newest-first
-fields date, , umsatzart, payee, purpose, , , , , , , betrag, , , , , , waehrung
+# the field names are the ones categories.rules tests: %payee, %type, %purpose
+fields date, , type, payee, purpose, , , , , , , betrag, , , , , , waehrung
 if ^Buchungstag
  skip
 if ^Kontostand
  skip
 description %payee
 if %payee ^$
- description %umsatzart
+ description %type
 comment %purpose
 amount %betrag EUR
 account2 konto:uncategorised

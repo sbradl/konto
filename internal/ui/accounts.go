@@ -191,7 +191,7 @@ func (m Model) onReopened(opened openedMsg) Model {
 	case opened.err != nil:
 		m.refreshErr = opened.err
 	default:
-		m.imports = m.imports.WithRefreshed(opened.staged.Carry(*opened.earlier))
+		m.imports = m.imports.WithRefreshed(opened.staged.Restage(*opened.earlier))
 	}
 	return m
 }

@@ -104,7 +104,7 @@ func (l Ledger) Watermark(account string) (time.Time, bool) {
 const defaultGroupSize = 3 // digits per group of thousands
 
 // AmountLike is a zero in the commodity written the way the journal shows it: the style and the places of an
-// account holding it, else the plain comma-decimal style with two places.
+// account holding it, else the default.
 func (l Ledger) AmountLike(commodity string) Amount {
 	for _, account := range l.Accounts {
 		for _, amount := range account.Balance {
@@ -113,6 +113,12 @@ func (l Ledger) AmountLike(commodity string) Amount {
 			}
 		}
 	}
+	return DefaultAmount(commodity)
+}
+
+// DefaultAmount is a zero in the commodity in the plain comma-decimal style with two places, for when the
+// journal has no amount to take a style from.
+func DefaultAmount(commodity string) Amount {
 	return Amount{Commodity: commodity, Places: 2, Style: AmountStyle{
 		Spaced: true, DecimalMark: ",", GroupMark: ".", GroupSize: defaultGroupSize,
 	}}

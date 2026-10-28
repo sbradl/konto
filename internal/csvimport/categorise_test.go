@@ -187,7 +187,7 @@ func TestTheClearingAccountIsTheOneTheLedgerNamesElseTheDefault(t *testing.T) {
 		t.Errorf("target = %q", got)
 	}
 	s.Known = []domain.Account{{Name: "assets:s", Source: domain.SourceImport}}
-	if got := s.Candidates(s.Rows[0])[0].Target; got != ClearingAccount {
+	if got := s.Candidates(s.Rows[0])[0].Target; got != domain.ClearingAccount {
 		t.Errorf("target = %q", got)
 	}
 }
@@ -479,7 +479,7 @@ func TestRecordsSkipLinesThatAreNoBookings(t *testing.T) {
 		"1.9.2026;1.9.2026;Umbuchung;Sparen;Sparen",
 	}
 	want := []record{{date: "2026-09-01", kind: "Umbuchung", payee: "Sparen", purpose: "Sparen"}}
-	if got := recordsOf(lines); !reflect.DeepEqual(got, want) {
+	if got := postbank().recordsOf(lines); !reflect.DeepEqual(got, want) {
 		t.Errorf("records = %+v, want %+v", got, want)
 	}
 }

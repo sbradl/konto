@@ -5,6 +5,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/sbradl/konto/internal/domain"
 )
 
 // Condition is one `%field pattern` test of a categorisation rule. The pattern is a case-insensitive
@@ -24,23 +26,29 @@ type Rule struct {
 }
 
 // Matches reports whether any alternative of the rule holds for the row.
-func (r Rule) Matches(row Row) bool {
-	for _, alternative := range r.Alternatives {
-		if allHold(alternative, row) {
-			return true
+func (r Rule) Matches(row Row) bool { return r.matcher()(row) }
+
+// matcher is Matches with the patterns compiled once, for testing many rows; an invalid pattern holds for none.
+func (r Rule) matcher() func(Row) bool {
+	alternatives := make([][]func(Row) bool, len(r.Alternatives))
+	for i, alternative := range r.Alternatives {
+		for _, condition := range alternative {
+			alternatives[i] = append(alternatives[i], condition.matcher())
 		}
 	}
-	return false
+	return func(row Row) bool {
+		return slices.ContainsFunc(alternatives, func(conditions []func(Row) bool) bool {
+			return !slices.ContainsFunc(conditions, func(holds func(Row) bool) bool { return !holds(row) })
+		})
+	}
 }
 
-func allHold(conditions []Condition, row Row) bool {
-	for _, condition := range conditions {
-		pattern, err := regexp.Compile("(?i)" + condition.Pattern)
-		if err != nil || !pattern.MatchString(row.field(condition.Field)) {
-			return false
-		}
+func (c Condition) matcher() func(Row) bool {
+	pattern, err := regexp.Compile("(?i)" + c.Pattern)
+	if err != nil {
+		return func(Row) bool { return false }
 	}
-	return true
+	return func(row Row) bool { return pattern.MatchString(row.field(c.Field)) }
 }
 
 // Text is the rule as categories.rules spells it.
@@ -58,7 +66,7 @@ func (r Rule) Text() string {
 			lines = append(lines, line)
 		}
 	}
-	lines = append(lines, "    account2 "+r.Category, "    comment2 "+RuleTag+":"+r.ID)
+	lines = append(lines, "    account2 "+r.Category, "    "+domain.RuleIDLine(r.ID))
 	return strings.Join(lines, "\n")
 }
 
@@ -99,8 +107,8 @@ func (r Rule) withLine(line string) Rule {
 		return r.orCondition(line)
 	case strings.HasPrefix(trimmed, "account2 "):
 		r.Category = strings.TrimSpace(strings.TrimPrefix(trimmed, "account2 "))
-	case strings.HasPrefix(trimmed, "comment2 "+RuleTag+":"):
-		r.ID = strings.TrimSpace(strings.TrimPrefix(trimmed, "comment2 "+RuleTag+":"))
+	case strings.HasPrefix(trimmed, domain.RuleIDLine("")):
+		r.ID = strings.TrimSpace(strings.TrimPrefix(trimmed, domain.RuleIDLine("")))
 	}
 	return r
 }

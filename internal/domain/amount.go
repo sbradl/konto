@@ -171,6 +171,30 @@ func (m MultiAmount) Negated() MultiAmount {
 	return negated
 }
 
+// IsZero reports whether every commodity balance is zero.
+func (m MultiAmount) IsZero() bool {
+	for _, amount := range m {
+		if amount.Mantissa != 0 {
+			return false
+		}
+	}
+	return true
+}
+
+// Value is the quantities and commodities without their display style or trailing zero decimals, so equal
+// amounts compare equal however the journal or the export writes them: "1234.56EUR".
+func (m MultiAmount) Value() string {
+	values := make([]string, len(m))
+	for i, amount := range m {
+		for amount.Places > 0 && amount.Mantissa%decimalBase == 0 {
+			amount.Mantissa, amount.Places = amount.Mantissa/decimalBase, amount.Places-1
+		}
+		amount.Style = AmountStyle{DecimalMark: "."}
+		values[i] = amount.Format()
+	}
+	return strings.Join(values, " ")
+}
+
 // Zeroed is the same commodities and styles with nothing in them.
 func (m MultiAmount) Zeroed() MultiAmount {
 	zero := make(MultiAmount, len(m))

@@ -1,6 +1,7 @@
 package journal
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/sbradl/konto/internal/domain"
@@ -26,17 +27,11 @@ func blocksIn(source *source) []domain.PeriodicRule {
 		if !strings.HasPrefix(line, "~") {
 			continue
 		}
-		lines := []string{line}
-		for _, next := range source.lines[i+1:] {
-			if !strings.HasPrefix(next, " ") && !strings.HasPrefix(next, "\t") {
-				break
-			}
-			lines = append(lines, next)
-		}
 		period, _, _ := strings.Cut(headerBody(line), "  ")
 		rules = append(rules, domain.PeriodicRule{
-			Period: strings.TrimSpace(period), Description: ruleName(line), Lines: lines,
-			Pos: domain.SourcePos{File: source.path, Line: i + 1},
+			Period: strings.TrimSpace(period), Description: ruleName(line),
+			Lines: slices.Clone(source.lines[i:blockEnd(source.lines, i)]),
+			Pos:   domain.SourcePos{File: source.path, Line: i + 1},
 		})
 	}
 	return rules
@@ -57,33 +52,19 @@ func (f File) RulesReferencing(account string) ([]string, error) {
 	}
 	var rules []string
 	for _, source := range sources {
-		rules = append(rules, rulesIn(source.lines, account)...)
+		rules = append(rules, rulesIn(source, account)...)
 	}
 	return rules, nil
 }
 
-// rulesIn finds the `~` blocks of lines that post to account: a header line, then indented postings.
-func rulesIn(lines []string, account string) []string {
+// rulesIn names the `~` blocks of the file that have a posting to account.
+func rulesIn(source *source, account string) []string {
 	var rules []string
-	name, inRule, references := "", false, false
-	flush := func() {
-		if inRule && references {
-			rules = append(rules, name)
-		}
-		inRule, references = false, false
-	}
-	for _, line := range lines {
-		switch {
-		case strings.HasPrefix(line, "~"):
-			flush()
-			name, inRule = ruleName(line), true
-		case strings.HasPrefix(line, " ") || strings.HasPrefix(line, "\t"):
-			references = references || postingAccount(line) == account
-		default:
-			flush()
+	for _, rule := range blocksIn(source) {
+		if slices.ContainsFunc(rule.Lines[1:], func(line string) bool { return postingAccount(line) == account }) {
+			rules = append(rules, rule.Description)
 		}
 	}
-	flush()
 	return rules
 }
 

@@ -3,7 +3,6 @@ package main
 import (
 	"os"
 	"os/exec"
-	"path/filepath"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -41,7 +40,7 @@ func main() {
 func runProgram(cfg config.Config) error {
 	today := todayFunc(os.Getenv, time.Now)
 	file := journal.NewFile(cfg.JournalPath, today)
-	rulesPath := filepath.Join(filepath.Dir(cfg.JournalPath), "categories.rules")
+	rulesPath := file.RulesPath()
 	client := hledger.New("hledger", file.Window)
 	loader := ledger.NewLoader(client, file, today)
 	writer := carry.NewWriter(file, client)

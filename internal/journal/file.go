@@ -19,8 +19,9 @@ import (
 func skeleton() string {
 	clearing := domain.Declaration{Source: domain.SourceClearing}.Comment()
 	return strings.Join([]string{
-		"decimal-mark ,", "commodity 1.000,00 EUR", "account " + domain.CarryAccount,
-		"account assets:transfers  ; " + clearing, "tag konto", "tag konto-rule", "",
+		"decimal-mark ,", "commodity 1.000,00 EUR", "account " + domain.OpeningBalanceAccount,
+		domain.Declare{Directive: "account", Name: domain.ClearingAccount, Comment: clearing}.Line(),
+		"tag " + domain.KontoTag, "tag " + domain.RuleTag, "",
 	}, "\n")
 }
 
@@ -61,7 +62,7 @@ func (f File) Create() error {
 	if err := writeNew(f.path, skeleton()); err != nil {
 		return err
 	}
-	return touch(filepath.Join(dir, "categories.rules"))
+	return touch(f.RulesPath())
 }
 
 // Window is what hledger is given: the main journal plus last year's and this year's file when they
