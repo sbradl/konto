@@ -169,9 +169,6 @@ func (m Model) View() string {
 	return lipgloss.JoinHorizontal(lipgloss.Top, left, column)
 }
 
-// extraPanels are the panels beside Accounts: the two stat cards, Recent, Upcoming and the spend chart.
-const extraPanels = 5
-
 // fitting is which of the panels beside Accounts the terminal has room for: the right column (the stat
 // cards over Recent), the lower band below Recent (Upcoming) and, beside Upcoming, the spend chart.
 type fitting struct{ right, band, chart bool }
@@ -186,17 +183,20 @@ func (m Model) fit() fitting {
 	return fit
 }
 
-// HiddenPanels is how many of the panels beside Accounts the terminal is too small to show.
+// HiddenPanels is how many of the panels beside Accounts the terminal is too small to show: each part of
+// the fit left out hides its own panels and, since the parts nest, those of the parts within it.
 func (m Model) HiddenPanels() int {
-	switch fit := m.fit(); {
-	case !fit.right:
-		return extraPanels
-	case !fit.band:
-		return 2 // Upcoming and the chart
-	case !fit.chart:
-		return 1 // the chart
+	fit, hidden := m.fit(), 0
+	parts := []struct {
+		shown  bool
+		panels int
+	}{{fit.right, cardCount + 1}, {fit.band, 1}, {fit.chart, 1}} // the cards and Recent, Upcoming, the chart
+	for _, part := range parts {
+		if !part.shown {
+			hidden += part.panels
+		}
 	}
-	return 0
+	return hidden
 }
 
 // listPanels stacks Recent over Upcoming beside the spend chart, leaving out what does not fit.

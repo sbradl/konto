@@ -338,11 +338,35 @@ func (w *world) press(keys ...string) error {
 			return err
 		}
 		s.settle(w.suite.timeout)
-		if k == "y" { // a confirmed write is followed by a reload; what comes next must see its result
-			s.waitFor(w.suite.timeout, func(screen string) bool { return !strings.Contains(screen, "⣾") })
+		if writeKeys[k] { // a write is followed by a reload; what comes next must see its result
+			if err := w.awaitReload(); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
+}
+
+// spinner is the status bar's mark of a write or reload in flight.
+const spinner = "⣾"
+
+// writeKeys are the keys that can start a write: y answers a write's question, Enter and Ctrl+S save the
+// Scheduled form. r reloads too but is left out: a scenario watches its spinner.
+var writeKeys = map[string]bool{"y": true, "Enter": true, "Ctrl+S": true}
+
+// awaitReload waits for the write or reload in flight to land, so what comes next sees its result; with none
+// in flight it returns at once.
+func (w *world) awaitReload() error {
+	return w.eventually(func() error {
+		s, err := w.session()
+		if err != nil {
+			return err
+		}
+		if strings.Contains(s.screenText(), spinner) {
+			return errors.New("still reloading")
+		}
+		return nil
+	})
 }
 
 // dump writes the failed scenario's screen, stderr and hledger calls.

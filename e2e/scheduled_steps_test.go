@@ -175,12 +175,7 @@ func (w *world) expectRuleListEmpty() error {
 
 // selectRule moves the cursor down to the rule with the description.
 func (w *world) selectRule(description string) error {
-	if err := w.eventually(func() error { // the list must be the reloaded one, or the rule is not where it was
-		if line, err := w.statusLine(); err != nil || strings.Contains(line, "⣾") {
-			return errors.New("still reloading")
-		}
-		return nil
-	}); err != nil {
+	if err := w.awaitReload(); err != nil { // the list must be the reloaded one, or the rule is not where it was
 		return err
 	}
 	var target int

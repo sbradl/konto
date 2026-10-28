@@ -339,3 +339,11 @@ func TestATransferRowIsMarked(t *testing.T) {
 		t.Errorf("no transfer mark:\n%s", view)
 	}
 }
+
+func TestWithNoDialogOpenThereIsNothingToHandOrDraw(t *testing.T) {
+	m := categorising()
+
+	if title, body := m.dialogBody(); title != "" || body != nil || m.dialogKey("x").Capturing() {
+		t.Errorf("title %q, body %v", title, body)
+	}
+}

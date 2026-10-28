@@ -62,6 +62,20 @@ func TestCAsksBeforeClosingTheSelectedAccount(t *testing.T) {
 	}
 }
 
+func TestCAndOWaitForTheReloadBecauseTheAccountMayHaveChanged(t *testing.T) {
+	planner := &fakePlanner{changeset: closeSpare}
+	model := withAccounts(t, planner, &fakeWriter{})
+	model.refreshing = true
+
+	for _, key := range []string{"c", "o"} {
+		pressed, _ := press(model, key)
+
+		if pressed.prompt != nil || !strings.Contains(lastLine(pressed), "try again in a moment") {
+			t.Errorf("%s: status %q, prompt %v", key, lastLine(pressed), pressed.prompt)
+		}
+	}
+}
+
 func TestYAppliesThePlannedChangeAndRefreshes(t *testing.T) {
 	planner, writer := &fakePlanner{changeset: closeSpare}, &fakeWriter{}
 	model, _ := press(withAccounts(t, planner, writer), "c")

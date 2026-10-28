@@ -18,13 +18,21 @@ type prompt struct {
 	quit     bool // y leaves konto: the question is about discarding the staged import
 }
 
-// pendingWrite is a changeset on its way to the journal and what follows once it is there.
+// pendingWrite is a changeset on its way to the journal and what follows once it is there. Every key that
+// plans one first asks busy, and waits while it is: a plan of the snapshot on screen is stale once a write or
+// reload is in flight.
 type pendingWrite struct {
 	changeset domain.Changeset
 	verify    bool              // checked first, so a journal that would fail its checks is never written
 	notice    string            // what the status bar says once it is written
 	written   func(Model) Model // what else changes on screen once it is written; nil for nothing
 }
+
+// reloadingNotice asks for a key refused while the model is busy to be pressed again.
+const reloadingNotice = "the journal is reloading — try again in a moment"
+
+// busy reports a write or reload in flight: the snapshot on screen is about to change.
+func (m Model) busy() bool { return m.refreshing }
 
 // onPromptKey answers the open y/n prompt; every other key leaves it open.
 func (m Model) onPromptKey(key string) (Model, tea.Cmd) {

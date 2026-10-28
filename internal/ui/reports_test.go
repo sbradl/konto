@@ -123,6 +123,20 @@ func TestAFailedReportKeepsTheOldOneAndFlagsTheError(t *testing.T) {
 	}
 }
 
+func TestAReportOfANewPeriodThatFailsSaysWhyInTheView(t *testing.T) {
+	var periods []domain.Period
+	model, _ := press(startedWithReports(t, fakeReporter{periods: &periods}), "5")
+	model, _ = press(model, "p")
+
+	failed, _ := model.Update(reportLoadedMsg{period: domain.QuarterToDate, err: errors.New("hledger bal: boom")})
+
+	content := plain(failed.(Model).View().Content)
+	if strings.Contains(content, "for month to date") || !strings.Contains(content, "hledger bal: boom") ||
+		!strings.Contains(content, "✗ error") {
+		t.Errorf("view:\n%s", content)
+	}
+}
+
 func TestArrowsScrollTheReportsAndOtherViewsIgnoreThem(t *testing.T) {
 	var periods []domain.Period
 	model, _ := press(startedWithReports(t, fakeReporter{periods: &periods}), "5")

@@ -284,3 +284,35 @@ func TestEAndDWaitForTheReloadBecauseTheRulesMayHaveMoved(t *testing.T) {
 		}
 	}
 }
+
+func TestEAndDWaitForTheReloadAfterTheEditorCloses(t *testing.T) {
+	rig := scheduledWithForm(t, &fakeRules{})
+	updated, _ := rig.model.Update(editorClosedMsg{})
+	model := updated.(Model)
+
+	if !strings.Contains(lastLine(model), "⣾") {
+		t.Errorf("status %q, want the spinner while the edited journal reloads", lastLine(model))
+	}
+	for _, key := range []string{"e", "d"} {
+		pressed, cmd := press(model, key)
+
+		if cmd != nil || pressed.prompt != nil || !strings.Contains(lastLine(pressed), "reloading") {
+			t.Errorf("%s: status %q, prompt %v", key, lastLine(pressed), pressed.prompt)
+		}
+	}
+}
+
+func TestAFormReadAfterTheRuleWasDeletedOrReloadedIsDropped(t *testing.T) {
+	cases := map[string][]string{"deleted": {"d", "y"}, "asked to delete": {"d"}, "reloaded": {"r"}, "new form": {"n"}}
+	for name, keys := range cases {
+		rig := scheduledWithForm(t, &fakeRules{})
+		model, read := press(rig.model, "e")
+		model = keysFor(model, keys...)
+
+		updated, _ := model.Update(read())
+
+		if got := updated.(Model).scheduled; got.Capturing() && !strings.Contains(got.View(), "new periodic rule") {
+			t.Errorf("%s: the form opened on a rule read before the journal changed:\n%s", name, got.View())
+		}
+	}
+}

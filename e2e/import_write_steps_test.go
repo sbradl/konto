@@ -152,13 +152,7 @@ func (w *world) writeImport() error {
 	if err := w.expectLine(-1, "status bar", "imported ", strings.Contains); err != nil {
 		return err
 	}
-	return w.eventually(func() error {
-		line, err := w.statusLine()
-		if err == nil && strings.Contains(line, "⣾") {
-			err = errors.New("still reloading")
-		}
-		return err
-	})
+	return w.awaitReload()
 }
 
 // openUnlessStaged opens the file in Import, unless that very file is already staged: what was staged for it

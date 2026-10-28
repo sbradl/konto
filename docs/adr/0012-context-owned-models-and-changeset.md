@@ -36,3 +36,9 @@ fresh `Ledger` (couples every writer to the `Loader`); checks inside the `Loader
 only refresh with a full reload, and the snapshot mixes journal data with journal health).
 
 Status: accepted.
+
+Amended (as built): there is no `journalChangedMsg` and no view emits one — views run no commands
+(ADR 0004, amended). A view's action makes the root plan the `Changeset` and ask y/n; the root
+verifies and applies it, and on `writtenMsg` shows the confirmation and reloads through the same
+`reload()` as `r` and the return from `$EDITOR`. Views and write use cases still never hold the
+`Loader`.

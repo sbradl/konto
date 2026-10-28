@@ -83,6 +83,11 @@ type ledgerLoadedMsg struct {
 	err    error
 }
 
+func (msg journalCreateFailedMsg) takeIn(m Model) Model {
+	m.createErr = msg.err
+	return m
+}
+
 // Model is konto's single tea.Model.
 type Model struct {
 	journalPath string
@@ -126,6 +131,11 @@ type browsedMsg struct {
 	err     error
 }
 
+func (msg browsedMsg) takeIn(m Model) Model {
+	m.imports = m.imports.WithListing(msg.dir, msg.entries, msg.err)
+	return m
+}
+
 // openedMsg carries an export read against the journal. When the staged import was read again after the
 // journal changed, earlier is what had been staged and load the load it was read again for.
 type openedMsg struct {
@@ -135,12 +145,16 @@ type openedMsg struct {
 	load    int
 }
 
+func (msg openedMsg) takeIn(m Model) Model { return m.onOpened(msg) }
+
 // forecastLoadedMsg carries a forecast built from the journal of a load, or why it could not be built.
 type forecastLoadedMsg struct {
 	load     int
 	forecast forecastsvc.Forecast
 	err      error
 }
+
+func (msg forecastLoadedMsg) takeIn(m Model) Model { return m.onForecast(msg) }
 
 // reportLoadedMsg carries a built report for the period and load it was asked for.
 type reportLoadedMsg struct {
@@ -149,6 +163,8 @@ type reportLoadedMsg struct {
 	report domain.Report
 	err    error
 }
+
+func (msg reportLoadedMsg) takeIn(m Model) Model { return m.onReport(msg) }
 
 // writtenMsg reports that a changeset was applied, and what was to follow, or why it was not.
 type writtenMsg struct {
@@ -204,9 +220,11 @@ func (m Model) load() tea.Msg {
 	return ledgerLoadedMsg{load: m.loads, ledger: snapshot, run: run, err: err}
 }
 
-// reload loads the journal again; whatever an earlier load still in flight finds out is dropped.
+// reload loads the journal again, the spinner showing until it lands; whatever an earlier load still in
+// flight finds out is dropped.
 func (m Model) reload() (Model, tea.Cmd) {
 	m.loads++
+	m.refreshing = true
 	return m, m.load
 }
 
@@ -218,32 +236,28 @@ func (m Model) create() tea.Msg {
 	return m.load()
 }
 
-// Update handles app-level input.
+// result is what a command found out that asks for nothing further; it takes itself into the model.
+type result interface {
+	takeIn(m Model) Model
+}
+
+// Update routes a message: the terminal's size and keys to the root, what a command found out to its handler.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if size, ok := msg.(tea.WindowSizeMsg); ok {
-		m = m.resize(size)
-	}
-	if loaded, ok := msg.(ledgerLoadedMsg); ok {
-		if loaded.load != m.loads {
-			return m, nil
-		}
-		m = m.onLoaded(loaded)
-		return m, tea.Batch(m.loadReport(loaded.err), m.reopen(loaded), m.loadForecast(loaded))
-	}
-	if updated, handled := m.onResult(msg); handled {
-		return updated, nil
-	}
-	if _, ok := msg.(editorClosedMsg); ok {
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		return m.resize(msg), nil
+	case tea.KeyPressMsg:
+		return m.onKey(msg)
+	case ledgerLoadedMsg:
+		return m.onLedgerLoaded(msg)
+	case editorClosedMsg:
 		return m.reload()
-	}
-	if saved, ok := msg.(ruleSavedMsg); ok {
-		return m.onRuleSaved(saved)
-	}
-	if written, ok := msg.(writtenMsg); ok {
-		return m.onWritten(written)
-	}
-	if key, ok := msg.(tea.KeyPressMsg); ok {
-		return m.onKey(key)
+	case ruleSavedMsg:
+		return m.onRuleSaved(msg)
+	case writtenMsg:
+		return m.onWritten(msg)
+	case result:
+		return msg.takeIn(m), nil
 	}
 	return m, nil
 }
@@ -258,26 +272,14 @@ func (m Model) resize(size tea.WindowSizeMsg) Model {
 	return m
 }
 
-// onResult takes in what a command found out: a forecast, a report, a folder listing, an export, a failure
-// to create the journal. handled is false for any other message.
-func (m Model) onResult(msg tea.Msg) (updated Model, handled bool) {
-	switch result := msg.(type) {
-	case forecastLoadedMsg:
-		return m.onForecast(result), true
-	case formReadyMsg:
-		return m.onFormReady(result), true
-	case reportLoadedMsg:
-		return m.onReport(result), true
-	case browsedMsg:
-		m.imports = m.imports.WithListing(result.dir, result.entries, result.err)
-		return m, true
-	case openedMsg:
-		return m.onOpened(result), true
-	case journalCreateFailedMsg:
-		m.createErr = result.err
-		return m, true
+// onLedgerLoaded takes the latest load in and builds what follows from it: the report, the staged export read
+// again, the forecast. A load asked for before the latest is dropped.
+func (m Model) onLedgerLoaded(loaded ledgerLoadedMsg) (Model, tea.Cmd) {
+	if loaded.load != m.loads {
+		return m, nil
 	}
-	return m, false
+	m = m.onLoaded(loaded)
+	return m, tea.Batch(m.loadReport(loaded.err), m.reopen(loaded), m.loadForecast(loaded))
 }
 
 // onLoaded takes a load result in. Once a good snapshot is held, a failed reload
@@ -313,12 +315,13 @@ func (m Model) loadReport(loadErr error) tea.Cmd {
 }
 
 // onReport takes a built report in; one for a period no longer shown or of an earlier load is dropped, and a
-// failed one leaves the old report on screen with the error flagged.
+// failed one is flagged, the Reports view saying why when it has no report of the period to show.
 func (m Model) onReport(loaded reportLoadedMsg) Model {
 	switch {
 	case loaded.period != m.reports.Period() || loaded.load != m.loads:
 	case loaded.err != nil:
 		m.failure = loaded.err
+		m.reports = m.reports.WithFailure(loaded.err)
 	default:
 		m.reports = m.reports.WithReport(loaded.report)
 	}
@@ -364,17 +367,14 @@ func (m Model) onKey(key tea.KeyPressMsg) (Model, tea.Cmd) {
 	case "q", "ctrl+c":
 		return m.quit()
 	}
-	if m.tooSmall() {
-		return m, nil
-	}
-	if m.firstRun {
+	switch m.screen() {
+	case screenFirstRun:
 		return m, m.onFirstRunKey(name)
-	}
-	if m.parseIssue != nil {
+	case screenParseIssue:
 		return m, m.onParseErrorKey(name)
-	}
-	if m.ledger != nil {
+	case screenViews, screenLoadFailed:
 		return m.onViewKey(name)
+	case screenTooSmall, screenLoading:
 	}
 	return m, nil
 }
@@ -400,7 +400,7 @@ func keyName(key tea.KeyPressMsg) string {
 // capturing reports whether a dialog of the view on screen, the Import dialog or the Scheduled form, has the
 // keyboard: every key is then text for it.
 func (m Model) capturing() bool {
-	if m.ledger == nil || m.prompt != nil || m.popup != popupNone || m.tooSmall() {
+	if m.screen() != screenViews || m.prompt != nil || m.popup != popupNone {
 		return false
 	}
 	captures := m.activeTab().captures
@@ -431,11 +431,14 @@ func (m Model) onViewKey(key string) (Model, tea.Cmd) {
 		return m.onPromptKey(key)
 	}
 	m.notice = ""
-	if m.popup != popupNone && key != "r" {
+	if m.popup != popupNone {
 		return m.onPopupKey(key)
 	}
 	if updated, cmd, global := m.onGlobalKey(key); global {
 		return updated, cmd
+	}
+	if m.screen() == screenLoadFailed {
+		return m, nil // no journal to act on
 	}
 	m, cmd := m.onActiveViewKey(key)
 	return m, cmd
@@ -447,7 +450,6 @@ func (m Model) onViewKey(key string) (Model, tea.Cmd) {
 func (m Model) onGlobalKey(key string) (updated Model, cmd tea.Cmd, global bool) {
 	switch key {
 	case "r":
-		m.refreshing = true
 		updated, cmd = m.reload()
 		return updated, cmd, true
 	case "?":

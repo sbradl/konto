@@ -20,29 +20,40 @@ func (m Model) onImportKey(key string) (Model, tea.Cmd) {
 	}
 	var action imports.Action
 	m.imports, action = m.imports.Key(key)
-	switch {
-	case action.Browse != "":
+	if action.Browse != "" {
 		return m, func() tea.Msg {
 			entries, err := m.importer.Browse(action.Browse)
 			return browsedMsg{dir: action.Browse, entries: entries, err: err}
 		}
-	case action.Open != "" && m.refreshing:
-		m.imports = m.imports.WithMessage("still reloading the journal — open the file again in a moment")
-		return m, nil
-	case action.Open != "":
-		return m, func() tea.Msg {
-			staged, err := m.importer.Open(context.Background(), action.Open, *m.ledger)
-			return openedMsg{staged: staged, err: err}
-		}
-	case action.Write:
+	}
+	if action.Open != "" {
+		return m.openExport(action.Open)
+	}
+	if action.Write {
 		return m.planImport(), nil
 	}
 	return m, nil
 }
 
+// openExport reads the export at path against the journal, once no write or reload is in flight.
+func (m Model) openExport(path string) (Model, tea.Cmd) {
+	if m.busy() {
+		m.imports = m.imports.WithMessage("still reloading the journal — open the file again in a moment")
+		return m, nil
+	}
+	return m, func() tea.Msg {
+		staged, err := m.importer.Open(context.Background(), path, *m.ledger)
+		return openedMsg{staged: staged, err: err}
+	}
+}
+
 // planImport asks y/n before writing the staged import, showing what will be written; what keeps it from
 // being written (rows without a category, a balance the bank does not share) is a message in the view.
 func (m Model) planImport() Model {
+	if m.busy() {
+		m.imports = m.imports.WithMessage(reloadingNotice) // the staged rows are about to be read again
+		return m
+	}
 	staged, _ := m.imports.Staged() // the view asks to write only with an import staged
 	plan, err := staged.Plan()
 	if err != nil {

@@ -5,17 +5,8 @@ import tea "charm.land/bubbletea/v2"
 // tabCount is the number of v1 views.
 const tabCount = 5
 
-// Tab indices of the views.
-const (
-	dashboardTab = 0
-	importTab    = 1
-	scheduledTab = 2
-	forecastTab  = 3
-	reportsTab   = 4
-)
-
 // tab is one view as the root drives it; adding a view is adding a tab. A view without a cursor, hidden
-// panels or a dialog of its own leaves the field nil.
+// panels or a dialog of its own leaves the field nil; captures and captured are set together.
 type tab struct {
 	name     string
 	keys     []keyBinding                         // what the status bar and the keys popup list
@@ -35,7 +26,7 @@ func tabs() [tabCount]tab {
 			name: "dash", keys: []keyBinding{{"c", "close"}, {"o", "reopen"}},
 			resize:   func(m Model, w, h int) Model { m.dash = m.dash.Resize(w, h); return m },
 			view:     func(m Model) string { return m.dash.View() },
-			key:      func(m Model, key string) (Model, tea.Cmd) { return m.onDashboardKey(key), nil },
+			key:      Model.onDashboardKey,
 			position: func(m Model) (row, total int) { return m.dash.Position() },
 			hidden:   func(m Model) int { return m.dash.HiddenPanels() },
 		},

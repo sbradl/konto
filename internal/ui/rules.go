@@ -20,12 +20,16 @@ type rulePlanner interface {
 	Form(ctx context.Context, rule domain.PeriodicRule, snapshot domain.Ledger) (periodic.Input, error)
 }
 
-// formReadyMsg carries what the form shows for the rule being edited, or why it cannot.
+// formReadyMsg carries what the form shows for the rule being edited, or why it cannot; load is the load the
+// rule was read from.
 type formReadyMsg struct {
+	load  int
 	input periodic.Input
 	rule  domain.PeriodicRule
 	err   error
 }
+
+func (msg formReadyMsg) takeIn(m Model) Model { return m.onFormReady(msg) }
 
 // ruleSavedMsg carries the changeset planned for the form's rule, or why the rule was refused.
 type ruleSavedMsg struct {
@@ -47,8 +51,8 @@ func (m Model) onScheduledKey(key string) (Model, tea.Cmd) {
 	if action != scheduled.EditSelected && action != scheduled.DeleteSelected {
 		return m, nil
 	}
-	if m.refreshing {
-		m.notice = "the journal is reloading — try again in a moment" // the rule's place may have moved
+	if m.busy() {
+		m.notice = reloadingNotice // the rule's place may have moved
 		return m, nil
 	}
 	if action == scheduled.EditSelected && m.rules != nil {
@@ -65,13 +69,18 @@ func (m Model) onScheduledKey(key string) (Model, tea.Cmd) {
 func (m Model) readRule(rule domain.PeriodicRule) tea.Cmd {
 	return func() tea.Msg {
 		input, err := m.rules.Form(context.Background(), rule, *m.ledger)
-		return formReadyMsg{input: input, rule: rule, err: err}
+		return formReadyMsg{load: m.loads, input: input, rule: rule, err: err}
 	}
 }
 
-// onFormReady opens the form on the rule, or says why it cannot be edited.
+// onFormReady opens the form on the rule, or says why it cannot be edited. A rule read before the journal
+// changed, or while it is being changed, asked about or another form opened, is dropped: its place in the
+// journal may be gone.
 func (m Model) onFormReady(ready formReadyMsg) Model {
-	if ready.err != nil {
+	switch {
+	case ready.load != m.loads || m.busy() || m.prompt != nil || m.scheduled.Capturing():
+		return m
+	case ready.err != nil:
 		m.notice = "cannot edit " + ready.rule.Description + ": " + ready.err.Error()
 		return m
 	}
@@ -87,8 +96,8 @@ func (m Model) onFormKey(key string) (Model, tea.Cmd) {
 	if action.Save == nil {
 		return m, nil
 	}
-	if m.refreshing {
-		m.scheduled = m.scheduled.WithFormError("the journal is reloading — try again in a moment")
+	if m.busy() {
+		m.scheduled = m.scheduled.WithFormError(reloadingNotice)
 		return m, nil
 	}
 	save := *action.Save

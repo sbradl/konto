@@ -36,10 +36,12 @@ func globalKeys() []keyBinding {
 }
 
 // onPopupKey handles a key while a popup is open: the opening keys toggle, Esc
-// closes, the checks panel has its own cursor keys, and everything else is swallowed
+// closes, r reloads, the checks panel has its own cursor keys, and everything else is swallowed
 // so view keys never leak through.
 func (m Model) onPopupKey(key string) (Model, tea.Cmd) {
 	switch key {
+	case "r":
+		return m.reload() // the popup stays open, so the checks panel shows the fresh run
 	case "esc":
 		m.popup = popupNone
 	case "?":

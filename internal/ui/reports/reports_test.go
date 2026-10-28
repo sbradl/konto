@@ -1,6 +1,7 @@
 package reports
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -218,6 +219,35 @@ func TestTheBarSaysLoadingUntilTheFirstReportArrives(t *testing.T) {
 	}
 	if strings.Contains(loaded, "loading") {
 		t.Errorf("after the first report:\n%s", loaded)
+	}
+}
+
+func TestTheNextPeriodDropsTheOldNumbersUntilItsReportArrives(t *testing.T) {
+	view := plain(loaded().Move("end").NextPeriod().View())
+
+	if !strings.Contains(view, "loading the reports") || strings.Contains(view, "assets:checking") {
+		t.Errorf("view:\n%s", view)
+	}
+	if next := loaded().Move("end").NextPeriod(); next.offset != 0 {
+		t.Errorf("offset %d, want the next period's tables from the top", next.offset)
+	}
+}
+
+func TestAReportThatCannotBeBuiltSaysWhyUntilOneIs(t *testing.T) {
+	failed := New().Resize(180, 30).WithFailure(errors.New("hledger bal: boom"))
+	refreshed := loaded().WithFailure(errors.New("hledger bal: boom"))
+
+	if view := plain(failed.View()); !strings.Contains(view, "hledger bal: boom") || strings.Contains(view, "loading") {
+		t.Errorf("failed first build:\n%s", view)
+	}
+	if view := plain(refreshed.View()); strings.Contains(view, "boom") || !strings.Contains(view, "assets:checking") {
+		t.Errorf("a failed rebuild keeps the report on screen:\n%s", view)
+	}
+	if view := plain(failed.WithReport(sample()).View()); strings.Contains(view, "boom") {
+		t.Errorf("a built report clears the failure:\n%s", view)
+	}
+	if view := plain(failed.NextPeriod().View()); strings.Contains(view, "boom") {
+		t.Errorf("the next period clears the failure:\n%s", view)
 	}
 }
 

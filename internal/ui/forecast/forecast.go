@@ -69,10 +69,12 @@ func (m Model) tableLines() int {
 	return lines
 }
 
+// chartRoom is the height the charts share above the milestone table.
+func (m Model) chartRoom() int { return m.height - m.tableLines() - layout.PanelChrome }
+
 // shownCharts is how many charts fit above the milestone table.
 func (m Model) shownCharts() int {
-	room := m.height - m.tableLines() - layout.PanelChrome
-	return max(0, min(len(m.forecast.Charts), room/minChartPanel))
+	return max(0, min(len(m.forecast.Charts), m.chartRoom()/minChartPanel))
 }
 
 // View draws the charts, then the milestone table.
@@ -84,9 +86,8 @@ func (m Model) View() string {
 		return layout.Panel("FORECAST", m.width, m.height,
 			theme.Dim.Render(" nothing to forecast — no open asset or liability account"))
 	}
-	shown := m.shownCharts()
-	tableHeight := m.tableLines() + layout.PanelChrome
-	room := m.height - tableHeight
+	shown, room := m.shownCharts(), m.chartRoom()
+	tableHeight := m.height - room
 	panels := make([]string, 0, shown+1)
 	for i := range shown {
 		height := room / shown

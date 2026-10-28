@@ -53,15 +53,22 @@ const listHeader = 1
 
 // dialogBody is the title and lines of the open dialog.
 func (m Model) dialogBody() (title string, body []string) {
-	bodies := map[dialogKind]func(Model) (string, []string){
-		dialogChoice:   func(m Model) (string, []string) { return "categorise", m.choiceLines() },
-		dialogRuleForm: func(m Model) (string, []string) { return "new rule", m.formLines() },
-		dialogRuleList: func(m Model) (string, []string) { return "add to rule", m.ruleListLines() },
-		dialogAddForm:  func(m Model) (string, []string) { return "widen rule " + m.dlg.ruleID, m.addFormLines() },
-		dialogPicker:   func(m Model) (string, []string) { return "category", m.pickerLines() },
-		dialogAccount:  func(m Model) (string, []string) { return "create account", m.accountLines() },
+	switch m.dlg.kind { // exhaustive: a new kind without its body fails the lint
+	case dialogChoice:
+		return "categorise", m.choiceLines()
+	case dialogRuleForm:
+		return "new rule", m.formLines()
+	case dialogRuleList:
+		return "add to rule", m.ruleListLines()
+	case dialogAddForm:
+		return "widen rule " + m.dlg.ruleID, m.addFormLines()
+	case dialogPicker:
+		return "category", m.pickerLines()
+	case dialogAccount:
+		return "create account", m.accountLines()
+	case dialogNone:
 	}
-	return bodies[m.dlg.kind](m)
+	return "", nil
 }
 
 // listLine is one entry of a list, highlighted when it is the one under the cursor.

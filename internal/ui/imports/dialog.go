@@ -77,11 +77,22 @@ func (m Model) dialogKey(key string) Model {
 	if key == keyEsc {
 		return m.close()
 	}
-	handlers := map[dialogKind]func(Model, string) Model{
-		dialogChoice: Model.choiceKey, dialogRuleForm: Model.formKey, dialogRuleList: Model.ruleListKey,
-		dialogAddForm: Model.addFormKey, dialogPicker: Model.pickerDialogKey, dialogAccount: Model.accountKey,
+	switch m.dlg.kind { // exhaustive: a new kind without its handler fails the lint
+	case dialogChoice:
+		return m.choiceKey(key)
+	case dialogRuleForm:
+		return m.formKey(key)
+	case dialogRuleList:
+		return m.ruleListKey(key)
+	case dialogAddForm:
+		return m.addFormKey(key)
+	case dialogPicker:
+		return m.pickerDialogKey(key)
+	case dialogAccount:
+		return m.accountKey(key)
+	case dialogNone:
 	}
-	return handlers[m.dlg.kind](m, key)
+	return m
 }
 
 // close shuts the open dialog: a picker over the rule form goes back to the form, anything else is

@@ -3,23 +3,25 @@ package ui
 import (
 	"errors"
 
+	tea "charm.land/bubbletea/v2"
+
 	"github.com/sbradl/konto/internal/domain"
 	"github.com/sbradl/konto/internal/ui/dashboard"
 )
 
 // onDashboardKey hands a key to the Dashboard and carries out what it asks for: closing or reopening the
 // selected account.
-func (m Model) onDashboardKey(key string) Model {
+func (m Model) onDashboardKey(key string) (Model, tea.Cmd) {
 	var action dashboard.Action
 	m.dash, action = m.dash.Key(key)
 	switch action {
 	case dashboard.CloseSelected:
-		return m.planAccountChange(m.accounts.Close, "close")
+		return m.planAccountChange(m.accounts.Close, "close"), nil
 	case dashboard.ReopenSelected:
-		return m.planAccountChange(m.accounts.Reopen, "reopen")
+		return m.planAccountChange(m.accounts.Reopen, "reopen"), nil
 	case dashboard.NoAction:
 	}
-	return m
+	return m, nil
 }
 
 // planAccountChange plans closing or reopening the Dashboard's selected account: a refusal becomes a notice,
@@ -28,6 +30,10 @@ func (m Model) onDashboardKey(key string) Model {
 func (m Model) planAccountChange(plan func(domain.Account) (domain.Changeset, error), verb string) Model {
 	account, ok := m.dash.Selected()
 	if !ok {
+		return m
+	}
+	if m.busy() {
+		m.notice = reloadingNotice // the account may have just been closed or reopened
 		return m
 	}
 	changeset, err := plan(account)

@@ -117,15 +117,14 @@ internal/
   entry/                 USE CASE. draft-entry validation, commit. NOT IN v1 (ADR 0010).
   config/                journal-path resolution (no config file in v1).
 
-  ui/                    ui.go = root model, tab chrome, app-level keymap dispatch, wiring.
+  ui/                    ui.go = root model, app-level key dispatch; tabs.go = the tab table
+                         (names, key hints, per-view closures, §6.2); render.go = chrome.
     theme/               ANSI-16 palette → named lipgloss.Style values.
-    layout/              responsive layout helpers + the lipgloss.Compositor overlay wrapper.
-    keys/                key.Binding sets (global + per view); the per-view HINTS strings.
-    widgets/             shared render helpers (stat card, panel frame, selectable-list
-                         styling, ntcharts wrapper).
+    layout/              hand-rolled render helpers (panel, cursor, text edit, ntcharts style)
+                         + the lipgloss.Compositor overlay wrapper (§6.6).
     dashboard/ imports/ scheduled/ forecast/ reports/   (entry/ deferred, ADR 0010)
-                         one package per view. Imports domain + the use-case service(s) it
-                         needs + the ui leaves. NEVER imports hledger/journal. NEVER imports
+                         one package per view: pure models, no ports. Imports domain (and a
+                         use case's types) + the ui leaves. NEVER imports hledger/journal. NEVER imports
                          another view.
 ```
 
@@ -198,9 +197,9 @@ ADR 0013) and works per file. It never needs to understand transactions, amounts
   calls are sub-100ms for a personal journal.
 - **Refresh triggers**: explicit `r` key; automatically after any konto journal write;
   automatically on return from `$EDITOR`. **No filesystem watcher in v1.** All three go
-  through one root path: a successful write makes the writing view emit
-  `journalChangedMsg{summary}`; the root shows the status-bar confirmation, runs
-  `Loader.Refresh()` + the check run, and broadcasts the results (ADR 0012). Views and write
+  through one root path: views return a write action, the root applies it and on
+  `writtenMsg` shows the status-bar confirmation, reloads the `Ledger` + the check run, and
+  hands the results to the views (ADR 0012, amended). Views and write
   use cases never hold the `Loader`.
 - **Granularity**: any journal write → **full `Ledger` refresh**. A `categories.rules` change
   on disk (konto's `w`, or a hand edit + `r`) does not touch the journal — it re-converts a
@@ -424,10 +423,9 @@ Context-owned, in their use-case package (ADR 0012):
 
 ### 5.5 `Ledger` — the loaded snapshot (`internal/ledger`)
 
-No monolithic `Journal` type. `Ledger` `{Meta LedgerMeta, Accounts []Account, Transactions
-[]Transaction, Prices []PriceDirective, Periodics []PeriodicRule}`; each
-field populated by its own gateway call, independently refreshable. `LedgerMeta`
-`{JournalPath, TxnCount, HledgerVersion, LoadedAt, Health}` — backs the tab-bar chrome.
+No monolithic `Journal` type. `Ledger` `{Accounts, Transactions, Upcoming, Month, Rules,
+Commodities, Spend}` (see `internal/domain/ledger.go`); each field populated by its own
+gateway call, run in parallel.
 Views hold a read-only `*Ledger`, replaced wholesale on refresh, never mutated. The
 `CheckRun` is not part of it: `internal/checks` produces it and the root holds the latest
 one (ADR 0012).
@@ -439,7 +437,7 @@ remove account-directive tag, declare account / payee, append / replace / delete
 block, append a `categories.rules` block or matcher line. Produced by `Account`,
 `StagedImport` and the `periodic` service; applied by `internal/journal` (§4.2). Every write
 runs **validate → apply → refresh**: pre-check via hledger on stdin, `Apply`, then
-`journalChangedMsg` (§4.4).
+`writtenMsg` and a reload (§4.4).
 
 ---
 
@@ -451,54 +449,66 @@ Full detail: ticket `05-bubble-tea-model-composition`.
 
 The program's single `tea.Model`. Holds:
 
-- `appMode ∈ {firstRun, parseError, normal}` — first two render their own screen, not the
-  tab UI, not a seventh view.
-- the **five view sub-models** (six once Entry returns, ADR 0010), constructed at startup, alive for the whole run. Tab switch
-  changes which one renders + receives input; cursor/scroll/draft state survives.
-- **app-global state**: terminal size, the read-only `*domain.Ledger`, the latest
-  `CheckRun`.
-- **chrome**: active view id, tab bar, status bar. **overlay state**: `keysPopupOpen` (`?`),
-  `checksPanelOpen` (`!`). No which-key goto, no command line (ADR 0011).
-- the use-case **ports** it needs (`ledger` Loader, `checks` run) — injected by `cmd/konto`.
-  It handles `journalChangedMsg` (§4.4).
+- the **five view sub-models** (six once Entry returns, ADR 0010), constructed at startup, alive for the
+  whole run. Tab switch changes which one renders + receives input; cursor/scroll/draft state survives.
+- **app-global state**: terminal size, the read-only `*domain.Ledger`, the latest `CheckRun`, the
+  `refreshing` flag (spinner) and the last hledger `failure` (`✗ error`).
+- **chrome**: active tab index, tab bar, status bar, the open y/n `prompt` (with an import's write
+  preview), a one-line `notice`. **Overlay state**: one `popupKind` (`?` keys or `!` checks). No
+  which-key goto, no command line (ADR 0011).
+- the use-case **ports** (`Ports`: loader, checks, writer, verifier, planners, report/forecast builders,
+  importer, editor) — injected by `cmd/konto`.
 
-Views never reference each other. Cross-view effects are mediated: a view acts → state
-changes → root broadcasts → every view updates.
+What fills the terminal is one `screen()` over the model, in precedence order: too small → first run (no
+journal) → located parse error → loading → load failed (tabs, the error as the body, no view keys) → the
+views. Rendering and key dispatch both switch on it; first run and parse error are their own screens, not
+views.
 
-### 6.2 View sub-model interface
+Views never reference each other. Cross-view effects are mediated: a view acts → the root runs the command
+→ the journal reloads → the root hands the new `Ledger` to every view (`WithLedger`, `WithReport`, …).
 
-```go
-type View interface {
-    Update(tea.Msg) (View, tea.Cmd)
-    View() string          // renders into its content area (size via WindowSizeMsg)
-    Title() string
-    StatusHint() string    // handoff HINTS map
-    KeyMap() []key.Binding  // feeds the ? popup
-}
-```
+### 6.2 Views and the tab table
 
-Each `Update` is a pure `(Msg) → (View, Cmd)` — unit-testable with no running program. A
-view holds the use-case port(s) it needs + its own view-local state (cursor, form field,
-scroll, generation counter).
+There is no `View` interface. Each view package (`dashboard`, `imports`, `scheduled`, `forecast`,
+`reports`) exports a value `Model` with pure methods: `Resize(w, h)`, `View() string`, `Key(key)` →
+`(Model, action)`, and `With…` setters for the data the root hands it. A view holds **no ports and runs no
+commands**: its action (an enum or small struct, e.g. `dashboard.CloseSelected`, `imports.Action{Open:
+path}`, `scheduled.Action{Save: …}`) tells the root what to do, and the root plans, writes or loads.
+
+The root drives the views through one table, `tabs()` in `tabs.go`: per tab its name, its hinted
+`keyBinding`s (status bar + `?` popup), and closures for `resize`, `view`, `key`, and optionally
+`position` (cursor row / count), `hidden` (panels dropped, §6.8) and `captures`/`captured` (a dialog
+that takes every key as text). Adding a view is adding a row. Tests check every hinted key is handled
+and that `captures` and `captured` come together.
 
 ### 6.3 Message routing (root's `Update`)
 
-| Message class | Routed to |
+One type switch:
+
+| Message | Handled by |
 |---|---|
-| `tea.KeyMsg`, `tea.MouseMsg` | open overlay if any, else the **active view only**. Global keys (`1`–`5`, `?`, `!`, `r`, `q`/`ctrl+c`) caught by root **first**; if the active view has a focused text input, only `Esc`/`Ctrl+C` are caught. |
-| `tea.WindowSizeMsg` | root computes the content rect (window − tab bar − rule − status bar), forwards a **content-dimension** `WindowSizeMsg` to **all** views |
-| `ledgerLoadedMsg`, `checksLoadedMsg`, ticks | root updates its state, **broadcasts** to all views |
-| view-specific async results (`reportLoadedMsg`, …) | root forwards to the **one owning view** |
+| `tea.WindowSizeMsg` | root keeps the size and hands each view its content area (window − tab bar − rule − status bar) |
+| `tea.KeyPressMsg` | `onKey`: a capturing dialog first (only `Ctrl+C` escapes it); `q`/`Ctrl+C`; then by `screen()`. On the views: open prompt → open popup (`r` still reloads) → global keys (`1`–`5`, `?`, `!`, `r`) → the active tab's `key` |
+| `ledgerLoadedMsg` | root takes the snapshot and check run, hands them to the views, then batches the report, forecast and staged-export re-read for it |
+| `writtenMsg`, `ruleSavedMsg`, `editorClosedMsg` | root carries on: write, reload |
+| any other result (`reportLoadedMsg`, `forecastLoadedMsg`, `openedMsg`, `browsedMsg`, `formReadyMsg`, …) | its own `takeIn(Model) Model` |
 
-Shared-state changes are **messages, not shared pointers**. Async races: each request
-carries a per-view monotonic generation number; stale results are dropped (pairs with §4.3
-context cancellation). Sub-model `Cmd`s bubble up and are `tea.Batch`-ed by root.
+**Stale results**: the root keeps one counter, `loads`, bumped by every reload. Each async result
+asked for from a snapshot carries the `loads` it was asked under and is dropped when it no longer
+matches; the report is also dropped when its period is no longer shown, and a rule's form when the
+model has since become busy, prompted or opened another form.
 
-### 6.4 Keymaps (`internal/ui/keys`)
+**Writes**: a key that plans a write first checks `busy()` (a write or reload in flight) and asks to try
+again while it is — the plan would be of a snapshot about to change. A plan becomes a y/n `prompt`
+holding a `pendingWrite`; `y` verifies (when asked) and applies it, `writtenMsg` shows the notice, runs
+what follows (close the form, clear the import) and reloads. `r`, a write and the editor's return all
+reload through one `reload()`, which raises the spinner; the landing load lowers it.
 
-`key.Binding` sets — one global + one per view. Root resolves against the global set first
-(after overlay / text-input checks), else forwards to the active view. The `?` popup renders
-from the binding sets (`bubbles/help`).
+### 6.4 Keymaps
+
+Key names are plain strings (`tea.KeyPressMsg.String()`). The global keys are the root's (`onGlobalKey`,
+`globalKeys()` for the popup); each view's keys are its `Key` switch, hinted by its row of the tab table
+(§6.2). The `?` popup lays the global then the active view's bindings out in columns.
 
 **Key principle:** every key is the **first letter of its action** where possible, and a
 letter means the same action in every view (`d` = delete, `n` new, `e` edit, `c` close,
@@ -545,23 +555,25 @@ Root-owned. The `?` keys popup and the `!` checks panel are
 
 - base view = one `Layer` at `X(0).Y(0).Z(0)` sized to `tea.WindowSizeMsg`
 - the single visible popup = a `Layer` at `Z(10)`, `Y(screenH - popupH - 1)`
-- `compositor.Render()` → `tea.View.Content`; cursor via `tea.View.Cursor` at the
-  post-composite position
+- `compositor.Render()` → `tea.View.Content` (`layout.Overlay`); text fields draw their own caret
 
 Only one popup is ever visible, so no z-stack management. Views know nothing about overlays.
 Details: `research/06-overlay-compositing.md`.
 
 ### 6.6 Components
 
-| Component | Use |
+No `bubbles` components: their models carry state and commands the pure views would have to thread
+through. konto draws with hand-rolled helpers in `ui/layout`:
+
+| Helper | Use |
 |---|---|
-| `bubbles/table` | Import CSV-row grid, Reports tables |
-| custom list widget (`ui/widgets`) | Dashboard panels (Accounts selectable; Recent, Upcoming read-only) |
-| `bubbles/textinput` | rule-editor target, import account-name, category typeahead, form fields |
-| `bubbles/viewport` | scrollable panels (journal preview, checks body) |
-| `bubbles/key`, `bubbles/help`, `bubbles/spinner` | bindings, `?` render, refresh indicator |
-| `ntcharts` | Dashboard trend + Forecast braille charts |
-| `bubbles/list` | evaluated, **not used** |
+| `Panel`, `TitleRule`, `Fit`, `AlignRight`, `More` | bordered panels, popup title rules, cell fitting, `… N more` |
+| `Cursor` | the one selectable list per view (Accounts, rule list, import rows, pickers) |
+| `Edit` | text input of the forms, dialogs and pickers (typed text, backspace, clear) |
+| `Overlay`, `OverlayFlush`, `PopupHeight`, `Columns` | popups and dialogs (§6.5), the `?` reflow |
+| `ChartStyle`, `Number` | `ntcharts` braille charts (Dashboard spend, Forecast) |
+
+The refresh spinner is a static `⣾` while `refreshing`; scrolling panels clamp their own offsets.
 
 ntcharts API fit (ticket 07): `timeserieslinechart` has named datasets (`PushDataSet`,
 `SetDataSetStyle`, `DrawBrailleDataSets`) for one line per account, and
@@ -572,9 +584,9 @@ colour per cell).
 ### 6.7 Startup
 
 `cmd/konto`: config → hledger version preflight → construct adapters/services → construct
-root model (inject ports + config) → `tea.NewProgram(root, tea.WithAltScreen())`. Root
-`Init()` returns `tea.Batch(initial ledger load, initial checks run)`; `appMode` starts from
-the load result.
+root model (inject ports + config) → `tea.NewProgram(root)` (the view sets `AltScreen`). Root
+`Init()` loads the journal and runs the checks over it in one command; `screen()` (§6.1) follows from
+the result.
 
 ### 6.8 Responsive layout (ticket 07)
 
@@ -586,17 +598,14 @@ the load result.
   priority order. No whole-view scroll, no stacking.
 - **Hidden-panel hint**: when a view drops panels, the status bar shows a dim
   `N panels hidden · widen terminal`. No zoom key.
-- **`ui/layout` helper** — one pure 1-D primitive plus a frame:
-  - `Allocate(total int, slots []Slot{Weight, Min, Priority}) []int` — 0 = dropped. Views
-    nest it: one call for columns, one per column for panel heights.
-  - `Panel(title, w, h, body)` — rounded border, title inset 2 cells.
-  - Not a declarative layout tree; views own their structure.
+- **`ui/layout` helpers** (§6.6), not a layout engine: each view computes its own sizes from its
+  content area and decides what to drop — a `fit()` of which panels have room (Dashboard), shares of the
+  height (Import), as many charts as fit (Forecast) — and reports `HiddenPanels()` from that same
+  computation. `Panel(title, w, h, body)` draws a rounded border, title inset 2 cells.
 - **Popups** (§6.5): full width; height = content, capped at ½ screen height; each popup
   reports its natural size and the root clamps it. Over the cap the checks list scrolls
   (arrows); the `?` popup reflows to `min(4, floor(w/minColW))` columns.
-- **Deferred to the shell build** (implementation, not decisions): exact floor numbers,
-  per-view priority orders, inter-panel gap cells, `Allocate` leftover-cell distribution
-  and priority tie-break.
+- Built: floor 100×30 (`minWidth`, `minHeight`); per-view drop orders live in each view.
 
 ---
 

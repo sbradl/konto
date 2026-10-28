@@ -28,19 +28,50 @@ func (m Model) tooSmall() bool {
 	return m.width > 0 && (m.width < minWidth || m.height < minHeight)
 }
 
-func (m Model) content() string {
+// screenKind is what fills the terminal; the first that applies wins, in the order screen tries them.
+type screenKind int
+
+const (
+	screenViews      screenKind = iota // the tabs over a loaded journal
+	screenTooSmall                     // the terminal is below the floor
+	screenFirstRun                     // there is no journal yet
+	screenParseIssue                   // the journal has a located error
+	screenLoading                      // the first load has not landed
+	screenLoadFailed                   // the tabs, the load's error in place of a view; no view keys
+)
+
+// screen is what fills the terminal: the content drawn and who gets the keys both follow it.
+func (m Model) screen() screenKind {
 	if m.tooSmall() {
-		return m.centred(fmt.Sprintf(
-			"terminal too small — need ≥%d×%d, have %d×%d", minWidth, minHeight, m.width, m.height))
+		return screenTooSmall
 	}
 	if m.firstRun {
-		return m.centred(m.firstRunText())
+		return screenFirstRun
 	}
 	if m.parseIssue != nil {
-		return m.centred(parseErrorText(*m.parseIssue))
+		return screenParseIssue
 	}
 	if m.ledger == nil {
+		return screenLoading
+	}
+	if m.loadErr != nil {
+		return screenLoadFailed
+	}
+	return screenViews
+}
+
+func (m Model) content() string {
+	switch m.screen() {
+	case screenTooSmall:
+		return m.centred(fmt.Sprintf(
+			"terminal too small — need ≥%d×%d, have %d×%d", minWidth, minHeight, m.width, m.height))
+	case screenFirstRun:
+		return m.centred(m.firstRunText())
+	case screenParseIssue:
+		return m.centred(parseErrorText(*m.parseIssue))
+	case screenLoading:
 		return m.centred("loading journal…")
+	case screenViews, screenLoadFailed:
 	}
 	return m.withPreview(m.withPopup(m.views()))
 }

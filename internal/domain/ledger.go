@@ -78,7 +78,7 @@ func (l Ledger) UnclassifiedIssues() []CheckIssue {
 	for _, account := range l.Accounts {
 		if account.IsUnclassified() {
 			issues = append(issues, CheckIssue{
-				Check:    "unclassified",
+				Check:    UnclassifiedCheck,
 				Severity: SeverityWarn,
 				Message:  account.Name + " has no konto:source tag",
 			})

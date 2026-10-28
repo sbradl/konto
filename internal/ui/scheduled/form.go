@@ -22,12 +22,25 @@ const (
 	fieldCount
 )
 
-// fieldLabel is the name a field is shown by.
-func fieldLabel(field int) string {
-	return [fieldCount]string{
-		"next due date", "frequency", "remaining payments", "description", "amount", "currency",
-		"from account", "to account",
-	}[field]
+// fieldSpec is one field of the form: the name it is shown by and the text of the input it holds, nil for the
+// dropdowns, which hold a choice.
+type fieldSpec struct {
+	label string
+	text  func(*periodic.Input) *string
+}
+
+// fields are the form's fields, in focus order.
+func fields() [fieldCount]fieldSpec {
+	return [fieldCount]fieldSpec{
+		fieldDate:        {"next due date", func(in *periodic.Input) *string { return &in.Date }},
+		fieldFrequency:   {"frequency", nil},
+		fieldRemaining:   {"remaining payments", func(in *periodic.Input) *string { return &in.Remaining }},
+		fieldDescription: {"description", func(in *periodic.Input) *string { return &in.Description }},
+		fieldAmount:      {"amount", func(in *periodic.Input) *string { return &in.Amount }},
+		fieldCurrency:    {"currency", nil},
+		fieldFrom:        {"from account", func(in *periodic.Input) *string { return &in.From }},
+		fieldTo:          {"to account", func(in *periodic.Input) *string { return &in.To }},
+	}
 }
 
 // Key names the form reacts to.
@@ -65,6 +78,9 @@ type form struct {
 	browsing   bool              // the picker's cursor was moved: Enter takes the match
 	message    string            // why the last save was refused
 }
+
+// text is the text or account field's text as the input holds it.
+func (f *form) text(field int) string { return *fields()[field].text(&f.input) }
 
 // Capturing reports whether the form has the keyboard: letters and digits are then text, not view keys.
 func (m Model) Capturing() bool { return m.form != nil }
@@ -181,15 +197,7 @@ func (f *form) picks() bool {
 	if !f.isAccount() {
 		return false
 	}
-	return f.filter != "" || f.browsing || f.value() == ""
-}
-
-// value is the field with the focus, as the input holds it.
-func (f *form) value() string {
-	return [fieldCount]string{
-		f.input.Date, "", f.input.Remaining, f.input.Description, f.input.Amount, f.input.Currency,
-		f.input.From, f.input.To,
-	}[f.focus]
+	return f.filter != "" || f.browsing || f.text(f.focus) == ""
 }
 
 // pick gives the focused field the match under the cursor and moves on, or says there is none.
@@ -200,11 +208,9 @@ func (f *form) pick() {
 		return
 	}
 	chosen := matches[f.cursor] // the cursor never leaves the matches
+	*fields()[f.focus].text(&f.input) = chosen
 	if f.focus == fieldFrom {
-		f.input.From = chosen
 		f.input.Currency = f.currencyHeldBy(chosen)
-	} else {
-		f.input.To = chosen
 	}
 	f.move(keyTab)
 }
@@ -229,23 +235,8 @@ func (f *form) edit(key string) {
 		f.input.Currency = cycle(f.currencies, f.input.Currency, key)
 	case fieldFrom, fieldTo:
 		f.editPicker(key)
-	default:
-		text, _ := layout.Edit(f.value(), key)
-		f.setText(text)
-	}
-}
-
-// setText stores the text of the text field with the focus.
-func (f *form) setText(text string) {
-	switch f.focus {
-	case fieldDate:
-		f.input.Date = text
-	case fieldRemaining:
-		f.input.Remaining = text
-	case fieldDescription:
-		f.input.Description = text
-	case fieldAmount:
-		f.input.Amount = text
+	default: // a text field
+		*fields()[f.focus].text(&f.input), _ = layout.Edit(f.text(f.focus), key)
 	}
 }
 

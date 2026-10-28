@@ -153,7 +153,8 @@ func registerFeatureSteps(sc *godog.ScenarioContext, w *world) {
 	step(sc, `^the active tab is unchanged$`, func() error { return w.expectActiveTab(w.tabAtBaseline) })
 	step(sc, `^the tab bar shows the journal path and "(\d+)" transactions on the right$`, func(count string) error {
 		return w.expectLine(0, "tab bar", count, func(line, count string) bool {
-			tabsEnd := strings.Index(line, "5 reports") + len("5 reports")
+			last := tabNames[len(tabNames)-1]
+			tabsEnd := strings.Index(line, last.key+" "+last.name) + len(last.key+" "+last.name)
 			rest := line[tabsEnd:]
 			return strings.Contains(rest, w.journal) && strings.Contains(rest, count)
 		})
@@ -182,17 +183,25 @@ func registerRefreshSteps(sc *godog.ScenarioContext, w *world) {
 		return errors.Join(werr, f.Close())
 	})
 	step(sc, `^the new transaction appears after refresh$`, func() error {
-		return w.expectLine(0, "tab bar", "55 txns", strings.Contains)
+		return w.expectLine(0, "tab bar", fmt.Sprintf("%d txns", w.transactionsAtStart()+1), strings.Contains)
 	})
 	step(sc, `^the status bar shows a spinner$`, func() error {
-		return w.expectLine(-1, "status bar", "⣾", strings.Contains)
+		return w.expectLine(-1, "status bar", spinner, strings.Contains)
 	})
 	step(sc, `^the status bar shows an error indicator$`, func() error {
 		return w.expectLine(-1, "status bar", "✗", strings.Contains)
 	})
 	step(sc, `^(?:the current panels stay rendered|the previous balances are still shown)$`, func() error {
-		return w.expectLine(0, "tab bar", "54 txns", strings.Contains)
+		return w.expectLine(0, "tab bar", fmt.Sprintf("%d txns", w.transactionsAtStart()), strings.Contains)
 	})
+}
+
+// datedLine opens a transaction.
+var datedLine = regexp.MustCompile(`(?m)^\d{4}-\d{2}-\d{2}`)
+
+// transactionsAtStart is how many transactions the journal files held when konto started.
+func (w *world) transactionsAtStart() int {
+	return len(datedLine.FindAllString(allJournalText(w.filesAtStart), -1))
 }
 
 func registerStatusBarSteps(sc *godog.ScenarioContext, w *world) {

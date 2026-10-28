@@ -189,11 +189,12 @@ func (m Model) scrollRows() Model {
 	return next
 }
 
-// layoutHeights are the heights of the row table and the skipped panel below the info block.
+// layoutHeights are the heights of the row table and the skipped panel below the info block; the skipped
+// panel takes what the row table leaves.
 func (m Model) layoutHeights() (rows, skipped int) {
 	room := m.height - infoHeight - m.bannerRows()
 	rows = max(minPanel, room*rowsShare/100)
-	return rows, max(minPanel, room-rows)
+	return rows, max(0, room-rows)
 }
 
 // innerWidth is the width of a panel's body.
@@ -225,15 +226,14 @@ func (m Model) body() string {
 	case m.staged == nil:
 		return layout.Panel("IMPORT", m.width, height, theme.Dim.Render(" "+emptyHint))
 	}
-	return m.overlay(m.stagedView(height))
+	return m.overlay(m.stagedView())
 }
 
 // stagedView is the info block above the row table and the skipped list.
-func (m Model) stagedView(height int) string {
+func (m Model) stagedView() string {
 	rowsHeight, skippedHeight := m.layoutHeights()
 	rowsPanel := layout.Panel("ROWS", m.width, rowsHeight, m.rowLines())
-	skippedPanelHeight := max(0, height-infoHeight-rowsHeight)
-	skipped := layout.Panel("SKIPPED", m.width, skippedPanelHeight, m.skippedLines(skippedHeight-layout.PanelChrome))
+	skipped := layout.Panel("SKIPPED", m.width, skippedHeight, m.skippedLines(max(0, skippedHeight-layout.PanelChrome)))
 	return strings.Join([]string{m.info(), rowsPanel, skipped}, "\n")
 }
 

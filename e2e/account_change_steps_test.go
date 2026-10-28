@@ -42,9 +42,8 @@ func indexOfRow(rows []accountRow, match func(accountRow) bool) (int, error) {
 
 // selectAccount moves the Accounts cursor onto the named account.
 func (w *world) selectAccount(name string) error {
-	if s, err := w.session(); err == nil { // a refresh after a write must land before rows are read
-		s.settle(w.suite.timeout)
-		s.waitFor(w.suite.timeout, func(screen string) bool { return !strings.Contains(screen, "⣾") })
+	if err := w.awaitReload(); err != nil { // a refresh after a write must land before rows are read
+		return err
 	}
 	offset, err := w.accountOffset(name)
 	if err != nil || offset == 0 {

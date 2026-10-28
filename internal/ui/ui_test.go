@@ -194,6 +194,42 @@ func TestFailedLoadIsShown(t *testing.T) {
 	}
 }
 
+// A failed load leaves no journal to act on: the view keys do nothing, the root's keys still work.
+func TestAFailedLoadLeavesOnlyTheRootsKeys(t *testing.T) {
+	var periods []domain.Period
+	model := New(journalPath, Ports{
+		Loader: fakeLoader{err: errors.New("hledger exploded")}, Checker: fakeChecker{}, Creator: &fakeCreator{},
+		Editor: recordingEditor(nil), Reports: fakeReporter{periods: &periods}, Importer: listing(), DownloadDir: "/dl",
+		Rules: &fakeRules{},
+	})
+	updated, _ := model.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	updated, _ = updated.Update(model.load())
+	failed := updated.(Model)
+
+	for _, keys := range [][]string{{"2", "n"}, {"5", "p"}, {"3", "n"}} {
+		pressed, cmd := failed, tea.Cmd(nil)
+		for _, key := range keys {
+			pressed, cmd = press(pressed, key)
+		}
+		if cmd != nil || pressed.capturing() || pressed.reports.Period() != domain.MonthToDate {
+			t.Errorf("%v: cmd %v, capturing %v", keys, cmd, pressed.capturing())
+		}
+	}
+	if _, cmd := press(failed, "r"); cmd == nil {
+		t.Error("r must still reload after a failed load")
+	}
+}
+
+func TestAMessageKontoDoesNotKnowChangesNothing(t *testing.T) {
+	model := started(t, fakeLoader{})
+
+	updated, cmd := model.Update(tea.FocusMsg{})
+
+	if cmd != nil || plain(updated.(Model).View().Content) != plain(model.View().Content) {
+		t.Errorf("cmd %v", cmd)
+	}
+}
+
 // The journal path sits at the right edge of the tab bar, opposite the tabs.
 func TestTabBarShowsJournalPathAtRightEdge(t *testing.T) {
 	first := firstLine(started(t, fakeLoader{}))

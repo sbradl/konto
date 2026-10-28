@@ -59,7 +59,7 @@ func (f *form) line(field int) string {
 	if field == f.focus {
 		mark = theme.Warn.Render(focusMark)
 	}
-	return mark + theme.Dim.Render(padRight(fieldLabel(field), labelWidth)) + f.shownValue(field)
+	return mark + theme.Dim.Render(padRight(fields()[field].label, labelWidth)) + f.shownValue(field)
 }
 
 // shownValue is the field's value: a text with the caret when it has the focus, the choices of a dropdown with
@@ -80,7 +80,7 @@ func (f *form) shownValue(field int) string {
 		}
 		return strings.Join(names, "  ")
 	case fieldFrom, fieldTo:
-		text := [2]string{f.input.From, f.input.To}[field-fieldFrom]
+		text := f.text(field)
 		if focused && f.filter != "" {
 			return f.filter + caret
 		}
@@ -89,9 +89,7 @@ func (f *form) shownValue(field int) string {
 		}
 		return text + map[bool]string{true: caret, false: ""}[focused]
 	}
-	text := [fieldCount]string{
-		f.input.Date, "", f.input.Remaining, f.input.Description, f.input.Amount, "", "", "",
-	}[field]
+	text := f.text(field)
 	if focused {
 		text += caret
 	}

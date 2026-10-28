@@ -276,6 +276,17 @@ func TestOpeningAFileWhileTheJournalReloadsAsksToTryAgain(t *testing.T) {
 	}
 }
 
+func TestWWhileTheJournalReloadsAsksToTryAgain(t *testing.T) {
+	model := stagedForWrite(t, writable()).model
+	model.refreshing = true
+
+	model, _ = press(model, "w")
+
+	if content := plain(model.View().Content); model.prompt != nil || !strings.Contains(content, "try again in a moment") {
+		t.Errorf("prompt %v; content:\n%s", model.prompt, content)
+	}
+}
+
 func TestAPreviewThatFitsShowsEveryLineOfItIncludingTheLast(t *testing.T) {
 	one := manyRows(1)
 	one.Closing = "13.239,00"

@@ -21,12 +21,13 @@ const (
 
 // Model is the Reports view's local state: the period it shows and how far the tables are scrolled.
 type Model struct {
-	period domain.Period
-	report domain.Report
-	offset int
-	width  int
-	height int
-	loaded bool // the first report has arrived
+	period  domain.Period
+	report  domain.Report
+	offset  int
+	width   int
+	height  int
+	loaded  bool  // the period's report has arrived
+	failure error // why the period's report could not be built, until one is
 }
 
 // New returns a Reports view on month to date with nothing loaded yet.
@@ -52,16 +53,25 @@ func (m Model) Key(key string) (Model, Action) {
 	return m.Move(key), NoAction
 }
 
-// NextPeriod moves to the next period (month, quarter, year, all time, month).
+// NextPeriod moves to the next period (month, quarter, year, all time, month), its tables empty until its
+// report arrives.
 func (m Model) NextPeriod() Model {
 	m.period = m.period.Next()
+	m.report, m.loaded, m.failure, m.offset = domain.Report{}, false, nil, 0
 	return m
 }
 
 // WithReport shows a freshly built report, keeping the scroll position when it still fits.
 func (m Model) WithReport(report domain.Report) Model {
-	m.report, m.loaded = report, true
+	m.report, m.loaded, m.failure = report, true, nil
 	m.offset = min(m.offset, m.maxOffset())
+	return m
+}
+
+// WithFailure says why the period's report could not be built; a report already on screen stays, since the
+// status bar flags the failure.
+func (m Model) WithFailure(err error) Model {
+	m.failure = err
 	return m
 }
 
@@ -112,10 +122,7 @@ func (m Model) Move(key string) Model {
 
 // View draws the period bar above the two panels.
 func (m Model) View() string {
-	bar := " " + theme.Dim.Render("period") + "  " + theme.Bold.Render(m.period.String())
-	if !m.loaded {
-		bar += "  " + theme.Dim.Render("loading the reports…")
-	}
+	bar := " " + theme.Dim.Render("period") + "  " + theme.Bold.Render(m.period.String()) + m.state()
 	sheetWidth := m.width / panelCount
 	height := m.height - periodRows
 	sheet := layout.Panel("BALANCE SHEET", sheetWidth, height,
@@ -124,6 +131,18 @@ func (m Model) View() string {
 	statement := layout.Panel("INCOME STATEMENT", statementWidth, height,
 		m.table(m.report.IncomeStatement, statementWidth-layout.PanelChrome))
 	return bar + "\n" + lipgloss.JoinHorizontal(lipgloss.Top, sheet, statement)
+}
+
+// state is what the period bar says after the period until its report is on screen: that it is being built,
+// or why it could not be.
+func (m Model) state() string {
+	if m.loaded {
+		return ""
+	}
+	if m.failure != nil {
+		return "  " + theme.Negative.Render("cannot build the reports: "+m.failure.Error())
+	}
+	return "  " + theme.Dim.Render("loading the reports…")
 }
 
 // table draws the rows from the scroll offset on, the last visible row giving way to "… N more". A
