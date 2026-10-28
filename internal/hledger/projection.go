@@ -3,9 +3,9 @@ package hledger
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"regexp"
-	"strings"
 	"time"
 
 	"github.com/sbradl/konto/internal/domain"
@@ -23,15 +23,14 @@ type multiPeriodReport struct {
 }
 
 // Projection returns the account's balance at the end of each month from the query's Begin on. Months from
-// ForecastFrom to ForecastTo include the occurrences of the periodic rules; the forecast start is explicit
-// because hledger's default starts after the latest transaction of the whole journal. A forecast that starts
-// before the latest transaction would break the journal's balance assertions, which the projection has no use
-// for, so they are ignored.
+// ForecastFrom up to, not including, ForecastTo include the occurrences of the periodic rules; the forecast
+// start is explicit because hledger's default starts after the latest transaction of the whole journal. A
+// forecast that starts before the latest transaction would break the journal's balance assertions, which the
+// projection has no use for, so they are ignored.
 func (c *Client) Projection(ctx context.Context, query domain.ProjectionQuery) (domain.Projection, error) {
 	out, err := c.query(ctx, "bal", "acct:^"+regexp.QuoteMeta(query.Account)+"$",
-		"-M", "-H", "-E", "-I", "--layout=bare", "-b", query.Begin.Format(time.DateOnly),
-		"--forecast="+query.ForecastFrom.Format(time.DateOnly)+".."+query.ForecastTo.Format(time.DateOnly),
-		"-O", "json")
+		"-M", "-H", "-E", "-I", "--layout=bare", "-b", day(query.Begin),
+		span{query.ForecastFrom, query.ForecastTo}.forecast(), "-O", "json")
 	if err != nil {
 		return domain.Projection{}, err
 	}
@@ -39,28 +38,26 @@ func (c *Client) Projection(ctx context.Context, query domain.ProjectionQuery) (
 	if err := json.Unmarshal(out, &report); err != nil {
 		return domain.Projection{}, fmt.Errorf("reading hledger bal output: %w", err)
 	}
+	months, err := report.months()
+	if err != nil {
+		return domain.Projection{}, err
+	}
 	projection := domain.Projection{
 		Ends:     make([]time.Time, len(report.Dates)),
 		Balances: make([]domain.MultiAmount, len(report.Dates)),
 	}
 	for i, period := range report.Dates {
-		end, err := periodEnd(period[len(period)-1].Contents)
-		if err != nil {
+		if len(period) == 0 {
+			return domain.Projection{}, errors.New("reading hledger bal output: a period without dates")
+		}
+		if projection.Ends[i], err = periodEnd(period[len(period)-1].Contents); err != nil {
 			return domain.Projection{}, err
 		}
-		projection.Ends[i] = end
 	}
-	if len(report.Rows) == 0 {
-		return projection, nil
-	}
-	for i, raw := range report.Rows[0].Amounts {
-		balance := make(domain.MultiAmount, len(raw))
-		for j, amount := range raw {
-			if balance[j], err = amount.amount(); err != nil {
-				return domain.Projection{}, fmt.Errorf("reading hledger bal output: %w", err)
-			}
+	for i, accounts := range months {
+		if len(accounts) > 0 { // the one account, absent in a month it held nothing
+			projection.Balances[i] = accounts[0].Balance
 		}
-		projection.Balances[i] = balance
 	}
 	return projection, nil
 }
@@ -73,13 +70,13 @@ func periodEnd(text string) (time.Time, error) {
 	return end, nil
 }
 
-// Occurrences are the dates the periodic rules in the journal text give rise to from first through last,
-// as hledger projects them. The text goes to hledger on standard input; no file is read or written.
-func (c *Client) Occurrences(ctx context.Context, text string, first, last time.Time) ([]time.Time, error) {
-	out, stderr, err := c.runInput(ctx, text, "-f", "-", "print",
-		"--forecast="+first.Format(time.DateOnly)+".."+last.Format(time.DateOnly), "-O", "json")
+// Occurrences are the dates the periodic rules in the journal text give rise to from begin up to, not
+// including, until, as hledger projects them. The text goes to hledger on standard input; no file is read or
+// written.
+func (c *Client) Occurrences(ctx context.Context, text string, begin, until time.Time) ([]time.Time, error) {
+	out, err := c.queryText(ctx, text, firstMessageLine, "print", span{begin, until}.forecast(), "-O", "json")
 	if err != nil {
-		return nil, fmt.Errorf("hledger projecting the rule: %w: %s", err, strings.TrimSpace(stderr))
+		return nil, err
 	}
 	transactions, err := readTransactions(out, jsonTransaction.isGenerated)
 	if err != nil {

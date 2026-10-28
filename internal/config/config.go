@@ -14,6 +14,7 @@ import (
 // Config is what konto needs to know before it starts.
 type Config struct {
 	JournalPath string
+	Home        string // the user's home directory, as resolved once at start-up
 }
 
 // Environment is the process context the journal path depends on.
@@ -37,10 +38,10 @@ func Resolve(args []string, env Environment) (Config, error) {
 	}
 	for _, path := range []string{*file, env.Getenv("LEDGER_FILE")} {
 		if path != "" {
-			return Config{JournalPath: absolute(env.Cwd, path)}, nil
+			return Config{JournalPath: absolute(env.Cwd, path), Home: env.Home}, nil
 		}
 	}
-	return Config{JournalPath: filepath.Join(env.Home, ".hledger.journal")}, nil
+	return Config{JournalPath: filepath.Join(env.Home, ".hledger.journal"), Home: env.Home}, nil
 }
 
 func absolute(cwd, path string) string {

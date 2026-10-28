@@ -95,22 +95,13 @@ func TestBalancesRejectsGarbage(t *testing.T) {
 	}
 }
 
-func TestPeriodActivityAsksForIncomeAndExpensesOverTheInclusivePeriod(t *testing.T) {
-	var calls []call
-	client := newClient(recording(balanceReport(row("expenses:rent", amountJSON("EUR", 90000, eurStyle))), nil, &calls), "/data/main.journal")
+func TestBalancesSayWhenTheReportIsEmpty(t *testing.T) {
+	client := newClient(recording("[]", nil, new([]call)), "/data/main.journal")
 
-	got, err := client.PeriodActivity(context.Background(),
-		time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	_, err := client.Balances(context.Background())
 
-	want := []string{"-f", "/data/main.journal", "bal", "--flat", "-O", "json", "-b", "2026-09-01", "-e", "2026-10-01", "^expenses:", "^income:"}
-	if len(calls) != 1 || !reflect.DeepEqual(calls[0].args, want) {
-		t.Errorf("calls = %+v, want one call with %v", calls, want)
-	}
-	if len(got) != 1 || got[0].Name != "expenses:rent" {
-		t.Errorf("accounts = %+v, want expenses:rent", got)
+	if err == nil || strings.Contains(err.Error(), "%!") || !strings.Contains(err.Error(), "empty") {
+		t.Errorf("err = %v, want one saying the report is empty", err)
 	}
 }
 
@@ -119,7 +110,7 @@ func TestActivityAsksForTheGivenQueriesOverTheInclusivePeriod(t *testing.T) {
 	client := newClient(recording(balanceReport(), nil, &calls), "/data/main.journal")
 
 	_, err := client.Activity(context.Background(),
-		time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC), "^assets:", "^liabilities:")
+		time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC), "assets:", "liabilities:")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -134,7 +125,7 @@ func TestBalancesUntilCountsEverythingUpToAndIncludingTheDay(t *testing.T) {
 	var calls []call
 	client := newClient(recording(balanceReport(row("assets:a", amountJSON("EUR", 100, eurStyle))), nil, &calls), "/data/main.journal")
 
-	got, err := client.BalancesUntil(context.Background(), time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC), "^assets:")
+	got, err := client.BalancesUntil(context.Background(), time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC), "assets:")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -223,6 +214,9 @@ func TestProjectionReportsWhatItCannotRead(t *testing.T) {
 		"not json":      newClient(recording("oops", nil, new([]call)), "j"),
 		"bad date":      newClient(recording(periodReport([]string{"soon"}), nil, new([]call)), "j"),
 		"bad amount":    newClient(recording(periodReport([]string{"2026-09-30"}, periodRow([]string{badAmount})), nil, new([]call)), "j"),
+		"empty period":  newClient(recording(`{"prDates": [[]], "prRows": []}`, nil, new([]call)), "j"),
+		"short row":     newClient(recording(periodReport([]string{"2026-09-30", "2026-10-31"}, periodRow(nil)), nil, new([]call)), "j"),
+		"long row":      newClient(recording(periodReport([]string{"2026-09-30"}, periodRow(nil, nil)), nil, new([]call)), "j"),
 	} {
 		if _, err := client.Projection(context.Background(), domain.ProjectionQuery{Account: "assets:x"}); err == nil {
 			t.Errorf("%s: expected an error", name)
@@ -250,7 +244,7 @@ func TestMonthlyActivityAsksForIncomeAndExpensesPerMonthOverTheInclusivePeriod(t
 	}
 
 	want := []string{
-		"-f", "/data/main.journal", "bal", "--flat", "-M", "-O", "json",
+		"-f", "/data/main.journal", "bal", "--flat", "-O", "json", "-M",
 		"-b", "2026-08-01", "-e", "2026-10-01", "^expenses:", "^income:",
 	}
 	if len(calls) != 1 || !reflect.DeepEqual(calls[0].args, want) {

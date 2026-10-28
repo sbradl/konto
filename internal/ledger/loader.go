@@ -6,7 +6,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/sbradl/konto/internal/domain"
@@ -16,7 +15,7 @@ type gateway interface {
 	Print(ctx context.Context) ([]domain.Transaction, error)
 	Balances(ctx context.Context) ([]domain.Account, error)
 	MonthlyActivity(ctx context.Context, first, last time.Time) ([][]domain.Account, error)
-	Upcoming(ctx context.Context, first, last time.Time) ([]domain.Transaction, error)
+	Upcoming(ctx context.Context, begin, until time.Time) ([]domain.Transaction, error)
 }
 
 type journalFile interface {
@@ -77,16 +76,16 @@ func (l *Loader) fromHledger(ctx context.Context) (domain.Ledger, []domain.Accou
 		accounts []domain.Account
 	)
 	today := l.today()
-	queries := []func() error{
+	err := domain.RunAll(
 		func() error { return assign(&snapshot.Transactions)(l.gw.Print(ctx)) },
 		func() error { return assign(&accounts)(l.gw.Balances(ctx)) },
-		func() (err error) { snapshot.Month, snapshot.Spend, err = l.activity(ctx); return err },
+		func() (err error) { snapshot.Month, snapshot.Spend, err = l.activity(ctx, today); return err },
 		func() error {
 			return assign(&snapshot.Upcoming)(l.gw.Upcoming(ctx, today.AddDate(0, 0, 1), today.AddDate(1, 0, 0)))
 		},
-	}
-	if err := runAll(queries); err != nil {
-		return domain.Ledger{}, nil, err
+	)
+	if err != nil {
+		return domain.Ledger{}, nil, err //nolint:wrapcheck // Load adds the context
 	}
 	return snapshot, accounts, nil
 }
@@ -97,22 +96,6 @@ func assign[T any](dst *T) func(T, error) error {
 		*dst = value
 		return err
 	}
-}
-
-// runAll runs the queries concurrently and returns the first failure in query order.
-func runAll(queries []func() error) error {
-	failures := make([]error, len(queries))
-	var group sync.WaitGroup
-	for i, query := range queries {
-		group.Go(func() { failures[i] = query() })
-	}
-	group.Wait()
-	for _, err := range failures {
-		if err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // declare completes each account with what its `account` directive says. An account declared
@@ -145,8 +128,7 @@ const spendMonths = 6
 
 // activity sums the calendar month so far (income as a positive figure, and expenses) and totals the
 // expenses of each of the six complete months before it, oldest first, from one monthly report.
-func (l *Loader) activity(ctx context.Context) (domain.MonthSummary, []domain.MonthSpend, error) {
-	today := l.today()
+func (l *Loader) activity(ctx context.Context, today time.Time) (domain.MonthSummary, []domain.MonthSpend, error) {
 	thisMonth := time.Date(today.Year(), today.Month(), 1, 0, 0, 0, 0, today.Location())
 	oldest := thisMonth.AddDate(0, -spendMonths, 0)
 	months, err := l.gw.MonthlyActivity(ctx, oldest, today)

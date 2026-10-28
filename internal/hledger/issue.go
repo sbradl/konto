@@ -27,8 +27,8 @@ func parseIssue(stderr string, messageOf func(text string) string) (domain.Check
 	line, _ := strconv.Atoi(groups[2])
 	col, _ := strconv.Atoi(groups[3])
 	return domain.CheckIssue{
-		Check:    "parseable",
-		Severity: domain.SeverityErr,
+		Check:    domain.ParseableCheck,
+		Severity: domain.SeverityOf(domain.ParseableCheck),
 		Message:  messageOf(rest),
 		File:     groups[1],
 		Line:     line,

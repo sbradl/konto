@@ -24,7 +24,7 @@ type Input struct {
 }
 
 type gateway interface {
-	Occurrences(ctx context.Context, text string, first, last time.Time) ([]time.Time, error)
+	Occurrences(ctx context.Context, text string, begin, until time.Time) ([]time.Time, error)
 }
 
 // Service plans the writes of the Scheduled form.

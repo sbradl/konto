@@ -91,3 +91,12 @@ func TestRelativeJournalPathBecomesAbsolute(t *testing.T) {
 		}
 	}
 }
+
+// The home directory is kept, whichever journal path wins, for what else starts from it.
+func TestResolveKeepsTheHomeDirectory(t *testing.T) {
+	for _, args := range [][]string{nil, {"--file", "/data/flag.journal"}} {
+		if cfg := mustResolve(t, args, nil); cfg.Home != "/home/alex" {
+			t.Errorf("%v: Home = %q, want /home/alex", args, cfg.Home)
+		}
+	}
+}

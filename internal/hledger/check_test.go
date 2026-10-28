@@ -127,10 +127,34 @@ func TestNewChecksTextThroughTheBinary(t *testing.T) {
 
 	err := New("hledger", func() []string { return []string{"/j"} }).CheckText(context.Background(), "the text", []string{"balanced"})
 
-	if err == nil || err.Error() != "broken" {
+	if err == nil || !strings.Contains(err.Error(), "where\nbroken") {
 		t.Errorf("error = %v, want hledger's stderr", err)
 	}
 	if got, _ := os.ReadFile(seen); string(got) != "the text" {
 		t.Errorf("hledger read %q from stdin", got)
+	}
+}
+
+func TestCheckTextSaysWhyWhenHledgerGivesNoMessage(t *testing.T) {
+	client := &Client{runInput: func(context.Context, string, ...string) ([]byte, string, error) {
+		return nil, "", errors.New("hledger did not answer within 2m0s")
+	}}
+
+	err := client.CheckText(context.Background(), "", nil)
+
+	if err == nil || !strings.Contains(err.Error(), "did not answer") {
+		t.Errorf("error = %v, want the cause", err)
+	}
+}
+
+func TestCheckTextKeepsTheLocationWhenHledgerSaysNothingElse(t *testing.T) {
+	client := &Client{runInput: func(context.Context, string, ...string) ([]byte, string, error) {
+		return nil, "hledger: Error: -:5:\n", errors.New("exit 1")
+	}}
+
+	err := client.CheckText(context.Background(), "", nil)
+
+	if err == nil || !strings.Contains(err.Error(), "-:5") {
+		t.Errorf("error = %v, want at least where it failed", err)
 	}
 }

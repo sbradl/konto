@@ -3,7 +3,6 @@ package hledger
 import (
 	"context"
 	"errors"
-	"strings"
 
 	"github.com/sbradl/konto/internal/domain"
 )
@@ -26,10 +25,9 @@ func (c *Client) Check(ctx context.Context, name string) (*domain.CheckIssue, er
 // CheckText runs the named checks over journal text given on standard input; the first failure is the
 // error, in hledger's words. Nothing on disk is read or written for the text itself.
 func (c *Client) CheckText(ctx context.Context, text string, names []string) error {
-	_, stderr, err := c.runInput(ctx, text, append([]string{"-f", "-", "check"}, names...)...)
-	if err != nil {
-		_, message, _ := strings.Cut(stderr, "\n") // the first line only says where
-		return errors.New(firstParagraph(message))
+	_, err := c.queryText(ctx, text, firstParagraph, append([]string{"check"}, names...)...)
+	if failure, ok := errors.AsType[domain.JournalError](err); ok && failure.Issue.Message != "" {
+		return errors.New(failure.Issue.Message) // where in the text it failed means nothing to the user
 	}
-	return nil
+	return err
 }

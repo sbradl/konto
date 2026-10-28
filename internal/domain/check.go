@@ -42,12 +42,39 @@ func (e JournalError) Error() string {
 	return e.Issue.Location() + ": " + e.Issue.Message
 }
 
-// SeverityOf is the severity of a failed check, assigned by its name (spec §5.2): the
-// checks that make a journal wrong are errors, everything else is a warning.
+// Check is one `hledger check` and the severity of its failure (spec §5.2).
+type Check struct {
+	Name     string
+	Severity Severity
+}
+
+// ParseableCheck is the check a journal hledger cannot read at all fails.
+const ParseableCheck = "parseable"
+
+// HledgerChecks are every `hledger check`, in the order the panel reports them: the checks that make a
+// journal wrong are errors, everything else is a warning.
+func HledgerChecks() []Check {
+	return []Check{
+		{ParseableCheck, SeverityErr},
+		{"autobalanced", SeverityErr},
+		{"assertions", SeverityErr},
+		{"balanced", SeverityErr},
+		{"commodities", SeverityWarn},
+		{"accounts", SeverityWarn},
+		{"ordereddates", SeverityWarn},
+		{"tags", SeverityWarn},
+		{"payees", SeverityWarn},
+		{"recentassertions", SeverityWarn},
+		{"uniqueleafnames", SeverityWarn},
+	}
+}
+
+// SeverityOf is the severity of a failed check, assigned by its name; a check konto does not know is a warning.
 func SeverityOf(check string) Severity {
-	switch check {
-	case "parseable", "autobalanced", "assertions", "balanced":
-		return SeverityErr
+	for _, known := range HledgerChecks() {
+		if known.Name == check {
+			return known.Severity
+		}
 	}
 	return SeverityWarn
 }

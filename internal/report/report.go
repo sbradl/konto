@@ -13,8 +13,8 @@ import (
 )
 
 type gateway interface {
-	BalancesUntil(ctx context.Context, last time.Time, queries ...string) ([]domain.Account, error)
-	Activity(ctx context.Context, first, last time.Time, queries ...string) ([]domain.Account, error)
+	BalancesUntil(ctx context.Context, last time.Time, prefixes ...string) ([]domain.Account, error)
+	Activity(ctx context.Context, first, last time.Time, prefixes ...string) ([]domain.Account, error)
 }
 
 // Service builds reports.
@@ -26,28 +26,21 @@ type Service struct {
 // NewService returns a Service that reads through gw; today is the day every period ends.
 func NewService(gw gateway, today func() time.Time) *Service { return &Service{gw: gw, today: today} }
 
-// query is the hledger account pattern for the accounts under prefix.
-func query(prefix string) string { return "^" + prefix }
+func sheetPrefixes() []string { return []string{domain.AssetsPrefix, domain.LiabilitiesPrefix} }
 
-func sheetQueries() []string {
-	return []string{query(domain.AssetsPrefix), query(domain.LiabilitiesPrefix)}
-}
-
-func statementQueries() []string {
-	return []string{query(domain.IncomePrefix), query(domain.ExpensesPrefix)}
-}
+func statementPrefixes() []string { return []string{domain.IncomePrefix, domain.ExpensesPrefix} }
 
 // Report builds both tables for the period, ending today.
 func (s *Service) Report(ctx context.Context, period domain.Period) (domain.Report, error) {
 	today := s.today()
 	start, bounded := period.Start(today)
-	balances, err := s.gw.BalancesUntil(ctx, today, sheetQueries()...)
+	balances, err := s.gw.BalancesUntil(ctx, today, sheetPrefixes()...)
 	if err != nil {
 		return domain.Report{}, fmt.Errorf("reading balances: %w", err)
 	}
 	var delta map[string]domain.MultiAmount // stays nil under all time: no Δ column
 	if bounded {
-		changes, err := s.gw.Activity(ctx, start, today, sheetQueries()...)
+		changes, err := s.gw.Activity(ctx, start, today, sheetPrefixes()...)
 		if err != nil {
 			return domain.Report{}, fmt.Errorf("reading changes: %w", err)
 		}
@@ -72,9 +65,9 @@ func (s *Service) statementActivity(
 	ctx context.Context, period domain.Period, today time.Time,
 ) ([]domain.Account, error) {
 	if start, bounded := period.Start(today); bounded {
-		return s.gw.Activity(ctx, start, today, statementQueries()...) //nolint:wrapcheck // Report adds the context
+		return s.gw.Activity(ctx, start, today, statementPrefixes()...) //nolint:wrapcheck // Report adds the context
 	}
-	return s.gw.BalancesUntil(ctx, today, statementQueries()...) //nolint:wrapcheck // Report adds the context
+	return s.gw.BalancesUntil(ctx, today, statementPrefixes()...) //nolint:wrapcheck // Report adds the context
 }
 
 // section is one titled group of accounts and the total row that closes it.

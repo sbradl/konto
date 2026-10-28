@@ -5,10 +5,9 @@ package forecast
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"slices"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/sbradl/konto/internal/domain"
@@ -71,19 +70,21 @@ func (s *Service) Forecast(ctx context.Context, ledger domain.Ledger) (Forecast,
 	forecast := Forecast{Today: today, Begin: addMonths(today, -monthsBack), End: addMonths(today, monthsAhead)}
 	accounts := forecastable(ledger)
 	projections := make([]domain.Projection, len(accounts))
-	failures := make([]error, len(accounts))
-	var group sync.WaitGroup
+	projects := make([]func() error, len(accounts))
 	for i, account := range accounts {
-		group.Go(func() {
-			projections[i], failures[i] = s.gw.Projection(ctx, domain.ProjectionQuery{
+		projects[i] = func() (err error) {
+			projections[i], err = s.gw.Projection(ctx, domain.ProjectionQuery{
 				Account: account.Name, Begin: forecast.Begin, ForecastTo: forecast.End,
 				ForecastFrom: start(account, ledger, today),
 			})
-		})
+			if err != nil {
+				return fmt.Errorf("projecting %s: %w", account.Name, err)
+			}
+			return nil
+		}
 	}
-	group.Wait()
-	if err := errors.Join(failures...); err != nil {
-		return Forecast{}, err
+	if err := domain.RunAll(projects...); err != nil {
+		return Forecast{}, err //nolint:wrapcheck // each projection names its account
 	}
 	for rank := range accounts {
 		lines := linesOf(accountProjection{accounts[rank].Name, rank, projections[rank], ledger.Zero()}, today)

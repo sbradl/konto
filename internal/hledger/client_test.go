@@ -25,6 +25,11 @@ var euroStyle = domain.AmountStyle{Spaced: true, DecimalMark: ",", GroupMark: ".
 
 type call struct{ args []string }
 
+// newClient is a Client that runs run on the journal of the files.
+func newClient(run runner, files ...string) *Client {
+	return &Client{run: run, files: func() []string { return files }, tempRules: osRules}
+}
+
 func recording(out string, err error, calls *[]call) runner {
 	return recordingStderr(out, "", err, calls)
 }

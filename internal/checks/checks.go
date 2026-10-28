@@ -5,18 +5,9 @@ package checks
 import (
 	"context"
 	"fmt"
-	"sync"
 
 	"github.com/sbradl/konto/internal/domain"
 )
-
-// hledgerChecks are every `hledger check`, always, in the order the panel reports them.
-func hledgerChecks() []string {
-	return []string{
-		"parseable", "autobalanced", "assertions", "balanced", "commodities", "accounts",
-		"ordereddates", "tags", "payees", "recentassertions", "uniqueleafnames",
-	}
-}
 
 // ownChecks is how many checks konto runs itself over the Ledger.
 const ownChecks = 1
@@ -36,21 +27,24 @@ func NewRunner(gw gateway) *Runner { return &Runner{gw: gw} }
 // Run runs every check against the journal and the loaded ledger. hledger reports only the
 // first failure per check, so each contributes at most one issue; konto's own checks list all.
 func (r *Runner) Run(ctx context.Context, ledger domain.Ledger) (domain.CheckRun, error) {
-	names := hledgerChecks()
-	run := domain.CheckRun{Total: len(names) + ownChecks}
-	issues := make([]*domain.CheckIssue, len(names))
-	failures := make([]error, len(names))
-	var group sync.WaitGroup
-	for i, name := range names {
-		group.Go(func() { issues[i], failures[i] = r.gw.Check(ctx, name) })
-	}
-	group.Wait()
-	for i, name := range names {
-		if failures[i] != nil {
-			return domain.CheckRun{}, fmt.Errorf("running check %s: %w", name, failures[i])
+	checks := domain.HledgerChecks()
+	run := domain.CheckRun{Total: len(checks) + ownChecks}
+	issues := make([]*domain.CheckIssue, len(checks))
+	runs := make([]func() error, len(checks))
+	for i, check := range checks {
+		runs[i] = func() (err error) {
+			if issues[i], err = r.gw.Check(ctx, check.Name); err != nil {
+				return fmt.Errorf("running check %s: %w", check.Name, err)
+			}
+			return nil
 		}
-		if issues[i] != nil {
-			run.Issues = append(run.Issues, *issues[i])
+	}
+	if err := domain.RunAll(runs...); err != nil {
+		return domain.CheckRun{}, err //nolint:wrapcheck // each run names its check
+	}
+	for _, issue := range issues {
+		if issue != nil {
+			run.Issues = append(run.Issues, *issue)
 		}
 	}
 	run.Issues = append(run.Issues, ledger.UnclassifiedIssues()...)
@@ -82,9 +76,9 @@ func (v *Verifier) Verify(ctx context.Context, changeset domain.Changeset) error
 		return fmt.Errorf("preparing the write: %w", err)
 	}
 	var blocking []string
-	for _, name := range hledgerChecks() {
-		if domain.SeverityOf(name) == domain.SeverityErr {
-			blocking = append(blocking, name)
+	for _, check := range domain.HledgerChecks() {
+		if check.Severity == domain.SeverityErr {
+			blocking = append(blocking, check.Name)
 		}
 	}
 	if err := v.gw.CheckText(ctx, text, blocking); err != nil {

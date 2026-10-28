@@ -18,6 +18,9 @@ import (
 // output, ignoring any trailing platform suffix.
 var versionPattern = regexp.MustCompile(`^hledger (\d+)\.(\d+)(?:\.(\d+))?`)
 
+// Binary is the hledger executable konto runs, looked up on PATH: the one preflight checks and Client calls.
+const Binary = "hledger"
+
 // The oldest hledger release konto supports (spec §4.5).
 const (
 	minMajor = 1
@@ -33,7 +36,7 @@ func Preflight(
 	lookPath func(name string) (string, error),
 	runVersion func() (string, error),
 ) (domain.HledgerVersion, error) {
-	if _, err := lookPath("hledger"); err != nil {
+	if _, err := lookPath(Binary); err != nil {
 		return domain.HledgerVersion{}, fmt.Errorf(
 			"hledger binary not found on PATH (konto needs hledger %d.%d or newer): %w", minMajor, minMinor, err)
 	}
@@ -52,10 +55,10 @@ func Preflight(
 	return version, nil
 }
 
-// PreflightOnPath runs Preflight against the hledger binary on PATH.
+// PreflightOnPath runs Preflight against Binary on PATH, with the time limit of any hledger call.
 func PreflightOnPath() (domain.HledgerVersion, error) {
 	return Preflight(exec.LookPath, func() (string, error) {
-		out, err := exec.CommandContext(context.Background(), "hledger", "--version").Output()
+		out, _, err := binary{Binary, callTimeout}.run(context.Background(), nil, []string{"--version"})
 		return string(out), err
 	})
 }

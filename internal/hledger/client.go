@@ -37,14 +37,10 @@ const callTimeout = 2 * time.Minute
 
 // New returns a Client that runs the hledger binary bin on the journal made of the files named by files.
 func New(bin string, files func() []string) *Client {
-	client := newClient(execRunner(bin, callTimeout))
-	client.files = files
-	client.runInput = execInputRunner(bin, callTimeout)
-	return client
-}
-
-func newClient(run runner, files ...string) *Client {
-	return &Client{run: run, files: func() []string { return files }, tempRules: osRules}
+	return &Client{
+		run: execRunner(bin, callTimeout), runInput: execInputRunner(bin, callTimeout),
+		files: files, tempRules: osRules,
+	}
 }
 
 func execRunner(bin string, timeout time.Duration) runner {
@@ -90,12 +86,29 @@ func (c *Client) query(ctx context.Context, args ...string) ([]byte, error) {
 func (c *Client) queryMessage(ctx context.Context, messageOf func(string) string, args ...string) ([]byte, error) {
 	out, stderr, err := c.runJournal(ctx, args)
 	if err != nil {
-		if issue, ok := parseIssue(stderr, messageOf); ok {
-			return nil, domain.JournalError{Issue: issue}
-		}
-		return nil, fmt.Errorf("hledger %s: %w: %s", args[0], err, strings.TrimSpace(stderr))
+		return nil, failure(stderr, err, messageOf, "hledger "+args[0])
 	}
 	return out, nil
+}
+
+// queryText is queryMessage on journal text given on standard input instead of the client's journal.
+func (c *Client) queryText(
+	ctx context.Context, text string, messageOf func(string) string, args ...string,
+) ([]byte, error) {
+	out, stderr, err := c.runInput(ctx, text, append([]string{"-f", "-"}, args...)...)
+	if err != nil {
+		return nil, failure(stderr, err, messageOf, "hledger "+args[0])
+	}
+	return out, nil
+}
+
+// failure is why a run of hledger failed: the located issue when stderr names one, read with messageOf, else
+// what failed, the cause and hledger's own words.
+func failure(stderr string, err error, messageOf func(string) string, what string) error {
+	if issue, ok := parseIssue(stderr, messageOf); ok {
+		return domain.JournalError{Issue: issue}
+	}
+	return fmt.Errorf("%s: %w: %s", what, err, strings.TrimSpace(stderr))
 }
 
 // runJournal runs hledger on the journal. A single file is named with -f. Several files go as one journal on
@@ -138,11 +151,10 @@ func (c *Client) Print(ctx context.Context) ([]domain.Transaction, error) {
 // generatedTag marks the transactions hledger projects from periodic rules.
 const generatedTag = "_generated-transaction"
 
-// Upcoming returns the occurrences of the periodic rules from first through last, as hledger projects them.
-// The forecast period is always explicit: its default starts after the latest regular transaction.
-func (c *Client) Upcoming(ctx context.Context, first, last time.Time) ([]domain.Transaction, error) {
-	period := first.Format(time.DateOnly) + ".." + last.Format(time.DateOnly)
-	return c.transactions(ctx, jsonTransaction.isGenerated, "print", "--forecast="+period, "-O", "json")
+// Upcoming returns the occurrences of the periodic rules from begin up to, not including, until, as hledger
+// projects them. The forecast period is always explicit: its default starts after the latest regular transaction.
+func (c *Client) Upcoming(ctx context.Context, begin, until time.Time) ([]domain.Transaction, error) {
+	return c.transactions(ctx, jsonTransaction.isGenerated, "print", span{begin, until}.forecast(), "-O", "json")
 }
 
 func (raw jsonTransaction) isGenerated() bool {
@@ -200,7 +212,7 @@ func (c *Client) ConvertCSV(ctx context.Context, csvPath, rules string) ([]domai
 	defer func() { _ = os.Remove(rulesPath) }()
 	out, stderr, err := c.run(ctx, "print", "-f", csvPath, "--rules-file", rulesPath, "-O", "json")
 	if err != nil {
-		return nil, fmt.Errorf("hledger converting %s: %w: %s", csvPath, err, strings.TrimSpace(stderr))
+		return nil, failure(stderr, err, firstMessageLine, "hledger converting "+csvPath)
 	}
 	return readTransactions(out, nil)
 }
@@ -235,12 +247,9 @@ func osRules(rules string) (string, error) {
 func (raw jsonTransaction) postings() ([]domain.Posting, error) {
 	postings := make([]domain.Posting, len(raw.Postings))
 	for i, posting := range raw.Postings {
-		amounts := make(domain.MultiAmount, len(posting.Amounts))
-		for j, amount := range posting.Amounts {
-			var err error
-			if amounts[j], err = amount.amount(); err != nil {
-				return nil, err
-			}
+		amounts, err := amounts(posting.Amounts)
+		if err != nil {
+			return nil, err
 		}
 		postings[i] = domain.Posting{Account: posting.Account, Amounts: amounts, Tags: tagMap(posting.Tags)}
 	}

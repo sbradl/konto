@@ -11,7 +11,7 @@ type Projection struct {
 }
 
 // ProjectionQuery asks for an account's projection: months from Begin on, the periodic rules' occurrences
-// counted from ForecastFrom through ForecastTo.
+// counted from ForecastFrom up to, not including, ForecastTo.
 type ProjectionQuery struct {
 	Account      string
 	Begin        time.Time

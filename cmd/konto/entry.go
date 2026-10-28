@@ -41,16 +41,18 @@ func runProgram(cfg config.Config) error {
 	today := todayFunc(os.Getenv, time.Now)
 	file := journal.NewFile(cfg.JournalPath, today)
 	rulesPath := file.RulesPath()
-	client := hledger.New("hledger", file.Window)
+	client := hledger.New(hledger.Binary, file.Window)
 	loader := ledger.NewLoader(client, file, today)
 	writer := carry.NewWriter(file, client)
-	home, _ := os.UserHomeDir() // without a home the picker falls back to a relative Downloads
 	_, err := tea.NewProgram(ui.New(cfg.JournalPath, ui.Ports{
 		Loader: loader, Checker: checks.NewRunner(client), Creator: file, Editor: openInEditor,
+		// The Verifier renders through the carry writer, not file: file satisfies the same port but would check
+		// a write without the year carry-over it brings.
 		Accounts: accounts.NewService(file, today), Writer: writer, Verifier: checks.NewVerifier(writer, client),
 		Reports: report.NewService(client, today), Forecast: forecast.NewService(client, today),
-		Rules:    periodic.NewService(client, today),
-		Importer: csvimport.NewService(files.System{}, client, rulesPath), DownloadDir: downloadDir(os.Getenv, home),
+		Rules:       periodic.NewService(client, today),
+		Importer:    csvimport.NewService(files.System{}, client, rulesPath),
+		DownloadDir: downloadDir(os.Getenv, cfg.Home),
 	})).Run()
 	return err //nolint:wrapcheck // the program's own error is already self-describing
 }

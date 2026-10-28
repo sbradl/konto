@@ -28,14 +28,14 @@ type fakeGateway struct {
 	err      error
 }
 
-func (f *fakeGateway) BalancesUntil(_ context.Context, last time.Time, queries ...string) ([]domain.Account, error) {
-	f.calls = append(f.calls, "until "+last.Format(time.DateOnly)+" "+strings.Join(queries, ","))
-	return f.until[queries[0]], f.err
+func (f *fakeGateway) BalancesUntil(_ context.Context, last time.Time, prefixes ...string) ([]domain.Account, error) {
+	f.calls = append(f.calls, "until "+last.Format(time.DateOnly)+" "+strings.Join(prefixes, ","))
+	return f.until[prefixes[0]], f.err
 }
 
-func (f *fakeGateway) Activity(_ context.Context, first, last time.Time, queries ...string) ([]domain.Account, error) {
-	f.calls = append(f.calls, "activity "+first.Format(time.DateOnly)+".."+last.Format(time.DateOnly)+" "+strings.Join(queries, ","))
-	return f.activity[queries[0]], f.err
+func (f *fakeGateway) Activity(_ context.Context, first, last time.Time, prefixes ...string) ([]domain.Account, error) {
+	f.calls = append(f.calls, "activity "+first.Format(time.DateOnly)+".."+last.Format(time.DateOnly)+" "+strings.Join(prefixes, ","))
+	return f.activity[prefixes[0]], f.err
 }
 
 var sept30 = func() time.Time { return time.Date(2026, 9, 30, 15, 0, 0, 0, time.UTC) }
@@ -43,12 +43,12 @@ var sept30 = func() time.Time { return time.Date(2026, 9, 30, 15, 0, 0, 0, time.
 func household() *fakeGateway {
 	return &fakeGateway{
 		until: map[string][]domain.Account{
-			"^assets:": {account("assets:checking", 1324000), account("assets:savings", 1350000)},
-			"^income:": {account("income:salary", -900000), account("expenses:rent", 270000)},
+			"assets:": {account("assets:checking", 1324000), account("assets:savings", 1350000)},
+			"income:": {account("income:salary", -900000), account("expenses:rent", 270000)},
 		},
 		activity: map[string][]domain.Account{
-			"^assets:": {account("assets:checking", 135000), account("liabilities:creditcard", -3500)},
-			"^income:": {account("income:salary", -300000), account("expenses:rent", 90000), account("expenses:books", 3500)},
+			"assets:": {account("assets:checking", 135000), account("liabilities:creditcard", -3500)},
+			"income:": {account("income:salary", -300000), account("expenses:rent", 90000), account("expenses:books", 3500)},
 		},
 	}
 }
@@ -69,7 +69,7 @@ func rows(table []domain.ReportRow) []string {
 
 func TestBalanceSheetShowsBalancesAtTodayAndTheChangeWithinThePeriod(t *testing.T) {
 	gw := household()
-	gw.until["^assets:"] = append(gw.until["^assets:"], account("liabilities:creditcard", -14000))
+	gw.until["assets:"] = append(gw.until["assets:"], account("liabilities:creditcard", -14000))
 
 	got, err := NewService(gw, sept30).Report(context.Background(), domain.MonthToDate)
 	if err != nil {
@@ -124,9 +124,9 @@ func TestEveryPeriodEndsToday(t *testing.T) {
 	}
 
 	want := []string{
-		"until 2026-09-30 ^assets:,^liabilities:",
-		"activity 2026-07-01..2026-09-30 ^assets:,^liabilities:",
-		"activity 2026-07-01..2026-09-30 ^income:,^expenses:",
+		"until 2026-09-30 assets:,liabilities:",
+		"activity 2026-07-01..2026-09-30 assets:,liabilities:",
+		"activity 2026-07-01..2026-09-30 income:,expenses:",
 	}
 	if !reflect.DeepEqual(gw.calls, want) {
 		t.Errorf("calls = %q, want %q", gw.calls, want)
@@ -146,7 +146,7 @@ func TestAllTimeHasNoDeltaAndReadsTheStatementFromBalances(t *testing.T) {
 			t.Errorf("row %q has a Δ under all time", row.Label)
 		}
 	}
-	if want := "until 2026-09-30 ^income:,^expenses:"; gw.calls[1] != want || len(gw.calls) != 2 {
+	if want := "until 2026-09-30 income:,expenses:"; gw.calls[1] != want || len(gw.calls) != 2 {
 		t.Errorf("calls = %q, want the second to be %q", gw.calls, want)
 	}
 	if got.IncomeStatement[len(got.IncomeStatement)-1].Amount.Format() != "6.300,00 EUR" {
@@ -155,7 +155,7 @@ func TestAllTimeHasNoDeltaAndReadsTheStatementFromBalances(t *testing.T) {
 }
 
 func TestAnEmptyPeriodGivesEmptyStatementAndNoZeroRows(t *testing.T) {
-	gw := &fakeGateway{until: map[string][]domain.Account{"^assets:": {account("assets:old", 0)}}}
+	gw := &fakeGateway{until: map[string][]domain.Account{"assets:": {account("assets:old", 0)}}}
 
 	got, err := NewService(gw, sept30).Report(context.Background(), domain.MonthToDate)
 	if err != nil {
@@ -168,7 +168,7 @@ func TestAnEmptyPeriodGivesEmptyStatementAndNoZeroRows(t *testing.T) {
 }
 
 func TestAnAccountWithoutChangeShowsAZeroDelta(t *testing.T) {
-	gw := &fakeGateway{until: map[string][]domain.Account{"^assets:": {account("assets:savings", 1350000)}}}
+	gw := &fakeGateway{until: map[string][]domain.Account{"assets:": {account("assets:savings", 1350000)}}}
 
 	got, _ := NewService(gw, sept30).Report(context.Background(), domain.MonthToDate)
 
@@ -178,7 +178,7 @@ func TestAnAccountWithoutChangeShowsAZeroDelta(t *testing.T) {
 }
 
 func TestOnlyExpensesStillGiveANet(t *testing.T) {
-	gw := &fakeGateway{activity: map[string][]domain.Account{"^income:": {account("expenses:rent", 90000)}}}
+	gw := &fakeGateway{activity: map[string][]domain.Account{"income:": {account("expenses:rent", 90000)}}}
 
 	got, _ := NewService(gw, sept30).Report(context.Background(), domain.MonthToDate)
 
@@ -203,11 +203,11 @@ type failingLater struct {
 	failOn int
 }
 
-func (f failingLater) Activity(ctx context.Context, first, last time.Time, queries ...string) ([]domain.Account, error) {
+func (f failingLater) Activity(ctx context.Context, first, last time.Time, prefixes ...string) ([]domain.Account, error) {
 	if len(f.calls)+1 == f.failOn {
 		return nil, errors.New("later boom")
 	}
-	return f.fakeGateway.Activity(ctx, first, last, queries...)
+	return f.fakeGateway.Activity(ctx, first, last, prefixes...)
 }
 
 func TestReportPassesOnALaterGatewayFailure(t *testing.T) {
