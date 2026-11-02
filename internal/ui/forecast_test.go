@@ -11,6 +11,7 @@ import (
 
 	"github.com/sbradl/konto/internal/domain"
 	forecastsvc "github.com/sbradl/konto/internal/forecast"
+	"github.com/sbradl/konto/internal/ui/uitest"
 )
 
 type fakeForecaster struct {
@@ -25,7 +26,7 @@ func (f *fakeForecaster) Forecast(_ context.Context, snapshot domain.Ledger) (fo
 }
 
 func oneChart(commodities ...string) forecastsvc.Forecast {
-	style := domain.AmountStyle{Spaced: true, DecimalMark: ",", GroupMark: ".", GroupSize: 3}
+	style := domain.DefaultAmount("EUR").Style
 	forecast := forecastsvc.Forecast{
 		Today: time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC), Begin: time.Date(2026, 3, 30, 0, 0, 0, 0, time.UTC),
 		End: time.Date(2027, 9, 30, 0, 0, 0, 0, time.UTC),
@@ -64,7 +65,7 @@ func TestTheLoadedJournalIsForecastAndTheForecastViewShowsIt(t *testing.T) {
 	if len(forecaster.ledgers) != 1 {
 		t.Fatalf("forecast built %d times, want once", len(forecaster.ledgers))
 	}
-	content := plain(model.View().Content)
+	content := uitest.Plain(model.View().Content)
 	for _, want := range []string{"╭─ EUR ", "╭─ MILESTONES ", "13.240,00 EUR"} {
 		if !strings.Contains(content, want) {
 			t.Errorf("view lacks %q:\n%s", want, content)
@@ -96,8 +97,8 @@ func TestAFailedForecastKeepsTheLastOneAndFlagsTheError(t *testing.T) {
 	model = deliver(model, cmd)
 	model, _ = press(model, "4")
 
-	if !strings.Contains(lastLine(model), "✗ error") || !strings.Contains(plain(model.View().Content), "13.240,00 EUR") {
-		t.Errorf("status %q; view:\n%s", lastLine(model), plain(model.View().Content))
+	if !strings.Contains(lastLine(model), "✗ error") || !strings.Contains(uitest.Plain(model.View().Content), "13.240,00 EUR") {
+		t.Errorf("status %q; view:\n%s", lastLine(model), uitest.Plain(model.View().Content))
 	}
 }
 
@@ -127,7 +128,7 @@ func TestOtherViewsReportNoHiddenForecastPanels(t *testing.T) {
 func TestWithoutAForecasterTheForecastViewStaysEmpty(t *testing.T) {
 	model, _ := press(withAccounts(t, &fakePlanner{}, &fakeWriter{}), "4")
 
-	if content := plain(model.View().Content); !strings.Contains(content, "loading the forecast") {
+	if content := uitest.Plain(model.View().Content); !strings.Contains(content, "loading the forecast") {
 		t.Errorf("view:\n%s", content)
 	}
 }
@@ -141,7 +142,7 @@ func TestARefreshReplacesTheForecastOnScreen(t *testing.T) {
 	model = deliver(model, cmd)
 	model, _ = press(model, "4")
 
-	if content := plain(model.View().Content); !strings.Contains(content, "13.240,00 PLN") || strings.Contains(content, "13.240,00 EUR") {
+	if content := uitest.Plain(model.View().Content); !strings.Contains(content, "13.240,00 PLN") || strings.Contains(content, "13.240,00 EUR") {
 		t.Errorf("view:\n%s", content)
 	}
 }

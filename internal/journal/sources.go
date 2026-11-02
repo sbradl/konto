@@ -24,7 +24,7 @@ func (f File) sources() ([]*source, error) {
 	if err := readSource(f.path, seen, &sources); err != nil {
 		return nil, err
 	}
-	for _, path := range f.Window()[1:] {
+	for _, path := range f.windowYears() { // one the journal includes was read with it
 		if err := readSource(path, seen, &sources); err != nil {
 			return nil, err
 		}
@@ -60,7 +60,7 @@ func readSource(path string, seen map[string]bool, sources *[]*source) error {
 
 // includedFiles are the files an `include` line of the file at from names; none for any other line.
 func includedFiles(from, line string) ([]string, error) {
-	pattern, ok := strings.CutPrefix(line, "include ")
+	pattern, ok := directiveArgs(line, "include")
 	if !ok {
 		return nil, nil
 	}

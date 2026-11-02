@@ -79,27 +79,8 @@ Feature: Product invariants that must hold across the whole app
 
   Rule: Every transaction is categorised, a transfer, or an opening balance (ADR 0008)
 
-
-    Scenario: after any import no transaction sits in a catch-all account
-      Given the journal "household"
-      And a Postbank CSV "sept.csv" for IBAN "DE89370400440532013000" with closing balance 13.239,00 EUR:
-        | date      | type          | payee | purpose | amount |
-        | 29.9.2026 | Kartenzahlung | Kiosk | Zeitung | -1,00  |
-      And I start konto
-      When I import "sept.csv" categorising every row
-      Then every transaction has a counterpart that is a category, an account, or "equity:opening-balances"
-      And the journal has no account named "unknown" or "uncategorized" or "uncategorised"
-
-
-    Scenario: the import cannot be written with an uncategorised row
-      Given the journal "household"
-      And a Postbank CSV "sept.csv" for IBAN "DE89370400440532013000" with closing balance 13.239,00 EUR:
-        | date      | type          | payee | purpose | amount |
-        | 29.9.2026 | Kartenzahlung | Kiosk | Zeitung | -1,00  |
-      And I start konto
-      When I open "sept.csv" in Import
-      And I press "w"
-      Then the journal is unchanged
+    # No catch-all account: import-write.feature, "there is no catch-all account".
+    # No write with an uncategorised row: import-write.feature, "w is blocked while ? rows remain".
 
   Rule: Forecast and periodic rules never write transactions (ADR 0006, 0007)
 

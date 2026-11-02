@@ -23,7 +23,7 @@ const (
 type Model struct {
 	period  domain.Period
 	report  domain.Report
-	offset  int
+	scroll  layout.Cursor // how far both tables are scrolled
 	width   int
 	height  int
 	loaded  bool  // the period's report has arrived
@@ -36,35 +36,40 @@ func New() Model { return Model{} }
 // Period is the period the view shows; the Dashboard's month to date is separate.
 func (m Model) Period() domain.Period { return m.period }
 
-// Action is what a key asks the root model to do.
-type Action int
+// Action is what a key asks the root model to do: LoadReport; nil asks for nothing.
+type Action interface{ isAction() }
 
-// The Reports view's actions.
-const (
-	NoAction   Action = iota
-	LoadReport        // p moved to the next period: its report is to be built
-)
+// LoadReport asks for the report of the period now shown to be built.
+type LoadReport struct{}
+
+func (LoadReport) isAction() {}
+
+// keyPeriod moves to the next period.
+const keyPeriod = "p"
+
+// Bindings are the keys Key acts on besides the cursor keys, as the root hints them.
+func Bindings() []layout.Binding { return []layout.Binding{{Key: keyPeriod, Action: "period"}} }
 
 // Key applies a key: p moves to the next period and asks for its report, the other keys scroll.
 func (m Model) Key(key string) (Model, Action) {
-	if key == "p" {
-		return m.NextPeriod(), LoadReport
+	if key == keyPeriod {
+		return m.NextPeriod(), LoadReport{}
 	}
-	return m.Move(key), NoAction
+	return m.Move(key), nil
 }
 
 // NextPeriod moves to the next period (month, quarter, year, all time, month), its tables empty until its
 // report arrives.
 func (m Model) NextPeriod() Model {
 	m.period = m.period.Next()
-	m.report, m.loaded, m.failure, m.offset = domain.Report{}, false, nil, 0
+	m.report, m.loaded, m.failure, m.scroll = domain.Report{}, false, nil, layout.Cursor{}
 	return m
 }
 
 // WithReport shows a freshly built report, keeping the scroll position when it still fits.
 func (m Model) WithReport(report domain.Report) Model {
 	m.report, m.loaded, m.failure = report, true, nil
-	m.offset = min(m.offset, m.maxOffset())
+	m.scroll.Offset = min(m.scroll.Offset, m.maxOffset())
 	return m
 }
 
@@ -78,7 +83,7 @@ func (m Model) WithFailure(err error) Model {
 // Resize gives the view the content area below the tab bar and above the status bar.
 func (m Model) Resize(width, height int) Model {
 	m.width, m.height = width, height
-	m.offset = min(m.offset, m.maxOffset())
+	m.scroll.Offset = min(m.scroll.Offset, m.maxOffset())
 	return m
 }
 
@@ -101,22 +106,7 @@ func (m Model) maxOffset() int {
 
 // Move scrolls both tables together: up, down, pgup, pgdown, home or end.
 func (m Model) Move(key string) Model {
-	target := m.offset
-	switch key {
-	case "up":
-		target--
-	case "down":
-		target++
-	case "pgup":
-		target -= m.capacity()
-	case "pgdown":
-		target += m.capacity()
-	case "home":
-		target = 0
-	case "end":
-		target = m.maxOffset()
-	}
-	m.offset = max(0, min(target, m.maxOffset()))
+	m.scroll = m.scroll.Scroll(key, m.maxOffset(), m.capacity())
 	return m
 }
 
@@ -154,7 +144,7 @@ func (m Model) table(rows []domain.ReportRow, width int) string {
 	if columns.delta > 0 {
 		lines = append(lines, columns.titleRow(width))
 	}
-	first := min(m.offset, max(0, len(rows)-capacity))
+	first := min(m.scroll.Offset, max(0, len(rows)-capacity))
 	last := min(len(rows), first+capacity)
 	if last < len(rows) {
 		last--

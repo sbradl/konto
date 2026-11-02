@@ -34,25 +34,48 @@ const (
 	transferMark = " ⇄"
 )
 
-// Action is what the view asks the root to do: list a directory, open a file or write the import. At most
-// one is set.
-type Action struct {
-	Browse string
-	Open   string
-	Write  bool
+// Action is what the view asks the root to do: Browse, Open or Write; nil asks for nothing.
+type Action interface{ isAction() }
+
+// Browse asks for the folder Dir to be listed in the file picker.
+type Browse struct{ Dir string }
+
+// Open asks for the export at Path to be read against the journal.
+type Open struct{ Path string }
+
+// Write asks for the staged import to be written.
+type Write struct{}
+
+func (Browse) isAction() {}
+func (Open) isAction()   {}
+func (Write) isAction()  {}
+
+// The Import view's own keys.
+const (
+	keyNewFile = "n"
+	keyWrite   = "w"
+)
+
+// Bindings are the keys Key acts on besides the cursor keys, as the root hints them.
+func Bindings() []layout.Binding {
+	return []layout.Binding{
+		{Key: keyNewFile, Action: "new file"},
+		{Key: layout.KeyEnter, Action: "categorise"},
+		{Key: keyWrite, Action: "write"},
+	}
 }
 
-// Model is the Import view's state: nothing, the file picker, or a staged import.
+// Model is the Import view's state: nothing, the file picker, or a staged import with a dialog over it.
 type Model struct {
 	downloadDir string
-	picking     bool
+	mode        mode
 	dir         string
 	entries     []domain.FileEntry
 	listErr     error
 	browse      layout.Cursor // the file picker's selected entry
 	staged      *csvimport.Staged
-	dlg         dialog        // the categorising dialog over the rows
-	parent      dialog        // the form waiting while its category picker is open
+	dlg         dialog        // what the open dialog holds
+	waiting     *dialog       // the rule form waiting while its category picker is open; nil when none is
 	table       layout.Cursor // the row table's selected row
 	message     string
 	width       int
@@ -72,13 +95,12 @@ func (m Model) Resize(width, height int) Model {
 // WithStaged shows an import and closes the picker.
 func (m Model) WithStaged(staged csvimport.Staged) Model {
 	next := m
-	next.staged, next.picking, next.message = &staged, false, ""
-	next.dlg, next.parent = dialog{}, dialog{}
+	next.staged, next.message = &staged, ""
 	next.table = layout.Cursor{}
 	if staged.NewAccount && staged.Named == "" {
-		next.dlg = dialog{kind: dialogAccount, filter: csvimport.SuggestAccountName(staged.IBAN)}
+		return next.show(modeAccount, dialog{name: csvimport.SuggestAccountName(staged.IBAN)})
 	}
-	return next
+	return next.show(modeRows, dialog{})
 }
 
 // WithRefreshed swaps the staged import for the same export read again against a changed journal. The
@@ -86,8 +108,8 @@ func (m Model) WithStaged(staged csvimport.Staged) Model {
 func (m Model) WithRefreshed(staged csvimport.Staged) Model {
 	next := m
 	next.staged = &staged
-	if next.dlg.kind != dialogAccount {
-		next.dlg, next.parent = dialog{}, dialog{}
+	if next.mode != modeAccount {
+		next = next.closeDialog()
 	}
 	return next.rowsTo(m.table.Row)
 }
@@ -103,15 +125,17 @@ func (m Model) Staged() (csvimport.Staged, bool) {
 // Cleared drops the staged import and shows the empty start state.
 func (m Model) Cleared() Model {
 	next := m
-	next.staged, next.dlg, next.parent = nil, dialog{}, dialog{}
-	next.table = layout.Cursor{}
-	return next
+	next.staged, next.table = nil, layout.Cursor{}
+	return next.closeDialog()
 }
 
 // WithMessage tells the user why nothing happened and closes the picker; the next key clears it.
 func (m Model) WithMessage(text string) Model {
 	next := m
-	next.message, next.picking = text, false
+	next.message = text
+	if next.mode == modeFiles {
+		return next.show(modeRows, dialog{})
+	}
 	return next
 }
 
@@ -125,7 +149,7 @@ func (m Model) WithListing(dir string, entries []domain.FileEntry, err error) Mo
 
 // Position is the 1-based row under the cursor and the number of rows; (0, 0) outside a staged import.
 func (m Model) Position() (row, total int) {
-	if m.picking || m.staged == nil || len(m.staged.Rows) == 0 {
+	if m.mode == modeFiles || m.staged == nil || len(m.staged.Rows) == 0 {
 		return 0, 0
 	}
 	return m.table.Row + 1, len(m.staged.Rows)
@@ -135,30 +159,34 @@ func (m Model) Position() (row, total int) {
 func (m Model) Key(key string) (Model, Action) {
 	next := m
 	next.message = ""
-	if next.dlg.kind != dialogNone {
-		return next.dialogKey(key), Action{}
+	if next.mode.dialog() {
+		return next.dialogKey(key), nil
 	}
-	if next.picking {
+	if next.mode == modeFiles {
 		return next.pickerKey(key)
 	}
 	switch key {
-	case "n":
-		next.picking, next.dir, next.entries, next.listErr = true, m.downloadDir, nil, nil
+	case keyNewFile:
+		next = next.show(modeFiles, dialog{})
+		next.dir, next.entries, next.listErr = m.downloadDir, nil, nil
 		next.browse = layout.Cursor{}
-		return next, Action{Browse: m.downloadDir}
-	case keyEnter:
-		return next.openChoice(), Action{}
-	case "w":
-		return next, Action{Write: next.staged != nil}
+		return next, Browse{Dir: m.downloadDir}
+	case layout.KeyEnter:
+		return next.openChoice(), nil
+	case keyWrite:
+		if next.staged == nil {
+			return next, nil
+		}
+		return next, Write{}
 	default:
-		return next.moveRows(key), Action{}
+		return next.moveRows(key), nil
 	}
 }
 
 // openChoice opens the categorise popup on the row under the cursor.
 func (m Model) openChoice() Model {
 	if m.rowCount() > 0 {
-		m.dlg = dialog{kind: dialogChoice}
+		return m.show(modeChoice, dialog{})
 	}
 	return m
 }
@@ -220,10 +248,10 @@ func (m Model) View() string {
 
 func (m Model) body() string {
 	height := m.height - m.bannerRows()
-	switch {
-	case m.picking:
+	if m.mode == modeFiles { // ifs, not a switch: mutation testing sees no coverage on switch cases
 		return m.picker(height)
-	case m.staged == nil:
+	}
+	if m.staged == nil {
 		return layout.Panel("IMPORT", m.width, height, theme.Dim.Render(" "+emptyHint))
 	}
 	return m.overlay(m.stagedView())

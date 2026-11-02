@@ -62,33 +62,53 @@ func (m Model) Position() (row, total int) {
 	return m.cursor.Row + 1, len(m.schedules)
 }
 
-// ListAction is what a key on the rule list asks the root model to do.
-type ListAction int
+// Action is what a key asks the root model to do: NewRule, EditSelected or DeleteSelected from the rule list,
+// a *Save from the form; nil asks for nothing. Editing and deleting are asked for only with a rule selected.
+type Action interface{ isAction() }
 
-// The Scheduled list's actions; editing and deleting are asked for only with a rule selected.
+// NewRule asks for the form to open on a new rule.
+type NewRule struct{}
+
+// EditSelected asks for the form to open on the selected rule.
+type EditSelected struct{}
+
+// DeleteSelected asks whether to delete the selected rule.
+type DeleteSelected struct{}
+
+func (NewRule) isAction()        {}
+func (EditSelected) isAction()   {}
+func (DeleteSelected) isAction() {}
+
+// The rule list's own keys.
 const (
-	NoAction       ListAction = iota
-	NewRule                   // n: open the form on a new rule
-	EditSelected              // e: open the form on the selected rule
-	DeleteSelected            // d: ask whether to delete the selected rule
+	keyNew    = "n"
+	keyEdit   = "e"
+	keyDelete = "d"
 )
+
+// Bindings are the keys Key acts on besides the cursor keys, as the root hints them.
+func Bindings() []layout.Binding {
+	return []layout.Binding{
+		{Key: keyNew, Action: "new"}, {Key: keyEdit, Action: "edit"}, {Key: keyDelete, Action: "delete"},
+	}
+}
 
 // Key applies a key: n, e and d ask for a new rule or for the selected one to be edited or deleted, the
 // cursor keys move.
-func (m Model) Key(key string) (Model, ListAction) {
-	if key == "n" {
-		return m, NewRule
+func (m Model) Key(key string) (Model, Action) {
+	if key == keyNew {
+		return m, NewRule{}
 	}
 	if _, selected := m.Selected(); !selected {
-		return m.Move(key), NoAction
+		return m.Move(key), nil
 	}
 	switch key {
-	case "e":
-		return m, EditSelected
-	case "d":
-		return m, DeleteSelected
+	case keyEdit:
+		return m, EditSelected{}
+	case keyDelete:
+		return m, DeleteSelected{}
 	}
-	return m.Move(key), NoAction
+	return m.Move(key), nil
 }
 
 // Move applies a cursor key: up, down, home, end, pgup or pgdown. The cursor stops at both ends.

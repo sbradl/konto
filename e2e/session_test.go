@@ -14,6 +14,7 @@ import (
 	"sync"
 	"syscall"
 	"time"
+	"unicode/utf8"
 
 	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/vt"
@@ -26,11 +27,11 @@ type session struct {
 	cmd *exec.Cmd
 	pty *os.File
 
-	mu         sync.Mutex
-	term       *vt.Emulator
-	raw        bytes.Buffer // every byte the program wrote to the terminal
-	lastOutput time.Time
-	lastSend   time.Time
+	mu     sync.Mutex
+	term   *vt.Emulator
+	raw    bytes.Buffer // every byte the program wrote to the terminal
+	title  string       // the window title: konto's idle signal, "konto idle N" or "konto busy N"
+	expect int          // the inputs konto must have taken in once the last key or resize is handled
 
 	stderr   lockedBuffer
 	done     chan struct{}
@@ -60,7 +61,8 @@ func startSession(bin string, args, env []string, dir string, w, h int) (*sessio
 	cmd := exec.CommandContext(context.Background(), bin, args...)
 	cmd.Env = env
 	cmd.Dir = dir
-	s := &session{cmd: cmd, term: vt.NewEmulator(w, h), done: make(chan struct{}), lastOutput: time.Now()}
+	s := &session{cmd: cmd, term: vt.NewEmulator(w, h), done: make(chan struct{})}
+	s.term.SetCallbacks(vt.Callbacks{Title: func(title string) { s.title = title }}) // called under s.mu, by pump
 	cmd.Stderr = &s.stderr
 	f, err := pty.StartWithSize(cmd, &pty.Winsize{Cols: uint16(w), Rows: uint16(h)})
 	if err != nil {
@@ -82,7 +84,6 @@ func (s *session) pump() {
 			s.mu.Lock()
 			s.raw.Write(buf[:n])
 			_, _ = s.term.Write(buf[:n])
-			s.lastOutput = time.Now()
 			s.mu.Unlock()
 		}
 		if err != nil {
@@ -111,18 +112,27 @@ func (s *session) wait() {
 	close(s.done)
 }
 
+// send writes keys: one escape sequence or control key, or text, each rune of which konto takes in as a key.
 func (s *session) send(b string) error {
-	s.mu.Lock()
-	s.lastSend = time.Now()
-	s.mu.Unlock()
+	keys := utf8.RuneCountInString(b)
+	if strings.HasPrefix(b, "\x1b") {
+		keys = 1
+	}
+	s.expectInputs(keys)
 	_, err := s.pty.WriteString(b)
 	return err
 }
 
+// resize sets the terminal size; only a new size reaches the program (as SIGWINCH), and so its idle signal.
 func (s *session) resize(w, h int) error {
 	s.mu.Lock()
+	same := s.term.Width() == w && s.term.Height() == h
 	s.term.Resize(w, h)
 	s.mu.Unlock()
+	if same {
+		return nil
+	}
+	s.expectInputs(1)
 	return pty.Setsize(s.pty, &pty.Winsize{Cols: uint16(w), Rows: uint16(h)})
 }
 
@@ -145,21 +155,52 @@ func (s *session) waitExit(timeout time.Duration) (int, error) {
 	}
 }
 
-// settle waits until the program has been quiet for settleQuiet, or exited.
-// After input it also gives the program reactWindow to start reacting, so a
-// slow reaction is not mistaken for a program that ignored the key.
-func (s *session) settle(timeout time.Duration) {
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) && !s.exited() {
-		s.mu.Lock()
-		idle := time.Since(s.lastOutput)
-		reacted := s.lastOutput.After(s.lastSend) || time.Since(s.lastSend) >= reactWindow
-		s.mu.Unlock()
-		if idle >= settleQuiet && reacted {
-			return
-		}
-		time.Sleep(10 * time.Millisecond)
+// expectInputs notes n more inputs konto has to take in: keys or a resize.
+func (s *session) expectInputs(n int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, inputs := s.signal()
+	s.expect = max(s.expect, inputs) + n
+}
+
+// signal reads konto's idle signal (KONTO_E2E): whether nothing it started is still running, and how many
+// inputs it has taken in; -1 inputs before the first frame. Callers hold s.mu.
+func (s *session) signal() (idle bool, inputs int) {
+	var state string
+	if _, err := fmt.Sscanf(s.title, "konto %s %d", &state, &inputs); err != nil {
+		return false, -1
 	}
+	return state == "idle", inputs
+}
+
+// settle waits until konto has taken in every key and resize sent and finished what they started: no load,
+// write or plan in flight. It returns false on timeout; a program that exited is settled.
+func (s *session) settle(timeout time.Duration) bool { return s.awaitSignal(timeout, true) }
+
+// handled waits until konto has taken in every key and resize sent, the work they started maybe still running.
+func (s *session) handled(timeout time.Duration) bool { return s.awaitSignal(timeout, false) }
+
+func (s *session) awaitSignal(timeout time.Duration, idle bool) bool {
+	deadline := time.Now().Add(timeout)
+	for !s.exited() {
+		s.mu.Lock()
+		quiet, inputs := s.signal()
+		done := inputs >= s.expect && (quiet || !idle)
+		late := !done && time.Now().After(deadline)
+		if late { // said, and the count taken as it is, so one lost input does not stall every later wait
+			fmt.Fprintf(os.Stderr, "e2e: no idle signal for %d inputs after %s, title %q\n", s.expect, timeout, s.title)
+			s.expect = min(s.expect, max(inputs, 0))
+		}
+		s.mu.Unlock()
+		if done {
+			return true
+		}
+		if late {
+			return false
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	return true
 }
 
 // waitFor polls the screen until cond holds.

@@ -1,7 +1,7 @@
 package ui
 
 import (
-	"strings"
+	"strconv"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -26,12 +26,15 @@ const (
 	keyWidth          = 7 // widest key label ("Enter") plus a gap
 )
 
-// keyBinding is one key and what it does, as the status bar and keys popup show it.
-type keyBinding struct{ key, action string }
-
-func globalKeys() []keyBinding {
-	return []keyBinding{
-		{"1–5", "switch view"}, {"?", "keys"}, {"!", "checks"}, {"r", "refresh"}, {"q", "quit"}, {"Esc", "close popup"},
+// globalKeys are the keys the root keeps from every view, as the keys popup lists them.
+func globalKeys() []layout.Binding {
+	return []layout.Binding{
+		{Key: "1–" + strconv.Itoa(tabCount), Action: "switch view"},
+		{Key: "?", Action: "keys"},
+		{Key: "!", Action: "checks"},
+		{Key: "r", Action: "refresh"},
+		{Key: "q", Action: "quit"},
+		{Key: layout.KeyEsc, Action: "close popup"},
 	}
 }
 
@@ -42,7 +45,7 @@ func (m Model) onPopupKey(key string) (Model, tea.Cmd) {
 	switch key {
 	case "r":
 		return m.reload() // the popup stays open, so the checks panel shows the fresh run
-	case "esc":
+	case layout.KeyEsc:
 		m.popup = popupNone
 	case "?":
 		m = m.toggle(popupKeys)
@@ -80,12 +83,8 @@ func (m Model) popupBox() string {
 	if m.popup == popupChecks {
 		title, body = "checks", m.checksBody()
 	}
-	rows := append([]string{layout.TitleRule(title, m.width)}, body...)
-	rows = rows[:layout.PopupHeight(len(rows), m.height)]
-	for i, row := range rows[1:] {
-		rows[i+1] = layout.Fit(row, m.width)
-	}
-	return strings.Join(rows, "\n")
+	shown := layout.Visible(layout.Cursor{}, body, layout.PopupCapacity(len(body), m.height))
+	return layout.Popup(title, shown, m.width)
 }
 
 // keysColumns is how many columns the keys popup uses at the given width.
@@ -100,7 +99,7 @@ func (m Model) keysBody() []string {
 	columnCell := lipgloss.NewStyle().Width(m.width / columns)
 	body := make([]string, rows)
 	for i, binding := range bindings {
-		cell := " " + keyCell.Render(binding.key) + theme.Dim.Render(binding.action)
+		cell := " " + keyCell.Render(binding.Label()) + theme.Dim.Render(binding.Action)
 		body[i%rows] += columnCell.Render(cell)
 	}
 	return body

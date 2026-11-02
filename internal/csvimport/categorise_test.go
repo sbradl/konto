@@ -29,7 +29,7 @@ func debit(payee string) Row {
 
 func stagedRows(rows ...Row) Staged {
 	return Staged{
-		Rows: rows, Rules: ParseRules(rulesText), Zero: eur(0),
+		Rows: rows, Rules: ParseRules(rulesText), Zero: eur(0), Format: FormatPostbank,
 		Account: domain.Account{Name: checking, Source: domain.SourceImport},
 		Known: []domain.Account{
 			{Name: checking, Source: domain.SourceImport},
@@ -440,8 +440,18 @@ func TestOpenReadsTheRulesAndGivesRowsTheirRawTypeAndPayee(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(staged.Rules) != 3 || staged.Rules[1].ID != "2" || len(staged.Known) != 1 || staged.Zero.Format() != "0,00 EUR" {
-		t.Errorf("staged = %+v", staged)
+	ids := make([]string, len(staged.Rules))
+	for i, rule := range staged.Rules {
+		ids[i] = rule.ID
+	}
+	if want := []string{"1", "2", "5"}; !reflect.DeepEqual(ids, want) {
+		t.Errorf("rule ids = %v, want %v", ids, want)
+	}
+	if len(staged.Known) != 1 {
+		t.Errorf("known accounts = %v, want the ledger's one", staged.Known)
+	}
+	if got := staged.Zero.Format(); got != "0,00 EUR" {
+		t.Errorf("zero = %s", got)
 	}
 	if got := staged.Rows[0]; got.Type != "Kartenzahlung" || got.Payee != "Kiosk" {
 		t.Errorf("row = %+v, want its raw fields", got)
@@ -507,7 +517,7 @@ func TestRecordsSkipLinesThatAreNoBookings(t *testing.T) {
 		"junk;1;2;3;4", "Buchungstag;Wert", "short;line", "xx.1.2026;;A;B;C", "", "Kontostand;30.9.2026;;;1;EUR",
 		"1.9.2026;1.9.2026;Umbuchung;Sparen;Sparen",
 	}
-	want := []record{{date: "2026-09-01", kind: "Umbuchung", payee: "Sparen", purpose: "Sparen"}}
+	want := []record{{key: rowKey{booking{"2026-09-01", "", "Sparen"}, "Sparen"}, kind: "Umbuchung", payee: "Sparen"}}
 	if got := postbank().recordsOf(lines); !reflect.DeepEqual(got, want) {
 		t.Errorf("records = %+v, want %+v", got, want)
 	}
@@ -516,7 +526,7 @@ func TestRecordsSkipLinesThatAreNoBookings(t *testing.T) {
 func TestRawFieldsOfABookingWithoutPayeeCarryTheTypeAsDescription(t *testing.T) {
 	rows, err := withRawFields(
 		[]Row{{Date: day("2026-09-29"), Description: "Auszahlung", Purpose: "Geldautomat"}},
-		[]record{{date: "2026-09-29", kind: "Auszahlung", purpose: "Geldautomat"}},
+		[]record{{key: rowKey{booking{"2026-09-29", "", "Auszahlung"}, "Geldautomat"}, kind: "Auszahlung"}},
 	)
 	if err != nil || rows[0].Type != "Auszahlung" || rows[0].Payee != "" {
 		t.Errorf("row = %+v, err = %v", rows[0], err)
@@ -525,9 +535,51 @@ func TestRawFieldsOfABookingWithoutPayeeCarryTheTypeAsDescription(t *testing.T) 
 
 func TestRecordsAreTrimmedAsHledgerTrimsThem(t *testing.T) {
 	lines := []string{"Buchungstag;Wert", "1.9.2026;1.9.2026; Auszahlung ;  ; Geldautomat "}
-	want := []record{{date: "2026-09-01", kind: "Auszahlung", purpose: "Geldautomat"}}
+	want := []record{{key: rowKey{booking{"2026-09-01", "", "Auszahlung"}, "Geldautomat"}, kind: "Auszahlung"}}
 	if got := postbank().recordsOf(lines); !reflect.DeepEqual(got, want) {
 		t.Errorf("records = %+v, want %+v", got, want)
+	}
+}
+
+func TestRawFieldsTellSameDayBookingsApartByTheirAmount(t *testing.T) {
+	lines := []string{
+		"Buchungstag;Wert",
+		"30.9.2026;30.9.2026;Kartenzahlung;Kiosk;Zeitung;;;;;;;-2,00",
+		"30.9.2026;30.9.2026;Gutschrift;Kiosk;Zeitung;;;;;;;5,00",
+	}
+	kiosk := Row{Date: day("2026-09-30"), Description: "Kiosk", Purpose: "Zeitung"}
+	refund, card := kiosk, kiosk
+	refund.Amount, card.Amount = eur(500), eur(-200)
+
+	rows, err := withRawFields([]Row{refund, card}, postbank().recordsOf(lines))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if rows[0].Type != "Gutschrift" {
+		t.Errorf("the 5,00 row has type %q, want Gutschrift", rows[0].Type)
+	}
+	if rows[1].Type != "Kartenzahlung" {
+		t.Errorf("the -2,00 row has type %q, want Kartenzahlung", rows[1].Type)
+	}
+}
+
+func TestRawFieldsUseEachLineOfTheExportOnce(t *testing.T) {
+	lines := []string{
+		"Buchungstag;Wert",
+		"30.9.2026;30.9.2026;Kartenzahlung;Kiosk;Zeitung;;;;;;;-2,00",
+		"30.9.2026;30.9.2026;Lastschrift;Kiosk;Zeitung;;;;;;;-2,00",
+	}
+	row := Row{Date: day("2026-09-30"), Description: "Kiosk", Purpose: "Zeitung", Amount: eur(-200)}
+
+	rows, err := withRawFields([]Row{row, row}, postbank().recordsOf(lines))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if rows[0].Type != "Kartenzahlung" || rows[1].Type != "Lastschrift" {
+		t.Errorf("types %q and %q, want one line for each row", rows[0].Type, rows[1].Type)
+	}
+	if _, err := withRawFields([]Row{row, row, row}, postbank().recordsOf(lines)); !errors.Is(err, errUnmatchedRow) {
+		t.Errorf("a third row of two lines: err = %v, want errUnmatchedRow", err)
 	}
 }
 

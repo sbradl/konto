@@ -10,40 +10,29 @@ import (
 )
 
 const (
-	caret          = "▏"
-	focusMark      = "▸"
-	createLabel    = "+ create"
-	transferLabel  = "(transfer)"
-	noCategory     = "—"
-	labelWidth     = 10
-	boxChromeLines = 1 // the title rule
+	caret         = "▏"
+	focusMark     = "▸"
+	createLabel   = "+ create"
+	transferLabel = "(transfer)"
+	noCategory    = "—"
+	labelWidth    = 10
 )
 
 // overlay draws the open dialog over the staged import, bottom-anchored like the keys popup.
 func (m Model) overlay(base string) string {
-	if m.dlg.kind == dialogNone {
+	if !m.mode.dialog() {
 		return base
 	}
 	title, body := m.dialogBody()
-	capacity := max(1, layout.PopupHeight(len(body)+boxChromeLines, m.height)-boxChromeLines)
-	rows := []string{layout.TitleRule(title, m.width)}
-	for _, line := range m.windowed(body, capacity) {
-		rows = append(rows, layout.Fit(line, m.width))
-	}
-	return layout.OverlayFlush(base, strings.Join(rows, "\n"), m.height)
-}
-
-// windowed cuts the body to capacity lines that keep the selected line in view; the selected line is the
-// one the dialog marks with the cursor.
-func (m Model) windowed(body []string, capacity int) []string {
-	start := max(0, m.selectedLine()-capacity+1) // the selected line is never past the body's end
-	return body[start:min(len(body), start+capacity)]
+	capacity := layout.PopupCapacity(len(body), m.height)
+	shown := layout.Cursor{Row: m.selectedLine()}.Scrolled(capacity) // the line the cursor marks stays in view
+	return layout.OverlayFlush(base, layout.Popup(title, layout.Visible(shown, body, capacity), m.width), m.height)
 }
 
 // selectedLine is the index in the dialog body of the entry under the list cursor.
 func (m Model) selectedLine() int {
-	if m.dlg.kind == dialogPicker || m.dlg.kind == dialogRuleList {
-		return listHeader + m.dlg.cursor
+	if m.mode == modeCategory || m.mode == modeRuleList {
+		return listHeader + m.dlg.cursor.Row
 	}
 	return 0
 }
@@ -53,20 +42,20 @@ const listHeader = 1
 
 // dialogBody is the title and lines of the open dialog.
 func (m Model) dialogBody() (title string, body []string) {
-	switch m.dlg.kind { // exhaustive: a new kind without its body fails the lint
-	case dialogChoice:
+	switch m.mode { // exhaustive: a new dialog without its body fails the lint
+	case modeChoice:
 		return "categorise", m.choiceLines()
-	case dialogRuleForm:
+	case modeRuleForm:
 		return "new rule", m.formLines()
-	case dialogRuleList:
+	case modeRuleList:
 		return "add to rule", m.ruleListLines()
-	case dialogAddForm:
+	case modeAddForm:
 		return "widen rule " + m.dlg.ruleID, m.addFormLines()
-	case dialogPicker:
+	case modeCategory:
 		return "category", m.pickerLines()
-	case dialogAccount:
+	case modeAccount:
 		return "create account", m.accountLines()
-	case dialogNone:
+	case modeRows, modeFiles:
 	}
 	return "", nil
 }
@@ -84,7 +73,7 @@ func (m Model) choiceLines() []string {
 	options := m.choices()
 	lines := make([]string, 0, len(options))
 	for i, option := range options {
-		lines = append(lines, listLine(option, i, m.dlg.cursor, m.width))
+		lines = append(lines, listLine(option, i, m.dlg.cursor.Row, m.width))
 	}
 	return lines
 }
@@ -143,7 +132,7 @@ func (m Model) ruleListLines() []string {
 	lines := append(make([]string, 0, 1+len(rules)), field("filter", m.dlg.filter, 0, 0))
 	for i, rule := range rules {
 		text := fmt.Sprintf("#%-3s %-24s %s", rule.ID, rule.Category, ruleSummary(rule))
-		lines = append(lines, listLine(text, i, m.dlg.cursor, m.width))
+		lines = append(lines, listLine(text, i, m.dlg.cursor.Row, m.width))
 	}
 	return lines
 }
@@ -181,12 +170,12 @@ func (m Model) pickerLines() []string {
 		if candidate.Transfer {
 			text += "  " + transferLabel
 		}
-		lines = append(lines, listLine(text, i, m.dlg.cursor, m.width))
+		lines = append(lines, listLine(text, i, m.dlg.cursor.Row, m.width))
 	}
 	if create {
 		row := m.staged.Rows[m.table.Row]
 		text := createLabel + " " + csvimport.SuggestName(row, m.dlg.filter)
-		lines = append(lines, listLine(strings.TrimSpace(text), len(candidates), m.dlg.cursor, m.width))
+		lines = append(lines, listLine(strings.TrimSpace(text), len(candidates), m.dlg.cursor.Row, m.width))
 	}
 	return append(lines, m.refusalLines()...)
 }
@@ -194,7 +183,7 @@ func (m Model) pickerLines() []string {
 // accountLines is the name input for the account a new IBAN stands for.
 func (m Model) accountLines() []string {
 	return append([]string{
-		field("name", m.dlg.filter, 0, 0),
+		field("name", m.dlg.name, 0, 0),
 		" " + theme.Dim.Render("for "+m.staged.IBAN+" · Enter creates · Esc abandons"),
 	}, m.refusalLines()...)
 }

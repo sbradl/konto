@@ -3,7 +3,6 @@ package imports
 import (
 	"errors"
 	"fmt"
-	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -15,17 +14,14 @@ import (
 	"github.com/sbradl/konto/internal/domain"
 	"github.com/sbradl/konto/internal/ui/layout"
 	"github.com/sbradl/konto/internal/ui/theme"
+	"github.com/sbradl/konto/internal/ui/uitest"
 )
 
-var euro = domain.AmountStyle{Spaced: true, DecimalMark: ",", GroupMark: ".", GroupSize: 3}
+var euro = domain.DefaultAmount("EUR").Style
 
 func eur(mantissa int64) domain.MultiAmount {
 	return domain.MultiAmount{{Commodity: "EUR", Mantissa: mantissa, Places: 2, Style: euro}}
 }
-
-var escapes = regexp.MustCompile(`\x1b\[[0-9;:]*m`)
-
-func plain(s string) string { return escapes.ReplaceAllString(s, "") }
 
 func day(s string) time.Time { d, _ := time.Parse(time.DateOnly, s); return d }
 
@@ -47,10 +43,10 @@ func staged() csvimport.Staged {
 
 func opened() Model { return New("/dl").Resize(180, 40).WithStaged(staged()) }
 
-func lines(m Model) []string { return strings.Split(plain(m.View()), "\n") }
+func lines(m Model) []string { return strings.Split(uitest.Plain(m.View()), "\n") }
 
 func TestAnEmptyImportHintsAtTheNewFileKey(t *testing.T) {
-	view := plain(New("/dl").Resize(180, 40).View())
+	view := uitest.Plain(New("/dl").Resize(180, 40).View())
 
 	if !strings.Contains(view, "press n for a new file") || strings.Contains(view, "●") {
 		t.Errorf("empty Import:\n%s", view)
@@ -63,10 +59,10 @@ func TestAnEmptyImportHintsAtTheNewFileKey(t *testing.T) {
 func TestNOpensThePickerAtTheDownloadDirectoryAndAsksForItsListing(t *testing.T) {
 	m, action := New("/home/me/Downloads").Resize(180, 40).Key("n")
 
-	if action.Browse != "/home/me/Downloads" || action.Open != "" {
+	if action != (Browse{Dir: "/home/me/Downloads"}) {
 		t.Errorf("action = %+v, want a listing of the download directory", action)
 	}
-	if view := plain(m.View()); !strings.Contains(view, "/home/me/Downloads") {
+	if view := uitest.Plain(m.View()); !strings.Contains(view, "/home/me/Downloads") {
 		t.Errorf("the picker shows its directory:\n%s", view)
 	}
 }
@@ -82,7 +78,7 @@ func picker(t *testing.T) Model {
 }
 
 func TestThePickerListsTheFoldersAndFilesItIsGiven(t *testing.T) {
-	view := plain(picker(t).View())
+	view := uitest.Plain(picker(t).View())
 
 	for _, want := range []string{"OPEN A CSV FILE", "/dl", "..", "subdir/", "sept.csv", "other.csv"} {
 		if !strings.Contains(view, want) {
@@ -96,35 +92,44 @@ func TestEnterOnAFolderBrowsesIntoItAndOnAFileOpensIt(t *testing.T) {
 
 	into, _ := m.Key("down") // past ..
 	_, action := into.Key("enter")
-	if action.Browse != "/dl/subdir" || action.Open != "" {
+	if action != (Browse{Dir: "/dl/subdir"}) {
 		t.Errorf("enter on a folder: %+v, want to browse /dl/subdir", action)
 	}
 
 	file, _ := m.Key("down")
 	file, _ = file.Key("down")
 	_, action = file.Key("enter")
-	if action.Open != "/dl/sept.csv" || action.Browse != "" {
+	if action != (Open{Path: "/dl/sept.csv"}) {
 		t.Errorf("enter on a file: %+v, want to open /dl/sept.csv", action)
 	}
 }
 
 func TestEnterOnDotDotGoesUpAndTheRootHasNoDotDot(t *testing.T) {
 	_, action := picker(t).Key("enter")
-	if action.Browse != "/" {
+	if action != (Browse{Dir: "/"}) {
 		t.Errorf("enter on .. from /dl: %+v, want to browse /", action)
 	}
 	root := New("/").Resize(180, 40)
 	root, _ = root.Key("n")
 	root = root.WithListing("/", listing(), nil)
-	if strings.Contains(plain(root.View()), "..") {
+	if strings.Contains(uitest.Plain(root.View()), "..") {
 		t.Errorf("the root has no parent")
+	}
+}
+
+func TestAMessageClosesThePickerButNotADialog(t *testing.T) {
+	if m := picker(t).WithMessage("no"); m.mode != modeRows {
+		t.Errorf("the picker stays open under a message: mode %d", m.mode)
+	}
+	if m := opened().openChoice().WithMessage("no"); !m.Capturing() {
+		t.Error("a message closed the open dialog")
 	}
 }
 
 func TestEscLeavesThePickerWithNothingStaged(t *testing.T) {
 	m, action := picker(t).Key("esc")
 
-	if action != (Action{}) || !strings.Contains(plain(m.View()), "press n for a new file") {
+	if action != nil || !strings.Contains(uitest.Plain(m.View()), "press n for a new file") {
 		t.Errorf("esc should return to the empty Import; action = %+v", action)
 	}
 	back, _ := opened().Key("n")
@@ -141,8 +146,8 @@ func TestThePickerForgetsItsDirectoryEachTime(t *testing.T) {
 
 	_, action := m.Key("n")
 
-	if action.Browse != "/dl" {
-		t.Errorf("the picker reopens at %q, want the download directory", action.Browse)
+	if action != (Browse{Dir: "/dl"}) {
+		t.Errorf("the picker reopens at %+v, want the download directory", action)
 	}
 }
 
@@ -150,7 +155,7 @@ func TestAMissingDirectoryIsShownNotACrash(t *testing.T) {
 	m, _ := New("/nope").Resize(180, 40).Key("n")
 	m = m.WithListing("/nope", nil, errors.New("listing /nope: no such file or directory"))
 
-	if view := plain(m.View()); !strings.Contains(view, "no such file or directory") {
+	if view := uitest.Plain(m.View()); !strings.Contains(view, "no such file or directory") {
 		t.Errorf("the failure should be shown:\n%s", view)
 	}
 }
@@ -166,20 +171,20 @@ func TestPickerCursorStopsAtBothEndsAndScrolls(t *testing.T) {
 	for range 70 {
 		m, _ = m.Key("down")
 	}
-	end := plain(m.View())
+	end := uitest.Plain(m.View())
 	if !strings.Contains(end, "f59.csv") || strings.Contains(end, "f00.csv") {
 		t.Errorf("the cursor at the end scrolls the list:\n%s", end)
 	}
 	for range 70 {
 		m, _ = m.Key("up")
 	}
-	if !strings.Contains(plain(m.View()), "..") {
+	if !strings.Contains(uitest.Plain(m.View()), "..") {
 		t.Errorf("the cursor stops at the top")
 	}
 }
 
 func TestOpeningAFileStagesItAndClosesThePicker(t *testing.T) {
-	view := plain(picker(t).WithStaged(staged()).View())
+	view := uitest.Plain(picker(t).WithStaged(staged()).View())
 
 	if strings.Contains(view, "OPEN A CSV FILE") || !strings.Contains(view, "REWE Markt") {
 		t.Errorf("the staged import replaces the picker:\n%s", view)
@@ -187,7 +192,7 @@ func TestOpeningAFileStagesItAndClosesThePicker(t *testing.T) {
 }
 
 func TestTheInfoBlockNamesFileAccountFormatAndWatermark(t *testing.T) {
-	view := plain(opened().View())
+	view := uitest.Plain(opened().View())
 
 	for _, want := range []string{"file", "sept.csv", "account", "assets:checking", "format", "postbank", "watermark", "2026-09-26"} {
 		if !strings.Contains(view, want) {
@@ -200,7 +205,7 @@ func TestAFreshAccountShowsNoWatermark(t *testing.T) {
 	fresh := staged()
 	fresh.Watermark = time.Time{}
 
-	if view := plain(New("/dl").Resize(180, 40).WithStaged(fresh).View()); !strings.Contains(view, "no watermark") {
+	if view := uitest.Plain(New("/dl").Resize(180, 40).WithStaged(fresh).View()); !strings.Contains(view, "no watermark") {
 		t.Errorf("a fresh account has no watermark:\n%s", view)
 	}
 }
@@ -209,7 +214,7 @@ func TestANewAccountOffersToCreateIt(t *testing.T) {
 	fresh := staged()
 	fresh.NewAccount, fresh.Account = true, domain.Account{}
 
-	view := plain(New("/dl").Resize(180, 40).WithStaged(fresh).View())
+	view := uitest.Plain(New("/dl").Resize(180, 40).WithStaged(fresh).View())
 
 	if !strings.Contains(view, "create account") || strings.Contains(view, "attach") {
 		t.Errorf("a new IBAN offers to create an account:\n%s", view)
@@ -279,7 +284,7 @@ func TestTheFirstRowIsSelectedAndTheCursorMovesWithinTheRows(t *testing.T) {
 
 func TestSkippedRowsAreAListNotACountAndDim(t *testing.T) {
 	view := opened().View()
-	text := plain(view)
+	text := uitest.Plain(view)
 
 	_, skipped, found := strings.Cut(text, "SKIPPED")
 	if !found {
@@ -299,13 +304,13 @@ func TestAFileWithNothingNewSaysSoAndEmptyPanelsStayEmpty(t *testing.T) {
 	known := staged()
 	known.Rows = nil
 
-	view := plain(New("/dl").Resize(180, 40).WithStaged(known).View())
+	view := uitest.Plain(New("/dl").Resize(180, 40).WithStaged(known).View())
 	if !strings.Contains(view, "nothing new") {
 		t.Errorf("view:\n%s", view)
 	}
 	nothingSkipped := staged()
 	nothingSkipped.Skipped = nil
-	if view := plain(New("/dl").Resize(180, 40).WithStaged(nothingSkipped).View()); !strings.Contains(view, "SKIPPED") {
+	if view := uitest.Plain(New("/dl").Resize(180, 40).WithStaged(nothingSkipped).View()); !strings.Contains(view, "SKIPPED") {
 		t.Errorf("the skipped panel is empty, not absent:\n%s", view)
 	}
 }
@@ -313,11 +318,11 @@ func TestAFileWithNothingNewSaysSoAndEmptyPanelsStayEmpty(t *testing.T) {
 func TestMessagesReplaceTheStateUntilTheNextKey(t *testing.T) {
 	m := opened().WithMessage("the file is not a recognised Postbank export")
 
-	if view := plain(m.View()); !strings.Contains(view, "not a recognised Postbank export") {
+	if view := uitest.Plain(m.View()); !strings.Contains(view, "not a recognised Postbank export") {
 		t.Errorf("message missing:\n%s", view)
 	}
 	cleared, _ := m.Key("down")
-	if strings.Contains(plain(cleared.View()), "not a recognised") {
+	if strings.Contains(uitest.Plain(cleared.View()), "not a recognised") {
 		t.Errorf("a key clears the message")
 	}
 }
@@ -333,7 +338,7 @@ func TestLongListsOfRowsScrollWithTheCursorAndOverflowOnlyForSkipped(t *testing.
 	for range 30 {
 		m, _ = m.Key("down")
 	}
-	view := plain(m.View())
+	view := uitest.Plain(m.View())
 	if !strings.Contains(view, "Row 25") || !strings.Contains(view, "… ") {
 		t.Errorf("the selected row stays visible and skipped says how many more:\n%s", view)
 	}
@@ -355,7 +360,7 @@ func TestViewNeverGetsWiderThanTheTerminal(t *testing.T) {
 func TestKeysWithNothingStagedMoveNothing(t *testing.T) {
 	m, action := New("/dl").Resize(180, 40).Key("down")
 
-	if action != (Action{}) || m.table.Row != 0 {
+	if action != nil || m.table.Row != 0 {
 		t.Errorf("nothing to move over: %+v", m)
 	}
 }
@@ -383,7 +388,7 @@ func TestEnterInAnEmptyPickerDoesNothing(t *testing.T) {
 	m, _ := New("/").Resize(180, 40).Key("n")
 	m = m.WithListing("/", nil, nil)
 
-	if _, action := m.Key("enter"); action != (Action{}) {
+	if _, action := m.Key("enter"); action != nil {
 		t.Errorf("action = %+v, want none", action)
 	}
 }

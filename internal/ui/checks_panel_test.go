@@ -8,6 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sbradl/konto/internal/domain"
+	"github.com/sbradl/konto/internal/ui/uitest"
 )
 
 func issue(severity domain.Severity, check, file string, line int) domain.CheckIssue {
@@ -73,7 +74,7 @@ func TestStatusBarCountsAndColoursTheIssues(t *testing.T) {
 
 		raw := strings.Split(model.View().Content, "\n")
 		last := raw[len(raw)-1]
-		if !strings.Contains(plain(last), tc.want) || !strings.Contains(last, tc.escape) {
+		if !strings.Contains(uitest.Plain(last), tc.want) || !strings.Contains(last, tc.escape) {
 			t.Errorf("%s: status bar = %q, want %q drawn as %q", name, last, tc.want, tc.escape)
 		}
 	}
@@ -87,7 +88,7 @@ func TestNoIndicatorWithoutACheckRun(t *testing.T) {
 		t.Errorf("status bar = %q, want no indicator", got)
 	}
 	panel, _ := press(model, "!")
-	if content := plain(panel.View().Content); !strings.Contains(content, "no checks have run yet") {
+	if content := uitest.Plain(panel.View().Content); !strings.Contains(content, "no checks have run yet") {
 		t.Errorf("panel should say nothing ran:\n%s", content)
 	}
 }
@@ -95,7 +96,7 @@ func TestNoIndicatorWithoutACheckRun(t *testing.T) {
 func TestPanelListsEachIssueWithSeverityCheckLocationAndMessage(t *testing.T) {
 	model, _ := press(withRun(t, nil, issue(domain.SeverityWarn, "accounts", "/data/main.journal", 10)), "!")
 
-	content := plain(model.View().Content)
+	content := uitest.Plain(model.View().Content)
 	if !strings.Contains(content, " WARN  accounts  main.journal:10  accounts failed") {
 		t.Errorf("panel lacks the issue row:\n%s", content)
 	}
@@ -105,7 +106,7 @@ func TestPanelOmitsTheLocationOfIssuesWithoutOne(t *testing.T) {
 	bare := domain.CheckIssue{Check: "tags", Severity: domain.SeverityWarn, Message: "no place to jump to"}
 	model, _ := press(withRun(t, nil, bare), "!")
 
-	if content := plain(model.View().Content); !strings.Contains(content, " WARN  tags  no place to jump to") {
+	if content := uitest.Plain(model.View().Content); !strings.Contains(content, " WARN  tags  no place to jump to") {
 		t.Errorf("panel =\n%s", content)
 	}
 }
@@ -117,7 +118,7 @@ func TestPanelSelectsWithArrowsAndStopsAtTheEnds(t *testing.T) {
 	selected := func(m Model) string {
 		for line := range strings.SplitSeq(m.View().Content, "\n") {
 			if strings.Contains(line, ";1m WARN") {
-				return plain(line)
+				return uitest.Plain(line)
 			}
 		}
 		return ""
@@ -143,16 +144,16 @@ func TestPanelScrollsToKeepTheSelectionVisible(t *testing.T) {
 	model, _ := press(withRun(t, nil, issues...), "!")
 	model = resized(model, 100, 30) // half of 30 is 15 rows: a title and 14 issues
 
-	if rows := strings.Count(plain(model.popupBox()), "\n") + 1; rows != 15 {
+	if rows := strings.Count(uitest.Plain(model.popupBox()), "\n") + 1; rows != 15 {
 		t.Fatalf("popup is %d rows, want 15", rows)
 	}
 	for i := range 19 {
 		model = pressKey(model, tea.KeyDown)
 		if !strings.Contains(strings.Join(strings.Split(model.View().Content, "\n"), "\n"), ";1m WARN  check"+string(rune('a'+i+1))) {
-			t.Fatalf("after %d ↓ the selected row is not visible:\n%s", i+1, plain(model.View().Content))
+			t.Fatalf("after %d ↓ the selected row is not visible:\n%s", i+1, uitest.Plain(model.View().Content))
 		}
 	}
-	if content := plain(model.View().Content); !strings.Contains(content, "checkt") {
+	if content := uitest.Plain(model.View().Content); !strings.Contains(content, "checkt") {
 		t.Errorf("the last issue should be visible after scrolling:\n%s", content)
 	}
 }
@@ -218,7 +219,7 @@ func TestPanelShowsPathsInsideTheJournalDirectoryRelativeToIt(t *testing.T) {
 		issue(domain.SeverityWarn, "a", "/data/sub/extra.journal", 4),
 		issue(domain.SeverityWarn, "b", "/elsewhere/other.journal", 2)), "!")
 
-	content := plain(model.View().Content)
+	content := uitest.Plain(model.View().Content)
 	for _, want := range []string{" a  sub/extra.journal:4  ", " b  /elsewhere/other.journal:2  "} {
 		if !strings.Contains(content, want) {
 			t.Errorf("panel lacks %q:\n%s", want, content)
@@ -253,12 +254,29 @@ func TestChecksPanelShowsTheFailureOfAReload(t *testing.T) {
 	failed, _ := model.Update(ledgerLoadedMsg{err: errors.New("hledger: boom\nsecond line")})
 	opened, _ := press(failed.(Model), "!")
 
-	content := plain(opened.View().Content)
+	content := uitest.Plain(opened.View().Content)
 
 	if !strings.Contains(content, "✗ hledger: boom") || !strings.Contains(content, "second line") {
 		t.Errorf("the panel should show the reload failure:\n%s", content)
 	}
 	if !strings.Contains(content, "all ") {
 		t.Errorf("the stale check result stays beneath it:\n%s", content)
+	}
+}
+
+func TestAShrinkKeepsTheSelectedIssueInView(t *testing.T) {
+	issues := make([]domain.CheckIssue, 20)
+	for i := range issues {
+		issues[i] = issue(domain.SeverityWarn, "check"+string(rune('a'+i)), "", 0)
+	}
+	model, _ := press(withRun(t, nil, issues...), "!")
+	for range 19 {
+		model = pressKey(model, tea.KeyDown)
+	}
+
+	model = resized(model, 100, 30)
+
+	if !strings.Contains(model.View().Content, ";1m WARN  checkt") {
+		t.Errorf("the selected issue is off screen:\n%s", uitest.Plain(model.View().Content))
 	}
 }

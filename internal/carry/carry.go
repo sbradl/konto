@@ -22,11 +22,8 @@ type balances interface {
 	TextBalances(ctx context.Context, text string, before time.Time) ([]domain.Account, error)
 }
 
-// Writer is a journal file whose writes keep the carry right.
-//
-// shortcut: Apply and Render take no context, as the ui and checks ports they satisfy have none, so the
-// hledger calls run on context.Background (each still has hledger's own time limit); thread a ctx through
-// those ports to make a write cancellable.
+// Writer is a journal file whose writes keep the carry right: Prepare completes a changeset with its carry
+// once, and that same completed changeset is checked and then applied, so what is written is what was checked.
 type Writer struct {
 	file journalFile
 	gw   balances
@@ -35,27 +32,15 @@ type Writer struct {
 // NewWriter returns a Writer that writes through file and asks gw for the balances to carry.
 func NewWriter(file journalFile, gw balances) *Writer { return &Writer{file: file, gw: gw} }
 
-// Apply writes the changeset together with the carry it makes stale.
+// Apply writes a changeset Prepare completed.
 func (w *Writer) Apply(changeset domain.Changeset) error {
-	complete, err := w.complete(context.Background(), changeset)
-	if err != nil {
-		return err
-	}
-	return w.file.Apply(complete) //nolint:wrapcheck // the journal's own failure says what went wrong
+	return w.file.Apply(changeset) //nolint:wrapcheck // the journal's own failure says what went wrong
 }
 
-// Render is the journal as it would read after Apply.
-func (w *Writer) Render(changeset domain.Changeset) (string, error) {
-	complete, err := w.complete(context.Background(), changeset)
-	if err != nil {
-		return "", err
-	}
-	return w.file.Render(complete) //nolint:wrapcheck // the journal's own failure says what went wrong
-}
-
-// complete adds a SetCarry for each stale year, oldest first: the balances at the start of the year, counted
-// on the journal as the changeset leaves it without that year's carry, so the closing carry never cancels them.
-func (w *Writer) complete(ctx context.Context, changeset domain.Changeset) (domain.Changeset, error) {
+// Prepare is the changeset with the carry it makes stale: a SetCarry for each stale year, oldest first, of the
+// balances at the start of the year, counted on the journal as the changeset leaves it without that year's
+// carry, so the closing carry never cancels them.
+func (w *Writer) Prepare(ctx context.Context, changeset domain.Changeset) (domain.Changeset, error) {
 	years, err := w.file.CarryYears(changeset)
 	if err != nil {
 		return domain.Changeset{}, fmt.Errorf("finding the carry to write: %w", err)

@@ -60,8 +60,9 @@ func (f File) Apply(changeset domain.Changeset) error {
 }
 
 // Render is the journal as it would read after the changeset, its included files spliced in where they are
-// included, then the year files the changeset reads or starts (older, unloaded ones it touches among them),
-// so hledger can check it from standard input without anything being written.
+// included, then the year files the changeset reads or starts (older, unloaded ones it touches among them)
+// that the main journal does not include itself, so hledger can check it from standard input without anything
+// being written.
 func (f File) Render(changeset domain.Changeset) (string, error) {
 	work, err := f.plan(changeset)
 	if err != nil {
@@ -78,9 +79,10 @@ func (f File) Render(changeset domain.Changeset) (string, error) {
 			text.WriteString("\n")
 		}
 	}
-	writeFile(flatten(byPath, work.sources[0], map[string]bool{}))
+	spliced := map[string]bool{}
+	writeFile(flatten(byPath, work.sources[0], spliced))
 	for _, year := range work.years() {
-		if file := work.findYear(year); file != nil {
+		if file := work.findYear(year); file != nil && !spliced[file.path] {
 			writeFile(strings.Join(file.lines, "\n"))
 		}
 	}
@@ -93,7 +95,7 @@ func flatten(byPath map[string]*source, file *source, seen map[string]bool) stri
 	seen[file.path] = true
 	var lines []string
 	for _, line := range file.lines {
-		if !strings.HasPrefix(line, "include ") {
+		if _, ok := directiveArgs(line, "include"); !ok {
 			lines = append(lines, line)
 			continue
 		}
@@ -107,37 +109,33 @@ func flatten(byPath map[string]*source, file *source, seen map[string]bool) stri
 	return strings.Join(lines, "\n")
 }
 
-// apply makes one edit in the workspace; nothing is written until every edit has gone through.
+// apply makes one edit in the workspace; nothing is written until every edit has gone through. Every kind of
+// domain.Edit has its case (TestApplyHandlesEveryKindOfEdit): only a type that embeds the interface falls
+// through.
 func (w *workspace) apply(edit domain.Edit) error {
 	switch change := edit.(type) {
 	case domain.SetAccountTag:
 		setTag(w.sources, change)
+		return nil
 	case domain.RemoveAccountTag:
 		editDirective(w.sources, change.Account, func(tags []string) []string { return withoutTag(tags, change.Key) })
+		return nil
 	case domain.Declare:
 		declare(w.sources, change)
+		return nil
+	case domain.AddRule:
+		addRule(w.sources, change)
+		return nil
 	case domain.AddTransactions:
 		return w.addTransactions(change)
 	case domain.SetCategoryRule:
 		return w.setCategoryRule(change)
 	case domain.SetCarry:
 		return w.setCarry(change)
-	default:
-		return applyRuleEdit(w.sources, edit)
-	}
-	return nil
-}
-
-// applyRuleEdit makes an edit of a `~` rule; any other edit is one konto does not know.
-func applyRuleEdit(sources []*source, edit domain.Edit) error {
-	switch change := edit.(type) {
 	case domain.DeleteRule:
-		return deleteRule(sources, change.Pos)
-	case domain.AddRule:
-		addRule(sources, change)
-		return nil
+		return deleteRule(w.sources, change.Pos)
 	case domain.ReplaceRule:
-		return replaceRule(sources, change)
+		return replaceRule(w.sources, change)
 	}
 	return fmt.Errorf("unsupported edit %T", edit)
 }
@@ -150,7 +148,7 @@ func ruleAt(sources []*source, pos domain.SourcePos) (file *source, first int, e
 			continue
 		}
 		first = pos.Line - 1
-		if first < 0 || first >= len(source.lines) || !strings.HasPrefix(source.lines[first], "~") {
+		if first < 0 || first >= len(source.lines) || !isRuleHeader(source.lines[first]) {
 			return nil, 0, fmt.Errorf("%s:%d is no longer a periodic rule: reload and try again", pos.File, pos.Line)
 		}
 		return source, first, nil
@@ -184,7 +182,7 @@ func replaceRule(sources []*source, edit domain.ReplaceRule) error {
 // blockEnd is the index after the block that starts at first: its line and the indented lines under it.
 func blockEnd(lines []string, first int) int {
 	end := first + 1
-	for end < len(lines) && strings.TrimLeft(lines[end], " \t") != lines[end] {
+	for end < len(lines) && indented(lines[end]) {
 		end++
 	}
 	return end

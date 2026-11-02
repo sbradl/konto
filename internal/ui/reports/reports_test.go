@@ -3,24 +3,20 @@ package reports
 import (
 	"errors"
 	"fmt"
-	"regexp"
 	"strings"
 	"testing"
 
 	"charm.land/lipgloss/v2"
 
 	"github.com/sbradl/konto/internal/domain"
+	"github.com/sbradl/konto/internal/ui/uitest"
 )
 
-var euro = domain.AmountStyle{Spaced: true, DecimalMark: ",", GroupMark: ".", GroupSize: 3}
+var euro = domain.DefaultAmount("EUR").Style
 
 func eur(mantissa int64) domain.MultiAmount {
 	return domain.MultiAmount{{Commodity: "EUR", Mantissa: mantissa, Places: 2, Style: euro}}
 }
-
-var escapes = regexp.MustCompile(`\x1b\[[0-9;:]*m`)
-
-func plain(s string) string { return escapes.ReplaceAllString(s, "") }
 
 func sample() domain.Report {
 	return domain.Report{
@@ -43,12 +39,12 @@ func sample() domain.Report {
 
 func loaded() Model { return New().Resize(180, 30).WithReport(sample()) }
 
-func lines(m Model) []string { return strings.Split(plain(m.View()), "\n") }
+func lines(m Model) []string { return strings.Split(uitest.Plain(m.View()), "\n") }
 
 func TestPeriodBarNamesThePeriodAndCyclesWithNext(t *testing.T) {
 	m := New().Resize(180, 40)
-	if !strings.Contains(plain(m.View()), "month to date") {
-		t.Errorf("a new Reports view starts on month to date:\n%s", plain(m.View()))
+	if !strings.Contains(uitest.Plain(m.View()), "month to date") {
+		t.Errorf("a new Reports view starts on month to date:\n%s", uitest.Plain(m.View()))
 	}
 
 	for _, want := range []domain.Period{domain.QuarterToDate, domain.YearToDate, domain.AllTime, domain.MonthToDate} {
@@ -76,7 +72,7 @@ func TestTwoPanelsShareTheScreenRowAndFillTheSize(t *testing.T) {
 }
 
 func TestBalanceSheetShowsBalanceAndDelta(t *testing.T) {
-	view := plain(loaded().View())
+	view := uitest.Plain(loaded().View())
 
 	for _, want := range []string{"Δ period", "assets:checking", "13.240,00 EUR", "1.350,00 EUR", "Net worth", "26.600,00 EUR"} {
 		if !strings.Contains(view, want) {
@@ -91,7 +87,7 @@ func TestBalanceSheetWithoutDeltasHasNoDeltaColumn(t *testing.T) {
 		report.BalanceSheet[i].Delta = nil
 	}
 
-	view := plain(New().Resize(180, 30).WithReport(report).View())
+	view := uitest.Plain(New().Resize(180, 30).WithReport(report).View())
 
 	if strings.Contains(view, "Δ period") || !strings.Contains(view, "13.240,00 EUR") {
 		t.Errorf("no Δ column under all time:\n%s", view)
@@ -116,7 +112,7 @@ func TestStylesFollowRowKindsAndSigns(t *testing.T) {
 }
 
 func TestTheIncomeStatementHasAccountAndAmountOnly(t *testing.T) {
-	view := plain(loaded().View())
+	view := uitest.Plain(loaded().View())
 	_, statement, _ := strings.Cut(view, "INCOME STATEMENT")
 
 	if strings.Contains(statement, "%") || !strings.Contains(statement, "3.000,00 EUR") {
@@ -135,7 +131,7 @@ func many(n int) domain.Report {
 }
 
 func TestOverflowSaysHowManyRowsAreHidden(t *testing.T) {
-	view := plain(New().Resize(100, 20).WithReport(many(40)).View())
+	view := uitest.Plain(New().Resize(100, 20).WithReport(many(40)).View())
 
 	if !strings.Contains(view, "… ") || !strings.Contains(view, " more") || strings.Contains(view, "expenses:cat39") {
 		t.Errorf("the statement should be cut with a … N more row:\n%s", view)
@@ -145,7 +141,7 @@ func TestOverflowSaysHowManyRowsAreHidden(t *testing.T) {
 func TestScrollingMovesBothTablesAndTheEndsShowTheLastRows(t *testing.T) {
 	m := New().Resize(100, 20).WithReport(many(40))
 
-	scrolled := plain(m.Move("down").Move("down").Move("down").View())
+	scrolled := uitest.Plain(m.Move("down").Move("down").Move("down").View())
 	if strings.Contains(scrolled, "Income") && strings.Contains(strings.Split(scrolled, "\n")[2], "Income") {
 		t.Errorf("after 3 downs the first rows should be scrolled off:\n%s", scrolled)
 	}
@@ -153,11 +149,11 @@ func TestScrollingMovesBothTablesAndTheEndsShowTheLastRows(t *testing.T) {
 		t.Errorf("scrolling reveals later rows:\n%s", scrolled)
 	}
 
-	end := plain(m.Move("end").View())
+	end := uitest.Plain(m.Move("end").View())
 	if !strings.Contains(end, "Net") || strings.Contains(end, "more") {
 		t.Errorf("End shows the last row, nothing hidden below:\n%s", end)
 	}
-	top := plain(m.Move("end").Move("home").View())
+	top := uitest.Plain(m.Move("end").Move("home").View())
 	if !strings.Contains(top, "Assets") || !strings.Contains(top, "Income") {
 		t.Errorf("Home shows the first rows:\n%s", top)
 	}
@@ -167,26 +163,26 @@ func TestPagingAndLimits(t *testing.T) {
 	m := New().Resize(100, 20).WithReport(many(40))
 
 	paged := m.Move("pgdown")
-	if paged.offset == 0 {
+	if paged.scroll.Offset == 0 {
 		t.Errorf("pgdown should scroll")
 	}
-	if back := paged.Move("pgup"); back.offset != 0 {
-		t.Errorf("pgup should return, offset %d", back.offset)
+	if back := paged.Move("pgup"); back.scroll.Offset != 0 {
+		t.Errorf("pgup should return, offset %d", back.scroll.Offset)
 	}
-	if up := m.Move("up"); up.offset != 0 {
+	if up := m.Move("up"); up.scroll.Offset != 0 {
 		t.Errorf("cannot scroll above the top")
 	}
-	if past := m.Move("end").Move("down"); past.offset != m.Move("end").offset {
+	if past := m.Move("end").Move("down"); past.scroll.Offset != m.Move("end").scroll.Offset {
 		t.Errorf("cannot scroll below the end")
 	}
-	if same := m.Move("x"); same.offset != 0 {
+	if same := m.Move("x"); same.scroll.Offset != 0 {
 		t.Errorf("other keys do nothing")
 	}
 }
 
 func TestShortReportsDoNotScroll(t *testing.T) {
-	if m := loaded().Move("down").Move("end"); m.offset != 0 {
-		t.Errorf("offset = %d, want 0 for a report that fits", m.offset)
+	if m := loaded().Move("down").Move("end"); m.scroll.Offset != 0 {
+		t.Errorf("offset = %d, want 0 for a report that fits", m.scroll.Offset)
 	}
 }
 
@@ -197,7 +193,7 @@ func TestNoRowIsHighlighted(t *testing.T) {
 }
 
 func TestAnEmptyReportRendersEmptyPanels(t *testing.T) {
-	view := plain(New().Resize(180, 30).WithReport(domain.Report{Period: domain.MonthToDate}).View())
+	view := uitest.Plain(New().Resize(180, 30).WithReport(domain.Report{Period: domain.MonthToDate}).View())
 
 	if !strings.Contains(view, "BALANCE SHEET") || !strings.Contains(view, "INCOME STATEMENT") {
 		t.Errorf("empty tables still have their panels:\n%s", view)
@@ -205,14 +201,14 @@ func TestAnEmptyReportRendersEmptyPanels(t *testing.T) {
 }
 
 func TestBeforeTheFirstReportThePanelsAreEmptyToo(t *testing.T) {
-	if view := plain(New().Resize(180, 30).View()); !strings.Contains(view, "BALANCE SHEET") {
+	if view := uitest.Plain(New().Resize(180, 30).View()); !strings.Contains(view, "BALANCE SHEET") {
 		t.Errorf("view:\n%s", view)
 	}
 }
 
 func TestTheBarSaysLoadingUntilTheFirstReportArrives(t *testing.T) {
-	loading := plain(New().Resize(180, 30).View())
-	loaded := plain(New().Resize(180, 30).WithReport(domain.Report{Period: domain.MonthToDate}).View())
+	loading := uitest.Plain(New().Resize(180, 30).View())
+	loaded := uitest.Plain(New().Resize(180, 30).WithReport(domain.Report{Period: domain.MonthToDate}).View())
 
 	if !strings.Contains(loading, "loading the reports") {
 		t.Errorf("before the first report:\n%s", loading)
@@ -223,13 +219,13 @@ func TestTheBarSaysLoadingUntilTheFirstReportArrives(t *testing.T) {
 }
 
 func TestTheNextPeriodDropsTheOldNumbersUntilItsReportArrives(t *testing.T) {
-	view := plain(loaded().Move("end").NextPeriod().View())
+	view := uitest.Plain(loaded().Move("end").NextPeriod().View())
 
 	if !strings.Contains(view, "loading the reports") || strings.Contains(view, "assets:checking") {
 		t.Errorf("view:\n%s", view)
 	}
-	if next := loaded().Move("end").NextPeriod(); next.offset != 0 {
-		t.Errorf("offset %d, want the next period's tables from the top", next.offset)
+	if next := loaded().Move("end").NextPeriod(); next.scroll.Offset != 0 {
+		t.Errorf("offset %d, want the next period's tables from the top", next.scroll.Offset)
 	}
 }
 
@@ -237,16 +233,16 @@ func TestAReportThatCannotBeBuiltSaysWhyUntilOneIs(t *testing.T) {
 	failed := New().Resize(180, 30).WithFailure(errors.New("hledger bal: boom"))
 	refreshed := loaded().WithFailure(errors.New("hledger bal: boom"))
 
-	if view := plain(failed.View()); !strings.Contains(view, "hledger bal: boom") || strings.Contains(view, "loading") {
+	if view := uitest.Plain(failed.View()); !strings.Contains(view, "hledger bal: boom") || strings.Contains(view, "loading") {
 		t.Errorf("failed first build:\n%s", view)
 	}
-	if view := plain(refreshed.View()); strings.Contains(view, "boom") || !strings.Contains(view, "assets:checking") {
+	if view := uitest.Plain(refreshed.View()); strings.Contains(view, "boom") || !strings.Contains(view, "assets:checking") {
 		t.Errorf("a failed rebuild keeps the report on screen:\n%s", view)
 	}
-	if view := plain(failed.WithReport(sample()).View()); strings.Contains(view, "boom") {
+	if view := uitest.Plain(failed.WithReport(sample()).View()); strings.Contains(view, "boom") {
 		t.Errorf("a built report clears the failure:\n%s", view)
 	}
-	if view := plain(failed.NextPeriod().View()); strings.Contains(view, "boom") {
+	if view := uitest.Plain(failed.NextPeriod().View()); strings.Contains(view, "boom") {
 		t.Errorf("the next period clears the failure:\n%s", view)
 	}
 }
@@ -255,7 +251,7 @@ func TestLongLabelsAreCutToKeepTheAmounts(t *testing.T) {
 	report := sample()
 	report.BalanceSheet[1].Label = strings.Repeat("long:", 30)
 
-	for line := range strings.SplitSeq(plain(New().Resize(100, 30).WithReport(report).View()), "\n") {
+	for line := range strings.SplitSeq(uitest.Plain(New().Resize(100, 30).WithReport(report).View()), "\n") {
 		if lipgloss.Width(line) > 100 {
 			t.Errorf("line too wide: %q", line)
 		}
@@ -268,7 +264,7 @@ func TestForeignCurrenciesRenderAsTheyAre(t *testing.T) {
 		{Commodity: "PLN", Mantissa: 100, Places: 2, Style: euro}, {Commodity: "CZK", Mantissa: 200, Places: 2, Style: euro},
 	}
 
-	if view := plain(New().Resize(180, 30).WithReport(report).View()); !strings.Contains(view, "PLN") {
+	if view := uitest.Plain(New().Resize(180, 30).WithReport(report).View()); !strings.Contains(view, "PLN") {
 		t.Errorf("view:\n%s", view)
 	}
 }
@@ -276,7 +272,7 @@ func TestForeignCurrenciesRenderAsTheyAre(t *testing.T) {
 func TestEndShowsTheLastRowOfABalanceSheetWhoseDeltaTitleTakesALine(t *testing.T) {
 	m := New().Resize(100, 9).WithReport(sample()).Move("end")
 
-	if view := plain(m.View()); !strings.Contains(view, "Net worth") || strings.Contains(view, "more") {
+	if view := uitest.Plain(m.View()); !strings.Contains(view, "Net worth") || strings.Contains(view, "more") {
 		t.Errorf("after End:\n%s", view)
 	}
 }
@@ -300,10 +296,10 @@ func TestRowsAndColumnsSitWhereTheLayoutPutsThem(t *testing.T) {
 		"│  liabilities:cred   -140,00 EUR    -35,00 EUR  ││                                                │\n" +
 		"│ Net worth         26.600,00 EUR  1.315,00 EUR  ││                                                │\n" + bottom
 
-	if got := plain(m.View()); got != wantTop {
+	if got := uitest.Plain(m.View()); got != wantTop {
 		t.Errorf("top =\n%s\nwant\n%s", got, wantTop)
 	}
-	if got := plain(m.Move("end").View()); got != wantEnd {
+	if got := uitest.Plain(m.Move("end").View()); got != wantEnd {
 		t.Errorf("end =\n%s\nwant\n%s", got, wantEnd)
 	}
 }
@@ -324,7 +320,7 @@ func TestNarrowPanelsCutLabelsAndLetTheAmountsOverflowTheirColumns(t *testing.T)
 		"│                     ││                     │\n" +
 		"╰─────────────────────╯╰─────────────────────╯"
 
-	if got := plain(New().Resize(46, 14).WithReport(sample()).View()); got != want {
+	if got := uitest.Plain(New().Resize(46, 14).WithReport(sample()).View()); got != want {
 		t.Errorf("view =\n%s\nwant\n%s", got, want)
 	}
 }
@@ -336,7 +332,7 @@ func TestATableWithoutDeltasUsesEveryRowBelowTheBorder(t *testing.T) {
 			domain.ReportRow{Kind: domain.RowLeaf, Label: name, Amount: eur(100)})
 	}
 
-	view := plain(New().Resize(100, 7).WithReport(report).View())
+	view := uitest.Plain(New().Resize(100, 7).WithReport(report).View())
 
 	if !strings.Contains(view, "… 3 more") {
 		t.Errorf("a four-row panel showing six rows gives its last row to the overflow line:\n%s", view)
@@ -347,10 +343,10 @@ func TestKeyPMovesToTheNextPeriodAndAsksForItsReport(t *testing.T) {
 	m := New().Resize(180, 40)
 
 	next, action := m.Key("p")
-	if action != LoadReport || next.Period() != domain.QuarterToDate {
+	if action != (LoadReport{}) || next.Period() != domain.QuarterToDate {
 		t.Errorf("p: action = %v, period = %v; want the quarter's report asked for", action, next.Period())
 	}
-	if _, action := m.Key("down"); action != NoAction {
+	if _, action := m.Key("down"); action != nil {
 		t.Errorf("down: action = %v, want none", action)
 	}
 }

@@ -42,7 +42,7 @@ func indexOfRow(rows []accountRow, match func(accountRow) bool) (int, error) {
 
 // selectAccount moves the Accounts cursor onto the named account.
 func (w *world) selectAccount(name string) error {
-	if err := w.awaitReload(); err != nil { // a refresh after a write must land before rows are read
+	if err := w.awaitIdle(); err != nil { // a refresh after a write must land before rows are read
 		return err
 	}
 	offset, err := w.accountOffset(name)
@@ -228,13 +228,12 @@ func registerPromptSteps(sc *godog.ScenarioContext, w *world) {
 	})
 	step(sc, `^the (?:y/n )?prompt is still open$`, func() error { return w.expectStatusHas(true, []string{"(y/n)"}) })
 	step(sc, `^no y/n prompt is shown$`, w.expectNoPrompt)
-	step(sc, `^I see a refusal mentioning ("[^"]*" and "[^"]*")$`, func(list string) error {
+	step(sc, `^I see a refusal mentioning ("[^"]*"(?: and "[^"]*")?)$`, func(list string) error {
 		return w.expectStatusHas(true, quotedList(list))
 	})
 	step(sc, `^I see a refusal mentioning ("[^"]*" or "[^"]*")$`, func(list string) error {
 		return w.expectStatusHas(false, quotedList(list))
 	})
-	step(sc, `^I see a refusal mentioning "([^"]*)"$`, func(text string) error { return w.expectStatusHas(true, []string{text}) })
 	step(sc, `^I see a refusal "([^"]*)"$`, func(text string) error { return w.expectStatusHas(true, []string{text}) })
 	step(sc, `^the refusal names ("[^"]*" and "[^"]*")$`, func(list string) error { return w.expectStatusHas(true, quotedList(list)) })
 	step(sc, `^no full-screen error is shown$`, func() error { return w.expectScreen(true, tabBarMarker) })

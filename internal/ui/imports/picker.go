@@ -22,27 +22,27 @@ func (m Model) pickerPage() int { return max(1, m.height-layout.PanelChrome-1) }
 func (m Model) pickerKey(key string) (Model, Action) {
 	rows := m.pickerRows()
 	switch key {
-	case keyEsc:
-		m.picking = false
-	case keyEnter:
+	case layout.KeyEsc:
+		m = m.show(modeRows, dialog{})
+	case layout.KeyEnter:
 		if len(rows) > 0 {
 			return m, m.activate(rows[m.browse.Row])
 		}
 	default:
 		m.browse = m.browse.Move(key, len(rows), m.pickerPage())
 	}
-	return m, Action{}
+	return m, nil
 }
 
 // activate is what Enter does on an entry: go into a folder, or open a file.
 func (m Model) activate(entry domain.FileEntry) Action {
 	switch {
 	case entry.Name == parentEntry:
-		return Action{Browse: filepath.Dir(m.dir)}
+		return Browse{Dir: filepath.Dir(m.dir)}
 	case entry.IsDir:
-		return Action{Browse: filepath.Join(m.dir, entry.Name)}
+		return Browse{Dir: filepath.Join(m.dir, entry.Name)}
 	}
-	return Action{Open: filepath.Join(m.dir, entry.Name)}
+	return Open{Path: filepath.Join(m.dir, entry.Name)}
 }
 
 func (m Model) scrollPicker() Model {

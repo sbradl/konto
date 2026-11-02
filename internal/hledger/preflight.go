@@ -58,7 +58,7 @@ func Preflight(
 // PreflightOnPath runs Preflight against Binary on PATH, with the time limit of any hledger call.
 func PreflightOnPath() (domain.HledgerVersion, error) {
 	return Preflight(exec.LookPath, func() (string, error) {
-		out, _, err := binary{Binary, callTimeout}.run(context.Background(), nil, []string{"--version"})
+		out, _, err := callBinary(Binary).run(context.Background(), nil, "--version")
 		return string(out), err
 	})
 }

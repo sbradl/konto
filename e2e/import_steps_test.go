@@ -248,15 +248,6 @@ func (w *world) expectNothingStaged() error {
 	})
 }
 
-func (w *world) expectNoneOf3Screen(a, b, c string) error {
-	for _, text := range []string{a, b, c} {
-		if err := w.expectScreen(false, text); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func (w *world) expectNoStatusDots() error {
 	return w.expectPanel(infoTitle, func(rows []recentRow) error {
 		for _, row := range rows {
@@ -357,7 +348,6 @@ func registerImportRowSteps(sc *godog.ScenarioContext, w *world) {
 		})
 	})
 	step(sc, `^the (first|second|last) table row is selected(?: with background \d+ and foreground \d+)?$`, w.expectSelectedRow)
-	step(sc, `^I do not see "([^"]*)" or "([^"]*)" or "([^"]*)"$`, w.expectNoneOf3Screen)
 }
 
 func registerImportInfoSteps(sc *godog.ScenarioContext, w *world) {
@@ -369,7 +359,7 @@ func registerImportInfoSteps(sc *godog.ScenarioContext, w *world) {
 	step(sc, `^I do not see a list of existing accounts to attach to$`, func() error { return w.expectScreen(false, "attach") })
 	step(sc, `^nothing is staged$`, w.expectNothingStaged)
 	step(sc, `^I see a message saying the file is not a recognised export$`, func() error {
-		return w.expectScreen(true, "not a recognised Postbank export")
+		return w.expectScreen(true, "not a recognised bank export")
 	})
 	step(sc, `^I see a message saying the account could not be detected$`, func() error {
 		return w.expectScreen(true, "could not be detected")

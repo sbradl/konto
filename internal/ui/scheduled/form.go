@@ -43,18 +43,8 @@ func fields() [fieldCount]fieldSpec {
 	}
 }
 
-// Key names the form reacts to.
-const (
-	keyEsc   = "esc"
-	keyEnter = "enter"
-	keyTab   = "tab"
-	keyBack  = "shift+tab"
-	keyUp    = "up"
-	keyDown  = "down"
-	keyLeft  = "left"
-	keyRight = "right"
-	keySave  = "ctrl+s"
-)
+// keySave saves the form from any field.
+const keySave = "ctrl+s"
 
 // Save asks the root to plan the form's rule and write it; Editing is the rule being replaced, nil for a new one.
 type Save struct {
@@ -62,8 +52,7 @@ type Save struct {
 	Editing *domain.PeriodicRule
 }
 
-// Action is what the form asks the root to do; the zero value asks for nothing.
-type Action struct{ Save *Save }
+func (*Save) isAction() {}
 
 // form is the open new-rule or edit-rule form.
 type form struct {
@@ -74,7 +63,7 @@ type form struct {
 	accounts   []string          // the open accounts the pickers offer
 	held       map[string]string // the first currency each account holds
 	filter     string            // what is typed into the focused account picker
-	cursor     int               // the match under the cursor in the picker
+	cursor     layout.Cursor     // the match under the cursor in the picker
 	browsing   bool              // the picker's cursor was moved: Enter takes the match
 	message    string            // why the last save was refused
 }
@@ -130,19 +119,26 @@ func (m Model) WithFormError(text string) Model {
 	return m
 }
 
-// FormKey applies a key to the open form: Tab and Shift+Tab move between the fields, Enter and Ctrl+S save,
-// Esc cancels; anything else edits the field with the focus.
+// FormKey applies a key to the open form: Tab and Shift+Tab, or the up and down arrows, move between the
+// fields (on an account field the arrows move through its matches), Enter and Ctrl+S save, Esc cancels;
+// anything else edits the field with the focus.
 func (m Model) FormKey(key string) (Model, Action) {
 	next := *m.form
 	next.message = ""
 	switch key {
-	case keyEsc:
-		return m.CloseForm(), Action{}
+	case layout.KeyEsc:
+		return m.CloseForm(), nil
 	case keySave:
 		return m.formSave(&next)
-	case keyTab, keyBack:
+	case layout.KeyTab, layout.KeyBackTab:
 		next.move(key)
-	case keyEnter:
+	case layout.KeyUp, layout.KeyDown:
+		if next.isAccount() {
+			next.edit(key)
+		} else {
+			next.move(key)
+		}
+	case layout.KeyEnter:
 		if !next.picks() {
 			return m.formSave(&next)
 		}
@@ -151,13 +147,13 @@ func (m Model) FormKey(key string) (Model, Action) {
 		next.edit(key)
 	}
 	m.form = &next
-	return m, Action{}
+	return m, nil
 }
 
 // formSave asks the root to plan the rule the form holds.
 func (m Model) formSave(f *form) (Model, Action) {
 	m.form = f
-	return m, Action{Save: &Save{Input: f.input, Editing: f.editing}}
+	return m, &Save{Input: f.input, Editing: f.editing}
 }
 
 // shown reports whether the field is on the form: a rule that happens once has no payments left to count.
@@ -165,10 +161,10 @@ func (f *form) shown(field int) bool {
 	return field != fieldRemaining || f.input.Frequency != periodic.Once
 }
 
-// move puts the focus on the next or the previous field that is shown.
+// move puts the focus on the next field that is shown, or with Shift+Tab or up the previous one.
 func (f *form) move(key string) {
 	step := 1
-	if key == keyBack {
+	if key == layout.KeyBackTab || key == layout.KeyUp {
 		step = -1
 	}
 	for {
@@ -177,7 +173,7 @@ func (f *form) move(key string) {
 			break
 		}
 	}
-	f.filter, f.cursor, f.browsing = "", 0, false
+	f.filter, f.cursor, f.browsing = "", layout.Cursor{}, false
 }
 
 // isAccount reports that the focus is on an account picker.
@@ -207,12 +203,12 @@ func (f *form) pick() {
 		f.message = "no account matches " + f.filter
 		return
 	}
-	chosen := matches[f.cursor] // the cursor never leaves the matches
+	chosen := matches[f.cursor.Row] // the cursor never leaves the matches
 	*fields()[f.focus].text(&f.input) = chosen
 	if f.focus == fieldFrom {
 		f.input.Currency = f.currencyHeldBy(chosen)
 	}
-	f.move(keyTab)
+	f.move(layout.KeyTab)
 }
 
 // currencyHeldBy is the first currency the account holds when the journal declares it, else the first declared.
@@ -240,26 +236,23 @@ func (f *form) edit(key string) {
 	}
 }
 
-// editPicker types into the picker's filter or moves its cursor.
+// editPicker moves the picker's cursor by a cursor key, or types into its filter.
 func (f *form) editPicker(key string) {
-	switch key {
-	case keyUp:
-		f.cursor, f.browsing = max(0, f.cursor-1), true
-	case keyDown:
-		f.cursor, f.browsing = min(len(f.matches())-1, f.cursor+1), true
-	default:
-		f.filter, _ = layout.Edit(f.filter, key)
-		f.cursor, f.browsing = 0, false
+	if layout.Moves(key) {
+		f.cursor, f.browsing = f.cursor.Move(key, len(f.matches()), pickerRows), true
+		return
 	}
+	f.filter, _ = layout.Edit(f.filter, key)
+	f.cursor, f.browsing = layout.Cursor{}, false
 }
 
-// cycle is the choice a left or right arrow (or up or down) moves to, staying at the ends.
+// cycle is the choice a left or right arrow moves to, staying at the ends.
 func cycle[T comparable](choices []T, current T, key string) T {
 	index := slices.Index(choices, current)
 	switch key {
-	case keyLeft, keyUp:
+	case layout.KeyLeft:
 		index--
-	case keyRight, keyDown:
+	case layout.KeyRight:
 		index++
 	default:
 		return current

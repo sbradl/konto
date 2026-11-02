@@ -8,6 +8,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/sbradl/konto/internal/domain"
+	"github.com/sbradl/konto/internal/ui/uitest"
 )
 
 func accountsLedger() domain.Ledger {
@@ -24,7 +25,7 @@ func pressKey(m Model, code rune) Model {
 }
 
 func TestDashboardShowsTheAccountsPanel(t *testing.T) {
-	content := plain(started(t, fakeLoader{ledger: accountsLedger()}).View().Content)
+	content := uitest.Plain(started(t, fakeLoader{ledger: accountsLedger()}).View().Content)
 
 	for _, want := range []string{"ACCOUNTS", "assets:checking", "assets:savings", "assets:spare"} {
 		if !strings.Contains(content, want) {
@@ -36,7 +37,7 @@ func TestDashboardShowsTheAccountsPanel(t *testing.T) {
 func TestOtherViewsDoNotShowTheAccountsPanel(t *testing.T) {
 	model, _ := press(started(t, fakeLoader{ledger: accountsLedger()}), "2")
 
-	if content := plain(model.View().Content); strings.Contains(content, "ACCOUNTS") {
+	if content := uitest.Plain(model.View().Content); strings.Contains(content, "ACCOUNTS") {
 		t.Errorf("the import view shows the accounts panel:\n%s", content)
 	}
 }
@@ -105,7 +106,7 @@ func TestWarningCountIsAmber(t *testing.T) {
 func TestChecksPanelListsEveryUnclassifiedAccount(t *testing.T) {
 	model, _ := press(started(t, fakeLoader{ledger: accountsLedger()}), "!")
 
-	content := plain(model.View().Content)
+	content := uitest.Plain(model.View().Content)
 	if !strings.Contains(content, "WARN  unclassified  assets:spare has no konto:source tag") {
 		t.Errorf("checks panel lacks the unclassified row:\n%s", content)
 	}

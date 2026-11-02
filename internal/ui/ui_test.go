@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os/exec"
 	"reflect"
-	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -17,6 +16,7 @@ import (
 	"github.com/sbradl/konto/internal/domain"
 	"github.com/sbradl/konto/internal/ledger"
 	"github.com/sbradl/konto/internal/ui/theme"
+	"github.com/sbradl/konto/internal/ui/uitest"
 )
 
 const journalPath = "/data/household.journal"
@@ -105,18 +105,14 @@ func started(t *testing.T, loader fakeLoader) Model {
 	return updated.(Model)
 }
 
-var escapes = regexp.MustCompile(`\x1b\[[0-9;:]*m`)
-
 // plain is s as the terminal shows it, without styling.
-func plain(s string) string { return escapes.ReplaceAllString(s, "") }
-
 func firstLine(m Model) string {
-	first, _, _ := strings.Cut(plain(m.View().Content), "\n")
+	first, _, _ := strings.Cut(uitest.Plain(m.View().Content), "\n")
 	return first
 }
 
 func lastLine(m Model) string {
-	lines := strings.Split(plain(m.View().Content), "\n")
+	lines := strings.Split(uitest.Plain(m.View().Content), "\n")
 	return lines[len(lines)-1]
 }
 
@@ -225,7 +221,7 @@ func TestAMessageKontoDoesNotKnowChangesNothing(t *testing.T) {
 
 	updated, cmd := model.Update(tea.FocusMsg{})
 
-	if cmd != nil || plain(updated.(Model).View().Content) != plain(model.View().Content) {
+	if cmd != nil || uitest.Plain(updated.(Model).View().Content) != uitest.Plain(model.View().Content) {
 		t.Errorf("cmd %v", cmd)
 	}
 }
@@ -252,7 +248,7 @@ func TestTabBarKeepsTabsAndPathApartWhenPathIsLong(t *testing.T) {
 	updated, _ := model.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	updated, _ = updated.Update(model.Init()())
 
-	first, _, _ := strings.Cut(plain(updated.View().Content), "\n")
+	first, _, _ := strings.Cut(uitest.Plain(updated.View().Content), "\n")
 
 	if !strings.Contains(first, "5 reports "+long) {
 		t.Errorf("tabs and path should be separated by a space, got %q", first)
@@ -572,7 +568,7 @@ func TestNumberKeysDoNothingOnTheFirstRunScreen(t *testing.T) {
 // The screen has exactly the terminal's height: tab bar on top, status bar at the bottom,
 // a rule between the tab bar and the view.
 func TestLayoutFillsTheTerminal(t *testing.T) {
-	lines := strings.Split(plain(started(t, fakeLoader{}).View().Content), "\n")
+	lines := strings.Split(uitest.Plain(started(t, fakeLoader{}).View().Content), "\n")
 
 	if len(lines) != 40 {
 		t.Fatalf("screen has %d lines, want 40", len(lines))
@@ -692,10 +688,10 @@ func TestRefreshKeepsSnapshotAndShowsSpinner(t *testing.T) {
 	if count(refreshing) != "2 txns" {
 		t.Errorf("count = %q, want the stale 2 txns while refreshing", count(refreshing))
 	}
-	if !strings.ContainsAny(lastLine(refreshing), "⣾⣽⣻⢿⡿⣟⣯⣷") {
+	if !strings.Contains(lastLine(refreshing), "⣾") {
 		t.Errorf("status bar = %q, want a spinner", lastLine(refreshing))
 	}
-	if strings.ContainsAny(lastLine(model), "⣾⣽⣻⢿⡿⣟⣯⣷") {
+	if strings.Contains(lastLine(model), "⣾") {
 		t.Errorf("status bar = %q, want no spinner when idle", lastLine(model))
 	}
 }
@@ -715,7 +711,7 @@ func TestFailedRefreshKeepsSnapshotAndFlagsError(t *testing.T) {
 	if !strings.Contains(lastLine(failed.(Model)), "✗ error") {
 		t.Errorf("status bar = %q, want an error indicator", lastLine(failed.(Model)))
 	}
-	if strings.ContainsAny(lastLine(failed.(Model)), "⣾⣽⣻⢿⡿⣟⣯⣷") {
+	if strings.Contains(lastLine(failed.(Model)), "⣾") {
 		t.Error("the spinner should stop when the refresh fails")
 	}
 
@@ -771,7 +767,7 @@ func scheduledLedger() domain.Ledger {
 func TestSchedViewListsTheRulesWithACursorPosition(t *testing.T) {
 	model, _ := press(started(t, fakeLoader{ledger: scheduledLedger()}), "3")
 
-	content := plain(model.View().Content)
+	content := uitest.Plain(model.View().Content)
 	if !strings.Contains(content, "╭─ RULES ") || !strings.Contains(content, "Rent") || !strings.Contains(lastLine(model), "1/2") {
 		t.Errorf("Scheduled view and its position:\n%s", content)
 	}
@@ -790,7 +786,7 @@ func TestSchedKeysDoNotPostOrPause(t *testing.T) {
 
 	for _, key := range []string{"p", "x"} {
 		after, cmd := press(model, key)
-		if cmd != nil || after.prompt != nil || plain(after.View().Content) != plain(model.View().Content) {
+		if cmd != nil || after.prompt != nil || uitest.Plain(after.View().Content) != uitest.Plain(model.View().Content) {
 			t.Errorf("%s must do nothing in Scheduled", key)
 		}
 	}
@@ -802,7 +798,7 @@ func TestSchedKeysDoNotPostOrPause(t *testing.T) {
 func TestSchedViewFollowsTheTerminalSize(t *testing.T) {
 	model, _ := press(started(t, fakeLoader{ledger: scheduledLedger()}), "3")
 
-	rows := strings.Split(plain(resized(model, 160, 50).View().Content), "\n")
+	rows := strings.Split(uitest.Plain(resized(model, 160, 50).View().Content), "\n")
 
 	if len(rows) != 50 || !strings.HasPrefix(rows[len(rows)-2], "╰") {
 		t.Errorf("view has %d rows; the panels should end just above the status bar, got %q", len(rows), rows[len(rows)-2])
@@ -869,5 +865,11 @@ func TestDWithoutRulesOrOutsideSchedDoesNothing(t *testing.T) {
 	dash, _ := press(withRules(t, &fakeWriter{}), "1")
 	if got, _ := press(dash, "d"); got.prompt != nil {
 		t.Errorf("d only deletes in Scheduled")
+	}
+}
+
+func TestAFailedFirstLoadCountsNoTransactions(t *testing.T) {
+	if first := firstLine(started(t, fakeLoader{err: errors.New("hledger exploded")})); strings.Contains(first, "txns") {
+		t.Errorf("tab bar = %q, want no count without a journal", first)
 	}
 }

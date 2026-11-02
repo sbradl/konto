@@ -3,6 +3,7 @@ package hledger
 import (
 	"context"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -89,8 +90,8 @@ func TestFirstParagraphJoinsTheMessageUpToTheNextBlankLine(t *testing.T) {
 func TestCheckTextPipesTheTextToTheNamedChecks(t *testing.T) {
 	var gotInput string
 	var gotArgs []string
-	client := &Client{runInput: func(_ context.Context, input string, args ...string) ([]byte, string, error) {
-		gotInput, gotArgs = input, args
+	client := &Client{run: func(_ context.Context, stdin io.Reader, args ...string) ([]byte, string, error) {
+		gotInput, gotArgs = readAll(stdin), args
 		return nil, "", nil
 	}}
 
@@ -105,7 +106,7 @@ func TestCheckTextPipesTheTextToTheNamedChecks(t *testing.T) {
 }
 
 func TestCheckTextReportsTheFirstFailureInHledgersWords(t *testing.T) {
-	client := &Client{runInput: func(context.Context, string, ...string) ([]byte, string, error) {
+	client := &Client{run: func(context.Context, io.Reader, ...string) ([]byte, string, error) {
 		return nil, "hledger: Error: -:5:\n5 | x\n\nbalance assertion: assets:checking\nthe asserted balance is 1\n", errors.New("exit 1")
 	}}
 
@@ -136,7 +137,7 @@ func TestNewChecksTextThroughTheBinary(t *testing.T) {
 }
 
 func TestCheckTextSaysWhyWhenHledgerGivesNoMessage(t *testing.T) {
-	client := &Client{runInput: func(context.Context, string, ...string) ([]byte, string, error) {
+	client := &Client{run: func(context.Context, io.Reader, ...string) ([]byte, string, error) {
 		return nil, "", errors.New("hledger did not answer within 2m0s")
 	}}
 
@@ -148,7 +149,7 @@ func TestCheckTextSaysWhyWhenHledgerGivesNoMessage(t *testing.T) {
 }
 
 func TestCheckTextKeepsTheLocationWhenHledgerSaysNothingElse(t *testing.T) {
-	client := &Client{runInput: func(context.Context, string, ...string) ([]byte, string, error) {
+	client := &Client{run: func(context.Context, io.Reader, ...string) ([]byte, string, error) {
 		return nil, "hledger: Error: -:5:\n", errors.New("exit 1")
 	}}
 

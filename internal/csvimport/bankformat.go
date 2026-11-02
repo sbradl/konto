@@ -58,6 +58,16 @@ func postbank() bankFormat {
 	}
 }
 
+// formatNamed is the bank format of the name, as Staged.Format and an account's konto:format tag name it.
+func formatNamed(name string) (bankFormat, bool) {
+	formats := []bankFormat{postbank()}
+	at := slices.IndexFunc(formats, func(format bankFormat) bool { return format.name == name })
+	if at < 0 {
+		return bankFormat{}, false
+	}
+	return formats[at], true
+}
+
 // rules is the hledger rules preamble that converts the bookings: the header and the trailer are skipped,
 // the payee, else the type, is the description, the purpose the comment, and no row has a category yet.
 func (b bankFormat) rules() string {
@@ -114,8 +124,12 @@ func (b bankFormat) readPreamble(data []byte) (preamble, error) {
 	return found, nil
 }
 
-// record is what one line of the export says in the columns konto matches rules against.
-type record struct{ date, kind, payee, purpose string }
+// record is what one line of the export says in the columns konto matches rules against, and what tells it
+// from the other lines.
+type record struct {
+	key         rowKey
+	kind, payee string
+}
 
 // recordsOf are the bookings below the export's header line, up to the trailer.
 func (b bankFormat) recordsOf(lines []string) []record {
@@ -134,39 +148,50 @@ func (b bankFormat) recordsOf(lines []string) []record {
 		if err != nil {
 			continue
 		}
-		records = append(records, record{
-			date: date.Format(time.DateOnly), kind: column(fields, b.typeColumn), payee: column(fields, b.payeeColumn),
-			purpose: column(fields, b.purposeColumn),
-		})
+		kind, payee := column(fields, b.typeColumn), column(fields, b.payeeColumn)
+		seen := booking{date.Format(time.DateOnly), b.value(column(fields, b.amountColumn)), descriptionOf(kind, payee)}
+		records = append(records, record{key: rowKey{seen, column(fields, b.purposeColumn)}, kind: kind, payee: payee})
 	}
 	return records
 }
 
-// descriptionOf is what the rules make of the record (`if %payee ^$`): the payee, else the transaction type.
-func (r record) descriptionOf() string {
-	if r.payee == "" {
-		return r.kind
+// value is the amount column as MultiAmount.Value has it, to compare with a converted row; empty when it is
+// no number, which no converted row matches.
+func (b bankFormat) value(text string) string {
+	amount, err := b.amount(domain.DefaultAmount(b.currency), text)
+	if err != nil {
+		return ""
 	}
-	return r.payee
+	return domain.MultiAmount{amount}.Value()
+}
+
+// descriptionOf is what the rules make of a line (`if %payee ^$`): the payee, else the transaction type.
+func descriptionOf(kind, payee string) string {
+	if payee == "" {
+		return kind
+	}
+	return payee
 }
 
 // errUnmatchedRow is konto reading a line of the export other than hledger did, so the rules konto drafts
 // would test fields the row does not have.
 var errUnmatchedRow = errors.New("a converted row matches no line of the export")
 
-// withRawFields gives each row the transaction type and payee of the export line it came from, found by
-// date, description and purpose.
+// withRawFields gives each row the transaction type and payee of the export line it came from, found by its
+// key; each line gives its fields to one row only, so same-day bookings alike but for their type keep theirs.
 func withRawFields(rows []Row, records []record) ([]Row, error) {
+	unused := map[rowKey][]record{}
+	for _, rec := range records {
+		unused[rec.key] = append(unused[rec.key], rec)
+	}
 	for i := range rows {
 		row := &rows[i]
-		at := slices.IndexFunc(records, func(rec record) bool {
-			return rec.date == row.Date.Format(time.DateOnly) && rec.descriptionOf() == row.Description &&
-				rec.purpose == row.Purpose
-		})
-		if at < 0 {
+		found := unused[row.key()]
+		if len(found) == 0 {
 			return nil, fmt.Errorf("%w: %s %s", errUnmatchedRow, row.Date.Format(time.DateOnly), row.Description)
 		}
-		row.Type, row.Payee = records[at].kind, records[at].payee
+		row.Type, row.Payee = found[0].kind, found[0].payee
+		unused[row.key()] = found[1:]
 	}
 	return rows, nil
 }

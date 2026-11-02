@@ -6,6 +6,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sbradl/konto/internal/domain"
+	"github.com/sbradl/konto/internal/ui/layout"
 )
 
 // prompt is a y/n question about a planned write; y writes it. An import's prompt also shows what will be
@@ -14,8 +15,8 @@ type prompt struct {
 	question string
 	write    pendingWrite
 	preview  []string
-	top      int  // the first line of the preview on screen
-	quit     bool // y leaves konto: the question is about discarding the staged import
+	scroll   layout.Cursor // the preview's first line on screen
+	quit     bool          // y leaves konto: the question is about discarding the staged import
 }
 
 // pendingWrite is a changeset on its way to the journal and what follows once it is there. Every key that
@@ -32,7 +33,7 @@ type pendingWrite struct {
 const reloadingNotice = "the journal is reloading — try again in a moment"
 
 // busy reports a write or reload in flight: the snapshot on screen is about to change.
-func (m Model) busy() bool { return m.refreshing }
+func (m Model) busy() bool { return m.writing || m.reloading }
 
 // onPromptKey answers the open y/n prompt; every other key leaves it open.
 func (m Model) onPromptKey(key string) (Model, tea.Cmd) {
@@ -44,43 +45,47 @@ func (m Model) onPromptKey(key string) (Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 		return m.write(pending.write)
-	case "n", "esc":
+	case "n", layout.KeyEsc:
 		m.prompt = nil
-	case "up":
-		m.prompt = m.prompt.scrolled(-1, m.lastPreviewTop())
-	case "down":
-		m.prompt = m.prompt.scrolled(1, m.lastPreviewTop())
+	default:
+		m.prompt = m.prompt.scrolled(key, m.lastPreviewTop(), m.previewCapacity())
 	}
 	return m, nil
 }
 
-// scrolled is the prompt with its preview moved by lines, between the first line and last, the last line
-// the preview can start at; a new prompt, since the one open is shared with earlier models.
-func (p *prompt) scrolled(lines, last int) *prompt {
+// scrolled is the prompt with its preview scrolled by a cursor key, between the first line and last, the last
+// line the preview can start at; a new prompt, since the one open is shared with earlier models.
+func (p *prompt) scrolled(key string, last, page int) *prompt {
 	next := *p
-	next.top = max(0, min(p.top+lines, last))
+	next.scroll = p.scroll.Scroll(key, last, page)
 	return &next
 }
 
 // write writes the changeset, checking it first if it asks to be. The spinner shows from now until the
 // reload after it lands.
 func (m Model) write(pending pendingWrite) (Model, tea.Cmd) {
-	m.refreshing = true
+	m.writing = true
 	return m, func() tea.Msg {
+		ctx := context.Background()
+		changeset, err := m.writer.Prepare(ctx, pending.changeset) // checked and written as prepared, never redone
+		if err != nil {
+			return writtenMsg{err: err}
+		}
 		if pending.verify && m.verifier != nil {
-			if err := m.verifier.Verify(context.Background(), pending.changeset); err != nil {
+			if err := m.verifier.Verify(ctx, changeset); err != nil {
 				return writtenMsg{err: err}
 			}
 		}
-		return writtenMsg{err: m.writer.Apply(pending.changeset), pending: pending}
+		return writtenMsg{err: m.writer.Apply(changeset), pending: pending}
 	}
 }
 
 // onWritten refreshes after a successful write, saying so and carrying out what follows it, and reports a
 // failed one.
 func (m Model) onWritten(written writtenMsg) (Model, tea.Cmd) {
+	m.writing = false
 	if written.err != nil {
-		m.notice, m.refreshing = "write failed: "+written.err.Error(), false
+		m.notice = "write failed: " + written.err.Error()
 		return m, nil
 	}
 	if written.pending.notice != "" {

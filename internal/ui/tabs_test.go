@@ -1,10 +1,10 @@
 package ui
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/sbradl/konto/internal/domain"
+	"github.com/sbradl/konto/internal/ui/uitest"
 )
 
 // Tab indices the tests name.
@@ -15,8 +15,8 @@ const (
 
 func TestATabThatCapturesKeysHandsThemOn(t *testing.T) {
 	for _, tab := range tabs() {
-		if (tab.captures == nil) != (tab.captured == nil) {
-			t.Errorf("%s: captures and captured must be set together", tab.name)
+		if tab.capture != nil && (tab.capture.active == nil || tab.capture.key == nil) {
+			t.Errorf("%s: a capture needs both when it is active and what takes its keys", tab.name)
 		}
 		if len(tab.keys) > 0 && tab.key == nil {
 			t.Errorf("%s: hints keys but handles none", tab.name)
@@ -51,9 +51,9 @@ func TestEveryHintedKeyIsHandled(t *testing.T) {
 		}
 		for _, binding := range tab.keys {
 			model := rig(t)
-			pressed, cmd := press(model, strings.ToLower(binding.key))
-			if cmd == nil && plain(pressed.View().Content) == plain(model.View().Content) {
-				t.Errorf("%s: %s is hinted but does nothing", tab.name, binding.key)
+			pressed, cmd := press(model, binding.Key)
+			if cmd == nil && uitest.Plain(pressed.View().Content) == uitest.Plain(model.View().Content) {
+				t.Errorf("%s: %s is hinted but does nothing", tab.name, binding.Key)
 			}
 		}
 	}

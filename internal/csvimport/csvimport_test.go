@@ -11,7 +11,7 @@ import (
 	"github.com/sbradl/konto/internal/domain"
 )
 
-var euro = domain.AmountStyle{Spaced: true, DecimalMark: ",", GroupMark: ".", GroupSize: 3}
+var euro = domain.DefaultAmount("EUR").Style
 
 func eur(mantissa int64) domain.MultiAmount {
 	return domain.MultiAmount{{Commodity: "EUR", Mantissa: mantissa, Places: 2, Style: euro}}
@@ -66,11 +66,13 @@ func open(t *testing.T, iban string, ledger domain.Ledger, transactions ...domai
 	return staged, conv, err
 }
 
-// exportOf is the export with a line for each converted transaction, its description the payee.
+// exportOf is the export with a line for each converted transaction, its description the payee, its amount
+// the import account's.
 func exportOf(iban string, transactions []domain.Transaction) []byte {
 	var lines strings.Builder
 	for _, transaction := range transactions {
-		lines.WriteString("\n" + transaction.Date.Format("2.1.2006") + ";;;" + transaction.Description + ";" + transaction.Comment)
+		lines.WriteString("\n" + transaction.Date.Format("2.1.2006") + ";;;" + transaction.Description + ";" +
+			transaction.Comment + ";;;;;;;" + transaction.Postings[0].Amounts[0].FormatNumber())
 	}
 	return []byte(strings.Replace(string(export(iban)), "\nKontostand;", lines.String()+"\nKontostand;", 1))
 }
@@ -92,15 +94,26 @@ func journalTxn(date, description string, mantissa int64) domain.Transaction {
 	}}
 }
 
+// header is what Open says about the export and the account it belongs to.
+type header struct {
+	Account, File, Format, IBAN, Closing string
+	NewAccount                           bool
+}
+
+func headerOf(s Staged) header {
+	return header{s.Account.Name, s.File, s.Format, s.IBAN, s.Closing, s.NewAccount}
+}
+
 func TestOpenFindsTheAccountByIBANWhateverTheSpacing(t *testing.T) {
+	want := header{Account: checking, File: "sept.csv", Format: "postbank", IBAN: "DE89370400440532013000", Closing: "14.261,45"}
 	for _, iban := range []string{"DE89370400440532013000", "DE89 3704 0044 0532 0130 00"} {
 		staged, _, err := open(t, iban, ledgerWith(importAccount()))
-
-		if err != nil || staged.Account.Name != checking || staged.NewAccount || staged.File != "sept.csv" || staged.Format != "postbank" {
-			t.Errorf("IBAN %q: staged = %+v, err = %v", iban, staged, err)
+		if err != nil {
+			t.Fatalf("IBAN %q: unexpected error: %v", iban, err)
 		}
-		if staged.IBAN != "DE89370400440532013000" || staged.Closing != "14.261,45" {
-			t.Errorf("IBAN %q: staged = %+v, want the normalised IBAN and the trailer's balance", iban, staged)
+
+		if got := headerOf(staged); got != want {
+			t.Errorf("IBAN %q: staged %+v, want %+v", iban, got, want)
 		}
 	}
 }
@@ -119,9 +132,12 @@ func TestOpenGivesHledgerTheFormatThenTheAccountThenTheRules(t *testing.T) {
 
 func TestOpenOfAnUnknownIBANStagesANewAccount(t *testing.T) {
 	staged, conv, err := open(t, "DE27100777770209299700", ledgerWith(importAccount()))
-
-	if err != nil || !staged.NewAccount || staged.IBAN != "DE27100777770209299700" || staged.Account.Name != "" {
-		t.Errorf("staged = %+v, err = %v; want a new account", staged, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := header{File: "sept.csv", Format: "postbank", IBAN: "DE27100777770209299700", Closing: "14.261,45", NewAccount: true}
+	if got := headerOf(staged); got != want {
+		t.Errorf("staged %+v, want %+v", got, want)
 	}
 	if !strings.Contains(conv.rules, "account1 "+newAccountName+"\n") {
 		t.Errorf("rules = %q, want the stand-in account", conv.rules)
@@ -184,9 +200,14 @@ func TestOpenToleratesWindowsLineEndings(t *testing.T) {
 	conv := &fakeConverter{}
 
 	staged, err := service(fakeFiles{data: map[string][]byte{"/x.csv": []byte(crlf)}}, conv).Open(context.Background(), "/x.csv", ledgerWith(importAccount()))
-
-	if err != nil || staged.IBAN != "DE89370400440532013000" || staged.Closing != "14.261,45" {
-		t.Errorf("staged = %+v, err = %v", staged, err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if staged.IBAN != "DE89370400440532013000" {
+		t.Errorf("IBAN = %q", staged.IBAN)
+	}
+	if staged.Closing != "14.261,45" {
+		t.Errorf("closing = %q", staged.Closing)
 	}
 }
 
@@ -324,7 +345,7 @@ func TestTheWatermarkIgnoresOtherAccountsTransactions(t *testing.T) {
 func TestTheCarryMovesNoWatermarkAndIsNoBooking(t *testing.T) {
 	ledger := sept()
 	carry := journalTxn("2026-09-30", "opening balance", -50000)
-	carry.Comment = domain.CarryTag
+	carry.Comment, carry.Tags = domain.CarryTag, map[string]string{domain.KontoTag: "carry"}
 	ledger.Transactions = append(ledger.Transactions, carry)
 
 	staged, _, _ := open(t, "DE89370400440532013000", ledger,

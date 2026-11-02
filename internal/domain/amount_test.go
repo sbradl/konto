@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-var euro = AmountStyle{Spaced: true, DecimalMark: ",", GroupMark: ".", GroupSize: 3}
+var euro = DefaultAmount("EUR").Style
 
 func eur(mantissa int64) Amount {
 	return Amount{Commodity: "EUR", Mantissa: mantissa, Places: 2, Style: euro}
@@ -131,6 +131,16 @@ func TestMultiAmountNegatedFlipsEveryAmount(t *testing.T) {
 
 	if got[0].Mantissa != -1 || got[1].Mantissa != 2 {
 		t.Errorf("Negated = %+v", got)
+	}
+}
+
+func TestAmountZeroKeepsCommodityPlacesAndStyle(t *testing.T) {
+	want := Amount{Commodity: "USD", Places: 3, Style: AmountStyle{SymbolLeft: true}}
+	have := want
+	have.Mantissa = 1234
+
+	if got := have.Zero(); got != want {
+		t.Errorf("Zero = %+v, want %+v", got, want)
 	}
 }
 

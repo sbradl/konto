@@ -14,12 +14,11 @@ import (
 func (m Model) onDashboardKey(key string) (Model, tea.Cmd) {
 	var action dashboard.Action
 	m.dash, action = m.dash.Key(key)
-	switch action {
+	switch action.(type) {
 	case dashboard.CloseSelected:
 		return m.planAccountChange(m.accounts.Close, "close"), nil
 	case dashboard.ReopenSelected:
 		return m.planAccountChange(m.accounts.Reopen, "reopen"), nil
-	case dashboard.NoAction:
 	}
 	return m, nil
 }

@@ -32,13 +32,13 @@ type directiveLine struct{ head, name, comment string }
 
 // parseDirective splits a line of the keyword's directive; false for any other line.
 func parseDirective(line, keyword string) (directiveLine, bool) {
-	rest, found := strings.CutPrefix(line, keyword+" ")
+	rest, found := directiveArgs(line, keyword)
 	if !found {
 		return directiveLine{}, false
 	}
 	head, comment, _ := strings.Cut(rest, ";")
-	name, _, _ := strings.Cut(strings.TrimSpace(head), "  ")
-	return directiveLine{head: strings.TrimRight(head, " \t"), name: strings.TrimSpace(name), comment: comment}, true
+	head = strings.TrimRight(head, blanks)
+	return directiveLine{head: head, name: accountField(head), comment: comment}, true
 }
 
 // parseDeclaration reads `account NAME  ; tag, tag` into a Declaration.
@@ -75,16 +75,22 @@ func (f File) Commodities() ([]string, error) {
 // commodityName is the commodity a `commodity` directive line declares, whether it gives a sample amount
 // (`commodity 1.000,00 EUR`, `commodity $1,000.00`) or the bare symbol.
 func commodityName(line string) (string, bool) {
-	rest, found := strings.CutPrefix(line, "commodity ")
+	rest, found := directiveArgs(line, "commodity")
 	if !found {
 		return "", false
 	}
 	rest, _, _ = strings.Cut(rest, ";")
-	symbol := strings.Trim(strings.TrimSpace(strings.Map(func(r rune) rune {
-		if unicode.IsDigit(r) || strings.ContainsRune(".,- ", r) {
+	if _, quoted, found := strings.Cut(rest, `"`); found {
+		symbol, _, _ := strings.Cut(quoted, `"`)
+		return symbol, symbol != ""
+	}
+	// an unquoted symbol has no digits, spaces or marks (hledger wants any that has them quoted), so it is
+	// what the sample amount leaves
+	symbol := strings.TrimSpace(strings.Map(func(r rune) rune {
+		if unicode.IsDigit(r) || strings.ContainsRune(".,-", r) {
 			return -1
 		}
 		return r
-	}, rest)), `"`)
+	}, rest))
 	return symbol, symbol != ""
 }

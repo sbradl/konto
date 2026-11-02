@@ -12,7 +12,7 @@ import (
 )
 
 func eur(mantissa int64) domain.MultiAmount {
-	style := domain.AmountStyle{Spaced: true, DecimalMark: ",", GroupMark: ".", GroupSize: 3}
+	style := domain.DefaultAmount("EUR").Style
 	return domain.MultiAmount{{Commodity: "EUR", Mantissa: mantissa, Places: 2, Style: style}}
 }
 

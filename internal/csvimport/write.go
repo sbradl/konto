@@ -82,9 +82,13 @@ func needCategory(rows int) string {
 	return strconv.Itoa(rows) + " rows need a category"
 }
 
-// closing is the bank's closing balance in the export's currency, in the journal's style.
+// closing is the bank's closing balance in the export's currency, in the journal's style, read as the export's
+// bank format prints it.
 func (s Staged) closing() (domain.Amount, error) {
-	format := postbank()
+	format, known := formatNamed(s.Format)
+	if !known {
+		return domain.Amount{}, fmt.Errorf("the bank format %q is unknown", s.Format)
+	}
 	like := domain.DefaultAmount(format.currency)
 	if len(s.Zero) > 0 {
 		like = s.Zero[0]

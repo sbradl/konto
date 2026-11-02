@@ -6,6 +6,7 @@ import (
 
 	"github.com/sbradl/konto/internal/domain"
 	"github.com/sbradl/konto/internal/periodic"
+	"github.com/sbradl/konto/internal/ui/uitest"
 )
 
 func withAccounts() domain.Ledger {
@@ -34,6 +35,12 @@ func pressed(m Model, keys ...string) (Model, Action) {
 	return m, action
 }
 
+// saved is the save the action asks for; nil when it asks for none.
+func saved(action Action) *Save {
+	save, _ := action.(*Save)
+	return save
+}
+
 func typed(m Model, text string) Model {
 	for _, r := range text {
 		m, _ = m.FormKey(string(r))
@@ -41,7 +48,7 @@ func typed(m Model, text string) Model {
 	return m
 }
 
-func screen(m Model) string { return plain(m.View()) }
+func screen(m Model) string { return uitest.Plain(m.View()) }
 
 func TestNOpensTheFormWithItsFieldsAndFrequencyMonthly(t *testing.T) {
 	m := opened()
@@ -132,7 +139,7 @@ func TestTypingIntoATextFieldIsTextAndBackspaceAndCtrlUEditIt(t *testing.T) {
 }
 
 func TestOtherKeysDoNothingInATextField(t *testing.T) {
-	m, _ := pressed(opened(), "tab", "tab", "tab", "left", "up", "f1")
+	m, _ := pressed(opened(), "tab", "tab", "tab", "left", "right", "f1")
 
 	if view := screen(m); !strings.Contains(view, "description         ▏") {
 		t.Errorf("the description changed:\n%s", view)
@@ -142,7 +149,7 @@ func TestOtherKeysDoNothingInATextField(t *testing.T) {
 func TestEscClosesTheForm(t *testing.T) {
 	m, action := pressed(opened(), "esc")
 
-	if m.Capturing() || action.Save != nil || strings.Contains(screen(m), "new periodic rule") {
+	if m.Capturing() || saved(action) != nil || strings.Contains(screen(m), "new periodic rule") {
 		t.Error("Esc did not close the form without saving")
 	}
 }
@@ -194,6 +201,44 @@ func TestAFromAccountWithoutAHeldCurrencyFallsBackToTheFirstDeclared(t *testing.
 
 	if view := screen(m); !strings.Contains(view, "[EUR]  PLN") {
 		t.Errorf("view:\n%s", view)
+	}
+}
+
+func TestTheUpAndDownArrowsMoveBetweenTheFieldsAndLeaveTheDropdownsAlone(t *testing.T) {
+	focus := func(m Model) string {
+		for line := range strings.SplitSeq(screen(m), "\n") {
+			if strings.Contains(line, "▸") {
+				return line
+			}
+		}
+		return ""
+	}
+	m, _ := pressed(opened(), "down")
+	if line := focus(m); !strings.Contains(line, "frequency") || !strings.Contains(line, "[monthly]") {
+		t.Errorf("down did not move to the frequency: %q", line)
+	}
+	m, _ = pressed(m, "down", "down", "up")
+	if line := focus(m); !strings.Contains(line, "remaining payments") {
+		t.Errorf("down twice and up once did not end on the remaining payments: %q", line)
+	}
+	m, _ = pressed(m, "up", "up")
+	if line := focus(m); !strings.Contains(line, "next due date") {
+		t.Errorf("up did not go back to the first field: %q", line)
+	}
+	if view := screen(m); !strings.Contains(view, "[monthly]") {
+		t.Errorf("the arrows changed the frequency:\n%s", view)
+	}
+}
+
+func TestPageKeysMoveThePickersCursorToItsEnds(t *testing.T) {
+	m, _ := pressed(opened(), "tab", "tab", "tab", "tab", "tab", "tab")
+	m = typed(m, "assets:")
+
+	if end, _ := pressed(m, "end", "enter"); !strings.Contains(screen(end), "from account        assets:wallet") {
+		t.Errorf("end did not take the last match:\n%s", screen(end))
+	}
+	if home, _ := pressed(m, "pgdown", "home", "enter"); !strings.Contains(screen(home), "from account        assets:checking") {
+		t.Errorf("home did not take the first match:\n%s", screen(home))
 	}
 }
 
@@ -254,7 +299,7 @@ func TestEnterWithAnAccountAlreadyChosenSavesInsteadOfPickingAgain(t *testing.T)
 
 	_, action := pressed(m, "enter")
 
-	if action.Save == nil || action.Save.Input.From != "assets:checking" {
+	if saved(action) == nil || saved(action).Input.From != "assets:checking" {
 		t.Errorf("action = %+v, want a save with the account kept", action)
 	}
 }
@@ -267,8 +312,8 @@ func TestEnterAndCtrlSAskTheRootToSaveWhatTheFormHolds(t *testing.T) {
 	for _, key := range []string{"enter", "ctrl+s"} {
 		_, action := pressed(m, key)
 
-		if action.Save == nil || action.Save.Editing != nil || action.Save.Input.Date != "2026-10-15" ||
-			action.Save.Input.Description != "Book club" || action.Save.Input.Frequency != periodic.Monthly {
+		if saved(action) == nil || saved(action).Editing != nil || saved(action).Input.Date != "2026-10-15" ||
+			saved(action).Input.Description != "Book club" || saved(action).Input.Frequency != periodic.Monthly {
 			t.Errorf("%s: action = %+v", key, action)
 		}
 	}
@@ -311,7 +356,7 @@ func TestOpenEditFillsTheFormAndTitlesItEdit(t *testing.T) {
 		}
 	}
 	_, action := pressed(m, "ctrl+s")
-	if action.Save == nil || action.Save.Editing == nil || action.Save.Editing.Pos != rule.Pos {
+	if saved(action) == nil || saved(action).Editing == nil || saved(action).Editing.Pos != rule.Pos {
 		t.Errorf("action = %+v, want a save of the rule being edited", action)
 	}
 }
@@ -360,8 +405,8 @@ func TestTypingFillsEveryTextFieldAndAToAccountCanBePicked(t *testing.T) {
 		Date: "2026-10-15", Frequency: periodic.Monthly, Remaining: "3", Description: "Book club", Amount: "12,00",
 		Currency: "EUR", To: "expenses:books",
 	}
-	if action.Save == nil || action.Save.Input != want {
-		t.Errorf("saved %+v, want %+v", action.Save, want)
+	if saved(action) == nil || saved(action).Input != want {
+		t.Errorf("saved %+v, want %+v", saved(action), want)
 	}
 }
 

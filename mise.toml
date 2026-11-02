@@ -55,8 +55,9 @@ run = "go mod tidy -diff"
 description = "Write coverage.out and print the total"
 run = '''
 go test -race -covermode=atomic -coverpkg=./... -coverprofile=coverage.out ./...
-# cmd/konto/entry.go is only the process entry point (real os.Exit, real tty); its logic lives in
-# main.go and is covered. Recorded reason for the exclusion.
+# cmd/konto/entry.go is only main(), the process entry point (real os.Args, os.Exit, clock, tty); the
+# start-up sequence (app) and the port wiring (buildPorts) live in main.go and are covered. Recorded reason
+# for the exclusion.
 grep -v '/cmd/konto/entry.go:' coverage.out > coverage.filtered && mv coverage.filtered coverage.out
 go tool cover -func=coverage.out | tail -n1
 '''

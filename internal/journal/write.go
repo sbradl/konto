@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"strings"
 	"time"
 
 	"github.com/sbradl/konto/internal/domain"
+	"github.com/sbradl/konto/internal/rulesfile"
 )
 
 // RulesPath is the categorisation rules file beside the journal.
@@ -114,15 +114,6 @@ func firstDatedAfter(lines []string, date time.Time) int {
 	return -1
 }
 
-// headerDate is the date a transaction's first line starts with, its parts separated by -, / or . as hledger
-// reads them (2026-09-30, 2026/9/30, 2026.09.30), for a file edited by hand.
-func headerDate(line string) (time.Time, bool) {
-	date, err := time.Parse("2006-1-2", strings.NewReplacer("/", "-", ".", "-").Replace(leadingDate.FindString(line)))
-	return date, err == nil
-}
-
-var leadingDate = regexp.MustCompile(`^\d{4}[-/.]\d{1,2}[-/.]\d{1,2}`)
-
 // setCategoryRule replaces the rule block with the id, or adds the block at the end of categories.rules.
 func (w *workspace) setCategoryRule(edit domain.SetCategoryRule) error {
 	if w.rules == nil {
@@ -133,7 +124,7 @@ func (w *workspace) setCategoryRule(edit domain.SetCategoryRule) error {
 		w.rules = &source{path: w.rulesPath, lines: strings.Split(string(text), "\n")}
 	}
 	block := strings.Split(edit.Text, "\n")
-	first, end, found := edit.Block(w.rules.lines)
+	first, end, found := rulesfile.Block(w.rules.lines, edit.ID)
 	if !found {
 		appendBlock(w.rules, block)
 		return nil

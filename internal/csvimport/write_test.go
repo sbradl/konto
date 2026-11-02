@@ -199,6 +199,15 @@ func TestPlanReportsAnUnreadableClosingBalance(t *testing.T) {
 	}
 }
 
+func TestPlanReadsTheClosingBalanceInTheExportsBankFormat(t *testing.T) {
+	staged := weekImport()
+	staged.Format = "otherbank"
+
+	if _, err := staged.Plan(); err == nil || !strings.Contains(err.Error(), `bank format "otherbank"`) {
+		t.Errorf("err = %v, want the unknown bank format named", err)
+	}
+}
+
 func TestParseAmountReadsGermanNumbersInTheStyleOfTheLedger(t *testing.T) {
 	like := eur(0)[0]
 	for text, want := range map[string]int64{"13.182,03": 1318203, "-5,5": -550, "7": 700, "0,01": 1} {

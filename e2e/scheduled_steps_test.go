@@ -149,15 +149,6 @@ func (w *world) expectNoneOf3(a, b, c string) error {
 	return nil
 }
 
-func (w *world) expectNoneOf2(a, b string) error {
-	for _, text := range []string{a, b} {
-		if err := w.expectScreen(false, text); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func (w *world) expectTabCount(count string) error {
 	return w.expectLine(0, "tab bar", count+" txns", strings.Contains)
 }
@@ -175,7 +166,7 @@ func (w *world) expectRuleListEmpty() error {
 
 // selectRule moves the cursor down to the rule with the description.
 func (w *world) selectRule(description string) error {
-	if err := w.awaitReload(); err != nil { // the list must be the reloaded one, or the rule is not where it was
+	if err := w.awaitIdle(); err != nil { // the list must be the reloaded one, or the rule is not where it was
 		return err
 	}
 	var target int
@@ -218,8 +209,7 @@ func registerScheduledSteps(sc *godog.ScenarioContext, w *world) {
 	step(sc, `^the annual impact total is "([^"]*)" coloured (\d+)$`, func(figure string, colour int) error {
 		return w.expectImpact("Total", figure, colour)
 	})
-	step(sc, `^there is no valuation toggle$`, func() error { return w.expectNoneOf2("valuation", "market") })
-	step(sc, `^I do not see "([^"]*)" or "([^"]*)"$`, w.expectNoneOf2)
+	step(sc, `^there is no valuation toggle$`, func() error { return w.expectNoneOf("valuation", "market") })
 	step(sc, `^the status bar does not list "([^"]*)" or "([^"]*)" or "([^"]*)"$`, w.expectNoneOf3)
 	step(sc, `^the tab bar shows "(\d+)" transactions$`, w.expectTabCount)
 	step(sc, `^I select the rule "([^"]*)"$`, w.selectRule)
@@ -245,15 +235,6 @@ func ruleBlocks(text string) []string {
 		blocks = append(blocks, strings.Join(block, "\n"))
 	}
 	return blocks
-}
-
-func allJournalText(files map[string][]byte) string {
-	var all strings.Builder
-	for _, content := range files {
-		all.Write(content)
-		all.WriteByte('\n')
-	}
-	return all.String()
 }
 
 func (w *world) expectRuleCount(n int) error {
@@ -298,19 +279,6 @@ func (w *world) expectJournalLacks(texts ...string) error {
 	})
 }
 
-func (w *world) eventually(check func() error) error {
-	s, err := w.session()
-	if err != nil {
-		return err
-	}
-	var failure error
-	s.waitFor(w.suite.timeout, func(string) bool {
-		failure = check()
-		return failure == nil
-	})
-	return failure
-}
-
 func (w *world) expectOneBlockRemoved() error {
 	return w.eventually(func() error {
 		before := ruleBlocks(allJournalText(w.filesAtStart))
@@ -343,6 +311,9 @@ func (w *world) expectRuleIntact(description string) error {
 }
 
 func (w *world) expectMainJournalUnchanged() error {
+	if err := w.awaitIdleIfRunning(); err != nil {
+		return err
+	}
 	now, err := os.ReadFile(w.journal)
 	if err != nil {
 		return err

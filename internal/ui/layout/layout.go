@@ -41,6 +41,23 @@ func PopupHeight(content, screen int) int {
 	return max(1, min(content, screen/2))
 }
 
+// PopupCapacity is how many lines of a body n lines long a popup shows under its title rule on a screen h rows
+// tall: as many as fit in its height, at least one.
+func PopupCapacity(n, h int) int {
+	return max(1, PopupHeight(n+1, h)-1)
+}
+
+// Popup is a popup width cells wide: the title rule, then each line of body fitted to the width. The caller cuts
+// body to what is shown.
+func Popup(title string, body []string, width int) string {
+	rows := make([]string, 0, 1+len(body))
+	rows = append(rows, TitleRule(title, width))
+	for _, line := range body {
+		rows = append(rows, Fit(line, width))
+	}
+	return strings.Join(rows, "\n")
+}
+
 // Columns is how many columns of at least minWidth fit in width, between 1 and maxCols.
 func Columns(width, minWidth, maxCols int) int {
 	return max(1, min(maxCols, width/minWidth))

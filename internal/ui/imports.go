@@ -20,20 +20,22 @@ func (m Model) onImportKey(key string) (Model, tea.Cmd) {
 	}
 	var action imports.Action
 	m.imports, action = m.imports.Key(key)
-	if action.Browse != "" {
+	switch action := action.(type) {
+	case imports.Browse:
 		return m, func() tea.Msg {
-			entries, err := m.importer.Browse(action.Browse)
-			return browsedMsg{dir: action.Browse, entries: entries, err: err}
+			entries, err := m.importer.Browse(action.Dir)
+			return browsedMsg{dir: action.Dir, entries: entries, err: err}
 		}
-	}
-	if action.Open != "" {
-		return m.openExport(action.Open)
-	}
-	if action.Write {
+	case imports.Open:
+		return m.openExport(action.Path)
+	case imports.Write:
 		return m.planImport(), nil
 	}
 	return m, nil
 }
+
+// importDialogOpen reports whether a dialog of the Import view has the keyboard.
+func (m Model) importDialogOpen() bool { return m.importer != nil && m.imports.Capturing() }
 
 // openExport reads the export at path against the journal, once no write or reload is in flight.
 func (m Model) openExport(path string) (Model, tea.Cmd) {
@@ -43,7 +45,7 @@ func (m Model) openExport(path string) (Model, tea.Cmd) {
 	}
 	return m, func() tea.Msg {
 		staged, err := m.importer.Open(context.Background(), path, *m.ledger)
-		return openedMsg{staged: staged, err: err}
+		return openedMsg{staged: staged, err: err, load: m.loads}
 	}
 }
 
@@ -84,12 +86,13 @@ func (m Model) reopen(loaded ledgerLoadedMsg) tea.Cmd {
 }
 
 // onReopened takes the staged export read again in: what was staged carries over. An export read again
-// for an earlier load, or after the import was written or replaced, is dropped, and one that cannot be read
-// leaves the import as it was, with the error flagged.
+// after the import was written or replaced is dropped, and one that cannot be read leaves the import as it
+// was, with the error flagged.
 func (m Model) onReopened(opened openedMsg) Model {
 	current, ok := m.imports.Staged()
+	stillStaged := ok && current.Path == opened.earlier.Path
 	switch {
-	case !ok || current.Path != opened.earlier.Path || opened.load != m.loads:
+	case !stillStaged:
 	case opened.err != nil:
 		m.failure = opened.err
 	default:
@@ -99,8 +102,12 @@ func (m Model) onReopened(opened openedMsg) Model {
 }
 
 // onOpened stages the export, or says why it cannot be: a file konto cannot use is a message in the Import
-// view; hledger failing on it also flags the error, so its words are in the checks panel.
+// view; hledger failing on it also flags the error, so its words are in the checks panel. An export read
+// against a journal since reloaded is dropped; the picker stays open on it.
 func (m Model) onOpened(opened openedMsg) Model {
+	if !m.fresh(opened.load) {
+		return m
+	}
 	if opened.earlier != nil {
 		return m.onReopened(opened)
 	}

@@ -129,6 +129,18 @@ func TestCommoditiesAreTheDeclaredCurrenciesOnceEachInOrder(t *testing.T) {
 	}
 }
 
+// A quoted symbol is the commodity as written, digits and spaces in it included, whichever side of the
+// sample amount it stands; a tab may follow the keyword.
+func TestCommoditiesKeepAQuotedSymbolWhole(t *testing.T) {
+	file := journalWith(t, "commodity \"VAN500\"\ncommodity 1.000,00 \"VAN 500\"\ncommodity \"X1\" 1,00\ncommodity\tPLN\n")
+
+	got, err := file.Commodities()
+
+	if want := []string{"VAN500", "VAN 500", "X1", "PLN"}; err != nil || !slices.Equal(got, want) {
+		t.Errorf("commodities = %q, %v; want %q", got, err, want)
+	}
+}
+
 func TestCommoditiesReportAnUnreadableJournal(t *testing.T) {
 	if _, err := NewFile(filepath.Join(t.TempDir(), "missing.journal"), septemberOf(2026)).Commodities(); err == nil {
 		t.Error("expected an error")

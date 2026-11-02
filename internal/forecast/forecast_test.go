@@ -13,7 +13,7 @@ import (
 	"github.com/sbradl/konto/internal/domain"
 )
 
-var euroStyle = domain.AmountStyle{Spaced: true, DecimalMark: ",", GroupMark: ".", GroupSize: 3}
+var euroStyle = domain.DefaultAmount("EUR").Style
 
 func day(s string) time.Time { d, _ := time.Parse(time.DateOnly, s); return d }
 

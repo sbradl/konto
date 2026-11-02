@@ -109,8 +109,8 @@ func TestWatermarkLeavesTheCarryOut(t *testing.T) {
 	day := func(y, m, d int) time.Time { return time.Date(y, time.Month(m), d, 0, 0, 0, 0, time.UTC) }
 	ledger := Ledger{Transactions: []Transaction{
 		{Date: day(2025, 12, 28), Postings: []Posting{{Account: "assets:b"}}},
-		{Date: day(2025, 12, 31), Comment: CarryTag, Postings: []Posting{{Account: "assets:b"}}},
-		{Date: day(2026, 1, 1), Comment: CarryTag, Postings: []Posting{{Account: "assets:b"}}},
+		{Date: day(2025, 12, 31), Tags: map[string]string{KontoTag: "carry"}, Postings: []Posting{{Account: "assets:b"}}},
+		{Date: day(2026, 1, 1), Tags: map[string]string{KontoTag: "carry"}, Postings: []Posting{{Account: "assets:b"}}},
 	}}
 
 	got, ok := ledger.Watermark("assets:b")
@@ -123,8 +123,8 @@ func TestWatermarkLeavesTheCarryOut(t *testing.T) {
 func TestWatermarkOfAnAccountWithOnlyTheCarryIsTheCarry(t *testing.T) {
 	day := func(y, m, d int) time.Time { return time.Date(y, time.Month(m), d, 0, 0, 0, 0, time.UTC) }
 	ledger := Ledger{Transactions: []Transaction{
-		{Date: day(2026, 1, 1), Comment: CarryTag, Postings: []Posting{{Account: "assets:b"}}},
-		{Date: day(2025, 1, 1), Comment: CarryTag, Postings: []Posting{{Account: "assets:b"}}},
+		{Date: day(2026, 1, 1), Tags: map[string]string{KontoTag: "carry"}, Postings: []Posting{{Account: "assets:b"}}},
+		{Date: day(2025, 1, 1), Tags: map[string]string{KontoTag: "carry"}, Postings: []Posting{{Account: "assets:b"}}},
 		{Date: day(2026, 3, 1), Postings: []Posting{{Account: "assets:other"}}},
 	}}
 

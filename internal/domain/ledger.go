@@ -49,8 +49,7 @@ func (l Ledger) NetWorth() MultiAmount {
 func (l Ledger) Zero() MultiAmount {
 	for _, account := range l.Accounts {
 		if len(account.Balance) > 0 {
-			first := account.Balance[0]
-			return MultiAmount{{Commodity: first.Commodity, Places: first.Places, Style: first.Style}}
+			return MultiAmount{account.Balance[0].Zero()}
 		}
 	}
 	return nil
@@ -127,7 +126,7 @@ func (l Ledger) AmountLike(commodity string) Amount {
 	for _, account := range l.Accounts {
 		for _, amount := range account.Balance {
 			if amount.Commodity == commodity {
-				return Amount{Commodity: commodity, Places: amount.Places, Style: amount.Style}
+				return amount.Zero()
 			}
 		}
 	}

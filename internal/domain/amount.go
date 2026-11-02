@@ -24,6 +24,11 @@ type Amount struct {
 	Style     AmountStyle
 }
 
+// Zero is the same commodity, places and style with nothing in it.
+func (a Amount) Zero() Amount {
+	return Amount{Commodity: a.Commodity, Places: a.Places, Style: a.Style}
+}
+
 // IsNegative reports whether the quantity is below zero.
 func (a Amount) IsNegative() bool { return a.Mantissa < 0 }
 
@@ -199,7 +204,7 @@ func (m MultiAmount) Value() string {
 func (m MultiAmount) Zeroed() MultiAmount {
 	zero := make(MultiAmount, len(m))
 	for i, amount := range m {
-		zero[i] = Amount{Commodity: amount.Commodity, Places: amount.Places, Style: amount.Style}
+		zero[i] = amount.Zero()
 	}
 	return zero
 }

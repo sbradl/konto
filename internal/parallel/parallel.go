@@ -1,4 +1,5 @@
-package domain
+// Package parallel runs independent tasks side by side.
+package parallel
 
 import (
 	"runtime"

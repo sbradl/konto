@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/sbradl/konto/internal/domain"
+	"github.com/sbradl/konto/internal/rulesfile"
 )
 
 // Condition is one `%field pattern` test of a categorisation rule. The pattern is a case-insensitive
@@ -66,7 +66,7 @@ func (r Rule) Text() string {
 			lines = append(lines, line)
 		}
 	}
-	lines = append(lines, "    account2 "+r.Category, "    "+domain.RuleIDLine(r.ID))
+	lines = append(lines, "    account2 "+r.Category, "    "+rulesfile.IDLine(r.ID))
 	return strings.Join(lines, "\n")
 }
 
@@ -87,7 +87,7 @@ func ParseRules(text string) []Rule {
 		case strings.HasPrefix(line, "if "):
 			flush()
 			current, open = current.orCondition(strings.TrimPrefix(line, "if ")), true
-		case domain.IsBlankLine(line):
+		case rulesfile.IsBlank(line):
 			flush()
 		case open:
 			current = current.withLine(line)
@@ -107,8 +107,8 @@ func (r Rule) withLine(line string) Rule {
 		return r.orCondition(line)
 	case strings.HasPrefix(trimmed, "account2 "):
 		r.Category = strings.TrimSpace(strings.TrimPrefix(trimmed, "account2 "))
-	case strings.HasPrefix(trimmed, domain.RuleIDLine("")):
-		r.ID = strings.TrimSpace(strings.TrimPrefix(trimmed, domain.RuleIDLine("")))
+	case strings.HasPrefix(trimmed, rulesfile.IDLine("")):
+		r.ID = strings.TrimSpace(strings.TrimPrefix(trimmed, rulesfile.IDLine("")))
 	}
 	return r
 }

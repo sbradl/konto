@@ -137,7 +137,7 @@ func TestLoadDeclaresAccountsFromTheirDirectives(t *testing.T) {
 	closed := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
 	gw := fakeGateway{accounts: []domain.Account{{Name: "assets:checking"}, {Name: "assets:old"}, {Name: "expenses:rent"}}}
 	file := fakeFile{exists: true, declarations: []domain.Declaration{
-		{Name: "assets:checking", Source: domain.SourceImport, IBAN: "DE12"},
+		{Name: "assets:checking", Source: domain.SourceImport, IBAN: "DE12", Format: "postbank"},
 		{Name: "assets:old", Source: domain.SourceImport, Closed: closed},
 		{Name: "assets:new", Source: domain.SourceManual},
 		{Name: "assets:new", Source: domain.SourceManual}, // a repeated directive adds nothing
@@ -149,7 +149,7 @@ func TestLoadDeclaresAccountsFromTheirDirectives(t *testing.T) {
 	}
 
 	want := []domain.Account{
-		{Name: "assets:checking", Source: domain.SourceImport, IBAN: "DE12"},
+		{Name: "assets:checking", Source: domain.SourceImport, IBAN: "DE12", Format: "postbank"},
 		{Name: "assets:old", Source: domain.SourceImport, Closed: closed},
 		{Name: "expenses:rent"},
 		{Name: "assets:new", Source: domain.SourceManual},
@@ -171,7 +171,7 @@ func TestLoadReportsBalanceAndDirectiveFailures(t *testing.T) {
 }
 
 func eur(mantissa int64) domain.MultiAmount {
-	style := domain.AmountStyle{Spaced: true, DecimalMark: ",", GroupMark: ".", GroupSize: 3}
+	style := domain.DefaultAmount("EUR").Style
 	return domain.MultiAmount{{Commodity: "EUR", Mantissa: mantissa, Places: 2, Style: style}}
 }
 

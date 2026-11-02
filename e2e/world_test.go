@@ -13,14 +13,14 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/sbradl/konto/e2e/shimconf"
 )
 
 const (
 	defaultToday  = "2026-09-30"
 	defaultWidth  = 120
 	defaultHeight = 40
-	settleQuiet   = 120 * time.Millisecond
-	reactWindow   = 250 * time.Millisecond
 )
 
 // suite is what every scenario shares: paths and binaries built once.
@@ -69,14 +69,9 @@ func newSuite() (*suite, error) {
 	}, nil
 }
 
-// kontoBinary builds cmd/konto on first use, so harness self-tests and a
-// suite of only @wip scenarios run before the binary exists.
+// kontoBinary builds cmd/konto on first use, so the harness self-tests need not build it.
 func (s *suite) kontoBinary() (string, error) {
 	s.buildOnce.Do(func() {
-		if _, err := os.Stat(filepath.Join(s.root, "cmd", "konto")); err != nil {
-			s.buildErr = errors.New("cmd/konto does not exist yet; tag the scenario @wip until the shell is built")
-			return
-		}
 		if out, err := goBuild(s.root, s.konto, "./cmd/konto"); err != nil {
 			s.buildErr = fmt.Errorf("building konto: %w\n%s", err, out)
 		}
@@ -107,15 +102,6 @@ func repoRoot() (string, error) {
 	}
 }
 
-// shimConfig mirrors the hledgershim config file.
-type shimConfig struct {
-	Version    string   `json:"version,omitempty"`
-	DelayMs    int      `json:"delayMs,omitempty"`
-	Fail       string   `json:"fail,omitempty"`
-	GarbageFor []string `json:"garbageFor,omitempty"`
-	FailCSV    string   `json:"failCsv,omitempty"`
-}
-
 // world is one scenario's sandbox: its own HOME, journal, PATH and terminal.
 type world struct {
 	suite *suite
@@ -132,7 +118,7 @@ type world struct {
 	width  int
 	height int
 
-	shim     shimConfig
+	shim     shimconf.Config
 	shimConf string
 	shimLog  string
 
@@ -184,6 +170,7 @@ func newWorld(s *suite) (*world, error) {
 		"LANG":                   "C.UTF-8",
 		"LEDGER_FILE":            w.journal,
 		"KONTO_TODAY":            defaultToday,
+		"KONTO_E2E":              "1", // konto reports in its window title when it is idle (cmd/konto/idle.go)
 		"XDG_CONFIG_HOME":        filepath.Join(w.home, ".config"),
 		"XDG_STATE_HOME":         filepath.Join(w.home, ".local", "state"),
 		"XDG_DATA_HOME":          filepath.Join(w.home, ".local", "share"),
@@ -301,8 +288,7 @@ func (w *world) start(args ...string) error {
 		return err
 	}
 	w.s = s
-	s.waitFor(w.suite.timeout, func(screen string) bool { return strings.TrimSpace(screen) != "" || s.exited() })
-	s.settle(w.suite.timeout)
+	w.settle(s)
 	return nil
 }
 
@@ -313,61 +299,54 @@ func (w *world) session() (*session, error) {
 	return w.s, nil
 }
 
-// waitLoaded gives konto time to finish its first load before input: keys
-// sent while "loading journal…" shows are (rightly) ignored; the Reports view fills in a moment later.
-func (w *world) waitLoaded(s *session) {
-	s.waitFor(w.suite.timeout, func(screen string) bool {
-		return !strings.Contains(screen, "loading journal…") && !strings.Contains(screen, "loading the reports…") &&
-			!strings.Contains(screen, "loading the forecast…")
-	})
+// waitLoaded waits until konto is idle: its first load done, keys sent while "loading journal…" shows
+// being (rightly) ignored, and every later load, write or plan landed.
+func (w *world) waitLoaded(s *session) { s.settle(w.suite.timeout) }
+
+// settle waits for konto to finish what the last input started. A slowed hledger is there to watch work in
+// flight, so then it only waits for the input to be taken in.
+func (w *world) settle(s *session) {
+	if w.shim.DelayMs > 0 {
+		s.handled(w.suite.timeout)
+		return
+	}
+	s.settle(w.suite.timeout)
 }
 
-// press sends keys and waits for the screen to settle.
+// awaitIdle waits until no load, write or plan is in flight, so what comes next sees its result.
+func (w *world) awaitIdle() error {
+	s, err := w.session()
+	if err != nil {
+		return err
+	}
+	if !s.settle(w.suite.timeout) {
+		return fmt.Errorf("konto still busy after %s:\n%s", w.suite.timeout, s.screenText())
+	}
+	return nil
+}
+
+// press sends keys, each once konto is idle, and waits for what each started to finish.
 func (w *world) press(keys ...string) error {
 	s, err := w.session()
 	if err != nil {
 		return err
 	}
-	w.waitLoaded(s)
 	for _, k := range keys {
 		b, err := keyBytes(k)
 		if err != nil {
 			return err
 		}
+		w.waitLoaded(s)
 		if err := s.send(b); err != nil {
 			return err
 		}
-		s.settle(w.suite.timeout)
-		if writeKeys[k] { // a write is followed by a reload; what comes next must see its result
-			if err := w.awaitReload(); err != nil {
-				return err
-			}
-		}
+		w.settle(s)
 	}
 	return nil
 }
 
 // spinner is the status bar's mark of a write or reload in flight.
 const spinner = "⣾"
-
-// writeKeys are the keys that can start a write: y answers a write's question, Enter and Ctrl+S save the
-// Scheduled form. r reloads too but is left out: a scenario watches its spinner.
-var writeKeys = map[string]bool{"y": true, "Enter": true, "Ctrl+S": true}
-
-// awaitReload waits for the write or reload in flight to land, so what comes next sees its result; with none
-// in flight it returns at once.
-func (w *world) awaitReload() error {
-	return w.eventually(func() error {
-		s, err := w.session()
-		if err != nil {
-			return err
-		}
-		if strings.Contains(s.screenText(), spinner) {
-			return errors.New("still reloading")
-		}
-		return nil
-	})
-}
 
 // dump writes the failed scenario's screen, stderr and hledger calls.
 func (w *world) dump(name string) {

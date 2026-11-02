@@ -37,4 +37,4 @@
  currency            [EUR]  PLN
  from account        —
  to account          —
- Tab next field · ←/→ choose · Enter save · Esc cancel
+ Tab/↑/↓ field · ←/→ choose · Enter save · Esc cancel

@@ -10,6 +10,7 @@ import (
 
 	"github.com/sbradl/konto/internal/domain"
 	forecastsvc "github.com/sbradl/konto/internal/forecast"
+	"github.com/sbradl/konto/internal/ui/uitest"
 )
 
 // countingLoader loads a journal with one more transaction on every load.
@@ -76,8 +77,18 @@ func TestAnOlderReloadLandingLastIsDropped(t *testing.T) {
 	updated, cmd := updated.Update(older)
 
 	model = updated.(Model)
-	if cmd != nil || !strings.Contains(firstLine(model), "3 txns") || model.refreshing {
-		t.Errorf("cmd %v, refreshing %v, tab bar %q; want the newer load kept", cmd, model.refreshing, firstLine(model))
+	if cmd != nil || !strings.Contains(firstLine(model), "3 txns") || model.busy() {
+		t.Errorf("cmd %v, refreshing %v, tab bar %q; want the newer load kept", cmd, model.busy(), firstLine(model))
+	}
+}
+
+func TestEachReloadIsNumberedOneOnFromTheFirstLoad(t *testing.T) {
+	model, _ := press(generationModel(t), "r")
+
+	updated, _ := model.Update(ledgerLoadedMsg{load: 1, ledger: ledgerWith(7)})
+
+	if got := firstLine(updated.(Model)); !strings.Contains(got, "7 txns") {
+		t.Errorf("tab bar %q; want the result of reload 1 taken in", got)
 	}
 }
 
@@ -88,7 +99,7 @@ func TestAReloadStillInFlightKeepsTheSpinnerWhenAnOlderOneLands(t *testing.T) {
 
 	updated, _ := model.Update(first())
 
-	if !updated.(Model).refreshing {
+	if !updated.(Model).busy() {
 		t.Error("the spinner must show until the newest reload lands")
 	}
 }
@@ -106,11 +117,11 @@ func TestReportsAndForecastsOfAnOlderReloadAreDropped(t *testing.T) {
 	}
 
 	model, _ = press(updated.(Model), "5")
-	if content := plain(model.View().Content); !strings.Contains(content, "build 3") {
+	if content := uitest.Plain(model.View().Content); !strings.Contains(content, "build 3") {
 		t.Errorf("reports view:\n%s", content)
 	}
 	model, _ = press(model, "4")
-	if content := plain(model.View().Content); !strings.Contains(content, "╭─ B3 ") {
+	if content := uitest.Plain(model.View().Content); !strings.Contains(content, "╭─ B3 ") {
 		t.Errorf("forecast view:\n%s", content)
 	}
 }
@@ -129,5 +140,22 @@ func TestAnExportReadAgainForAnOlderReloadIsDropped(t *testing.T) {
 
 	if staged, _ := updated.(Model).imports.Staged(); len(staged.Rows) != len(earlier.Rows) {
 		t.Errorf("rows %d, want the %d staged before the newer reload", len(staged.Rows), len(earlier.Rows))
+	}
+}
+
+func TestAnExportOpenedBeforeAReloadIsDropped(t *testing.T) {
+	importer := &fakeImporter{entries: []domain.FileEntry{{Name: "sept.csv"}}, staged: sampleStaged()}
+	model := startedWithImporter(t, importer)
+	model, cmd := press(model, "n")
+	model = deliver(model, cmd)
+	model, _ = pressCode(model, tea.KeyDown)
+	model, open := pressCode(model, tea.KeyEnter)
+	model, reload := press(model, "r")
+	model = deliver(model, reload)
+
+	updated, _ := model.Update(open())
+
+	if _, staged := updated.(Model).imports.Staged(); staged {
+		t.Error("an export read against the journal before the reload was staged")
 	}
 }

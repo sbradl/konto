@@ -1,8 +1,14 @@
 package journal
 
 import (
+	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
+	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -52,6 +58,59 @@ func TestApplyRefusesAnEditItDoesNotKnowAndWritesNothing(t *testing.T) {
 	if got := readFile(t, file.path); got != directive+"\n" {
 		t.Errorf("journal = %q, want it untouched", got)
 	}
+}
+
+// editKinds is a zero value of every domain.Edit implementation; TestApplyHandlesEveryKindOfEdit keeps it
+// complete against the domain's source.
+var editKinds = []domain.Edit{
+	domain.SetAccountTag{},
+	domain.RemoveAccountTag{},
+	domain.Declare{},
+	domain.AddTransactions{},
+	domain.SetCategoryRule{},
+	domain.SetCarry{},
+	domain.DeleteRule{},
+	domain.AddRule{},
+	domain.ReplaceRule{},
+}
+
+// The domain's edits are a closed set (the unexported isEdit marker), so apply can switch over all of them:
+// a new kind of edit fails here until apply has a case for it.
+func TestApplyHandlesEveryKindOfEdit(t *testing.T) {
+	kinds := make([]string, 0, len(editKinds))
+	for _, edit := range editKinds {
+		kinds = append(kinds, reflect.TypeOf(edit).Name())
+		if err := journalWith(t, "x\n").Apply(domain.Changeset{Edits: []domain.Edit{edit}}); err != nil &&
+			strings.Contains(err.Error(), "unsupported edit") {
+			t.Errorf("apply does not handle %T", edit)
+		}
+	}
+	if marked := editImplementations(t); !slices.Equal(marked, slices.Sorted(slices.Values(kinds))) {
+		t.Errorf("domain.Edit implementations = %v, editKinds = %v; add the new kind to both", marked, kinds)
+	}
+}
+
+// editImplementations are the types the domain package gives the isEdit marker, sorted by name.
+func editImplementations(t *testing.T) []string {
+	t.Helper()
+	files, err := filepath.Glob(filepath.Join("..", "domain", "*.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, path := range files {
+		parsed, err := parser.ParseFile(token.NewFileSet(), path, nil, parser.SkipObjectResolution)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, decl := range parsed.Decls {
+			if fn, ok := decl.(*ast.FuncDecl); ok && fn.Name.Name == "isEdit" && fn.Recv != nil {
+				names = append(names, fmt.Sprint(fn.Recv.List[0].Type))
+			}
+		}
+	}
+	slices.Sort(names)
+	return names
 }
 
 func TestApplyReplacesATagWithTheSameKey(t *testing.T) {

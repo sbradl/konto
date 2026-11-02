@@ -12,15 +12,13 @@ import (
 	"github.com/sbradl/konto/internal/domain"
 	forecastsvc "github.com/sbradl/konto/internal/forecast"
 	"github.com/sbradl/konto/internal/ui/theme"
+	"github.com/sbradl/konto/internal/ui/uitest"
 )
 
 var (
-	escapes = regexp.MustCompile(`\x1b\[[0-9;:]*m`)
 	braille = regexp.MustCompile(`[\x{2801}-\x{28FF}]`)
-	style   = domain.AmountStyle{Spaced: true, DecimalMark: ",", GroupMark: ".", GroupSize: 3}
+	style   = domain.DefaultAmount("EUR").Style
 )
-
-func plain(s string) string { return escapes.ReplaceAllString(s, "") }
 
 func day(s string) time.Time { d, _ := time.Parse(time.DateOnly, s); return d }
 
@@ -59,7 +57,7 @@ func showing(width, height int) Model {
 }
 
 func TestNothingLoadedYetSaysSo(t *testing.T) {
-	if view := plain(New().Resize(100, 30).View()); !strings.Contains(view, "loading the forecast") {
+	if view := uitest.Plain(New().Resize(100, 30).View()); !strings.Contains(view, "loading the forecast") {
 		t.Errorf("view:\n%s", view)
 	}
 }
@@ -67,13 +65,13 @@ func TestNothingLoadedYetSaysSo(t *testing.T) {
 func TestNoOpenAccountsSaysThereIsNothingToForecast(t *testing.T) {
 	model := New().Resize(100, 30).WithForecast(forecastsvc.Forecast{})
 
-	if view := plain(model.View()); !strings.Contains(view, "nothing to forecast") || model.HiddenPanels() != 0 {
+	if view := uitest.Plain(model.View()); !strings.Contains(view, "nothing to forecast") || model.HiddenPanels() != 0 {
 		t.Errorf("view:\n%s", view)
 	}
 }
 
 func TestOneChartTitledByItsCurrencyDrawnWithBrailleOverAMilestoneTable(t *testing.T) {
-	view := plain(showing(180, 60).View())
+	view := uitest.Plain(showing(180, 60).View())
 
 	for _, want := range []string{"╭─ EUR ", "╭─ MILESTONES "} {
 		if strings.Count(view, want) != 1 {
@@ -97,7 +95,7 @@ func TestTheLegendNamesEveryAccountInItsColour(t *testing.T) {
 
 func TestTheXAxisRunsFromTheMonthSixMonthsBackToTheMonthTwelveAhead(t *testing.T) {
 	var labels string
-	for row := range strings.SplitSeq(plain(showing(180, 60).View()), "\n") {
+	for row := range strings.SplitSeq(uitest.Plain(showing(180, 60).View()), "\n") {
 		if strings.Contains(row, "Mar") && strings.Contains(row, "Sep") {
 			labels = row
 			break
@@ -111,13 +109,13 @@ func TestTheXAxisRunsFromTheMonthSixMonthsBackToTheMonthTwelveAhead(t *testing.T
 }
 
 func TestYLabelsCountThousands(t *testing.T) {
-	if !regexp.MustCompile(`\d+\.\dk`).MatchString(plain(showing(180, 60).View())) {
+	if !regexp.MustCompile(`\d+\.\dk`).MatchString(uitest.Plain(showing(180, 60).View())) {
 		t.Error("no y label is in thousands")
 	}
 }
 
 func TestTheMilestoneTableShowsEachAccountAcrossTheMonths(t *testing.T) {
-	view := plain(showing(180, 60).View())
+	view := uitest.Plain(showing(180, 60).View())
 
 	for _, want := range []string{
 		"today", "+3 months", "+6 months", "+12 months",
@@ -137,7 +135,7 @@ func TestNegativeBalancesInTheTableAreRed(t *testing.T) {
 
 	var table string
 	for row := range strings.SplitSeq(raw, "\n") {
-		if strings.Contains(row, "liabilities:creditcard") && strings.Contains(plain(row), "-140,00 EUR") {
+		if strings.Contains(row, "liabilities:creditcard") && strings.Contains(uitest.Plain(row), "-140,00 EUR") {
 			table = row
 		}
 	}
@@ -155,7 +153,7 @@ func TestSeveralCurrenciesStackAChartEachAndGroupTheTable(t *testing.T) {
 	forecast.Charts = append(forecast.Charts, forecastsvc.Chart{Commodity: "PLN", Lines: []forecastsvc.Line{pln}})
 
 	model := New().Resize(180, 60).WithForecast(forecast)
-	view := plain(model.View())
+	view := uitest.Plain(model.View())
 
 	if strings.Count(view, "╭─ EUR ") != 1 || strings.Count(view, "╭─ PLN ") != 1 || model.HiddenPanels() != 0 {
 		t.Errorf("view:\n%s", view)
@@ -175,7 +173,7 @@ func TestChartsGiveWayBeforeTheTableWhenTheTerminalIsSmall(t *testing.T) {
 	if model.HiddenPanels() != 1 {
 		t.Errorf("hidden = %d, want the last chart", model.HiddenPanels())
 	}
-	view := plain(model.View())
+	view := uitest.Plain(model.View())
 	if strings.Count(view, "╭─ EUR ") != 1 || strings.Count(view, "╭─ PLN ") != 1 || strings.Contains(view, "╭─ CZK ") ||
 		!strings.Contains(view, "╭─ MILESTONES ") {
 		t.Errorf("view:\n%s", view)
@@ -185,8 +183,8 @@ func TestChartsGiveWayBeforeTheTableWhenTheTerminalIsSmall(t *testing.T) {
 func TestNothingFitsAboveTheTableInATinyTerminal(t *testing.T) {
 	model := New().Resize(100, 8).WithForecast(sample())
 
-	if model.HiddenPanels() != 1 || strings.Contains(plain(model.View()), "╭─ EUR ") {
-		t.Errorf("hidden = %d; view:\n%s", model.HiddenPanels(), plain(model.View()))
+	if model.HiddenPanels() != 1 || strings.Contains(uitest.Plain(model.View()), "╭─ EUR ") {
+		t.Errorf("hidden = %d; view:\n%s", model.HiddenPanels(), uitest.Plain(model.View()))
 	}
 }
 
@@ -199,7 +197,7 @@ func TestTheViewFillsTheTerminalExactly(t *testing.T) {
 		}
 		for _, line := range lines {
 			if lipgloss.Width(line) > size[0] {
-				t.Errorf("%dx%d: a line is %d cells wide: %q", size[0], size[1], lipgloss.Width(line), plain(line))
+				t.Errorf("%dx%d: a line is %d cells wide: %q", size[0], size[1], lipgloss.Width(line), uitest.Plain(line))
 				break
 			}
 		}
@@ -207,7 +205,7 @@ func TestTheViewFillsTheTerminalExactly(t *testing.T) {
 }
 
 func TestANarrowChartIsLeftOutButItsLegendStays(t *testing.T) {
-	view := plain(New().Resize(20, 30).WithForecast(sample()).View())
+	view := uitest.Plain(New().Resize(20, 30).WithForecast(sample()).View())
 
 	if braille.MatchString(view) || !strings.Contains(view, "assets:") {
 		t.Errorf("view:\n%s", view)
@@ -220,7 +218,7 @@ func TestFlatLinesAndEmptyRangesStillDraw(t *testing.T) {
 		Charts: []forecastsvc.Chart{{Commodity: "EUR", Lines: []forecastsvc.Line{course("assets:spare", 0, 0, 0)}}},
 	}
 
-	view := plain(New().Resize(120, 40).WithForecast(flat).View())
+	view := uitest.Plain(New().Resize(120, 40).WithForecast(flat).View())
 
 	if !strings.Contains(view, "╭─ EUR ") || !strings.Contains(view, "0,00 EUR") {
 		t.Errorf("view:\n%s", view)
@@ -241,7 +239,7 @@ func TestALongLegendWrapsOntoMoreRowsAndNamesEveryAccount(t *testing.T) {
 	}
 	forecast.Charts[0].Lines = lines
 
-	view := plain(New().Resize(100, 60).WithForecast(forecast).View())
+	view := uitest.Plain(New().Resize(100, 60).WithForecast(forecast).View())
 
 	rows := 0
 	for row := range strings.SplitSeq(view, "\n") {

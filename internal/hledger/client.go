@@ -16,43 +16,24 @@ import (
 	"github.com/sbradl/konto/internal/domain"
 )
 
-// runner is the single seam to the hledger process (spec §4.3): it runs
-// hledger with args and returns its standard output and standard error.
-type runner func(ctx context.Context, args ...string) (stdout []byte, stderr string, err error)
-
-// inputRunner is the seam for hledger reading journal text from standard input.
-type inputRunner func(ctx context.Context, input string, args ...string) (stdout []byte, stderr string, err error)
+// runner is the single seam to the hledger process (spec §4.3): it runs hledger with args, reading stdin
+// (nil for none), and returns its standard output and standard error.
+type runner func(ctx context.Context, stdin io.Reader, args ...string) (stdout []byte, stderr string, err error)
 
 // Client asks hledger about one journal, made of one file or several (runJournal says how they are passed).
 type Client struct {
-	run       runner
-	runInput  inputRunner
-	files     func() []string                             // the files making up the journal, asked for on every call
-	tempRules func(rules string) (path string, err error) // the seam for the CSV rules file
+	run   runner
+	files func() []string // the files making up the journal, asked for on every call
 }
 
-// callTimeout is how long one hledger call may take before it is killed and fails: generous, since a large
-// journal takes about a second a call (ADR 0013), but a hung hledger must not leave a view waiting forever.
-const callTimeout = 2 * time.Minute
+// callBinary is the hledger binary at path with how long one call may take before it is killed and fails:
+// generous, since a large journal takes about a second a call (ADR 0013), but a hung hledger must not leave a
+// view waiting forever.
+func callBinary(path string) binary { return binary{path, 2 * time.Minute} }
 
 // New returns a Client that runs the hledger binary bin on the journal made of the files named by files.
 func New(bin string, files func() []string) *Client {
-	return &Client{
-		run: execRunner(bin, callTimeout), runInput: execInputRunner(bin, callTimeout),
-		files: files, tempRules: osRules,
-	}
-}
-
-func execRunner(bin string, timeout time.Duration) runner {
-	return func(ctx context.Context, args ...string) ([]byte, string, error) {
-		return binary{bin, timeout}.run(ctx, nil, args)
-	}
-}
-
-func execInputRunner(bin string, timeout time.Duration) inputRunner {
-	return func(ctx context.Context, input string, args ...string) ([]byte, string, error) {
-		return binary{bin, timeout}.run(ctx, strings.NewReader(input), args)
-	}
+	return &Client{run: callBinary(bin).run, files: files}
 }
 
 // binary is the hledger executable and how long one call of it may take.
@@ -63,7 +44,7 @@ type binary struct {
 
 // run runs the binary with args and stdin, killing it once the timeout has passed; it returns stdout and
 // stderr.
-func (b binary) run(ctx context.Context, stdin io.Reader, args []string) (stdout []byte, stderr string, err error) {
+func (b binary) run(ctx context.Context, stdin io.Reader, args ...string) (stdout []byte, stderr string, err error) {
 	ctx, cancel := context.WithTimeout(ctx, b.timeout)
 	defer cancel()
 	var captured bytes.Buffer
@@ -88,7 +69,7 @@ func (c *Client) query(ctx context.Context, args ...string) ([]byte, error) {
 
 // queryText is query on journal text given on standard input instead of the client's journal.
 func (c *Client) queryText(ctx context.Context, text string, args ...string) ([]byte, error) {
-	out, stderr, err := c.runInput(ctx, text, append([]string{"-f", "-"}, args...)...)
+	out, stderr, err := c.run(ctx, strings.NewReader(text), append([]string{"-f", "-"}, args...)...)
 	if err != nil {
 		return nil, failure(stderr, err, messageOf(args[0]), "hledger "+args[0])
 	}
@@ -119,13 +100,13 @@ func failure(stderr string, err error, messageOf func(string) string, what strin
 func (c *Client) runJournal(ctx context.Context, args []string) (stdout []byte, stderr string, err error) {
 	files := c.files()
 	if len(files) == 1 {
-		return c.run(ctx, append([]string{"-f", files[0]}, args...)...)
+		return c.run(ctx, nil, append([]string{"-f", files[0]}, args...)...)
 	}
 	var journal strings.Builder
 	for _, file := range files {
 		journal.WriteString("include " + file + "\n")
 	}
-	return c.runInput(ctx, journal.String(), append([]string{"-f", "-"}, args...)...)
+	return c.run(ctx, strings.NewReader(journal.String()), append([]string{"-f", "-"}, args...)...)
 }
 
 // jsonTransaction is the part of `hledger print -O json` konto reads.
@@ -194,7 +175,8 @@ func readTransactions(out []byte, keep func(jsonTransaction) bool) ([]domain.Tra
 			return nil, fmt.Errorf("reading hledger print output: %w", err)
 		}
 		transaction := domain.Transaction{
-			Date: date, Description: entry.Description, Comment: strings.TrimSpace(entry.Comment), Postings: postings,
+			Date: date, Description: entry.Description, Comment: strings.TrimSpace(entry.Comment),
+			Tags: tagMap(entry.Tags), Postings: postings,
 		}
 		if len(entry.SourcePos) > 0 {
 			transaction.Source = domain.SourcePos{File: entry.SourcePos[0].Name, Line: entry.SourcePos[0].Line}
@@ -207,42 +189,20 @@ func readTransactions(out []byte, keep func(jsonTransaction) bool) ([]domain.Tra
 // ConvertCSV converts the bank export at csvPath to transactions with the given CSV rules, as hledger
 // reads them: the rules decide every field, the account of each side and the comments.
 func (c *Client) ConvertCSV(ctx context.Context, csvPath, rules string) ([]domain.Transaction, error) {
-	rulesPath, err := c.tempRules(rules)
-	if err != nil {
-		return nil, err
+	file, err := os.CreateTemp("", "konto-*.rules")
+	if err == nil { // one check for each way the file can fail: creating, writing or closing it
+		defer func() { _ = os.Remove(file.Name()) }()
+		_, err = file.WriteString(rules)
+		err = errors.Join(err, file.Close())
 	}
-	defer func() { _ = os.Remove(rulesPath) }()
-	out, stderr, err := c.run(ctx, "print", "-f", csvPath, "--rules-file", rulesPath, "-O", "json")
+	if err != nil {
+		return nil, fmt.Errorf("writing CSV rules: %w", err)
+	}
+	out, stderr, err := c.run(ctx, nil, "print", "-f", csvPath, "--rules-file", file.Name(), "-O", "json")
 	if err != nil {
 		return nil, failure(stderr, err, firstMessageLine, "hledger converting "+csvPath)
 	}
 	return readTransactions(out, nil)
-}
-
-// tempFile is a file just created for the CSV rules.
-type tempFile interface {
-	io.WriteCloser
-	Name() string
-}
-
-// writeRules puts the rules in a new temporary file, whose path it returns; a file it could not
-// fill is removed again.
-func writeRules(create func() (tempFile, error), rules string) (string, error) {
-	file, err := create()
-	if err != nil {
-		return "", fmt.Errorf("writing CSV rules: %w", err)
-	}
-	_, writeErr := io.WriteString(file, rules)
-	if err := errors.Join(writeErr, file.Close()); err != nil {
-		_ = os.Remove(file.Name())
-		return "", fmt.Errorf("writing CSV rules: %w", err)
-	}
-	return file.Name(), nil
-}
-
-// osRules writes the CSV rules to a temporary file on disk.
-func osRules(rules string) (string, error) {
-	return writeRules(func() (tempFile, error) { return os.CreateTemp("", "konto-*.rules") }, rules)
 }
 
 // postings are the transaction's postings with their amounts.

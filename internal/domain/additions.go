@@ -1,7 +1,6 @@
 package domain
 
 import (
-	"slices"
 	"strings"
 	"time"
 )
@@ -28,7 +27,7 @@ func (t NewTransaction) Lines() []string {
 	lines := make([]string, 0, 1+len(t.Postings))
 	lines = append(lines, header+TrailingComment(t.Comment))
 	for _, posting := range t.Postings {
-		lines = append(lines, "    "+posting.text())
+		lines = append(lines, posting.Line())
 	}
 	return lines
 }
@@ -36,7 +35,8 @@ func (t NewTransaction) Lines() []string {
 // amountGap ends the account name: hledger reads a single space as part of the name.
 const amountGap = "  "
 
-func (p NewPosting) text() string {
+// Line is the posting as an indented journal line, in a transaction or a `~` rule alike.
+func (p NewPosting) Line() string {
 	var after []string
 	if len(p.Amount) > 0 {
 		after = append(after, p.Amount[0].Format())
@@ -48,7 +48,7 @@ func (p NewPosting) text() string {
 	if len(after) > 0 {
 		text += amountGap + strings.Join(after, " ")
 	}
-	return text + TrailingComment(p.Comment)
+	return "    " + text + TrailingComment(p.Comment)
 }
 
 // TrailingComment is the comment as it ends a journal line, two spaces and a semicolon before it; nothing for
@@ -101,32 +101,8 @@ const RuleTag = "konto-rule"
 // categories.rules file beside the journal.
 type SetCategoryRule struct {
 	ID   string
-	Text string
+	Text string // the block as categories.rules spells it
 }
-
-// RuleIDLine is the line of a categories.rules block that tags the posting with the rule's id, indentation
-// aside. Blank lines separate the blocks.
-func RuleIDLine(id string) string { return "comment2 " + RuleTag + ":" + id }
-
-// Block is where the rule's block is among the lines of categories.rules: its first line and the index after
-// its last; false when no block has the rule's id.
-func (e SetCategoryRule) Block(lines []string) (first, end int, found bool) {
-	at := slices.IndexFunc(lines, func(line string) bool { return strings.TrimSpace(line) == RuleIDLine(e.ID) })
-	if at < 0 {
-		return 0, 0, false
-	}
-	first, end = at, at+1
-	for first > 0 && !IsBlankLine(lines[first-1]) {
-		first--
-	}
-	for end < len(lines) && !IsBlankLine(lines[end]) {
-		end++
-	}
-	return first, end, true
-}
-
-// IsBlankLine reports a line of nothing but spaces, the line that ends a block of categories.rules.
-func IsBlankLine(line string) bool { return strings.TrimSpace(line) == "" }
 
 func (Declare) isEdit()         {}
 func (AddTransactions) isEdit() {}

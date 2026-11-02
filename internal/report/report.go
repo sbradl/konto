@@ -162,10 +162,7 @@ func statementSection(activity []domain.Account, sec section) (domain.MultiAmoun
 		if !strings.HasPrefix(account.Name, sec.prefix) {
 			continue
 		}
-		amount := account.Balance
-		if sec.prefix == domain.IncomePrefix {
-			amount = amount.Negated() // hledger books income as credits
-		}
+		amount := account.Reported()
 		sum = sum.Plus(amount)
 		leaves = append(leaves, domain.ReportRow{Kind: domain.RowLeaf, Label: account.Name, Amount: amount})
 	}

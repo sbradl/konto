@@ -55,8 +55,10 @@ cmd/konto            Composition root. Only package importing concretes from eve
 internal/ui/…         Frameworks & Drivers. Bubble Tea / Lip Gloss confined here.
 internal/{ledger,accounts,checks,report,csvimport,periodic,forecast,entry}
                      Use cases. Plain Go, no tea/lipgloss/exec. Each declares its own ports.
-internal/hledger     Adapter → the hledger binary.       ┐ import domain only;
+internal/hledger     Adapter → the hledger binary.       ┐ import domain (and support) only;
 internal/journal     Adapter → the journal text file.    ┘ satisfy the ports structurally
+internal/{parallel,rulesfile}
+                     Support. Stdlib-only helpers use cases and adapters share; import nothing of konto's.
 internal/domain      Entities. Types + pure rules. Imports nothing of konto's.
 ```
 
@@ -436,7 +438,8 @@ one (ADR 0012).
 remove account-directive tag, declare account / payee, append / replace / delete a `~`
 block, append a `categories.rules` block or matcher line. Produced by `Account`,
 `StagedImport` and the `periodic` service; applied by `internal/journal` (§4.2). Every write
-runs **validate → apply → refresh**: pre-check via hledger on stdin, `Apply`, then
+runs **prepare → validate → apply → refresh**: the carry writer's `Prepare` adds the carry once (ADR 0013),
+that same prepared changeset is pre-checked via hledger on stdin and then `Apply`'d as it is, then
 `writtenMsg` and a reload (§4.4).
 
 ---
@@ -472,11 +475,13 @@ Views never reference each other. Cross-view effects are mediated: a view acts �
 There is no `View` interface. Each view package (`dashboard`, `imports`, `scheduled`, `forecast`,
 `reports`) exports a value `Model` with pure methods: `Resize(w, h)`, `View() string`, `Key(key)` →
 `(Model, action)`, and `With…` setters for the data the root hands it. A view holds **no ports and runs no
-commands**: its action (an enum or small struct, e.g. `dashboard.CloseSelected`, `imports.Action{Open:
-path}`, `scheduled.Action{Save: …}`) tells the root what to do, and the root plans, writes or loads.
+commands**: its action tells the root what to do, and the root plans, writes or loads. Every view's `Action`
+is a sealed interface (`interface{ isAction() }`) over small concrete types — `dashboard.CloseSelected{}`,
+`imports.Open{Path: …}`, `*scheduled.Save`, `reports.LoadReport{}` — nil asking for nothing, so an action
+that sets two things at once cannot be built; the root type-switches on it.
 
 The root drives the views through one table, `tabs()` in `tabs.go`: per tab its name, its hinted
-`keyBinding`s (status bar + `?` popup), and closures for `resize`, `view`, `key`, and optionally
+`layout.Binding`s (status bar + `?` popup) — each view exports its own `Bindings()` next to its `Key`, and closures for `resize`, `view`, `key`, and optionally
 `position` (cursor row / count), `hidden` (panels dropped, §6.8) and `captures`/`captured` (a dialog
 that takes every key as text). Adding a view is adding a row. Tests check every hinted key is handled
 and that `captures` and `captured` come together.
@@ -506,9 +511,10 @@ reload through one `reload()`, which raises the spinner; the landing load lowers
 
 ### 6.4 Keymaps
 
-Key names are plain strings (`tea.KeyPressMsg.String()`). The global keys are the root's (`onGlobalKey`,
-`globalKeys()` for the popup); each view's keys are its `Key` switch, hinted by its row of the tab table
-(§6.2). The `?` popup lays the global then the active view's bindings out in columns.
+Key names are plain strings (`tea.KeyPressMsg.String()`); the named keys more than one view reacts to are the
+`layout.Key…` constants, a view's own letters its own constants. The global keys are the root's
+(`onGlobalKey`, `globalKeys()` for the popup, `1`–N from the tab count); each view's keys are its `Key`
+switch, hinted by the `Bindings()` it exports (§6.2). The `?` popup lays the global then the active view's bindings out in columns.
 
 **Key principle:** every key is the **first letter of its action** where possible, and a
 letter means the same action in every view (`d` = delete, `n` new, `e` edit, `c` close,
@@ -519,7 +525,7 @@ letter means the same action in every view (`d` = delete, `n` new, `e` edit, `c`
 | Scope | Keys |
 |---|---|
 | Global | `1`–`5` views · `?` keys popup · `!` checks panel · `r` refresh · `q` / `Ctrl+C` quit · `Esc` cancel / close popup |
-| Movement | `↑`/`↓` row · `PgUp`/`PgDn` page · `Home`/`End` ends · `Tab`/`Shift+Tab` form fields. No `j`/`k`. |
+| Movement | `↑`/`↓` row · `PgUp`/`PgDn` page · `Home`/`End` ends — the same in every list, popup and scrolled view (`layout.Cursor`) · `Tab`/`Shift+Tab` or `↓`/`↑` form fields (in the Scheduled form's account picker the arrows move through the matches; `←`/`→` cycle a dropdown). No `j`/`k`. |
 | Dashboard | Accounts panel: `c` close · `o` reopen |
 | Import | `Enter` categorise row (popup: new rule / add to rule / once — `✓` rows: once only; picked with arrows + Enter) · `w` write import (y/n, only with no `?` rows) · `n` new file |
 | Scheduled | `n` new · `e` edit · `d` delete |
@@ -568,9 +574,10 @@ through. konto draws with hand-rolled helpers in `ui/layout`:
 | Helper | Use |
 |---|---|
 | `Panel`, `TitleRule`, `Fit`, `AlignRight`, `More` | bordered panels, popup title rules, cell fitting, `… N more` |
-| `Cursor` | the one selectable list per view (Accounts, rule list, import rows, pickers) |
+| `Cursor`, `Visible` | the one selectable list per view (Accounts, rule list, import rows, pickers), the dialogs' lists, and — offset only, `Scroll` — the Reports tables and the write preview |
 | `Edit` | text input of the forms, dialogs and pickers (typed text, backspace, clear) |
-| `Overlay`, `OverlayFlush`, `PopupHeight`, `Columns` | popups and dialogs (§6.5), the `?` reflow |
+| `Popup`, `PopupCapacity`, `Overlay`, `OverlayFlush`, `Columns` | every titled bottom popup — keys, checks, write preview, Import dialogs, Scheduled form (§6.5) — and the `?` reflow |
+| `Binding`, `Key…` | key hints and the shared key names |
 | `ChartStyle`, `Number` | `ntcharts` braille charts (Dashboard spend, Forecast) |
 
 The refresh spinner is a static `⣾` while `refreshing`; scrolling panels clamp their own offsets.
@@ -617,8 +624,9 @@ setting was either fixed or moved into the journal as an `account`-directive tag
 ### 7.1 Journal path (`internal/config`)
 
 Order: `--file` flag → `$LEDGER_FILE` → `~/.hledger.journal`.
-Resolve to an **absolute path at startup**; pass `-f <path>` explicitly on every hledger
-call. Nothing resolves to an existing file → first-run screen (§4.5).
+Resolve to an **absolute path at startup**; every hledger call names the journal explicitly:
+`-f <path>` for a single file, or `-f -` with standard input `include`-ing each file of the
+window (ADR 0013). Nothing resolves to an existing file → first-run screen (§4.5).
 
 `internal/config` only does this. Journal-intrinsic settings are `account` tags (§4.2);
 the check set is fixed (§4.6); CSV files are chosen with the Bubbles `filepicker` opening in

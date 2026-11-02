@@ -38,7 +38,7 @@ func TestBalancesReturnsEveryAccountWithItsAmounts(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	euro := domain.AmountStyle{Spaced: true, DecimalMark: ",", GroupMark: ".", GroupSize: 3}
+	euro := domain.DefaultAmount("EUR").Style
 	want := []domain.Account{
 		{Name: "assets:checking", Balance: domain.MultiAmount{{Commodity: "EUR", Mantissa: 1324000, Places: 2, Style: euro}}},
 		{Name: "assets:empty", Balance: domain.MultiAmount{}},
@@ -265,7 +265,7 @@ func TestMonthlyActivitySplitsTheAccountsByMonth(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	euro := domain.AmountStyle{Spaced: true, DecimalMark: ",", GroupMark: ".", GroupSize: 3}
+	euro := domain.DefaultAmount("EUR").Style
 	amount := func(mantissa int64) domain.MultiAmount {
 		return domain.MultiAmount{{Commodity: "EUR", Mantissa: mantissa, Places: 2, Style: euro}}
 	}
@@ -320,7 +320,7 @@ func TestTextBalancesAskAboutAssetsAndLiabilitiesBeforeTheDayFromStandardInput(t
 	var input string
 	var args []string
 	out := balanceReport(row("assets:checking", amountJSON("EUR", 90000, eurStyle)))
-	client := &Client{runInput: inputReturning(out, "", nil, &input, &args)}
+	client := &Client{run: inputReturning(out, "", nil, &input, &args)}
 
 	got, err := client.TextBalances(context.Background(), "journal text", time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC))
 
@@ -336,7 +336,7 @@ func TestTextBalancesAskAboutAssetsAndLiabilitiesBeforeTheDayFromStandardInput(t
 func TestTextBalancesReportHledgersWordsWhenItFails(t *testing.T) {
 	var input string
 	var args []string
-	client := &Client{runInput: inputReturning("", "bad journal\n", errors.New("exit 1"), &input, &args)}
+	client := &Client{run: inputReturning("", "bad journal\n", errors.New("exit 1"), &input, &args)}
 
 	_, err := client.TextBalances(context.Background(), "x", time.Time{})
 
@@ -348,7 +348,7 @@ func TestTextBalancesReportHledgersWordsWhenItFails(t *testing.T) {
 func TestTextBalancesRejectUnreadableOutput(t *testing.T) {
 	var input string
 	var args []string
-	client := &Client{runInput: inputReturning("oops", "", nil, &input, &args)}
+	client := &Client{run: inputReturning("oops", "", nil, &input, &args)}
 
 	if _, err := client.TextBalances(context.Background(), "x", time.Time{}); err == nil {
 		t.Error("want an error for output that is no report")

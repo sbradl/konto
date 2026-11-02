@@ -23,6 +23,7 @@ type layer int
 
 const (
 	layerDomain layer = iota + 1
+	layerSupport
 	layerAdapter
 	layerConfig
 	layerUseCase
@@ -35,6 +36,7 @@ const (
 
 var layerNames = map[layer]string{
 	layerDomain:  "domain",
+	layerSupport: "support",
 	layerAdapter: "adapter",
 	layerConfig:  "config",
 	layerUseCase: "use case",
@@ -53,6 +55,9 @@ var layers = map[string]layer{
 	"cmd/konto": layerCmd,
 
 	"internal/domain": layerDomain,
+
+	"internal/parallel":  layerSupport, // stdlib-only plumbing the use cases share; no domain knowledge
+	"internal/rulesfile": layerSupport, // the categories.rules line syntax the import and the journal adapter share
 
 	"internal/hledger": layerAdapter,
 	"internal/journal": layerAdapter,
@@ -75,6 +80,7 @@ var layers = map[string]layer{
 	"internal/ui/layout":  layerUILeaf,
 	"internal/ui/keys":    layerUILeaf,
 	"internal/ui/widgets": layerUILeaf,
+	"internal/ui/uitest":  layerUILeaf,
 
 	"internal/ui/dashboard": layerView,
 	"internal/ui/imports":   layerView,
@@ -84,6 +90,7 @@ var layers = map[string]layer{
 
 	"e2e":             layerE2E,
 	"e2e/hledgershim": layerE2E,
+	"e2e/shimconf":    layerE2E,
 }
 
 // mayImport lists the konto layers each layer may depend on. Dependencies
@@ -91,14 +98,15 @@ var layers = map[string]layer{
 // (ADR 0004); adapters and use cases meet only through consumer-side ports.
 var mayImport = map[layer][]layer{
 	layerDomain:  nil,
-	layerAdapter: {layerDomain},
+	layerSupport: nil,
+	layerAdapter: {layerDomain, layerSupport},
 	layerConfig:  {layerDomain},
-	layerUseCase: {layerDomain},
+	layerUseCase: {layerDomain, layerSupport},
 	layerUILeaf:  {layerDomain, layerUILeaf},
 	layerView:    {layerDomain, layerUseCase, layerUILeaf},
 	layerUIRoot:  {layerDomain, layerUseCase, layerUILeaf, layerView},
-	layerCmd:     {layerDomain, layerAdapter, layerConfig, layerUseCase, layerUILeaf, layerView, layerUIRoot},
-	layerE2E:     nil, // black box: drives the compiled binary only
+	layerCmd:     {layerDomain, layerSupport, layerAdapter, layerConfig, layerUseCase, layerUILeaf, layerView, layerUIRoot},
+	layerE2E:     {layerE2E}, // black box: drives the compiled binary only, sharing only the shim's config
 }
 
 // charmV2 is the only third-party code konto itself uses (spec §1), confined
@@ -135,8 +143,9 @@ var forbiddenStdlib = map[layer][]string{
 }
 
 // execAllowed lists the only packages that may start processes: the hledger
-// adapter, main (preflight), and the ui root ($EDITOR via tea.ExecProcess).
-// The e2e harness starts konto, the shim and hledger.
+// adapter (every hledger call, the preflight's included), main (builds the
+// $EDITOR command), and the ui root (runs it via tea.ExecProcess). The e2e
+// harness starts konto, the shim and hledger.
 var execAllowed = []string{"internal/hledger", "cmd/konto", "internal/ui", "e2e", "e2e/hledgershim"}
 
 // clockFree layers must take "today" as an injected func (ADR 0012).
@@ -500,6 +509,9 @@ func TestRules(t *testing.T) {
 		{"use case must not import adapter", "internal/report", "a.go", imports("report", k("internal/hledger")), "use case must not import internal/hledger"},
 		{"use case must not import use case", "internal/forecast", "a.go", imports("forecast", k("internal/periodic")), "use case must not import internal/periodic"},
 		{"use case imports domain", "internal/csvimport", "a.go", imports("csvimport", k("internal/domain")), ""},
+		{"use case imports support", "internal/checks", "a.go", imports("checks", k("internal/parallel")), ""},
+		{"support imports nothing of konto's", "internal/parallel", "a.go", imports("parallel", k("internal/domain")), "support must not import internal/domain"},
+		{"domain does not import support", "internal/domain", "a.go", imports("domain", k("internal/parallel")), "domain must not import internal/parallel"},
 		{"adapter must not import use case", "internal/hledger", "a.go", imports("hledger", k("internal/report")), "adapter must not import internal/report"},
 		{"adapter must not import adapter", "internal/journal", "a.go", imports("journal", k("internal/hledger")), "adapter must not import internal/hledger"},
 		{"config must not import adapter", "internal/config", "a.go", imports("config", k("internal/journal")), "config must not import internal/journal"},

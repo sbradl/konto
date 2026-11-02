@@ -1,0 +1,7 @@
+2026-09-01 Acme GmbH  ; September
+    assets:checking    2.000,00 EUR = 4.000,00 EUR
+    income:salary
+
+2026-09-14 Vermieter Mueller
+    expenses:rent      900,00 EUR  ; konto-rule:1
+    assets:checking

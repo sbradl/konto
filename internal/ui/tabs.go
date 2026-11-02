@@ -1,29 +1,42 @@
 package ui
 
-import tea "charm.land/bubbletea/v2"
+import (
+	tea "charm.land/bubbletea/v2"
+
+	"github.com/sbradl/konto/internal/ui/dashboard"
+	"github.com/sbradl/konto/internal/ui/imports"
+	"github.com/sbradl/konto/internal/ui/layout"
+	"github.com/sbradl/konto/internal/ui/reports"
+	"github.com/sbradl/konto/internal/ui/scheduled"
+)
 
 // tabCount is the number of v1 views.
 const tabCount = 5
 
 // tab is one view as the root drives it; adding a view is adding a tab. A view without a cursor, hidden
-// panels or a dialog of its own leaves the field nil; captures and captured are set together.
+// panels or a dialog of its own leaves the field nil.
 type tab struct {
 	name     string
-	keys     []keyBinding                         // what the status bar and the keys popup list
+	keys     []layout.Binding                     // what the status bar and the keys popup list
 	resize   func(Model, int, int) Model          // gives the view its content area
 	view     func(Model) string                   // draws the view
 	key      func(Model, string) (Model, tea.Cmd) // hands the view a key and runs what it asks for
 	position func(Model) (row, total int)         // the cursor row and the row count
 	hidden   func(Model) int                      // how many panels the terminal is too small to show
-	captures func(Model) bool                     // whether a dialog of the view has the keyboard
-	captured func(Model, string) (Model, tea.Cmd) // hands that dialog a key
+	capture  *capture                             // the view's dialog that can take the keyboard
+}
+
+// capture is a dialog of a view that, while active, takes every key as text.
+type capture struct {
+	active func(Model) bool                     // whether the dialog has the keyboard
+	key    func(Model, string) (Model, tea.Cmd) // hands the dialog a key
 }
 
 // tabs are the five v1 views, in tab order; number key i+1 selects tab i.
 func tabs() [tabCount]tab {
 	return [tabCount]tab{
 		{
-			name: "dash", keys: []keyBinding{{"c", "close"}, {"o", "reopen"}},
+			name: "dash", keys: dashboard.Bindings(),
 			resize:   func(m Model, w, h int) Model { m.dash = m.dash.Resize(w, h); return m },
 			view:     func(m Model) string { return m.dash.View() },
 			key:      Model.onDashboardKey,
@@ -31,22 +44,20 @@ func tabs() [tabCount]tab {
 			hidden:   func(m Model) int { return m.dash.HiddenPanels() },
 		},
 		{
-			name: "import", keys: []keyBinding{{"n", "new file"}, {"Enter", "categorise"}, {"w", "write"}},
+			name: "import", keys: imports.Bindings(),
 			resize:   func(m Model, w, h int) Model { m.imports = m.imports.Resize(w, h); return m },
 			view:     func(m Model) string { return m.imports.View() },
 			key:      Model.onImportKey,
 			position: func(m Model) (row, total int) { return m.imports.Position() },
-			captures: func(m Model) bool { return m.importer != nil && m.imports.Capturing() },
-			captured: Model.onImportKey,
+			capture:  &capture{active: Model.importDialogOpen, key: Model.onImportKey},
 		},
 		{
-			name: "sched", keys: []keyBinding{{"n", "new"}, {"e", "edit"}, {"d", "delete"}},
+			name: "sched", keys: scheduled.Bindings(),
 			resize:   func(m Model, w, h int) Model { m.scheduled = m.scheduled.Resize(w, h); return m },
 			view:     func(m Model) string { return m.scheduled.View() },
 			key:      Model.onScheduledKey,
 			position: func(m Model) (row, total int) { return m.scheduled.Position() },
-			captures: func(m Model) bool { return m.scheduled.Capturing() },
-			captured: Model.onFormKey,
+			capture:  &capture{active: func(m Model) bool { return m.scheduled.Capturing() }, key: Model.onFormKey},
 		},
 		{
 			name:   "forecast",
@@ -55,7 +66,7 @@ func tabs() [tabCount]tab {
 			hidden: func(m Model) int { return m.forecasts.HiddenPanels() },
 		},
 		{
-			name: "reports", keys: []keyBinding{{"p", "period"}},
+			name: "reports", keys: reports.Bindings(),
 			resize: func(m Model, w, h int) Model { m.reports = m.reports.Resize(w, h); return m },
 			view:   func(m Model) string { return m.reports.View() },
 			key:    Model.onReportsKey,
@@ -75,7 +86,7 @@ func (m Model) onActiveViewKey(key string) (Model, tea.Cmd) {
 }
 
 // onCapturedKey hands a key to the dialog that has the keyboard: the Import dialog or the Scheduled form.
-func (m Model) onCapturedKey(key string) (Model, tea.Cmd) { return m.activeTab().captured(m, key) }
+func (m Model) onCapturedKey(key string) (Model, tea.Cmd) { return m.activeTab().capture.key(m, key) }
 
 // position is the active view's cursor row and row count; views without a cursor have none.
 func (m Model) position() (row, total int) {

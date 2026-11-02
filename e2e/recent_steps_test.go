@@ -232,7 +232,6 @@ func registerRecentSteps(sc *godog.ScenarioContext, w *world) {
 	step(sc, `^the Recent rows for "([^"]*)" show "([^"]*)"$`, w.expectEveryRecentRowShows)
 	step(sc, `^no Recent row is highlighted with background (\d+)$`, func(int) error { return w.expectNoRecentHighlight() })
 	step(sc, `^I do not see "\?" in any Recent row$`, w.expectNoQuestionMarkInRecent)
-	step(sc, `^I do not see the word "([^"]*)" anywhere$`, func(word string) error { return w.expectScreen(false, word) })
 	step(sc, `^the Recent panel ends with "… N more" where N > 0$`, w.expectRecentOverflow)
 	step(sc, `^the journal "([^"]*)" with (\d+) transactions$`, func(name string, n int) error {
 		var b strings.Builder

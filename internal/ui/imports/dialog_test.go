@@ -6,6 +6,7 @@ import (
 
 	"github.com/sbradl/konto/internal/csvimport"
 	"github.com/sbradl/konto/internal/domain"
+	"github.com/sbradl/konto/internal/ui/uitest"
 )
 
 func categorisable() csvimport.Staged {
@@ -45,7 +46,7 @@ func typed(m Model, text string) Model {
 	return m
 }
 
-func screen(m Model) string { return plain(m.View()) }
+func screen(m Model) string { return uitest.Plain(m.View()) }
 
 // onRow moves the cursor to the row n (0-based) and opens the categorise popup.
 func onRow(m Model, n int) Model {
@@ -95,14 +96,14 @@ func TestEscClosesTheDialogAndChangesNothing(t *testing.T) {
 
 func TestChoicesAreMovedWithTheArrowKeysAndClamped(t *testing.T) {
 	m := keys(onRow(categorising(), 1), "down", "down", "down", "up")
-	if m.dlg.cursor != 1 {
-		t.Errorf("cursor = %d, want 1", m.dlg.cursor)
+	if m.dlg.cursor.Row != 1 {
+		t.Errorf("cursor = %d, want 1", m.dlg.cursor.Row)
 	}
-	if m = keys(m, "home"); m.dlg.cursor != 0 {
-		t.Errorf("home: cursor = %d", m.dlg.cursor)
+	if m = keys(m, "home"); m.dlg.cursor.Row != 0 {
+		t.Errorf("home: cursor = %d", m.dlg.cursor.Row)
 	}
-	if m = keys(m, "end"); m.dlg.cursor != 2 {
-		t.Errorf("end: cursor = %d", m.dlg.cursor)
+	if m = keys(m, "end"); m.dlg.cursor.Row != 2 {
+		t.Errorf("end: cursor = %d", m.dlg.cursor.Row)
 	}
 }
 
@@ -225,7 +226,7 @@ func TestFocusMovesBothWaysAndWraps(t *testing.T) {
 		t.Errorf("Shift+Tab from the pattern should wrap to the category:\n%s", screen(m))
 	}
 	m = keys(m, "esc")
-	if m.dlg.kind != dialogRuleForm || m.parent.kind != dialogNone {
+	if m.mode != modeRuleForm || m.waiting != nil {
 		t.Errorf("Esc in the picker should go back to the form: %+v", m.dlg)
 	}
 	m = keys(m, "down", "up", "up")
@@ -266,7 +267,7 @@ func TestAddToRuleListsTheRulesFiltersThemAndWidensTheOneChosen(t *testing.T) {
 	if m2 := typed(m, "zzz"); len(m2.ruleChoices()) != 0 {
 		t.Errorf("the filter kept %v", m2.ruleChoices())
 	}
-	if m2 := keys(typed(m, "zzz"), "enter"); m2.dlg.kind != dialogRuleList {
+	if m2 := keys(typed(m, "zzz"), "enter"); m2.mode != modeRuleList {
 		t.Error("Enter on an empty list moved on")
 	}
 	m = keys(typed(m, "groc"), "enter")

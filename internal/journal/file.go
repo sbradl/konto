@@ -66,9 +66,23 @@ func (f File) Create() error {
 }
 
 // Window is what hledger is given: the main journal plus last year's and this year's file when they
-// exist, oldest first (ADR 0013). Files of older years stay on disk, unloaded.
+// exist, oldest first (ADR 0013), but not one the main journal includes itself, or hledger would read it
+// twice. Files of older years stay on disk, unloaded.
 func (f File) Window() []string {
+	included := map[string]bool{}
+	_ = readSource(f.path, included, new([]*source)) // a journal that cannot be read fails in hledger, which says why
 	files := []string{f.path}
+	for _, path := range f.windowYears() {
+		if !included[path] {
+			files = append(files, path)
+		}
+	}
+	return files
+}
+
+// windowYears are the files of last year and this year that exist, oldest first.
+func (f File) windowYears() []string {
+	var files []string
 	for year := f.firstYear(); year <= f.thisYear(); year++ {
 		if path := f.yearPath(year); isFile(path) {
 			files = append(files, path)

@@ -72,8 +72,11 @@ func HledgerChecks() []Check {
 // UnclassifiedCheck is konto's own check for an asset or liability account without a source.
 const UnclassifiedCheck = "unclassified"
 
+// KontoCheck is one of konto's own checks: the issues it finds in the Ledger.
+type KontoCheck func(Ledger) []CheckIssue
+
 // KontoChecks are the checks konto runs itself over the Ledger, besides hledger's.
-func KontoChecks() []string { return []string{UnclassifiedCheck} }
+func KontoChecks() []KontoCheck { return []KontoCheck{Ledger.UnclassifiedIssues} }
 
 // SeverityOf is the severity of a failed check, assigned by its name; a check konto does not know is a warning.
 func SeverityOf(check string) Severity {

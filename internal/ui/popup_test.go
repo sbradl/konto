@@ -7,6 +7,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+
+	"github.com/sbradl/konto/internal/ui/uitest"
 )
 
 func pressEsc(m Model) Model {
@@ -14,12 +16,12 @@ func pressEsc(m Model) Model {
 	return updated.(Model)
 }
 
-func screenLines(m Model) []string { return strings.Split(plain(m.View().Content), "\n") }
+func screenLines(m Model) []string { return strings.Split(uitest.Plain(m.View().Content), "\n") }
 
 func TestQuestionMarkOpensTheKeysPopupListingTheGlobalKeys(t *testing.T) {
 	model, _ := press(started(t, fakeLoader{}), "?")
 
-	content := plain(model.View().Content)
+	content := uitest.Plain(model.View().Content)
 	for _, want := range []string{"keys", "1–5", "?", "!", "r", "q"} {
 		if !strings.Contains(content, want) {
 			t.Errorf("content lacks %q:\n%s", want, content)
@@ -52,7 +54,7 @@ func TestOnlyOnePopupIsOpenAtATime(t *testing.T) {
 	model, _ := press(started(t, fakeLoader{}), "?")
 	model, _ = press(model, "!")
 
-	content := plain(model.View().Content)
+	content := uitest.Plain(model.View().Content)
 	if !strings.Contains(content, "checks") || strings.Contains(content, "1–5") {
 		t.Errorf("want the checks panel only:\n%s", content)
 	}
@@ -62,7 +64,7 @@ func TestKeysPopupShowsTheActiveViewsKeys(t *testing.T) {
 	model, _ := press(started(t, fakeLoader{}), "3")
 	model, _ = press(model, "?")
 
-	content := plain(model.View().Content)
+	content := uitest.Plain(model.View().Content)
 	for _, want := range []string{"new", "edit", "delete"} {
 		if !strings.Contains(content, want) {
 			t.Errorf("content lacks %q:\n%s", want, content)
@@ -162,7 +164,7 @@ func trimRows(rows []string) []string {
 	return trimmed
 }
 
-func plainRows(box string) []string { return strings.Split(plain(box), "\n") }
+func plainRows(box string) []string { return strings.Split(uitest.Plain(box), "\n") }
 
 func TestKeysBodyFillsColumnsTopToBottom(t *testing.T) {
 	model, _ := press(started(t, fakeLoader{}), "3")
@@ -211,9 +213,9 @@ func TestRRefreshesWhileAPopupIsOpen(t *testing.T) {
 
 		model, cmd := press(model, "r")
 
-		if !model.refreshing || cmd == nil || model.popup == popupNone {
+		if !model.busy() || cmd == nil || model.popup == popupNone {
 			t.Errorf("%s open: refreshing = %v, cmd = %v, popup = %v; want a reload with the popup still open",
-				open, model.refreshing, cmd, model.popup)
+				open, model.busy(), cmd, model.popup)
 		}
 	}
 }

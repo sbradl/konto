@@ -37,4 +37,4 @@
    zz:a6
    zz:a7
  to account          —
- Tab next field · ←/→ choose · Enter save · Esc cancel
+ Tab/↑/↓ field · ←/→ choose · Enter save · Esc cancel

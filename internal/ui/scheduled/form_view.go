@@ -14,7 +14,7 @@ const (
 	labelWidth = 20
 	pickerRows = 5
 	noValue    = "—"
-	formHint   = "Tab next field · ←/→ choose · Enter save · Esc cancel"
+	formHint   = "Tab/↑/↓ field · ←/→ choose · Enter save · Esc cancel"
 )
 
 // withForm draws the open form over the view, bottom-anchored like the other popups but, unlike them, not
@@ -27,12 +27,7 @@ func (m Model) withForm(base string) string {
 	if m.form.editing != nil {
 		title = "edit periodic rule"
 	}
-	rows := append([]string{layout.TitleRule(title, m.width)}, m.form.lines()...)
-	rows = rows[:min(len(rows), m.height)]
-	for i, row := range rows[1:] {
-		rows[i+1] = layout.Fit(row, m.width)
-	}
-	return layout.OverlayFlush(base, strings.Join(rows, "\n"), m.height)
+	return layout.OverlayFlush(base, layout.Popup(title, m.form.lines(), m.width), m.height) // cut at the screen
 }
 
 // lines are the form's fields, the picker's matches under the focused account field, the refusal and the hint.
@@ -110,13 +105,11 @@ func (f *form) pickerLines() []string {
 	if len(matches) == 0 {
 		return []string{"   " + theme.Dim.Render("no account matches")}
 	}
-	first := max(0, f.cursor-pickerRows+1)
-	last := min(len(matches), first+pickerRows)
 	lines := make([]string, 0, pickerRows)
-	for i := first; i < last; i++ {
-		text := "   " + matches[i]
-		if i == f.cursor {
-			text = "  " + theme.Selected.Render(" "+matches[i])
+	for i, match := range layout.Visible(f.cursor, matches, pickerRows) {
+		text := "   " + match
+		if f.cursor.Offset+i == f.cursor.Row {
+			text = "  " + theme.Selected.Render(" "+match)
 		}
 		lines = append(lines, text)
 	}

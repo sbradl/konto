@@ -1,6 +1,9 @@
 package layout
 
-// Cursor is the selected row of a scrolling list and the first row the list shows.
+import "slices"
+
+// Cursor is the selected row of a scrolling list and the first row the list shows. A view scrolled without a
+// selected row (Scroll) keeps only the first row shown.
 type Cursor struct {
 	Row, Offset int
 }
@@ -9,20 +12,31 @@ type Cursor struct {
 // or pgdown. The cursor stops at both ends; any other key leaves it where it is.
 func (c Cursor) Move(key string, count, page int) Cursor {
 	switch key {
-	case "up":
+	case KeyUp:
 		return c.To(c.Row-1, count, page)
-	case "down":
+	case KeyDown:
 		return c.To(c.Row+1, count, page)
-	case "home":
+	case KeyHome:
 		return c.To(0, count, page)
-	case "end":
+	case KeyEnd:
 		return c.To(count, count, page) // To clamps to the last row
-	case "pgup":
+	case KeyPgUp:
 		return c.To(c.Row-page, count, page)
-	case "pgdown":
+	case KeyPgDown:
 		return c.To(c.Row+page, count, page)
 	}
 	return c
+}
+
+// Moves reports whether key is one of the cursor keys Move and Scroll act on.
+func Moves(key string) bool {
+	return slices.Contains([]string{KeyUp, KeyDown, KeyHome, KeyEnd, KeyPgUp, KeyPgDown}, key)
+}
+
+// Scroll applies a cursor key to a view with no selected row, the keys moving its first row shown as Move
+// moves a selected one: between the top and last, page rows a page.
+func (c Cursor) Scroll(key string, last, page int) Cursor {
+	return Cursor{Offset: Cursor{Row: c.Offset}.Move(key, last+1, page).Row}
 }
 
 // To puts the cursor on row, clamped to the list's count rows, and scrolls to keep it among the page shown.
@@ -37,4 +51,10 @@ func (c Cursor) Scrolled(page int) Cursor {
 		offset = c.Row - page + 1
 	}
 	return Cursor{Row: c.Row, Offset: offset}
+}
+
+// Visible is the page of items the cursor's window shows, from its first row shown on.
+func Visible[T any](c Cursor, items []T, page int) []T {
+	first := min(c.Offset, len(items))
+	return items[first:min(len(items), first+page)]
 }

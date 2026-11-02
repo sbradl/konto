@@ -20,18 +20,18 @@ func naming() Model { return New("/dl").Resize(180, 50).WithStaged(freshAccount(
 func TestWKeyAsksTheRootToWrite(t *testing.T) {
 	_, action := opened().Key("w")
 
-	if !action.Write || action.Open != "" || action.Browse != "" {
+	if action != (Write{}) {
 		t.Errorf("action = %+v, want only Write", action)
 	}
 }
 
 func TestWKeyWithNothingStagedOrWhilePickingAsksForNothing(t *testing.T) {
 	empty, action := New("/dl").Resize(180, 40).Key("w")
-	if action.Write {
+	if action != nil {
 		t.Error("w with nothing staged asks to write")
 	}
 	picking, _ := empty.Key("n")
-	if _, action := picking.Key("w"); action.Write {
+	if _, action := picking.Key("w"); action != nil {
 		t.Error("w in the picker asks to write")
 	}
 }

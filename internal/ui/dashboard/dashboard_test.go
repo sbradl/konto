@@ -2,7 +2,6 @@ package dashboard
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -11,9 +10,11 @@ import (
 
 	"github.com/sbradl/konto/internal/domain"
 	"github.com/sbradl/konto/internal/ui/layout"
+	"github.com/sbradl/konto/internal/ui/theme"
+	"github.com/sbradl/konto/internal/ui/uitest"
 )
 
-var euro = domain.AmountStyle{Spaced: true, DecimalMark: ",", GroupMark: ".", GroupSize: 3}
+var euro = domain.DefaultAmount("EUR").Style
 
 func eur(mantissa int64) domain.MultiAmount {
 	return domain.MultiAmount{{Commodity: "EUR", Mantissa: mantissa, Places: 2, Style: euro}}
@@ -37,11 +38,13 @@ func loaded(height int) Model {
 	return New().Resize(180, height).WithAccounts(accounts())
 }
 
-var escapes = regexp.MustCompile(`\x1b\[[0-9;:]*m`)
+// opening is the escape sequence the style starts its text with.
+func opening(style lipgloss.Style) string {
+	before, _, _ := strings.Cut(style.Render("x"), "x")
+	return before
+}
 
-func plain(s string) string { return escapes.ReplaceAllString(s, "") }
-
-func lines(m Model) []string { return strings.Split(plain(m.accountsPanel()), "\n") }
+func lines(m Model) []string { return strings.Split(uitest.Plain(m.accountsPanel()), "\n") }
 
 func TestAccountsListsAssetsAndLiabilitiesOpenFirstThenClosedEachByName(t *testing.T) {
 	got := lines(loaded(20))
@@ -111,16 +114,16 @@ func TestClosedAccountsShowTheirClosedDate(t *testing.T) {
 func TestStylesCarryTheAnsiColours(t *testing.T) {
 	raw := strings.Split(loaded(20).accountsPanel(), "\n")
 
-	if !strings.Contains(raw[6], "\x1b[31m") { // creditcard is negative: ANSI red
+	if !strings.Contains(raw[6], opening(theme.Negative)) { // creditcard is negative: ANSI red
 		t.Errorf("negative balance is not red: %q", raw[6])
 	}
-	if strings.Contains(raw[3], "\x1b[31m") { // checking is positive
+	if strings.Contains(raw[3], opening(theme.Negative)) { // checking is positive
 		t.Errorf("positive balance must not be red: %q", raw[3])
 	}
-	if !strings.Contains(raw[7], "\x1b[90m") { // closed rows are dim (ANSI 8 = bright black)
+	if !strings.Contains(raw[7], opening(theme.Dim)) { // closed rows are dim (ANSI 8 = bright black)
 		t.Errorf("closed row is not dim: %q", raw[7])
 	}
-	if !strings.Contains(raw[1], ";100m") { // the first row is selected: ANSI 8 background
+	if !strings.Contains(raw[1], opening(theme.Selected)) { // the first row is selected: ANSI 8 background
 		t.Errorf("selected row has no selection background: %q", raw[1])
 	}
 }
@@ -180,7 +183,7 @@ func TestTheCursorRowStaysVisibleWhenTheListScrolls(t *testing.T) {
 	if !strings.Contains(got[1], "assets:savings") || !strings.Contains(got[3], "liabilities:creditcard") {
 		t.Errorf("scrolled panel:\n%s", strings.Join(got, "\n"))
 	}
-	if raw := strings.Split(m.accountsPanel(), "\n"); !strings.Contains(raw[3], ";100m") {
+	if raw := strings.Split(m.accountsPanel(), "\n"); !strings.Contains(raw[3], opening(theme.Selected)) {
 		t.Errorf("the cursor row should be highlighted after scrolling: %q", raw[3])
 	}
 	if m = m.Move("home"); !strings.Contains(lines(m)[1], "assets:cash") {
@@ -266,7 +269,7 @@ func ledgerFigures() domain.Ledger {
 	}
 }
 
-func viewLines(m Model) []string { return strings.Split(plain(m.View()), "\n") }
+func viewLines(m Model) []string { return strings.Split(uitest.Plain(m.View()), "\n") }
 
 func TestStatCardsShowNetWorthAndTheMonthsNetIncome(t *testing.T) {
 	m := New().Resize(180, 20).WithLedger(ledgerFigures())
@@ -311,10 +314,10 @@ func TestNetIncomeIsGreenOrRedBySign(t *testing.T) {
 	negativeLedger.Month.Income = eur(0)
 	negative := New().Resize(180, 20).WithLedger(negativeLedger).View()
 
-	if !strings.Contains(positive, "\x1b[32m1.815,00 EUR") {
+	if !strings.Contains(positive, opening(theme.Ok)+"1.815,00 EUR") {
 		t.Errorf("positive net income should be green: %q", strings.Split(positive, "\n")[1])
 	}
-	if !strings.Contains(negative, "\x1b[31m-1.185,00 EUR") {
+	if !strings.Contains(negative, opening(theme.Negative)+"-1.185,00 EUR") {
 		t.Errorf("negative net income should be red: %q", strings.Split(negative, "\n")[1])
 	}
 }
@@ -425,7 +428,7 @@ func TestRecentAmountsAreGreenOrRed(t *testing.T) {
 
 	view := New().Resize(180, 20).WithLedger(ledger).View()
 
-	if !strings.Contains(view, "\x1b[31m-1,00 EUR") || !strings.Contains(view, "\x1b[32m1,00 EUR") {
+	if !strings.Contains(view, opening(theme.Negative)+"-1,00 EUR") || !strings.Contains(view, opening(theme.Ok)+"1,00 EUR") {
 		t.Errorf("amounts should be red when negative and green otherwise:\n%q", view)
 	}
 }
@@ -643,8 +646,8 @@ func TestSpendPanelIsEmptyWithoutHistoryOrRoom(t *testing.T) {
 		"too narrow": spendPanel(spendHistory(100), 8, 10),
 		"too short":  spendPanel(spendHistory(100), 60, 5),
 	} {
-		if strings.ContainsAny(plain(panel), "⠁⠂⠄⡀⢀⠈⠐⠠⣀⠤⠉k") || !strings.Contains(plain(panel), "SPEND") {
-			t.Errorf("%s: want an empty SPEND panel:\n%s", name, plain(panel))
+		if strings.ContainsAny(uitest.Plain(panel), "⠁⠂⠄⡀⢀⠈⠐⠠⣀⠤⠉k") || !strings.Contains(uitest.Plain(panel), "SPEND") {
+			t.Errorf("%s: want an empty SPEND panel:\n%s", name, uitest.Plain(panel))
 		}
 	}
 }
@@ -690,7 +693,7 @@ func TestHiddenPanelsCountWhatTheTerminalIsTooSmallFor(t *testing.T) {
 func TestSpendPanelDrawsTheChartAtTheSmallestSizeItFits(t *testing.T) {
 	want := "╭─ SPEND ╮\n│    │   │\n│    │   │\n│0.0k└───│\n│    Mar │\n╰────────╯"
 
-	if got := plain(spendPanel(spendHistory(100), minChartSize+layout.PanelChrome, minChartSize/2+layout.PanelChrome)); got != want {
+	if got := uitest.Plain(spendPanel(spendHistory(100), minChartSize+layout.PanelChrome, minChartSize/2+layout.PanelChrome)); got != want {
 		t.Errorf("spend panel =\n%s\nwant\n%s", got, want)
 	}
 }
@@ -707,7 +710,7 @@ func TestSpendChartPlacesTheLineAndTheMonthLabelsAlongTheAxes(t *testing.T) {
 		"│    Mar   Apr  May   Jun   Jul   Aug  │\n" +
 		"╰──────────────────────────────────────╯"
 
-	got := plain(spendPanel(spendHistory(117500, 112000, 119500, 115000, 120500, 113000), 40, 10))
+	got := uitest.Plain(spendPanel(spendHistory(117500, 112000, 119500, 115000, 120500, 113000), 40, 10))
 
 	if got != want {
 		t.Errorf("spend panel =\n%s\nwant\n%s", got, want)
@@ -716,12 +719,12 @@ func TestSpendChartPlacesTheLineAndTheMonthLabelsAlongTheAxes(t *testing.T) {
 
 func TestKeyAsksToCloseOrReopenAndMovesOnCursorKeys(t *testing.T) {
 	m := loaded(20)
-	for key, want := range map[string]Action{"c": CloseSelected, "o": ReopenSelected, "x": NoAction} {
+	for key, want := range map[string]Action{"c": CloseSelected{}, "o": ReopenSelected{}, "x": nil} {
 		if _, got := m.Key(key); got != want {
 			t.Errorf("%s: action = %v, want %v", key, got, want)
 		}
 	}
-	if moved, action := m.Key("down"); action != NoAction || moved.cursor.Row != 1 {
+	if moved, action := m.Key("down"); action != nil || moved.cursor.Row != 1 {
 		t.Errorf("down: action = %v, row = %d; want the cursor moved", action, moved.cursor.Row)
 	}
 }

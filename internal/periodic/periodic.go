@@ -144,7 +144,10 @@ func (s *Service) block(ctx context.Context, input Input, ledger domain.Ledger) 
 	if err != nil {
 		return nil, err
 	}
-	postings := []string{"    " + input.To + "  " + read.amount.Format(), "    " + input.From}
+	postings := []string{
+		domain.NewPosting{Account: input.To, Amount: domain.MultiAmount{read.amount}}.Line(),
+		domain.NewPosting{Account: input.From}.Line(),
+	}
 	header := input.header(read.date, time.Time{})
 	if read.remaining > 0 {
 		until, err := s.endAfter(ctx, append([]string{header}, postings...), read)
@@ -171,6 +174,7 @@ func (in Input) header(date, until time.Time) string {
 // endAfter is the day after the last of the remaining payments, found by asking hledger for the occurrences of
 // the rule without an end.
 func (s *Service) endAfter(ctx context.Context, rule []string, read entered) (time.Time, error) {
+	// yearly, the sparsest frequency, needs a year per payment; one more keeps the last inside the exclusive end
 	horizon := read.date.AddDate(read.remaining+1, 0, 0)
 	dates, err := s.gw.Occurrences(ctx, strings.Join(rule, "\n")+"\n", read.date, horizon)
 	if err != nil {

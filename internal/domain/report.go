@@ -10,7 +10,7 @@ const (
 	MonthToDate Period = iota
 	QuarterToDate
 	YearToDate
-	AllTime
+	AllTime // the loaded window, this year and last (ADR 0013), not every year the journal has
 )
 
 const monthsPerQuarter = 3
@@ -26,7 +26,7 @@ func (p Period) String() string {
 		return "year to date"
 	case AllTime:
 	}
-	return "all time"
+	return "all time" // of the loaded window (ADR 0013)
 }
 
 // Next is the period after p, wrapping from all time back to the month.

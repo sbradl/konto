@@ -1,13 +1,10 @@
 package layout
 
 import (
-	"regexp"
 	"testing"
+
+	"github.com/sbradl/konto/internal/ui/uitest"
 )
-
-var escapes = regexp.MustCompile(`\x1b\[[0-9;]*m`)
-
-func plain(s string) string { return escapes.ReplaceAllString(s, "") }
 
 func TestFitPadsOrCutsToTheWidthAndLeavesTextWholeWithNoRoom(t *testing.T) {
 	for _, tc := range []struct {
@@ -38,17 +35,17 @@ func TestAlignRightPadsOnTheLeftAndNeverCuts(t *testing.T) {
 }
 
 func TestTitleRuleInsetsTheTitleAndRunsToTheWidth(t *testing.T) {
-	got := plain(TitleRule("keys", 12))
+	got := uitest.Plain(TitleRule("keys", 12))
 	if got != "─ keys ─────" {
 		t.Errorf("rule = %q", got)
 	}
-	if got := plain(TitleRule("überschrift", 3)); got != "─ überschrift " {
+	if got := uitest.Plain(TitleRule("überschrift", 3)); got != "─ überschrift " {
 		t.Errorf("rule wider than the width = %q, want the title alone", got)
 	}
 }
 
 func TestMoreSaysHowManyRowsAreLeftOut(t *testing.T) {
-	if got := plain(More(3)); got != " … 3 more" {
+	if got := uitest.Plain(More(3)); got != " … 3 more" {
 		t.Errorf("More(3) = %q", got)
 	}
 }

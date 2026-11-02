@@ -14,9 +14,20 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sbradl/konto/internal/accounts"
+	"github.com/sbradl/konto/internal/carry"
+	"github.com/sbradl/konto/internal/checks"
 	"github.com/sbradl/konto/internal/config"
+	"github.com/sbradl/konto/internal/csvimport"
 	"github.com/sbradl/konto/internal/domain"
+	"github.com/sbradl/konto/internal/files"
+	"github.com/sbradl/konto/internal/forecast"
+	"github.com/sbradl/konto/internal/hledger"
 	"github.com/sbradl/konto/internal/journal"
+	"github.com/sbradl/konto/internal/ledger"
+	"github.com/sbradl/konto/internal/periodic"
+	"github.com/sbradl/konto/internal/report"
+	"github.com/sbradl/konto/internal/ui"
 )
 
 // app is konto's start-up sequence with its collaborators injected.
@@ -90,6 +101,25 @@ func lockJournal(journalPath string) (func() error, error) {
 		return nil, fmt.Errorf("locking journal: %w", err)
 	}
 	return lock.Release, nil
+}
+
+// buildPorts wires the adapters for the journal at cfg.JournalPath into the use cases the UI drives; today is
+// konto's today, getenv the environment.
+func buildPorts(cfg config.Config, getenv func(string) string, today func() time.Time) ui.Ports {
+	file := journal.NewFile(cfg.JournalPath, today)
+	client := hledger.New(hledger.Binary, file.Window)
+	return ui.Ports{
+		Loader: ledger.NewLoader(client, file, today), Checker: checks.NewRunner(client), Creator: file,
+		Editor:   func(path string, line int) *exec.Cmd { return editorCommand(getenv, path, line) },
+		Accounts: accounts.NewService(file, today), Writer: carry.NewWriter(file, client),
+		// The UI hands the Verifier the changeset the carry writer prepared, so it renders it through the very
+		// file that writer writes to (TestBuildPortsVerifiesTheJournalTheWriterWrites).
+		Verifier: checks.NewVerifier(file, client),
+		Reports:  report.NewService(client, today), Forecast: forecast.NewService(client, today),
+		Rules:       periodic.NewService(client, today),
+		Importer:    csvimport.NewService(files.System{}, client, file.RulesPath()),
+		DownloadDir: downloadDir(getenv, cfg.Home),
+	}
 }
 
 // editorCommand opens file at line in the user's editor: $VISUAL, then

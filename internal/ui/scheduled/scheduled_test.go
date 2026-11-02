@@ -10,17 +10,14 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/sbradl/konto/internal/domain"
+	"github.com/sbradl/konto/internal/ui/uitest"
 )
 
-var euro = domain.AmountStyle{Spaced: true, DecimalMark: ",", GroupMark: ".", GroupSize: 3}
+var euro = domain.DefaultAmount("EUR").Style
 
 func eur(mantissa int64) domain.MultiAmount {
 	return domain.MultiAmount{{Commodity: "EUR", Mantissa: mantissa, Places: 2, Style: euro}}
 }
-
-var escapes = regexp.MustCompile(`\x1b\[[0-9;:]*m`)
-
-func plain(s string) string { return escapes.ReplaceAllString(s, "") }
 
 func date(s string) time.Time { d, _ := time.Parse(time.DateOnly, s); return d }
 
@@ -54,7 +51,7 @@ func household() domain.Ledger {
 
 func loaded() Model { return New().Resize(180, 30).WithLedger(household()) }
 
-func lines(m Model) []string { return strings.Split(plain(m.View()), "\n") }
+func lines(m Model) []string { return strings.Split(uitest.Plain(m.View()), "\n") }
 
 func TestRulesListSortedByNextOccurrenceWithCadenceAndStatus(t *testing.T) {
 	got := lines(loaded())
@@ -101,7 +98,7 @@ func TestEmptyViewHasNoPositionAndSaysHowToAddARule(t *testing.T) {
 	if row, total := m.Position(); row != 0 || total != 0 {
 		t.Errorf("position = %d/%d, want none", row, total)
 	}
-	if view := plain(m.View()); !strings.Contains(view, "press n to add a rule") {
+	if view := uitest.Plain(m.View()); !strings.Contains(view, "press n to add a rule") {
 		t.Errorf("empty state should hint at n:\n%s", view)
 	}
 	if got := m.Move("down"); got.cursor.Row != 0 {
@@ -111,7 +108,7 @@ func TestEmptyViewHasNoPositionAndSaysHowToAddARule(t *testing.T) {
 
 func TestEntryShowsTheBlockAsWrittenWithTheRuleLineMagentaAndCommentsDim(t *testing.T) {
 	m := loaded()
-	view := plain(m.View())
+	view := uitest.Plain(m.View())
 	if !strings.Contains(view, "~ monthly from 2026-10-01  Vermieter Mueller") || !strings.Contains(view, "expenses:rent  900,00 EUR") {
 		t.Errorf("entry panel should show the first rule as written:\n%s", view)
 	}
@@ -126,7 +123,7 @@ func TestEntryShowsTheBlockAsWrittenWithTheRuleLineMagentaAndCommentsDim(t *test
 }
 
 func TestOccurrencesListsTheNextSixOfTheSelectedRule(t *testing.T) {
-	view := plain(loaded().View())
+	view := uitest.Plain(loaded().View())
 	_, occurrencesPanel, _ := strings.Cut(view, "OCCURRENCES")
 
 	for _, want := range []string{"2026-10-01", "2026-11-01", "2026-12-01", "2027-01-01", "2027-02-01", "2027-03-01"} {
@@ -137,12 +134,12 @@ func TestOccurrencesListsTheNextSixOfTheSelectedRule(t *testing.T) {
 	if strings.Contains(occurrencesPanel, "2027-04-01") {
 		t.Errorf("only the next six are listed")
 	}
-	next := plain(loaded().Move("down").View())
+	next := uitest.Plain(loaded().Move("down").View())
 	_, panel, _ := strings.Cut(next, "OCCURRENCES")
 	if !strings.Contains(panel, "2026-10-05") {
 		t.Errorf("occurrences follow the cursor:\n%s", panel)
 	}
-	none := plain(loaded().Move("end").View())
+	none := uitest.Plain(loaded().Move("end").View())
 	if _, panel, _ := strings.Cut(none, "OCCURRENCES"); !strings.Contains(panel, "none in the next 12 months") {
 		t.Errorf("a rule without occurrences says so:\n%s", panel)
 	}
@@ -150,7 +147,7 @@ func TestOccurrencesListsTheNextSixOfTheSelectedRule(t *testing.T) {
 
 func TestAnnualImpactListsEveryRuleAndTheTotalColoured(t *testing.T) {
 	view := loaded().View()
-	text := plain(view)
+	text := uitest.Plain(view)
 
 	_, impact, _ := strings.Cut(text, "ANNUAL IMPACT")
 	for _, want := range []string{"Vermieter Mueller", "-6.300,00 EUR", "Streaming", "-26,00 EUR", "Total", "-6.326,00 EUR"} {
@@ -191,7 +188,7 @@ func TestLongRuleListsScrollWithTheCursorAndPageByTheListHeight(t *testing.T) {
 	}
 	m := New().Resize(180, 30).WithLedger(ledger)
 
-	end, _, _ := strings.Cut(plain(m.Move("end").View()), "ENTRY")
+	end, _, _ := strings.Cut(uitest.Plain(m.Move("end").View()), "ENTRY")
 	if !strings.Contains(end, "Rule 39") || strings.Contains(end, "Rule 00") {
 		t.Errorf("End shows the last rule and scrolls the first away:\n%s", end)
 	}
@@ -202,7 +199,7 @@ func TestLongRuleListsScrollWithTheCursorAndPageByTheListHeight(t *testing.T) {
 	for range 20 {
 		down = down.Move("down")
 	}
-	if !strings.Contains(plain(down.View()), "Rule 20") {
+	if !strings.Contains(uitest.Plain(down.View()), "Rule 20") {
 		t.Errorf("the selected row is always visible")
 	}
 	if back := down.Move("home"); back.cursor.Offset != 0 {
@@ -213,7 +210,7 @@ func TestLongRuleListsScrollWithTheCursorAndPageByTheListHeight(t *testing.T) {
 func TestViewFillsTheSizeAndNeverGetsWiderThanTheTerminal(t *testing.T) {
 	for _, size := range [][2]int{{100, 27}, {120, 37}, {180, 57}, {240, 67}} {
 		view := New().Resize(size[0], size[1]).WithLedger(household()).View()
-		got := strings.Split(plain(view), "\n")
+		got := strings.Split(uitest.Plain(view), "\n")
 		if len(got) != size[1] {
 			t.Errorf("%v: %d rows, want %d", size, len(got), size[1])
 		}
@@ -226,7 +223,7 @@ func TestViewFillsTheSizeAndNeverGetsWiderThanTheTerminal(t *testing.T) {
 }
 
 func TestBeforeAnythingLoadedThePanelsAreEmpty(t *testing.T) {
-	if view := plain(New().Resize(180, 30).View()); !strings.Contains(view, "RULES") {
+	if view := uitest.Plain(New().Resize(180, 30).View()); !strings.Contains(view, "RULES") {
 		t.Errorf("view:\n%s", view)
 	}
 }
@@ -249,7 +246,7 @@ func selectedLines(view string) []string {
 	var rows []string
 	for row := range strings.SplitSeq(view, "\n") {
 		if selectionBackground.MatchString(row) {
-			rows = append(rows, plain(row))
+			rows = append(rows, uitest.Plain(row))
 		}
 	}
 	return rows
@@ -273,13 +270,13 @@ func TestExactlyTheRowUnderTheCursorIsHighlightedAndAlwaysVisible(t *testing.T) 
 }
 
 func TestKeyAsksForNewEditOrDeleteOnlyWithARuleForEditAndDelete(t *testing.T) {
-	for key, want := range map[string]ListAction{"n": NewRule, "e": EditSelected, "d": DeleteSelected, "x": NoAction} {
+	for key, want := range map[string]Action{"n": NewRule{}, "e": EditSelected{}, "d": DeleteSelected{}, "x": nil} {
 		if _, got := loaded().Key(key); got != want {
 			t.Errorf("%s: action = %v, want %v", key, got, want)
 		}
 	}
 	empty := New().Resize(180, 30)
-	for key, want := range map[string]ListAction{"n": NewRule, "e": NoAction, "d": NoAction} {
+	for key, want := range map[string]Action{"n": NewRule{}, "e": nil, "d": nil} {
 		if _, got := empty.Key(key); got != want {
 			t.Errorf("no rules, %s: action = %v, want %v", key, got, want)
 		}

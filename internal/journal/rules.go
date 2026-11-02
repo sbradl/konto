@@ -24,7 +24,7 @@ func (f File) PeriodicRules() ([]domain.PeriodicRule, error) {
 func blocksIn(source *source) []domain.PeriodicRule {
 	var rules []domain.PeriodicRule
 	for i, line := range source.lines {
-		if !strings.HasPrefix(line, "~") {
+		if !isRuleHeader(line) {
 			continue
 		}
 		period, _, _ := strings.Cut(headerBody(line), "  ")
@@ -75,16 +75,4 @@ func ruleName(header string) string {
 		return strings.TrimSpace(description)
 	}
 	return body
-}
-
-// postingAccount is the account a posting line names, without a virtual-posting bracket.
-func postingAccount(line string) string {
-	text := strings.TrimSpace(line)
-	if strings.HasPrefix(text, ";") {
-		return ""
-	}
-	account, _, _ := strings.Cut(text, "  ")
-	account, _, _ = strings.Cut(account, "\t")
-	account = strings.TrimLeft(account, "!* ")
-	return strings.Trim(account, "()[]")
 }

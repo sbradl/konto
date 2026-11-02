@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/sbradl/konto/e2e/shimconf"
 )
 
 // These tests pin the harness itself, so a green feature run means konto
@@ -148,6 +150,23 @@ func TestSessionSendsInput(t *testing.T) {
 	waitForText(t, s, "got:hello")
 }
 
+// settle waits for the idle signal to count the keys sent (x and Enter); handled does not wait for idle.
+func TestSessionSettlesOnTheIdleSignal(t *testing.T) {
+	s := startScript(t, `printf '\033]2;konto idle 0\a'; read line; printf '\033]2;konto busy 2\a'; sleep 0.3; printf 'done\033]2;konto idle 2\a'; sleep 5`)
+	if !s.settle(3 * time.Second) {
+		t.Fatal("never idle at start")
+	}
+	if err := s.send("x\r"); err != nil {
+		t.Fatal(err)
+	}
+	if !s.handled(3*time.Second) || strings.Contains(s.screenText(), "done") {
+		t.Errorf("handled should return once the key is taken in, before the work ends:\n%s", s.screenText())
+	}
+	if !s.settle(3*time.Second) || !strings.Contains(s.screenText(), "done") {
+		t.Errorf("settle should return once idle again, after the work:\n%s", s.screenText())
+	}
+}
+
 func TestSessionStartsAtSizeAndResizes(t *testing.T) {
 	s := startScript(t, `stty size; trap 'stty size; exit 7' WINCH; while :; do sleep 0.05; done`)
 	waitForText(t, s, "12 60")
@@ -187,43 +206,62 @@ func shimWorld(t *testing.T) *world {
 	return w
 }
 
-func runShim(t *testing.T, w *world, cfg shimConfig, args ...string) (string, error) {
+func runShim(t *testing.T, w *world, cfg shimconf.Config, args ...string) (string, error) {
+	t.Helper()
+	return runShimFed(t, w, cfg, "", args...)
+}
+
+// runShimFed runs the shim with stdin on its standard input.
+func runShimFed(t *testing.T, w *world, cfg shimconf.Config, stdin string, args ...string) (string, error) {
 	t.Helper()
 	w.shim = cfg
 	if err := w.writeShim(); err != nil {
 		t.Fatal(err)
 	}
 	cmd := exec.CommandContext(t.Context(), filepath.Join(w.binDir, "hledger"), args...)
-	cmd.Env = w.environ()
+	cmd.Env, cmd.Stdin = w.environ(), strings.NewReader(stdin)
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }
 
 func TestShimPassesThroughToRealHledger(t *testing.T) {
 	w := shimWorld(t)
-	if out, err := runShim(t, w, shimConfig{}, "--version"); err != nil || !strings.HasPrefix(out, "hledger 1.") {
+	if out, err := runShim(t, w, shimconf.Config{}, "--version"); err != nil || !strings.HasPrefix(out, "hledger 1.") {
 		t.Errorf("passthrough --version = %q, %v", out, err)
 	}
 }
 
 func TestShimFakesVersionAndFailures(t *testing.T) {
 	w := shimWorld(t)
-	cfg := shimConfig{Version: "1.31", Fail: "boom"}
+	cfg := shimconf.Config{Version: "1.31", Fail: "boom"}
 	if out, _ := runShim(t, w, cfg, "--version"); !strings.HasPrefix(out, "hledger 1.31,") {
 		t.Errorf("faked --version = %q", out)
 	}
 	if out, err := runShim(t, w, cfg, "-f", "x", "bal"); err == nil || !strings.Contains(out, "boom") {
 		t.Errorf("failing shim = %q, %v", out, err)
 	}
-	if out, err := runShim(t, w, shimConfig{GarbageFor: []string{"bal"}}, "-f", "x", "bal"); err != nil ||
+	if out, err := runShim(t, w, shimconf.Config{GarbageFor: []string{"bal"}}, "-f", "x", "bal"); err != nil ||
 		!strings.Contains(out, "not json") {
 		t.Errorf("garbage shim = %q, %v", out, err)
 	}
 }
 
+// A config field the shim does not know fails the call instead of being ignored.
+func TestShimRefusesAnUnknownConfigField(t *testing.T) {
+	w := shimWorld(t)
+	if err := os.WriteFile(w.shimConf, []byte(`{"delay": 5}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.CommandContext(t.Context(), filepath.Join(w.binDir, "hledger"), "--version")
+	cmd.Env = w.environ()
+	if out, err := cmd.CombinedOutput(); err == nil || !strings.Contains(string(out), "unknown field") {
+		t.Errorf("shim with an unknown config field = %q, %v", out, err)
+	}
+}
+
 func TestShimRecordsCallsWithoutVersionProbes(t *testing.T) {
 	w := shimWorld(t)
-	cfg := shimConfig{Version: "1.40", GarbageFor: []string{"bal"}}
+	cfg := shimconf.Config{Version: "1.40", GarbageFor: []string{"bal"}}
 	for _, args := range [][]string{{"--version"}, {"-f", "x", "bal"}} {
 		if _, err := runShim(t, w, cfg, args...); err != nil {
 			t.Fatal(err)
@@ -233,11 +271,32 @@ func TestShimRecordsCallsWithoutVersionProbes(t *testing.T) {
 	if err != nil || len(calls) != 1 || strings.Join(calls[0], " ") != "-f x bal" {
 		t.Errorf("recorded calls = %v, %v", calls, err)
 	}
-	if err := w.expectEveryCall([]string{"-f", "x"}); err != nil {
+	if err := w.expectEveryCallNamesTheJournal(); err == nil {
+		t.Error("a call without the journal path must be reported")
+	}
+}
+
+// A `-f -` call is logged with its stdin, which the real hledger still gets.
+func TestShimRecordsAndPassesOnStdin(t *testing.T) {
+	w := shimWorld(t)
+	if err := os.WriteFile(w.journal, []byte("2026-01-01 x\n    a    1\n    b\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	input := "include " + w.journal + "\n"
+
+	out, err := runShimFed(t, w, shimconf.Config{}, input, "-f", "-", "print")
+
+	if err != nil || !strings.Contains(out, "2026-01-01 x") {
+		t.Errorf("fed shim = %q, %v; want hledger to read the journal through stdin", out, err)
+	}
+	if err := w.expectEveryCallNamesTheJournal(); err != nil {
 		t.Error(err)
 	}
-	if err := w.expectEveryCall([]string{"-f", w.journal}); err == nil {
-		t.Error("a call without the journal path must be reported")
+	if err := w.expectEveryCallIncludes("2026"); err == nil {
+		t.Error("a call without the year file must be reported")
+	}
+	if out, err := runShimFed(t, w, shimconf.Config{}, "include /nowhere.journal\n", "-f", "-", "print"); err == nil {
+		t.Errorf("fed shim = %q, want hledger's failure passed on", out)
 	}
 }
 

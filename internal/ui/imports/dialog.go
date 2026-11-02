@@ -9,28 +9,23 @@ import (
 	"github.com/sbradl/konto/internal/ui/layout"
 )
 
-// dialogKind is which categorising dialog, if any, is open over the row table.
-type dialogKind int
+// mode is what has the Import view's keys: the staged import's rows (or the empty start), the file picker, or
+// one of the categorising dialogs over the rows.
+type mode int
 
 const (
-	dialogNone dialogKind = iota
-	dialogChoice
-	dialogRuleForm
-	dialogRuleList
-	dialogAddForm
-	dialogPicker
-	dialogAccount // naming the account a new IBAN stands for
+	modeRows mode = iota
+	modeFiles
+	modeChoice   // the categorise popup
+	modeRuleForm // the new-rule form
+	modeRuleList // the rules to add the row to
+	modeAddForm  // the add-to-rule form
+	modeCategory // the category picker, for the rule form or for the row alone
+	modeAccount  // naming the account a new IBAN stands for
 )
 
-// Key names the view reacts to.
-const (
-	keyEsc   = "esc"
-	keyEnter = "enter"
-	keyUp    = "up"
-	keyDown  = "down"
-	keyHome  = "home"
-	keyEnd   = "end"
-)
+// dialog reports whether the mode is a dialog over the rows: it then has the keyboard.
+func (m mode) dialog() bool { return m >= modeChoice }
 
 // The choices of the categorise popup.
 const (
@@ -47,22 +42,43 @@ const (
 	fieldCount
 )
 
-// dialog is the state of the dialog that is open. The picker can open over the rule form, which waits
-// in Model.parent for the category.
+// dialog is what the open dialog holds; each mode uses its own fields. The category picker can open over the
+// rule form, which waits in Model.waiting for the category.
 type dialog struct {
-	kind     dialogKind
-	cursor   int
-	filter   string              // the picker's and the rule list's text input
+	cursor   layout.Cursor       // the entry selected in the choices, the rule list or the category picker
+	filter   string              // the category picker's and the rule list's text input
 	draft    csvimport.Draft     // the new-rule form
 	category csvimport.Candidate // the category the new-rule form has been given
 	focus    int                 // the form field with the cursor
 	matcher  string              // the add-to-rule form's pattern
 	ruleID   string              // the rule being widened
+	name     string              // the name typed for the new account
 	refusal  string              // why the last confirm was refused
 }
 
 // Capturing reports whether a dialog has the keyboard: letters then are text, not view keys.
-func (m Model) Capturing() bool { return m.dlg.kind != dialogNone }
+func (m Model) Capturing() bool { return m.mode.dialog() }
+
+// show switches to the mode with the dialog state given; what another dialog held, and a waiting form, are
+// dropped. Every change of mode goes through it.
+func (m Model) show(mode mode, dlg dialog) Model {
+	m.mode, m.dlg, m.waiting = mode, dlg, nil
+	return m
+}
+
+// closeDialog goes back to the rows from a dialog, abandoning what was typed; the file picker stays open.
+func (m Model) closeDialog() Model {
+	if m.mode.dialog() {
+		return m.show(modeRows, dialog{})
+	}
+	return m
+}
+
+// dialogPage is how many lines of the open dialog its popup shows at once.
+func (m Model) dialogPage() int {
+	_, body := m.dialogBody()
+	return layout.PopupCapacity(len(body), m.height)
+}
 
 // choices are the categorise popup's options for the row under the cursor.
 func (m Model) choices() []string {
@@ -74,23 +90,23 @@ func (m Model) choices() []string {
 
 // dialogKey applies a key to the open dialog; Esc closes it.
 func (m Model) dialogKey(key string) Model {
-	if key == keyEsc {
+	if key == layout.KeyEsc {
 		return m.close()
 	}
-	switch m.dlg.kind { // exhaustive: a new kind without its handler fails the lint
-	case dialogChoice:
+	switch m.mode { // exhaustive: a new dialog without its handler fails the lint
+	case modeChoice:
 		return m.choiceKey(key)
-	case dialogRuleForm:
+	case modeRuleForm:
 		return m.formKey(key)
-	case dialogRuleList:
+	case modeRuleList:
 		return m.ruleListKey(key)
-	case dialogAddForm:
+	case modeAddForm:
 		return m.addFormKey(key)
-	case dialogPicker:
+	case modeCategory:
 		return m.pickerDialogKey(key)
-	case dialogAccount:
+	case modeAccount:
 		return m.accountKey(key)
-	case dialogNone:
+	case modeRows, modeFiles:
 	}
 	return m
 }
@@ -98,47 +114,34 @@ func (m Model) dialogKey(key string) Model {
 // close shuts the open dialog: a picker over the rule form goes back to the form, anything else is
 // abandoned along with what was typed.
 func (m Model) close() Model {
-	if m.dlg.kind == dialogAccount {
+	if m.mode == modeAccount {
 		return m.Cleared()
 	}
-	if m.dlg.kind == dialogPicker && m.parent.kind != dialogNone {
-		m.dlg, m.parent = m.parent, dialog{}
-		return m
+	if m.mode == modeCategory && m.waiting != nil {
+		return m.show(modeRuleForm, *m.waiting)
 	}
-	m.dlg, m.parent = dialog{}, dialog{}
-	return m
+	return m.show(modeRows, dialog{})
 }
 
-// moveCursor moves a list cursor by an arrow key within count entries.
-func moveCursor(cursor int, key string, count int) int {
-	switch key {
-	case keyUp:
-		cursor--
-	case keyDown:
-		cursor++
-	case keyHome:
-		cursor = 0
-	case keyEnd:
-		cursor = count // clamped below
-	}
-	return max(0, min(cursor, count-1))
+// moved is the dialog with its list cursor moved by a cursor key within count entries.
+func (m Model) moved(key string, count int) Model {
+	m.dlg.cursor = m.dlg.cursor.Move(key, count, m.dialogPage())
+	return m
 }
 
 func (m Model) choiceKey(key string) Model {
 	options := m.choices()
-	if key != keyEnter {
-		m.dlg.cursor = moveCursor(m.dlg.cursor, key, len(options))
-		return m
+	if key != layout.KeyEnter {
+		return m.moved(key, len(options))
 	}
-	switch options[m.dlg.cursor] {
+	switch options[m.dlg.cursor.Row] {
 	case choiceNewRule:
-		m.dlg = dialog{kind: dialogRuleForm, draft: m.staged.DraftFor(m.table.Row)}
+		return m.show(modeRuleForm, dialog{draft: m.staged.DraftFor(m.table.Row)})
 	case choiceAddToRule:
-		m.dlg = dialog{kind: dialogRuleList}
+		return m.show(modeRuleList, dialog{})
 	default:
-		m.dlg = dialog{kind: dialogPicker}
+		return m.show(modeCategory, dialog{})
 	}
-	return m
 }
 
 // currentRule is the rule the new-rule form would stage, with the category it has so far.
@@ -148,11 +151,11 @@ func (m Model) currentRule() csvimport.Rule {
 
 func (m Model) formKey(key string) Model {
 	switch key {
-	case "tab", keyDown:
+	case layout.KeyTab, layout.KeyDown:
 		return m.focusField(m.dlg.focus + 1)
-	case "shift+tab", keyUp:
+	case layout.KeyBackTab, layout.KeyUp:
 		return m.focusField(m.dlg.focus - 1)
-	case keyEnter:
+	case layout.KeyEnter:
 		return m.confirmRule()
 	}
 	m.dlg.refusal = ""
@@ -171,7 +174,9 @@ func (m Model) focusField(field int) Model {
 	if m.dlg.focus != fieldCategory {
 		return m
 	}
-	m.parent, m.dlg = m.dlg, dialog{kind: dialogPicker}
+	form := m.dlg
+	m = m.show(modeCategory, dialog{})
+	m.waiting = &form
 	return m
 }
 
@@ -182,8 +187,8 @@ func (m Model) confirmRule() Model {
 		m.dlg.refusal = err.Error()
 		return m
 	}
-	m.staged, m.dlg = &staged, dialog{}
-	return m
+	m.staged = &staged
+	return m.show(modeRows, dialog{})
 }
 
 // ruleChoices are the rules the list offers: those whose category contains the filter.
@@ -196,22 +201,19 @@ func (m Model) ruleChoices() []csvimport.Rule {
 
 func (m Model) ruleListKey(key string) Model {
 	rules := m.ruleChoices()
-	if key == keyEnter {
+	if key == layout.KeyEnter {
 		if len(rules) == 0 {
 			return m
 		}
 		row := m.staged.Rows[m.table.Row]
-		m.dlg = dialog{
-			kind: dialogAddForm, ruleID: rules[m.dlg.cursor].ID, matcher: regexp.QuoteMeta(row.Description),
-		}
-		return m
+		widen := dialog{ruleID: rules[m.dlg.cursor.Row].ID, matcher: regexp.QuoteMeta(row.Description)}
+		return m.show(modeAddForm, widen)
 	}
 	if text, ok := layout.Edit(m.dlg.filter, key); ok {
-		m.dlg.filter, m.dlg.cursor = text, 0
+		m.dlg.filter, m.dlg.cursor = text, layout.Cursor{}
 		return m
 	}
-	m.dlg.cursor = moveCursor(m.dlg.cursor, key, len(rules))
-	return m
+	return m.moved(key, len(rules))
 }
 
 // addition is the alternative the add-to-rule form would append: the row's payee (else type) matching
@@ -221,14 +223,14 @@ func (m Model) addition() []csvimport.Condition {
 }
 
 func (m Model) addFormKey(key string) Model {
-	if key == keyEnter {
+	if key == layout.KeyEnter {
 		staged, err := m.staged.Widen(m.dlg.ruleID, m.addition())
 		if err != nil {
 			m.dlg.refusal = err.Error()
 			return m
 		}
-		m.staged, m.dlg = &staged, dialog{}
-		return m
+		m.staged = &staged
+		return m.show(modeRows, dialog{})
 	}
 	m.dlg.refusal = ""
 	m.dlg.matcher, _ = layout.Edit(m.dlg.matcher, key)
@@ -237,18 +239,18 @@ func (m Model) addFormKey(key string) Model {
 
 // accountKey edits the new account's name; Enter gives the account the name, or shows why it cannot have it.
 func (m Model) accountKey(key string) Model {
-	if key != keyEnter {
-		m.dlg.filter, _ = layout.Edit(m.dlg.filter, key)
+	if key != layout.KeyEnter {
+		m.dlg.name, _ = layout.Edit(m.dlg.name, key)
 		m.dlg.refusal = ""
 		return m
 	}
-	named, err := m.staged.WithName(m.dlg.filter)
+	named, err := m.staged.WithName(m.dlg.name)
 	if err != nil {
 		m.dlg.refusal = err.Error()
 		return m
 	}
-	m.staged, m.dlg = &named, dialog{}
-	return m
+	m.staged = &named
+	return m.show(modeRows, dialog{})
 }
 
 // pickerEntries are what the picker lists for the filter: the matching candidates, then "+ create" when
@@ -265,21 +267,20 @@ func (m Model) pickerDialogKey(key string) Model {
 	if create {
 		count++
 	}
-	if key == keyEnter {
+	if key == layout.KeyEnter {
 		return m.pick(candidates)
 	}
 	if text, ok := layout.Edit(m.dlg.filter, key); ok {
-		m.dlg.filter, m.dlg.cursor, m.dlg.refusal = text, 0, ""
+		m.dlg.filter, m.dlg.cursor, m.dlg.refusal = text, layout.Cursor{}, ""
 		return m
 	}
-	m.dlg.cursor = moveCursor(m.dlg.cursor, key, count)
-	return m
+	return m.moved(key, count)
 }
 
 // pick takes the entry under the cursor: a category, or a new one created from what was typed.
 func (m Model) pick(candidates []csvimport.Candidate) Model {
-	if m.dlg.cursor < len(candidates) {
-		return m.picked(*m.staged, candidates[m.dlg.cursor])
+	if m.dlg.cursor.Row < len(candidates) {
+		return m.picked(*m.staged, candidates[m.dlg.cursor.Row])
 	}
 	row := m.staged.Rows[m.table.Row]
 	staged, candidate, err := m.staged.Create(csvimport.SuggestName(row, m.dlg.filter))
@@ -292,13 +293,13 @@ func (m Model) pick(candidates []csvimport.Candidate) Model {
 
 // picked closes the picker with the category: for the waiting form, or for this row alone.
 func (m Model) picked(staged csvimport.Staged, candidate csvimport.Candidate) Model {
-	if m.parent.kind != dialogNone {
-		m.dlg, m.parent = m.parent, dialog{}
+	if m.waiting != nil {
+		m = m.show(modeRuleForm, *m.waiting)
 		m.dlg.category, m.dlg.refusal = candidate, ""
 		m.staged = &staged
 		return m
 	}
 	once := staged.Once(m.table.Row, candidate)
-	m.staged, m.dlg = &once, dialog{}
-	return m
+	m.staged = &once
+	return m.show(modeRows, dialog{})
 }

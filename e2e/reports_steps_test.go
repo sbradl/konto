@@ -294,15 +294,6 @@ func (w *world) statementIsEmpty() error {
 	})
 }
 
-func (w *world) expectNoneOf(a, b, c, d string) error {
-	for _, text := range []string{a, b, c, d} {
-		if err := w.expectScreen(false, text); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func (w *world) expectWalletCurrencies(label, text string) error {
 	return w.expectTable(sheetTitle, func(rows []recentRow) error {
 		row, err := rowFor(rows, label)
@@ -352,14 +343,6 @@ func (w *world) totalExpenses(figure string) error { return w.statementRow("Tota
 
 func (w *world) sheetNotListed(label string) error { return w.expectNotListed(sheetTitle, label) }
 
-func (w *world) statementNotListed(label string) error {
-	return w.expectNotListed(statementTitle, label)
-}
-
-func (w *world) statementNotListedEither(a, b string) error {
-	return w.expectNotListed(statementTitle, a, b)
-}
-
 func (w *world) sheetShows(t *godog.Table) error { return w.expectTableShows(sheetTitle, t) }
 
 func (w *world) statementShows(t *godog.Table) error { return w.expectTableShows(statementTitle, t) }
@@ -381,8 +364,9 @@ func registerReportsTableSteps(sc *godog.ScenarioContext, w *world) {
 }
 
 func registerReportsStatementSteps(sc *godog.ScenarioContext, w *world) {
-	step(sc, `^the income statement does not list "([^"]*)" or "([^"]*)"$`, w.statementNotListedEither)
-	step(sc, `^the income statement does not list "([^"]*)"$`, w.statementNotListed)
+	step(sc, `^the income statement does not list ("[^"]*"(?: or "[^"]*")?)$`, func(list string) error {
+		return w.expectNotListed(statementTitle, quotedList(list)...)
+	})
 	step(sc, `^the income statement total income is "([^"]*)"$`, w.totalIncome)
 	step(sc, `^the income statement total expenses is "([^"]*)"$`, w.totalExpenses)
 	step(sc, `^the income statement net is "([^"]*)"$`, w.expectIncomeNet)
@@ -410,8 +394,6 @@ func registerReportsLayoutSteps(sc *godog.ScenarioContext, w *world) {
 	step(sc, `^no row is highlighted with background (\d+)$`, w.anyNoHighlight)
 	step(sc, `^I see no figure dated after "([^"]*)"$`, w.expectNoDateAfter)
 	step(sc, `^I see "([^"]*)" and "([^"]*)" on the same screen row$`, w.expectSameRow)
-	step(sc, `^I do not see "([^"]*)" or "([^"]*)" or "([^"]*)" or "([^"]*)"$`, w.expectNoneOf)
-	step(sc, `^I do not see the word "([^"]*)"$`, func(word string) error { return w.expectScreen(false, word) })
 }
 
 func registerReportsSteps(sc *godog.ScenarioContext, w *world) {

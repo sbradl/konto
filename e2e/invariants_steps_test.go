@@ -73,7 +73,7 @@ func (w *world) editPeriodicRule() error {
 		if err := w.selectRule("Acme GmbH"); err != nil {
 			return err
 		}
-		if err := w.awaitReload(); err != nil {
+		if err := w.awaitIdle(); err != nil {
 			return err
 		}
 		if err := w.press("e"); err != nil {
@@ -102,7 +102,7 @@ func (w *world) afterWrite(write func() error) error {
 	if err := write(); err != nil {
 		return err
 	}
-	return w.awaitReload()
+	return w.awaitIdle()
 }
 
 func newAccountExport() postbankExport {
@@ -153,19 +153,7 @@ func (w *world) expectOneSourceTag(account string) error {
 
 var accountLine = regexp.MustCompile(`^\s+(\S+)`)
 
-// expectCounterparts checks that no posting of an imported transaction lies in a catch-all account.
-func (w *world) expectNoCatchAll(names ...string) error {
-	return w.eventually(func() error {
-		text := strings.ToLower(allJournalText(w.journalFiles()))
-		for _, name := range names {
-			if strings.Contains(text, "account "+name) || strings.Contains(text, "    "+name) {
-				return fmt.Errorf("the journal has an account named %q", name)
-			}
-		}
-		return nil
-	})
-}
-
+// expectCounterpartsAreAccounts checks that every posting of the written transactions names an account.
 func (w *world) expectCounterpartsAreAccounts() error {
 	return w.eventually(func() error {
 		for _, block := range w.newBlocks(false) {
@@ -381,9 +369,6 @@ func registerInvariantSteps(sc *godog.ScenarioContext, w *world) {
 	step(sc, `^the journal's "account ([^"]*)" directive has exactly one "konto:source:" tag$`, w.expectOneSourceTag)
 	step(sc, `^I start konto again$`, w.startAgain)
 	step(sc, `^every transaction has a counterpart that is a category, an account, or "equity:opening-balances"$`, w.expectCounterpartsAreAccounts)
-	step(sc, `^the journal has no account named "([^"]*)" or "([^"]*)" or "([^"]*)"$`, func(a, b, c string) error {
-		return w.expectNoCatchAll(a, b, c)
-	})
 	step(sc, `^I visit every view and press every read-only key$`, w.visitEveryView)
 	step(sc, `^I visit every view$`, w.visitEveryView)
 	step(sc, `^I visit every view and quit$`, func() error {

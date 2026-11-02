@@ -1,17 +1,17 @@
 package domain
 
-import (
-	"strings"
-	"time"
-)
+import "time"
 
 // KontoTag is the tag konto marks the transactions it manages with.
 const KontoTag = "konto"
 
+// carryValue is the value of the konto tag on the carry.
+const carryValue = "carry"
+
 // Names of the managed carry transactions (ADR 0013); an import's opening balance shares the account and the
 // description.
 const (
-	CarryTag              = "konto:carry" // the konto tag, valued carry
+	CarryTag              = "konto:carry" // the konto tag, valued carryValue
 	OpeningBalanceAccount = "equity:opening-balances"
 	ClosingDescription    = "closing balance"
 	OpeningDescription    = "opening balance"
@@ -38,8 +38,9 @@ func (c SetCarry) Opening(date time.Time) NewTransaction {
 }
 
 // IsCarry reports a managed carry transaction: konto writes it, no account's source does, so it is no
-// booking and moves no watermark.
-func (t Transaction) IsCarry() bool { return strings.Contains(t.Comment, CarryTag) }
+// booking and moves no watermark. It reads the parsed tag, not the comment, which for an import is the bank's
+// purpose text and may say anything.
+func (t Transaction) IsCarry() bool { return t.Tags[KontoTag] == carryValue }
 
 func asBalanced(m MultiAmount) MultiAmount { return m }
 

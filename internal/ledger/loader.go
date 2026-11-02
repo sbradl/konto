@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/sbradl/konto/internal/domain"
+	"github.com/sbradl/konto/internal/parallel"
 )
 
 type gateway interface {
@@ -77,7 +78,7 @@ func (l *Loader) fromHledger(ctx context.Context) (domain.Ledger, []domain.Accou
 		accounts []domain.Account
 	)
 	today := l.today()
-	err := domain.RunAll(
+	err := parallel.RunAll(
 		func() error { return assign(&snapshot.Transactions)(l.gw.Print(ctx)) },
 		func() error { return assign(&accounts)(l.gw.Balances(ctx)) },
 		func() (err error) { snapshot.Month, snapshot.Spend, err = l.activity(ctx, today); return err },
@@ -112,13 +113,15 @@ func declare(accounts []domain.Account, declarations []domain.Declaration) []dom
 		declaration := byName[account.Name]
 		accounts[i].Source = declaration.Source
 		accounts[i].IBAN = declaration.IBAN
+		accounts[i].Format = declaration.Format
 		accounts[i].Closed = declaration.Closed
 	}
 	for _, declaration := range declarations {
 		if !listed[declaration.Name] {
 			listed[declaration.Name] = true
 			accounts = append(accounts, domain.Account{
-				Name: declaration.Name, Source: declaration.Source, IBAN: declaration.IBAN, Closed: declaration.Closed,
+				Name: declaration.Name, Source: declaration.Source, IBAN: declaration.IBAN, Format: declaration.Format,
+				Closed: declaration.Closed,
 			})
 		}
 	}
@@ -154,9 +157,9 @@ func summarise(activity []domain.Account, month time.Time) domain.MonthSummary {
 	for _, account := range activity {
 		switch {
 		case domain.IsIncome(account.Name):
-			summary.Income = summary.Income.Plus(account.Balance.Negated())
+			summary.Income = summary.Income.Plus(account.Reported())
 		case domain.IsExpense(account.Name):
-			summary.Expenses = summary.Expenses.Plus(account.Balance)
+			summary.Expenses = summary.Expenses.Plus(account.Reported())
 		}
 	}
 	return summary

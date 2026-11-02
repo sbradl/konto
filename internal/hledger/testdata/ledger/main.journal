@@ -1,0 +1,13 @@
+decimal-mark ,
+commodity 1.000,00 EUR
+
+account equity:opening-balances
+account assets:checking
+account expenses:rent
+account income:salary
+
+tag konto-rule
+
+~ monthly from 2026-10-01  Rent
+    expenses:rent    900,00 EUR
+    assets:checking

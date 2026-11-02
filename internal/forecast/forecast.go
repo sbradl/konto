@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/sbradl/konto/internal/domain"
+	"github.com/sbradl/konto/internal/parallel"
 )
 
 // Months of history and of forecast the chart covers.
@@ -83,7 +84,7 @@ func (s *Service) Forecast(ctx context.Context, ledger domain.Ledger) (Forecast,
 			return nil
 		}
 	}
-	if err := domain.RunAll(projects...); err != nil {
+	if err := parallel.RunAll(projects...); err != nil {
 		return Forecast{}, err //nolint:wrapcheck // each projection names its account
 	}
 	for rank := range accounts {
@@ -166,9 +167,7 @@ func commoditiesOf(projection domain.Projection) (commodities []string, zeros ma
 		for _, amount := range balance {
 			if _, seen := zeros[amount.Commodity]; !seen {
 				commodities = append(commodities, amount.Commodity)
-				zeros[amount.Commodity] = domain.Amount{
-					Commodity: amount.Commodity, Places: amount.Places, Style: amount.Style,
-				}
+				zeros[amount.Commodity] = amount.Zero()
 			}
 		}
 	}

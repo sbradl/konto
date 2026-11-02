@@ -44,3 +44,20 @@ func TestCarryPostsEachCommodityOfAnAccountOnItsOwn(t *testing.T) {
 		t.Errorf("lines = %q", lines)
 	}
 }
+
+func TestIsCarryReadsTheKontoTagNotTheCommentText(t *testing.T) {
+	cases := map[string]struct {
+		transaction Transaction
+		want        bool
+	}{
+		"the carry":                 {Transaction{Comment: CarryTag, Tags: map[string]string{KontoTag: "carry"}}, true},
+		"purpose quoting the tag":   {Transaction{Comment: "Ref xkonto:carryall", Tags: map[string]string{"xkonto": "carryall"}}, false},
+		"another konto tag":         {Transaction{Comment: "konto:other", Tags: map[string]string{KontoTag: "other"}}, false},
+		"untagged with the comment": {Transaction{Comment: "konto:carry, as text"}, false},
+	}
+	for name, c := range cases {
+		if got := c.transaction.IsCarry(); got != c.want {
+			t.Errorf("%s: IsCarry = %v, want %v", name, got, c.want)
+		}
+	}
+}

@@ -16,8 +16,9 @@ type Posting struct {
 type Transaction struct {
 	Date        time.Time
 	Description string
-	Comment     string    // the transaction's own comment, without the semicolon
-	Source      SourcePos // where the entry is written; a projected occurrence points at its `~` line
+	Comment     string            // the transaction's own comment, without the semicolon
+	Tags        map[string]string // the transaction's `key:value` tags, as hledger parsed them; nil when it has none
+	Source      SourcePos         // where the entry is written; a projected occurrence points at its `~` line
 	Postings    []Posting
 }
 

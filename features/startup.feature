@@ -35,10 +35,19 @@ Feature: Startup, preflight and journal resolution
     When I start konto with "--file ./j.journal"
     Then the tab bar shows an absolute path ending in "/j.journal"
 
-  Scenario: every hledger call gets the explicit -f path
+  # A single file is named with -f; a journal with year files (ADR 0013) goes as `-f -`, its files included
+  # on stdin, so balance assertions see across them.
+  Scenario: every hledger call names the journal
     Given the journal "minimal"
     When I start konto
-    Then every recorded hledger invocation contains "-f <absolute journal path>"
+    Then every recorded hledger invocation names the journal
+
+  @adr-0013
+  Scenario: a journal with year files is named through includes on stdin
+    Given the ledger "years"
+    And today is 2026-09-30
+    When I start konto
+    Then every recorded hledger invocation includes the journal and the year files 2025, 2026 on stdin
 
   Scenario: a second instance refuses to start
     Given the journal "minimal"

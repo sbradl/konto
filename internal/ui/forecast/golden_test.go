@@ -2,34 +2,17 @@ package forecast
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 	"testing"
 
 	forecastsvc "github.com/sbradl/konto/internal/forecast"
 	"github.com/sbradl/konto/internal/ui/layout"
+	"github.com/sbradl/konto/internal/ui/uitest"
 )
 
 // golden compares the plain view with testdata/<name>.txt; KONTO_UPDATE_GOLDEN=1 rewrites the file.
 func golden(t *testing.T, name string, model Model) {
 	t.Helper()
-	path := filepath.Join("testdata", name+".txt")
-	got := plain(model.View()) + "\n"
-	if os.Getenv("KONTO_UPDATE_GOLDEN") != "" {
-		if err := os.MkdirAll("testdata", 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(path, []byte(got), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	want, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got != string(want) {
-		t.Errorf("%s differs from %s:\n%s\nwant\n%s", name, path, got, want)
-	}
+	uitest.Golden(t, name, uitest.Plain(model.View()))
 }
 
 func twoCurrencies() forecastsvc.Forecast {

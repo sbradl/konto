@@ -37,4 +37,4 @@
 ▸from account        zz:x▏
    no account matches
  to account          —
- Tab next field · ←/→ choose · Enter save · Esc cancel
+ Tab/↑/↓ field · ←/→ choose · Enter save · Esc cancel

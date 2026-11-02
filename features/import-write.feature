@@ -38,6 +38,7 @@ Feature: Import — writing, assertions, opening balance, staging and quitting
       Given I open "sept.csv" in Import and categorise every row
       When I write the import
       Then the journal contains no "unknown" or "uncategorized" account
+      And every transaction has a counterpart that is a category, an account, or "equity:opening-balances"
 
     Scenario: w asks y/n and shows what will be written
       Given I open "sept.csv" in Import and categorise every row

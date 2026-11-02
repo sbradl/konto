@@ -45,17 +45,17 @@ func (m Model) screen() screenKind {
 	if m.tooSmall() {
 		return screenTooSmall
 	}
-	if m.firstRun {
+	if m.firstRun() {
 		return screenFirstRun
 	}
-	if m.parseIssue != nil {
+	if m.parseIssue() != nil {
 		return screenParseIssue
-	}
-	if m.ledger == nil {
-		return screenLoading
 	}
 	if m.loadErr != nil {
 		return screenLoadFailed
+	}
+	if m.ledger == nil {
+		return screenLoading
 	}
 	return screenViews
 }
@@ -68,7 +68,7 @@ func (m Model) content() string {
 	case screenFirstRun:
 		return m.centred(m.firstRunText())
 	case screenParseIssue:
-		return m.centred(parseErrorText(*m.parseIssue))
+		return m.centred(parseErrorText(*m.parseIssue()))
 	case screenLoading:
 		return m.centred("loading journal…")
 	case screenViews, screenLoadFailed:
@@ -98,19 +98,33 @@ func (m Model) hint() string {
 	keys := m.activeTab().keys
 	parts := make([]string, 0, len(keys))
 	for _, binding := range keys {
-		parts = append(parts, binding.key+" "+binding.action)
+		parts = append(parts, binding.Label()+" "+binding.Action)
 	}
-	return strings.Join(parts, "   ")
+	return strings.Join(parts, statusGap)
 }
+
+// The status bar's spacing: its segments are joined by statusGap, and statusEdge keeps them off the edges.
+const (
+	statusGap  = "   "
+	statusEdge = " "
+)
 
 // statusBar shows the active view's name and key hint, with "? keys" at the right edge.
 func (m Model) statusBar() string {
 	left := m.statusLeft()
-	status, statusStyle := m.checkStatus()
-	right := m.indicator() + "? keys "
+	status := m.statusChecks()
+	right := m.indicator() + "? keys" + statusEdge
 	gap := max(1, m.width-lipgloss.Width(left)-lipgloss.Width(status)-lipgloss.Width(right))
-	return theme.StatusBar.Render(left+strings.Repeat(" ", gap)) +
-		statusStyle.Render(status) + theme.StatusBar.Render(right)
+	return theme.StatusBar.Render(left+strings.Repeat(" ", gap)) + status + theme.StatusBar.Render(right)
+}
+
+// statusChecks is the check indicator in its style with the gap after it, or nothing before the first run.
+func (m Model) statusChecks() string {
+	status, style := m.checkStatus()
+	if status == "" {
+		return ""
+	}
+	return style.Render(status + statusGap)
 }
 
 func (m Model) firstRunText() string {
@@ -125,13 +139,14 @@ func (m Model) centred(text string) string {
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, text)
 }
 
-// indicator is the in-flight spinner or the stale-snapshot error flag, if any.
+// indicator is the in-flight spinner, which sits one cell before "? keys", or the stale-snapshot error flag
+// with the gap after it; nothing when there is neither.
 func (m Model) indicator() string {
-	if m.refreshing {
+	if m.busy() {
 		return "⣾ "
 	}
 	if m.failure != nil {
-		return "✗ error   "
+		return "✗ error" + statusGap
 	}
 	return ""
 }
@@ -181,22 +196,22 @@ func parseErrorText(issue domain.CheckIssue) string {
 // its key hint and its cursor position.
 func (m Model) statusLeft() string {
 	if m.prompt != nil {
-		return " " + m.prompt.question + " (y/n)"
+		return statusEdge + m.prompt.question + " (y/n)"
 	}
 	if m.notice != "" {
-		return " " + m.notice
+		return statusEdge + m.notice
 	}
-	left := " " + m.activeTab().name
+	segments := []string{m.activeTab().name}
 	if hint := m.hint(); hint != "" {
-		left += "   " + hint
+		segments = append(segments, hint)
 	}
 	if row, total := m.position(); total > 0 {
-		left += fmt.Sprintf("   %d/%d", row, total)
+		segments = append(segments, fmt.Sprintf("%d/%d", row, total))
 	}
 	if hidden := m.hiddenPanels(); hidden > 0 {
-		left += "   " + hiddenNotice(hidden)
+		segments = append(segments, hiddenNotice(hidden))
 	}
-	return left
+	return statusEdge + strings.Join(segments, statusGap)
 }
 
 // hiddenNotice says how many panels of the active view did not fit.

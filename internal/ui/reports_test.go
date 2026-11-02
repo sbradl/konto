@@ -10,6 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sbradl/konto/internal/domain"
+	"github.com/sbradl/konto/internal/ui/uitest"
 )
 
 // fakeReporter builds a report whose single row names the period it was asked for.
@@ -64,7 +65,7 @@ func TestTheReportLoadsWithTheLedgerAndShowsOnTheReportsTab(t *testing.T) {
 
 	reports, _ := press(model, "5")
 
-	if content := plain(reports.View().Content); !strings.Contains(content, "for month to date") || !strings.Contains(content, "BALANCE SHEET") {
+	if content := uitest.Plain(reports.View().Content); !strings.Contains(content, "for month to date") || !strings.Contains(content, "BALANCE SHEET") {
 		t.Errorf("Reports tab:\n%s", content)
 	}
 	if len(periods) != 1 {
@@ -81,7 +82,7 @@ func TestPCyclesTheReportsPeriodAndKeepsItAcrossViews(t *testing.T) {
 	away, _ := press(model, "3")
 	back, _ := press(away, "5")
 
-	if content := plain(back.View().Content); !strings.Contains(content, "quarter to date") || !strings.Contains(content, "for quarter to date") {
+	if content := uitest.Plain(back.View().Content); !strings.Contains(content, "quarter to date") || !strings.Contains(content, "for quarter to date") {
 		t.Errorf("the period survives a view switch:\n%s", content)
 	}
 }
@@ -106,7 +107,7 @@ func TestAStaleReportIsDropped(t *testing.T) {
 		IncomeStatement: []domain.ReportRow{{Kind: domain.RowLeaf, Label: "STALE"}},
 	}})
 
-	if strings.Contains(plain(stale.(Model).View().Content), "STALE") {
+	if strings.Contains(uitest.Plain(stale.(Model).View().Content), "STALE") {
 		t.Errorf("a report for another period must not be shown")
 	}
 }
@@ -117,7 +118,7 @@ func TestAFailedReportKeepsTheOldOneAndFlagsTheError(t *testing.T) {
 
 	failed, _ := model.Update(reportLoadedMsg{period: domain.MonthToDate, err: errors.New("hledger bal: boom")})
 
-	content := plain(failed.(Model).View().Content)
+	content := uitest.Plain(failed.(Model).View().Content)
 	if !strings.Contains(content, "for month to date") || !strings.Contains(content, "✗ error") {
 		t.Errorf("stale report stays and the error shows:\n%s", content)
 	}
@@ -130,7 +131,7 @@ func TestAReportOfANewPeriodThatFailsSaysWhyInTheView(t *testing.T) {
 
 	failed, _ := model.Update(reportLoadedMsg{period: domain.QuarterToDate, err: errors.New("hledger bal: boom")})
 
-	content := plain(failed.(Model).View().Content)
+	content := uitest.Plain(failed.(Model).View().Content)
 	if strings.Contains(content, "for month to date") || !strings.Contains(content, "hledger bal: boom") ||
 		!strings.Contains(content, "✗ error") {
 		t.Errorf("view:\n%s", content)
@@ -164,7 +165,7 @@ func TestReportsFollowTheTerminalSize(t *testing.T) {
 
 	resizedModel := resized(model, 160, 50)
 
-	rows := strings.Split(plain(resizedModel.View().Content), "\n")
+	rows := strings.Split(uitest.Plain(resizedModel.View().Content), "\n")
 	if len(rows) != 50 || !strings.HasPrefix(rows[len(rows)-2], "╰") {
 		t.Errorf("view has %d rows and the panels end at %q, want 50 rows with the panels' bottom border above the status bar", len(rows), rows[len(rows)-2])
 	}
@@ -173,7 +174,7 @@ func TestReportsFollowTheTerminalSize(t *testing.T) {
 func TestWithoutAReporterTheReportsTabStillRenders(t *testing.T) {
 	model, _ := press(started(t, fakeLoader{}), "5")
 
-	if content := plain(model.View().Content); !strings.Contains(content, "BALANCE SHEET") {
+	if content := uitest.Plain(model.View().Content); !strings.Contains(content, "BALANCE SHEET") {
 		t.Errorf("Reports tab:\n%s", content)
 	}
 }

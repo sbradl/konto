@@ -28,7 +28,7 @@ func (f *fakeGateway) Occurrences(_ context.Context, text string, first, last ti
 
 func today() time.Time { return day("2026-09-30") }
 
-var euro = domain.AmountStyle{Spaced: true, DecimalMark: ",", GroupMark: ".", GroupSize: 3}
+var euro = domain.DefaultAmount("EUR").Style
 
 func ledger() domain.Ledger {
 	return domain.Ledger{

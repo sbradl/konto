@@ -102,25 +102,39 @@ func (m Model) Resize(width, height int) Model {
 	return next.moveTo(next.cursor.Row)
 }
 
-// Action is what a key asks the root model to do with the selected account.
-type Action int
+// Action is what a key asks the root model to do with the selected account: CloseSelected or ReopenSelected;
+// nil asks for nothing.
+type Action interface{ isAction() }
 
-// The Dashboard's actions.
+// CloseSelected asks for closing the selected account to be planned.
+type CloseSelected struct{}
+
+// ReopenSelected asks for reopening the selected account to be planned.
+type ReopenSelected struct{}
+
+func (CloseSelected) isAction()  {}
+func (ReopenSelected) isAction() {}
+
+// The Dashboard's own keys.
 const (
-	NoAction       Action = iota
-	CloseSelected         // c: plan closing the selected account
-	ReopenSelected        // o: plan reopening it
+	keyClose  = "c"
+	keyReopen = "o"
 )
+
+// Bindings are the keys Key acts on besides the cursor keys, as the root hints them.
+func Bindings() []layout.Binding {
+	return []layout.Binding{{Key: keyClose, Action: "close"}, {Key: keyReopen, Action: "reopen"}}
+}
 
 // Key applies a key: c and o ask for the selected account to be closed or reopened, the cursor keys move.
 func (m Model) Key(key string) (Model, Action) {
 	switch key {
-	case "c":
-		return m, CloseSelected
-	case "o":
-		return m, ReopenSelected
+	case keyClose:
+		return m, CloseSelected{}
+	case keyReopen:
+		return m, ReopenSelected{}
 	}
-	return m.Move(key), NoAction
+	return m.Move(key), nil
 }
 
 // Move applies a cursor key: up, down, home, end, pgup or pgdown. The cursor stops at both ends.

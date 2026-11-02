@@ -20,7 +20,7 @@ const Uncategorised = "konto:uncategorised"
 
 // The ways an export can be unusable; both are the file's fault, not hledger's.
 var (
-	ErrNotAnExport = errors.New("the file is not a recognised Postbank export")
+	ErrNotAnExport = errors.New("the file is not a recognised bank export")
 	ErrNoIBAN      = errors.New("the account could not be detected: the export names no IBAN")
 )
 
@@ -70,21 +70,27 @@ func (r Row) NeedsCategory() bool { return r.Target == "" }
 
 // Staged is an export read against the journal, held in memory until it is written.
 type Staged struct {
-	Path        string // where the export was read from, to read it again when the journal changes
-	File        string // the export's file name
-	IBAN        string
-	Format      string
-	Account     domain.Account // the account the IBAN belongs to; zero for a new one
-	NewAccount  bool           // the IBAN is unknown: the account has yet to be created
-	Named       string         // the name given to the new account; empty until it has one
-	Watermark   time.Time      // the account's latest transaction; zero for a fresh account
-	Rows        []Row          // new rows, newest first
-	Skipped     []Row          // rows the journal already has, newest first
-	Closing     string         // the bank's closing balance as printed, e.g. "14.261,45"
-	Rules       []Rule         // the categorisation rules, those staged by this import included
-	Known       []domain.Account
-	NewAccounts []string           // categories this import declares
-	Zero        domain.MultiAmount // a zero in the export's currency, in the style the journal writes it
+	Path       string // where the export was read from, to read it again when the journal changes
+	File       string // the export's file name
+	IBAN       string
+	Format     string         // the bank format's name, as the account's konto:format tag has it
+	Account    domain.Account // the account the IBAN belongs to; zero for a new one
+	NewAccount bool           // the IBAN is unknown: the account has yet to be created
+	Watermark  time.Time      // the account's latest transaction; zero for a fresh account
+	Rows       []Row          // new rows, newest first
+	Skipped    []Row          // rows the journal already has, newest first
+	Closing    string         // the bank's closing balance as printed, e.g. "14.261,45"
+	Rules      []Rule         // the categorisation rules, those staged by this import included
+	Known      []domain.Account
+	Zero       domain.MultiAmount // a zero in the export's currency, in the style the journal writes it
+	Edits
+}
+
+// Edits are what the user did to a reading of the export besides its rows and rules: Restage carries them
+// whole into a new reading.
+type Edits struct {
+	Named       string   // the name given to the new account; empty until it has one
+	NewAccounts []string // categories this import declares
 }
 
 // NeedCategory counts the new rows no rule has claimed.
@@ -146,7 +152,7 @@ func (s *Service) rules(format bankFormat, account string) string {
 	return format.rules() + "account1 " + account + "\ninclude " + s.rulesPath + "\n"
 }
 
-// accountOf is the account the IBAN belongs to; false when no account has it.
+// accountOf is the account the IBAN belongs to; isNew when no account has it.
 func accountOf(ledger domain.Ledger, iban string) (account domain.Account, isNew bool) {
 	for _, candidate := range ledger.Accounts {
 		if candidate.IBAN != "" && domain.NormalizeIBAN(candidate.IBAN) == iban {
@@ -176,12 +182,25 @@ func rowsOf(transactions []domain.Transaction, account string) []Row {
 	return rows
 }
 
-// booking is what the journal knows of one transaction on the account: enough to recognise it again.
-type booking struct {
-	date        string
-	amount      string
-	description string
+// booking is what tells one booking on the account from another in the journal: its day, amount and
+// description (CONTEXT: Watermark). The purpose is left out: in the journal it is the transaction's comment,
+// which the user may edit and tags are added to.
+type booking struct{ date, amount, description string }
+
+// rowKey is what tells one row of the export from another: its booking and its purpose. The same row read
+// again, and the export line it was converted from, have the same key.
+type rowKey struct {
+	booking
+	purpose string
 }
+
+// booking is the row as the journal will know it.
+func (r Row) booking() booking {
+	return booking{r.Date.Format(time.DateOnly), r.Amount.Value(), r.Description}
+}
+
+// key is what tells the row from the others of the export.
+func (r Row) key() rowKey { return rowKey{r.booking(), r.Purpose} }
 
 // journalBookings are the account's transactions in the journal on the day, as bookings; the carry is none.
 func journalBookings(ledger domain.Ledger, account string, day time.Time) []booking {
@@ -215,7 +234,7 @@ func classify(rows []Row, ledger domain.Ledger, account string) (fresh, skipped 
 	}
 	for i := range rows {
 		row := &rows[i]
-		key := booking{row.Date.Format(time.DateOnly), row.Amount.Value(), row.Description}
+		key := row.booking()
 		switch {
 		case row.Date.Before(watermark):
 			skipped = append(skipped, *row)

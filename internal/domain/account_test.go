@@ -239,3 +239,13 @@ func TestImportRefusalNamesWhyAnAccountIsNoImportTarget(t *testing.T) {
 		}
 	}
 }
+
+func TestReportedShowsIncomeAsAPositiveFigureAndAnythingElseAsBooked(t *testing.T) {
+	booked := MultiAmount{{Commodity: "EUR", Mantissa: -500, Places: 2}}
+	cases := map[string]int64{"income:salary": 500, "expenses:rent": -500, "assets:checking": -500}
+	for name, want := range cases {
+		if got := (Account{Name: name, Balance: booked}).Reported(); got[0].Mantissa != want {
+			t.Errorf("%s: Reported = %+v, want %d", name, got, want)
+		}
+	}
+}

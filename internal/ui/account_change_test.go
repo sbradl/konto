@@ -1,13 +1,16 @@
 package ui
 
 import (
+	"context"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sbradl/konto/internal/domain"
+	"github.com/sbradl/konto/internal/ui/uitest"
 )
 
 type fakePlanner struct {
@@ -27,9 +30,18 @@ func (f *fakePlanner) Reopen(account domain.Account) (domain.Changeset, error) {
 	return f.changeset, f.err
 }
 
+// fakeWriter prepares a changeset by adding carry to it, and records what it prepares and applies.
 type fakeWriter struct {
-	applied []domain.Changeset
-	err     error
+	carry      []domain.Edit
+	prepared   []domain.Changeset
+	prepareErr error
+	applied    []domain.Changeset
+	err        error
+}
+
+func (f *fakeWriter) Prepare(_ context.Context, changeset domain.Changeset) (domain.Changeset, error) {
+	f.prepared = append(f.prepared, changeset)
+	return domain.Changeset{Edits: append(slices.Clone(changeset.Edits), f.carry...)}, f.prepareErr
 }
 
 func (f *fakeWriter) Apply(changeset domain.Changeset) error {
@@ -65,7 +77,7 @@ func TestCAsksBeforeClosingTheSelectedAccount(t *testing.T) {
 func TestCAndOWaitForTheReloadBecauseTheAccountMayHaveChanged(t *testing.T) {
 	planner := &fakePlanner{changeset: closeSpare}
 	model := withAccounts(t, planner, &fakeWriter{})
-	model.refreshing = true
+	model.reloading = true
 
 	for _, key := range []string{"c", "o"} {
 		pressed, _ := press(model, key)
@@ -90,7 +102,7 @@ func TestYAppliesThePlannedChangeAndRefreshes(t *testing.T) {
 		t.Errorf("applied = %+v, want the planned changeset", writer.applied)
 	}
 	updated, reload := model.Update(written)
-	if !updated.(Model).refreshing || reload == nil {
+	if !updated.(Model).busy() || reload == nil {
 		t.Error("a successful write should start a refresh")
 	}
 }
@@ -100,7 +112,7 @@ func TestTheSpinnerShowsFromYOnSoTheWriteIsNeverMistakenForDone(t *testing.T) {
 
 	model, _ = press(model, "y")
 
-	if !model.refreshing || !strings.Contains(plain(model.View().Content), "⣾") {
+	if !model.busy() || !strings.Contains(uitest.Plain(model.View().Content), "⣾") {
 		t.Error("the spinner should show while the write is in flight")
 	}
 }
@@ -114,7 +126,7 @@ func TestAFailedWriteIsReportedAndNotRefreshed(t *testing.T) {
 	if got := lastLine(updated.(Model)); !strings.Contains(got, "write failed: disk full") || cmd != nil {
 		t.Errorf("status bar = %q, cmd = %v; want the failure shown and no refresh", got, cmd)
 	}
-	if updated.(Model).refreshing {
+	if updated.(Model).busy() {
 		t.Error("the spinner should stop once the write has failed")
 	}
 }
@@ -200,5 +212,17 @@ func TestAccountKeysOnAnEmptyDashboardDoNothing(t *testing.T) {
 
 	if got, _ := press(updated.(Model), "c"); got.prompt != nil || got.notice != "" {
 		t.Error("c with no account selected should do nothing")
+	}
+}
+
+func TestAReloadLandingWhileAWriteIsInFlightKeepsTheModelBusy(t *testing.T) {
+	model, _ := press(withAccounts(t, &fakePlanner{changeset: closeSpare}, &fakeWriter{}), "c")
+	model, _ = press(model, "y")
+	model, reload := press(model, "r")
+
+	updated, _ := model.Update(reload())
+
+	if !updated.(Model).busy() || !strings.Contains(lastLine(updated.(Model)), "⣾") {
+		t.Errorf("status %q; want busy until the write lands", lastLine(updated.(Model)))
 	}
 }

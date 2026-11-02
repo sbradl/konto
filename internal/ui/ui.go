@@ -17,6 +17,7 @@ import (
 	"github.com/sbradl/konto/internal/ui/dashboard"
 	forecastview "github.com/sbradl/konto/internal/ui/forecast"
 	"github.com/sbradl/konto/internal/ui/imports"
+	"github.com/sbradl/konto/internal/ui/layout"
 	"github.com/sbradl/konto/internal/ui/reports"
 	"github.com/sbradl/konto/internal/ui/scheduled"
 )
@@ -57,12 +58,14 @@ type csvImporter interface {
 	Open(ctx context.Context, path string, snapshot domain.Ledger) (csvimport.Staged, error)
 }
 
-// journalWriter applies a changeset to the journal.
+// journalWriter writes a changeset to the journal: Prepare completes it with what else the write brings, once,
+// and Apply writes that prepared changeset as it is.
 type journalWriter interface {
+	Prepare(ctx context.Context, changeset domain.Changeset) (domain.Changeset, error)
 	Apply(changeset domain.Changeset) error
 }
 
-// changeVerifier checks a changeset before it is written and says why the journal would be wrong after it.
+// changeVerifier checks a prepared changeset before it is written and says why the journal would be wrong after it.
 type changeVerifier interface {
 	Verify(ctx context.Context, changeset domain.Changeset) error
 }
@@ -83,61 +86,69 @@ type ledgerLoadedMsg struct {
 	err    error
 }
 
-func (msg journalCreateFailedMsg) takeIn(m Model) Model {
+func (msg journalCreateFailedMsg) takeIn(m Model) (Model, tea.Cmd) {
 	m.createErr = msg.err
-	return m
+	return m, nil
 }
+
+func (msg ledgerLoadedMsg) takeIn(m Model) (Model, tea.Cmd) { return m.onLedgerLoaded(msg) }
 
 // Model is konto's single tea.Model.
 type Model struct {
+	// ports: the use cases and adapters the root drives
 	journalPath string
 	loader      ledgerLoader
 	checker     checkRunner
+	creator     journalCreator
 	accounts    accountPlanner
 	writer      journalWriter
 	verifier    changeVerifier
 	reporter    reportBuilder
 	forecaster  forecaster
 	rules       rulePlanner
-	forecasts   forecastview.Model
-	reports     reports.Model
-	scheduled   scheduled.Model
 	importer    csvImporter
-	imports     imports.Model
-	prompt      *prompt     // the y/n question awaiting an answer
-	notice      string      // a one-line message shown until the next key
-	checks      checksPanel // the latest check run and the panel's cursor over it
-	creator     journalCreator
 	editor      func(file string, line int) *exec.Cmd
-	ledger      *domain.Ledger
-	loadErr     error
-	refreshing  bool  // a write or reload is in flight; the held snapshot stays on screen
-	loads       int   // the number of the latest load asked for; results of earlier ones are stale
-	failure     error // the last hledger call that failed, flagged until a reload succeeds
-	active      int   // index into tabs
-	popup       popupKind
-	dash        dashboard.Model
-	firstRun    bool
-	parseIssue  *domain.CheckIssue
-	createErr   error
-	width       int
-	height      int
+
+	// view models
+	dash      dashboard.Model
+	imports   imports.Model
+	scheduled scheduled.Model
+	forecasts forecastview.Model
+	reports   reports.Model
+
+	// session state
+	ledger    *domain.Ledger  // the latest good snapshot; nil until a load succeeds
+	loadErr   error           // why the journal could not be loaded, while no snapshot is held
+	createErr error           // why the first-run journal could not be written
+	checks    checksPanel     // the latest check run and the panel's cursor over it
+	failure   error           // the last hledger call that failed, flagged until a reload succeeds
+	loads     int             // the number of the latest load asked for; results of earlier ones are stale
+	reloading bool            // the latest load is in flight; the held snapshot stays on screen
+	writing   bool            // a changeset is on its way to the journal
+	saving    *scheduled.Save // the form's save being planned; nil when none is
+	prompt    *prompt         // the y/n question awaiting an answer
+	notice    string          // a one-line message shown until the next key
+	popup     popupKind       // the popup over the view, if any
+	active    int             // index into tabs
+	width     int
+	height    int
 }
 
-// browsedMsg carries a folder's listing for the file picker.
+// browsedMsg carries a folder's listing for the file picker; a listing does not depend on the journal, so
+// it is never stale.
 type browsedMsg struct {
 	dir     string
 	entries []domain.FileEntry
 	err     error
 }
 
-func (msg browsedMsg) takeIn(m Model) Model {
+func (msg browsedMsg) takeIn(m Model) (Model, tea.Cmd) {
 	m.imports = m.imports.WithListing(msg.dir, msg.entries, msg.err)
-	return m
+	return m, nil
 }
 
-// openedMsg carries an export read against the journal. When the staged import was read again after the
-// journal changed, earlier is what had been staged and load the load it was read again for.
+// openedMsg carries an export read against the journal of load. When the staged import was read again after
+// the journal changed, earlier is what had been staged.
 type openedMsg struct {
 	staged  csvimport.Staged
 	err     error
@@ -145,7 +156,7 @@ type openedMsg struct {
 	load    int
 }
 
-func (msg openedMsg) takeIn(m Model) Model { return m.onOpened(msg) }
+func (msg openedMsg) takeIn(m Model) (Model, tea.Cmd) { return m.onOpened(msg), nil }
 
 // forecastLoadedMsg carries a forecast built from the journal of a load, or why it could not be built.
 type forecastLoadedMsg struct {
@@ -154,7 +165,7 @@ type forecastLoadedMsg struct {
 	err      error
 }
 
-func (msg forecastLoadedMsg) takeIn(m Model) Model { return m.onForecast(msg) }
+func (msg forecastLoadedMsg) takeIn(m Model) (Model, tea.Cmd) { return m.onForecast(msg), nil }
 
 // reportLoadedMsg carries a built report for the period and load it was asked for.
 type reportLoadedMsg struct {
@@ -164,16 +175,21 @@ type reportLoadedMsg struct {
 	err    error
 }
 
-func (msg reportLoadedMsg) takeIn(m Model) Model { return m.onReport(msg) }
+func (msg reportLoadedMsg) takeIn(m Model) (Model, tea.Cmd) { return m.onReport(msg), nil }
 
-// writtenMsg reports that a changeset was applied, and what was to follow, or why it was not.
+// writtenMsg reports that a changeset was applied, and what was to follow, or why it was not. A write is never
+// stale: whatever was reloaded meanwhile, the journal has changed (or not) and the model must hear of it.
 type writtenMsg struct {
 	err     error
 	pending pendingWrite
 }
 
+func (msg writtenMsg) takeIn(m Model) (Model, tea.Cmd) { return m.onWritten(msg) }
+
 // editorClosedMsg reports that the user's editor has exited.
 type editorClosedMsg struct{}
+
+func (editorClosedMsg) takeIn(m Model) (Model, tea.Cmd) { return m.reload() }
 
 // Ports are the use cases and adapters the root model drives.
 type Ports struct {
@@ -224,9 +240,12 @@ func (m Model) load() tea.Msg {
 // flight finds out is dropped.
 func (m Model) reload() (Model, tea.Cmd) {
 	m.loads++
-	m.refreshing = true
+	m.reloading = true
 	return m, m.load
 }
+
+// fresh reports whether a result asked for from the snapshot of load is still about the journal on screen.
+func (m Model) fresh(load int) bool { return load == m.loads }
 
 // create writes the first-run journal, then loads it.
 func (m Model) create() tea.Msg {
@@ -236,9 +255,23 @@ func (m Model) create() tea.Msg {
 	return m.load()
 }
 
-// result is what a command found out that asks for nothing further; it takes itself into the model.
+// result is what a command found out; it takes itself into the model and says what to run next.
 type result interface {
-	takeIn(m Model) Model
+	takeIn(m Model) (Model, tea.Cmd)
+}
+
+// Every async message is a result; most ask for nothing further.
+var _ = []result{
+	journalCreateFailedMsg{},
+	ledgerLoadedMsg{},
+	browsedMsg{},
+	openedMsg{},
+	forecastLoadedMsg{},
+	reportLoadedMsg{},
+	writtenMsg{},
+	editorClosedMsg{},
+	formReadyMsg{},
+	ruleSavedMsg{},
 }
 
 // Update routes a message: the terminal's size and keys to the root, what a command found out to its handler.
@@ -248,16 +281,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.resize(msg), nil
 	case tea.KeyPressMsg:
 		return m.onKey(msg)
-	case ledgerLoadedMsg:
-		return m.onLedgerLoaded(msg)
-	case editorClosedMsg:
-		return m.reload()
-	case ruleSavedMsg:
-		return m.onRuleSaved(msg)
-	case writtenMsg:
-		return m.onWritten(msg)
 	case result:
-		return msg.takeIn(m), nil
+		return msg.takeIn(m)
 	}
 	return m, nil
 }
@@ -269,13 +294,14 @@ func (m Model) resize(size tea.WindowSizeMsg) Model {
 	for _, tab := range tabs() {
 		m = tab.resize(m, m.width, content)
 	}
+	m.checks = m.checks.scrolled(m.height)
 	return m
 }
 
 // onLedgerLoaded takes the latest load in and builds what follows from it: the report, the staged export read
 // again, the forecast. A load asked for before the latest is dropped.
 func (m Model) onLedgerLoaded(loaded ledgerLoadedMsg) (Model, tea.Cmd) {
-	if loaded.load != m.loads {
+	if !m.fresh(loaded.load) {
 		return m, nil
 	}
 	m = m.onLoaded(loaded)
@@ -285,22 +311,27 @@ func (m Model) onLedgerLoaded(loaded ledgerLoadedMsg) (Model, tea.Cmd) {
 // onLoaded takes a load result in. Once a good snapshot is held, a failed reload
 // keeps it (stale-while-revalidate) and only flags the error.
 func (m Model) onLoaded(loaded ledgerLoadedMsg) Model {
-	m.refreshing = false
-	if m.hasSnapshot() && loaded.err != nil {
-		m.failure = loaded.err
+	m.reloading = false
+	if loaded.err != nil {
+		if m.hasSnapshot() {
+			m.failure = loaded.err
+		} else {
+			m.loadErr = loaded.err
+		}
 		return m
 	}
-	m.failure = nil
-	m.ledger, m.loadErr = &loaded.ledger, loaded.err
+	m.ledger, m.loadErr, m.failure = &loaded.ledger, nil, nil
 	m.dash = m.dash.WithLedger(loaded.ledger)
 	m.scheduled = m.scheduled.WithLedger(loaded.ledger)
-	if loaded.err == nil {
-		m.checks = m.checks.withRun(loaded.run, m.height)
-	}
-	m.firstRun = errors.Is(loaded.err, ledger.ErrNoJournal)
-	m.parseIssue = issueOf(loaded.err)
+	m.checks = m.checks.withRun(loaded.run, m.height)
 	return m
 }
+
+// firstRun reports that there is no journal yet.
+func (m Model) firstRun() bool { return errors.Is(m.loadErr, ledger.ErrNoJournal) }
+
+// parseIssue is the located journal error that kept the journal from loading, if there is one.
+func (m Model) parseIssue() *domain.CheckIssue { return issueOf(m.loadErr) }
 
 // loadReport builds the Reports view's report for its current period, once the journal has loaded.
 func (m Model) loadReport(loadErr error) tea.Cmd {
@@ -317,8 +348,9 @@ func (m Model) loadReport(loadErr error) tea.Cmd {
 // onReport takes a built report in; one for a period no longer shown or of an earlier load is dropped, and a
 // failed one is flagged, the Reports view saying why when it has no report of the period to show.
 func (m Model) onReport(loaded reportLoadedMsg) Model {
+	shown := loaded.period == m.reports.Period()
 	switch {
-	case loaded.period != m.reports.Period() || loaded.load != m.loads:
+	case !shown || !m.fresh(loaded.load):
 	case loaded.err != nil:
 		m.failure = loaded.err
 		m.reports = m.reports.WithFailure(loaded.err)
@@ -342,7 +374,7 @@ func (m Model) loadForecast(loaded ledgerLoadedMsg) tea.Cmd {
 // onForecast takes a built forecast in; one of an earlier load is dropped, and a failed one leaves the last
 // projection on screen with the error flagged.
 func (m Model) onForecast(built forecastLoadedMsg) Model {
-	if built.load != m.loads {
+	if !m.fresh(built.load) {
 		return m
 	}
 	if built.err != nil {
@@ -354,9 +386,7 @@ func (m Model) onForecast(built forecastLoadedMsg) Model {
 }
 
 // hasSnapshot reports whether a good ledger is on screen.
-func (m Model) hasSnapshot() bool {
-	return m.ledger != nil && m.loadErr == nil
-}
+func (m Model) hasSnapshot() bool { return m.ledger != nil }
 
 func (m Model) onKey(key tea.KeyPressMsg) (Model, tea.Cmd) {
 	name := keyName(key)
@@ -403,8 +433,8 @@ func (m Model) capturing() bool {
 	if m.screen() != screenViews || m.prompt != nil || m.popup != popupNone {
 		return false
 	}
-	captures := m.activeTab().captures
-	return captures != nil && captures(m)
+	capture := m.activeTab().capture
+	return capture != nil && capture.active(m)
 }
 
 func (m Model) onFirstRunKey(key string) tea.Cmd {
@@ -418,8 +448,8 @@ func (m Model) onFirstRunKey(key string) tea.Cmd {
 }
 
 func (m Model) onParseErrorKey(key string) tea.Cmd {
-	if key == "enter" {
-		return m.openEditor(*m.parseIssue)
+	if key == layout.KeyEnter {
+		return m.openEditor(*m.parseIssue())
 	}
 	return nil
 }
@@ -470,7 +500,7 @@ func (m Model) onGlobalKey(key string) (updated Model, cmd tea.Cmd, global bool)
 func (m Model) onReportsKey(key string) (Model, tea.Cmd) {
 	var action reports.Action
 	m.reports, action = m.reports.Key(key)
-	if action == reports.LoadReport {
+	if _, load := action.(reports.LoadReport); load {
 		return m, m.loadReport(nil)
 	}
 	return m, nil

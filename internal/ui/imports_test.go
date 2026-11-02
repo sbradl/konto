@@ -10,6 +10,7 @@ import (
 
 	"github.com/sbradl/konto/internal/csvimport"
 	"github.com/sbradl/konto/internal/domain"
+	"github.com/sbradl/konto/internal/ui/uitest"
 )
 
 type fakeImporter struct {
@@ -58,7 +59,7 @@ func sampleStaged() csvimport.Staged {
 func TestImportStartsEmptyWithAHintAndNIsInTheHint(t *testing.T) {
 	model := startedWithImporter(t, &fakeImporter{})
 
-	if content := plain(model.View().Content); !strings.Contains(content, "press n for a new file") {
+	if content := uitest.Plain(model.View().Content); !strings.Contains(content, "press n for a new file") {
 		t.Errorf("empty Import:\n%s", content)
 	}
 	if got := lastLine(model); !strings.Contains(got, "n new file") || regexpPosition.MatchString(got) {
@@ -72,8 +73,8 @@ func TestNBrowsesTheDownloadDirectoryAndEnterOpensTheFile(t *testing.T) {
 
 	model, cmd := press(model, "n")
 	model = deliver(model, cmd)
-	if len(importer.browsed) != 1 || importer.browsed[0] != "/home/me/Downloads" || !strings.Contains(plain(model.View().Content), "sept.csv") {
-		t.Fatalf("browsed %v; view:\n%s", importer.browsed, plain(model.View().Content))
+	if len(importer.browsed) != 1 || importer.browsed[0] != "/home/me/Downloads" || !strings.Contains(uitest.Plain(model.View().Content), "sept.csv") {
+		t.Fatalf("browsed %v; view:\n%s", importer.browsed, uitest.Plain(model.View().Content))
 	}
 
 	model, _ = pressCode(model, tea.KeyDown)
@@ -101,7 +102,7 @@ func TestAnUnusableFileIsAMessageAndNothingIsStaged(t *testing.T) {
 		model, cmd = pressCode(model, tea.KeyEnter)
 		model = deliver(model, cmd)
 
-		content := plain(model.View().Content)
+		content := uitest.Plain(model.View().Content)
 		if !strings.Contains(content, message) || strings.Contains(content, "ROWS") || strings.Contains(lastLine(model), "✗") {
 			t.Errorf("%v: the message should show and nothing be staged:\n%s", failure, content)
 		}
@@ -123,7 +124,7 @@ func TestGlobalKeysNeverReachTheView(t *testing.T) {
 		model, _ = press(model, "2")
 	}
 
-	if content := plain(model.View().Content); !strings.Contains(content, csvimport.ErrNoIBAN.Error()) {
+	if content := uitest.Plain(model.View().Content); !strings.Contains(content, csvimport.ErrNoIBAN.Error()) {
 		t.Errorf("a global key reached the Import view and cleared its message:\n%s", content)
 	}
 }
@@ -137,12 +138,12 @@ func TestHledgerFailingOnTheConversionFlagsTheErrorAndFillsTheChecksPanel(t *tes
 	model, cmd = pressCode(model, tea.KeyEnter)
 	failed := deliver(model, cmd)
 
-	content := plain(failed.View().Content)
+	content := uitest.Plain(failed.View().Content)
 	if !strings.Contains(content, "unreadable row or file") || !strings.Contains(lastLine(failed), "✗ error") {
 		t.Errorf("the failure shows as a message and an indicator:\n%s", content)
 	}
 	opened, _ := press(failed, "!")
-	if !strings.Contains(plain(opened.View().Content), "hledger: boom") {
+	if !strings.Contains(uitest.Plain(opened.View().Content), "hledger: boom") {
 		t.Errorf("the ! panel carries hledger's words")
 	}
 }
@@ -152,7 +153,7 @@ func TestAFailureToListTheFolderIsShownInThePicker(t *testing.T) {
 	model, cmd := press(startedWithImporter(t, importer), "n")
 	model = deliver(model, cmd)
 
-	if content := plain(model.View().Content); !strings.Contains(content, "no such file or directory") {
+	if content := uitest.Plain(model.View().Content); !strings.Contains(content, "no such file or directory") {
 		t.Errorf("picker:\n%s", content)
 	}
 }
@@ -163,11 +164,11 @@ func TestEscLeavesThePickerAndOtherViewsKeepTheirKeys(t *testing.T) {
 
 	closed, _ := pressCode(model, tea.KeyEscape)
 
-	if content := plain(closed.View().Content); !strings.Contains(content, "press n for a new file") {
+	if content := uitest.Plain(closed.View().Content); !strings.Contains(content, "press n for a new file") {
 		t.Errorf("Esc returns to the empty Import:\n%s", content)
 	}
 	dash, _ := press(closed, "1")
-	if got, cmd := press(dash, "n"); cmd != nil || strings.Contains(plain(got.View().Content), "OPEN A CSV") {
+	if got, cmd := press(dash, "n"); cmd != nil || strings.Contains(uitest.Plain(got.View().Content), "OPEN A CSV") {
 		t.Errorf("n belongs to Import only")
 	}
 }
@@ -177,7 +178,7 @@ func TestImportKeysDoNothingWithoutAnImporterAndStatsStayConsistent(t *testing.T
 
 	after, cmd := press(model, "n")
 
-	if cmd != nil || plain(after.View().Content) != plain(model.View().Content) {
+	if cmd != nil || uitest.Plain(after.View().Content) != uitest.Plain(model.View().Content) {
 		t.Errorf("without an importer n has nothing to open")
 	}
 }
@@ -185,7 +186,7 @@ func TestImportKeysDoNothingWithoutAnImporterAndStatsStayConsistent(t *testing.T
 func TestImportFollowsTheTerminalSize(t *testing.T) {
 	model, _ := press(startedWithImporter(t, &fakeImporter{staged: sampleStaged()}), "2")
 
-	rows := strings.Split(plain(resized(model, 160, 50).View().Content), "\n")
+	rows := strings.Split(uitest.Plain(resized(model, 160, 50).View().Content), "\n")
 
 	if len(rows) != 50 || !strings.HasPrefix(rows[len(rows)-2], "╰") {
 		t.Errorf("view has %d rows; the panels should end just above the status bar, got %q", len(rows), rows[len(rows)-2])
@@ -197,7 +198,7 @@ func TestKeysInViewsWithoutKeysOfTheirOwnDoNothing(t *testing.T) {
 
 	after, cmd := press(model, "x")
 
-	if cmd != nil || plain(after.View().Content) != plain(model.View().Content) {
+	if cmd != nil || uitest.Plain(after.View().Content) != uitest.Plain(model.View().Content) {
 		t.Errorf("Forecast has no keys of its own")
 	}
 }
@@ -221,16 +222,16 @@ func categorisingModel(t *testing.T) Model {
 func TestAnOpenDialogTakesEveryKeyAsTextSoViewKeysAndQuitDoNotLeakThrough(t *testing.T) {
 	model := categorisingModel(t)
 	if !model.capturing() {
-		t.Fatalf("the dialog is not capturing:\n%s", plain(model.View().Content))
+		t.Fatalf("the dialog is not capturing:\n%s", uitest.Plain(model.View().Content))
 	}
 	for _, key := range []string{"q", "1", "r", "?", "!", " "} {
 		var cmd tea.Cmd
 		model, cmd = press(model, key)
-		if cmd != nil || model.active != importTab || model.popup != popupNone || model.refreshing {
+		if cmd != nil || model.active != importTab || model.popup != popupNone || model.busy() {
 			t.Fatalf("%q leaked out of the dialog: active %d popup %d", key, model.active, model.popup)
 		}
 	}
-	if got := plain(model.View().Content); !strings.Contains(got, "─ categorise ") {
+	if got := uitest.Plain(model.View().Content); !strings.Contains(got, "─ categorise ") {
 		t.Errorf("the dialog closed:\n%s", got)
 	}
 }

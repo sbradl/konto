@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -11,10 +12,11 @@ import (
 
 	"github.com/sbradl/konto/internal/csvimport"
 	"github.com/sbradl/konto/internal/domain"
+	"github.com/sbradl/konto/internal/ui/uitest"
 )
 
 func euros(mantissa int64) domain.MultiAmount {
-	style := domain.AmountStyle{Spaced: true, DecimalMark: ",", GroupMark: ".", GroupSize: 3}
+	style := domain.DefaultAmount("EUR").Style
 	return domain.MultiAmount{{Commodity: "EUR", Mantissa: mantissa, Places: 2, Style: style}}
 }
 
@@ -74,7 +76,7 @@ func TestWBlocksWhileRowsNeedACategoryAndWritesNothing(t *testing.T) {
 
 	model, _ := press(rig.model, "w")
 
-	if content := plain(model.View().Content); !strings.Contains(content, "1 row needs a category") ||
+	if content := uitest.Plain(model.View().Content); !strings.Contains(content, "1 row needs a category") ||
 		model.prompt != nil || len(rig.writer.applied) != 0 {
 		t.Errorf("prompt = %v, applied = %v; content:\n%s", model.prompt, rig.writer.applied, content)
 	}
@@ -83,7 +85,7 @@ func TestWBlocksWhileRowsNeedACategoryAndWritesNothing(t *testing.T) {
 func TestWAsksYNAndShowsWhatWillBeWritten(t *testing.T) {
 	model, _ := press(stagedForWrite(t, writable()).model, "w")
 
-	content := plain(model.View().Content)
+	content := uitest.Plain(model.View().Content)
 	for _, want := range []string{"─ write ", "2026-09-30 REWE Markt", "expenses:groceries  42,17 EUR  ; konto-rule:2", "╭─ ROWS "} {
 		if !strings.Contains(content, want) {
 			t.Errorf("screen lacks %q:\n%s", want, content)
@@ -116,7 +118,7 @@ func TestNAndEscCancelTheWriteAndTheStagedImportSurvives(t *testing.T) {
 			model, _ = press(model, key)
 		}
 
-		if content := plain(model.View().Content); model.prompt != nil || !strings.Contains(content, "╭─ ROWS ") ||
+		if content := uitest.Plain(model.View().Content); model.prompt != nil || !strings.Contains(content, "╭─ ROWS ") ||
 			strings.Contains(content, "─ write ") || len(rig.writer.applied) != 0 {
 			t.Errorf("%s: prompt = %v; content:\n%s", key, model.prompt, content)
 		}
@@ -136,14 +138,47 @@ func TestYChecksThenWritesAndThenConfirmsAndEmptiesTheImport(t *testing.T) {
 	}
 	updated, reload := model.Update(written)
 	done := updated.(Model)
-	if !done.refreshing || reload == nil {
+	if !done.busy() || reload == nil {
 		t.Error("a successful write refreshes the views")
 	}
 	if got := lastLine(done); !strings.Contains(got, "imported 2 transactions into assets:checking") {
 		t.Errorf("status bar = %q", got)
 	}
-	if content := plain(done.View().Content); !strings.Contains(content, "press n for a new file") {
+	if content := uitest.Plain(done.View().Content); !strings.Contains(content, "press n for a new file") {
 		t.Errorf("the import is not emptied:\n%s", content)
+	}
+}
+
+// The write is prepared once, and the check and the write both get that prepared changeset, carry and all.
+func TestTheCheckAndTheWriteGetTheOnePreparedChangeset(t *testing.T) {
+	rig := stagedForWrite(t, writable())
+	carry := domain.DeclareTag(domain.KontoTag) // stands in for the carry the preparation adds
+	rig.writer.carry = []domain.Edit{carry}
+	model, _ := press(rig.model, "w")
+	_, cmd := press(model, "y")
+
+	cmd()
+
+	checked, applied := rig.verifier.checked, rig.writer.applied
+	if len(rig.writer.prepared) != 1 || len(checked) != 1 || len(applied) != 1 ||
+		!reflect.DeepEqual(checked[0], applied[0]) || applied[0].Edits[len(applied[0].Edits)-1] != carry {
+		t.Errorf("prepared %d, checked %+v, applied %+v; want one prepared changeset with the carry checked and written",
+			len(rig.writer.prepared), checked, applied)
+	}
+}
+
+func TestAFailedPreparationChecksAndWritesNothing(t *testing.T) {
+	rig := stagedForWrite(t, writable())
+	rig.writer.prepareErr = errors.New("adding up the carry into 2027: boom")
+	model, _ := press(rig.model, "w")
+	model, cmd := press(model, "y")
+
+	updated, _ := model.Update(cmd())
+
+	done := updated.(Model)
+	if len(rig.verifier.checked) != 0 || len(rig.writer.applied) != 0 ||
+		!strings.Contains(lastLine(done), "write failed: adding up the carry into 2027") {
+		t.Errorf("checked %v, applied %v, status = %q", rig.verifier.checked, rig.writer.applied, lastLine(done))
 	}
 }
 
@@ -157,7 +192,7 @@ func TestAFailedPreCheckWritesNothingAndKeepsTheImport(t *testing.T) {
 
 	done := updated.(Model)
 	if len(rig.writer.applied) != 0 || !strings.Contains(lastLine(done), "write failed: the journal would fail its checks") ||
-		!strings.Contains(plain(done.View().Content), "╭─ ROWS ") {
+		!strings.Contains(uitest.Plain(done.View().Content), "╭─ ROWS ") {
 		t.Errorf("applied = %v, status = %q", rig.writer.applied, lastLine(done))
 	}
 }
@@ -171,7 +206,7 @@ func TestAFailedWriteKeepsTheImport(t *testing.T) {
 	updated, _ := model.Update(cmd())
 
 	done := updated.(Model)
-	if !strings.Contains(lastLine(done), "write failed: disk full") || !strings.Contains(plain(done.View().Content), "╭─ ROWS ") {
+	if !strings.Contains(lastLine(done), "write failed: disk full") || !strings.Contains(uitest.Plain(done.View().Content), "╭─ ROWS ") {
 		t.Errorf("status = %q", lastLine(done))
 	}
 }
@@ -183,7 +218,7 @@ func TestAnExportThatMissesTheBanksBalanceIsBlockedWithTheFigures(t *testing.T) 
 
 	model, _ := press(rig.model, "w")
 
-	content := plain(model.View().Content)
+	content := uitest.Plain(model.View().Content)
 	if !strings.Contains(content, "bank 13.182,03 EUR · journal 13.195,83 EUR · difference -13,80 EUR") ||
 		model.prompt != nil || len(rig.writer.applied) != 0 || !strings.Contains(content, "╭─ ROWS ") {
 		t.Errorf("prompt = %v; content:\n%s", model.prompt, content)
@@ -196,7 +231,7 @@ func TestAnImportWithNothingNewHasNothingToWrite(t *testing.T) {
 
 	model, _ := press(stagedForWrite(t, staged).model, "w")
 
-	if content := plain(model.View().Content); !strings.Contains(content, "nothing new to write") || model.prompt != nil {
+	if content := uitest.Plain(model.View().Content); !strings.Contains(content, "nothing new to write") || model.prompt != nil {
 		t.Errorf("content:\n%s", content)
 	}
 }
@@ -227,21 +262,21 @@ func manyRows(n int) csvimport.Staged {
 
 func TestALongPreviewScrollsWithTheArrowKeys(t *testing.T) {
 	model, _ := press(stagedForWrite(t, manyRows(10)).model, "w")
-	if content := plain(model.View().Content); !strings.Contains(content, "Newest") || strings.Contains(content, "payee Newest") {
+	if content := uitest.Plain(model.View().Content); !strings.Contains(content, "Newest") || strings.Contains(content, "payee Newest") {
 		t.Fatalf("the preview starts with the newest transaction:\n%s", content)
 	}
 
 	for range 40 {
 		model, _ = pressCode(model, tea.KeyDown)
 	}
-	scrolled := plain(model.View().Content)
+	scrolled := uitest.Plain(model.View().Content)
 	if strings.Contains(scrolled, "2026-09-30 Newest") || !strings.Contains(scrolled, "payee Newest") {
 		t.Errorf("the preview did not scroll to its end:\n%s", scrolled)
 	}
 	for range 80 {
 		model, _ = pressCode(model, tea.KeyUp)
 	}
-	if content := plain(model.View().Content); !strings.Contains(content, "2026-09-30 Newest") {
+	if content := uitest.Plain(model.View().Content); !strings.Contains(content, "2026-09-30 Newest") {
 		t.Errorf("the preview did not scroll back:\n%s", content)
 	}
 }
@@ -252,11 +287,11 @@ func TestOneUpAfterScrollingPastTheEndScrollsTheLongPreviewBack(t *testing.T) {
 	for range 40 {
 		model, _ = pressCode(model, tea.KeyDown)
 	}
-	atEnd := plain(model.View().Content)
+	atEnd := uitest.Plain(model.View().Content)
 
 	model, _ = pressCode(model, tea.KeyUp)
 
-	if plain(model.View().Content) == atEnd {
+	if uitest.Plain(model.View().Content) == atEnd {
 		t.Errorf("one up after scrolling past the end did not move the preview:\n%s", atEnd)
 	}
 }
@@ -265,12 +300,12 @@ func TestOpeningAFileWhileTheJournalReloadsAsksToTryAgain(t *testing.T) {
 	importer := &fakeImporter{entries: []domain.FileEntry{{Name: "sept.csv"}}, staged: sampleStaged()}
 	model, cmd := press(startedWithImporter(t, importer), "n")
 	model = deliver(model, cmd)
-	model.refreshing = true
+	model.reloading = true
 
 	model, _ = pressCode(model, tea.KeyDown)
 	model, cmd = pressCode(model, tea.KeyEnter)
 
-	if content := plain(model.View().Content); cmd != nil || len(importer.opened) != 0 ||
+	if content := uitest.Plain(model.View().Content); cmd != nil || len(importer.opened) != 0 ||
 		!strings.Contains(content, "still reloading the journal") {
 		t.Errorf("opened %v; content:\n%s", importer.opened, content)
 	}
@@ -278,11 +313,11 @@ func TestOpeningAFileWhileTheJournalReloadsAsksToTryAgain(t *testing.T) {
 
 func TestWWhileTheJournalReloadsAsksToTryAgain(t *testing.T) {
 	model := stagedForWrite(t, writable()).model
-	model.refreshing = true
+	model.reloading = true
 
 	model, _ = press(model, "w")
 
-	if content := plain(model.View().Content); model.prompt != nil || !strings.Contains(content, "try again in a moment") {
+	if content := uitest.Plain(model.View().Content); model.prompt != nil || !strings.Contains(content, "try again in a moment") {
 		t.Errorf("prompt %v; content:\n%s", model.prompt, content)
 	}
 }
@@ -292,7 +327,7 @@ func TestAPreviewThatFitsShowsEveryLineOfItIncludingTheLast(t *testing.T) {
 	one.Closing = "13.239,00"
 	model, _ := press(stagedForWrite(t, one).model, "w")
 
-	content := plain(model.View().Content)
+	content := uitest.Plain(model.View().Content)
 	if model.prompt == nil {
 		t.Fatalf("no prompt:\n%s", content)
 	}

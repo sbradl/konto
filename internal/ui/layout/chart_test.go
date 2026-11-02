@@ -7,6 +7,7 @@ import (
 	"github.com/NimbleMarkets/ntcharts/v2/linechart"
 
 	"github.com/sbradl/konto/internal/domain"
+	"github.com/sbradl/konto/internal/ui/uitest"
 )
 
 func TestNumberIsTheAmountInUnitsOfItsCommodity(t *testing.T) {
@@ -19,7 +20,7 @@ func TestChartLabelsTheYAxisInThousandsEveryOtherRow(t *testing.T) {
 	chart := linechart.New(30, 8, 0, 1, 0, 4000, ChartStyle()...)
 	chart.DrawXYAxisAndLabel()
 
-	view := plain(chart.View())
+	view := uitest.Plain(chart.View())
 	if !strings.Contains(view, "4.0k") || !strings.Contains(view, "0.0k") || strings.Count(view, "k") != 4 {
 		t.Errorf("chart:\n%s", view)
 	}

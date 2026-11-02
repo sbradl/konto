@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/sbradl/konto/internal/domain"
+	"github.com/sbradl/konto/internal/parallel"
 )
 
 type gateway interface {
@@ -24,8 +25,8 @@ func NewRunner(gw gateway) *Runner { return &Runner{gw: gw} }
 // Run runs every check against the journal and the loaded ledger. hledger reports only the
 // first failure per check, so each contributes at most one issue; konto's own checks list all.
 func (r *Runner) Run(ctx context.Context, ledger domain.Ledger) (domain.CheckRun, error) {
-	checks := domain.HledgerChecks()
-	run := domain.CheckRun{Total: len(checks) + len(domain.KontoChecks())}
+	checks, own := domain.HledgerChecks(), domain.KontoChecks()
+	run := domain.CheckRun{Total: len(checks) + len(own)}
 	issues := make([]*domain.CheckIssue, len(checks))
 	runs := make([]func() error, len(checks))
 	for i, check := range checks {
@@ -36,7 +37,7 @@ func (r *Runner) Run(ctx context.Context, ledger domain.Ledger) (domain.CheckRun
 			return nil
 		}
 	}
-	if err := domain.RunAll(runs...); err != nil {
+	if err := parallel.RunAll(runs...); err != nil {
 		return domain.CheckRun{}, err //nolint:wrapcheck // each run names its check
 	}
 	for _, issue := range issues {
@@ -44,7 +45,9 @@ func (r *Runner) Run(ctx context.Context, ledger domain.Ledger) (domain.CheckRun
 			run.Issues = append(run.Issues, *issue)
 		}
 	}
-	run.Issues = append(run.Issues, ledger.UnclassifiedIssues()...)
+	for _, check := range own {
+		run.Issues = append(run.Issues, check(ledger)...)
+	}
 	return run, nil
 }
 
@@ -56,7 +59,7 @@ type textChecker interface {
 	CheckText(ctx context.Context, text string, names []string) error
 }
 
-// Verifier checks a changeset before it is written: the journal as it would read afterwards goes to
+// Verifier checks a prepared changeset before it is written, as it is: the journal as it would read afterwards goes to
 // hledger on standard input, and only the checks that make a journal wrong (errors, not warnings) count.
 type Verifier struct {
 	render renderer
@@ -66,7 +69,8 @@ type Verifier struct {
 // NewVerifier returns a Verifier that renders changesets through render and checks them through gw.
 func NewVerifier(render renderer, gw textChecker) *Verifier { return &Verifier{render: render, gw: gw} }
 
-// Verify returns why the journal would be wrong after the changeset, or nil.
+// Verify returns why the journal would be wrong after the changeset, or nil. The changeset is the one that will
+// be written, already holding what else the write brings (the carry), so it is rendered without adding to it.
 func (v *Verifier) Verify(ctx context.Context, changeset domain.Changeset) error {
 	text, err := v.render.Render(changeset)
 	if err != nil {

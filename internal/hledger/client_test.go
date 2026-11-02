@@ -3,6 +3,7 @@ package hledger
 import (
 	"context"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -21,13 +22,13 @@ var printJSON = `[
   ]}
 ]`
 
-var euroStyle = domain.AmountStyle{Spaced: true, DecimalMark: ",", GroupMark: ".", GroupSize: 3}
+var euroStyle = domain.DefaultAmount("EUR").Style
 
 type call struct{ args []string }
 
 // newClient is a Client that runs run on the journal of the files.
 func newClient(run runner, files ...string) *Client {
-	return &Client{run: run, files: func() []string { return files }, tempRules: osRules}
+	return &Client{run: run, files: func() []string { return files }}
 }
 
 func recording(out string, err error, calls *[]call) runner {
@@ -35,7 +36,7 @@ func recording(out string, err error, calls *[]call) runner {
 }
 
 func recordingStderr(out, stderr string, err error, calls *[]call) runner {
-	return func(_ context.Context, args ...string) ([]byte, string, error) {
+	return func(_ context.Context, _ io.Reader, args ...string) ([]byte, string, error) {
 		*calls = append(*calls, call{args})
 		return []byte(out), stderr, err
 	}
@@ -62,18 +63,32 @@ func TestPrintReturnsTransactions(t *testing.T) {
 	}
 }
 
-// Every hledger call names the journal explicitly with -f (spec §7.1).
-func TestPrintPassesJournalPathExplicitly(t *testing.T) {
-	var calls []call
-	client := newClient(recording("[]", nil, &calls), "/data/main.journal")
+// Every hledger call names the journal (spec §7.1): a single file with -f, several (ADR 0013) as `-f -` with
+// standard input including each of them.
+func TestPrintNamesTheJournalExplicitly(t *testing.T) {
+	for name, tc := range map[string]struct {
+		files     []string
+		wantArgs  []string
+		wantInput string
+	}{
+		"one file": {[]string{"/data/main.journal"}, []string{"-f", "/data/main.journal", "print", "-O", "json"}, ""},
+		"several files": {
+			[]string{"/data/main.journal", "/data/2026.journal"},
+			[]string{"-f", "-", "print", "-O", "json"},
+			"include /data/main.journal\ninclude /data/2026.journal\n",
+		},
+	} {
+		var input string
+		var args []string
+		client := newClient(inputReturning("[]", "", nil, &input, &args), tc.files...)
 
-	if _, err := client.Print(context.Background()); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+		if _, err := client.Print(context.Background()); err != nil {
+			t.Fatalf("%s: unexpected error: %v", name, err)
+		}
 
-	want := []string{"-f", "/data/main.journal", "print", "-O", "json"}
-	if len(calls) != 1 || !reflect.DeepEqual(calls[0].args, want) {
-		t.Errorf("calls = %+v, want one call with %v", calls, want)
+		if !reflect.DeepEqual(args, tc.wantArgs) || input != tc.wantInput {
+			t.Errorf("%s: args = %v, input = %q; want %v and %q", name, args, input, tc.wantArgs, tc.wantInput)
+		}
 	}
 }
 
@@ -270,7 +285,7 @@ func TestConvertCSVRunsHledgerOnTheFileWithTheRulesAndReadsComments(t *testing.T
 	  {"paccount": "expenses:groceries", "pamount": [` + amountJSON("EUR", 4217, eurStyle) + `], "ptags": [["konto-rule", "2"]]},
 	  {"paccount": "assets:checking", "pamount": [` + amountJSON("EUR", -4217, eurStyle) + `], "ptags": []}]}]`
 	var rulesSeen string
-	run := func(_ context.Context, args ...string) ([]byte, string, error) {
+	run := func(_ context.Context, _ io.Reader, args ...string) ([]byte, string, error) {
 		if !hasConvertArgs(args) {
 			t.Errorf("args = %v", args)
 		}
@@ -292,70 +307,20 @@ func TestConvertCSVRunsHledgerOnTheFileWithTheRulesAndReadsComments(t *testing.T
 	}
 }
 
-type fakeTemp struct {
-	name     string
-	writeErr error
-	closeErr error
-	content  strings.Builder
-}
-
-func (f *fakeTemp) Write(p []byte) (int, error) {
-	f.content.Write(p)
-	return len(p), f.writeErr
-}
-func (f *fakeTemp) Close() error { return f.closeErr }
-func (f *fakeTemp) Name() string { return f.name }
-
-func TestWriteRulesReportsEachWayTheFileCanFail(t *testing.T) {
-	create := func(file *fakeTemp, err error) func() (tempFile, error) {
-		return func() (tempFile, error) { return file, err }
-	}
-	for name, tc := range map[string]struct {
-		file *fakeTemp
-		err  error
-	}{
-		"create": {&fakeTemp{}, errors.New("no space")},
-		"write":  {&fakeTemp{name: "/tmp/gone", writeErr: errors.New("disk full")}, nil},
-		"close":  {&fakeTemp{name: "/tmp/gone", closeErr: errors.New("close failed")}, nil},
-	} {
-		if _, err := writeRules(create(tc.file, tc.err), "x"); err == nil || !strings.Contains(err.Error(), "writing CSV rules") {
-			t.Errorf("%s: expected an error, got %v", name, err)
-		}
-	}
-	file := &fakeTemp{name: "/tmp/ok"}
-	if path, err := writeRules(create(file, nil), "rules"); err != nil || path != "/tmp/ok" || file.content.String() != "rules" {
-		t.Errorf("path = %q, err = %v, content = %q", path, err, file.content.String())
-	}
-}
-
-func TestOsRulesWritesARealFileAndFailsWithoutATempDirectory(t *testing.T) {
-	path, err := osRules("skip 7\n")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if b, _ := os.ReadFile(path); string(b) != "skip 7\n" {
-		t.Errorf("file holds %q", b)
-	}
-	_ = os.Remove(path)
-
-	t.Setenv("TMPDIR", "/nonexistent/dir")
-	if _, err := osRules("x"); err == nil {
-		t.Errorf("expected an error without a temp directory")
-	}
-}
-
 func TestConvertCSVReportsARulesFileThatCannotBeWritten(t *testing.T) {
-	client := newClient(recording("[]", nil, new([]call)), "j")
-	client.tempRules = func(string) (string, error) { return "", errors.New("no temp") }
+	var calls []call
+	t.Setenv("TMPDIR", filepath.Join(t.TempDir(), "missing"))
 
-	if _, err := client.ConvertCSV(context.Background(), "x.csv", ""); err == nil {
-		t.Errorf("expected an error")
+	_, err := newClient(recording("[]", nil, &calls), "j").ConvertCSV(context.Background(), "x.csv", "")
+
+	if err == nil || !strings.Contains(err.Error(), "writing CSV rules") || len(calls) != 0 {
+		t.Errorf("err = %v, calls = %v; want the rules file's failure and no hledger call", err, calls)
 	}
 }
 
 func TestConvertCSVRemovesItsRulesFile(t *testing.T) {
 	var path string
-	run := func(_ context.Context, args ...string) ([]byte, string, error) {
+	run := func(_ context.Context, _ io.Reader, args ...string) ([]byte, string, error) {
 		path = args[4]
 		return []byte("[]"), "", nil
 	}
@@ -389,13 +354,24 @@ func TestTagMapSkipsMalformedTagsAndIsNilWithoutAny(t *testing.T) {
 	}
 }
 
+func TestReadTransactionsKeepsTheTransactionTags(t *testing.T) {
+	out := `[{"tdate": "2027-01-01", "tdescription": "opening balance", "tcomment": "konto:carry\n",
+	  "ttags": [["konto", "carry"]], "tpostings": []}]`
+
+	got, err := readTransactions([]byte(out), nil)
+
+	if err != nil || len(got) != 1 || !got[0].IsCarry() {
+		t.Errorf("transactions = %+v, %v; want the carry, read from its tags", got, err)
+	}
+}
+
 // Balance assertions are checked per -f file but across an include, so a journal of several files reaches
 // hledger as one journal on standard input that includes them in order.
 func TestQueriesGiveSeveralFilesAsOneJournalThatIncludesThem(t *testing.T) {
 	var input string
 	var args []string
 	client := newClient(nil, "/data/main.journal", "/data/2025.journal", "/data/my 2026.journal")
-	client.runInput = inputReturning(balanceReport(), "", nil, &input, &args)
+	client.run = inputReturning(balanceReport(), "", nil, &input, &args)
 
 	if _, err := client.Balances(context.Background()); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -425,21 +401,20 @@ func TestQueriesNameASingleFileWithF(t *testing.T) {
 
 // The files are asked for on every query: a year file created meanwhile joins the next one.
 func TestTheFilesAreResolvedOnEveryQuery(t *testing.T) {
-	var calls []call
 	var input string
 	var args []string
 	files := make([]string, 1, 2)
 	files[0] = "/data/main.journal"
-	client := newClient(recording(balanceReport(), nil, &calls))
+	client := newClient(inputReturning(balanceReport(), "", nil, &input, &args))
 	client.files = func() []string { return files }
-	client.runInput = inputReturning(balanceReport(), "", nil, &input, &args)
 
 	_, _ = client.Balances(context.Background())
+	firstArgs := args
 	files = append(files, "/data/2026.journal")
 	_, _ = client.Balances(context.Background())
 
-	if len(calls) != 1 || input != "include /data/main.journal\ninclude /data/2026.journal\n" {
-		t.Errorf("calls = %+v, input = %q; want the second query to include the new file", calls, input)
+	if firstArgs[1] != "/data/main.journal" || input != "include /data/main.journal\ninclude /data/2026.journal\n" {
+		t.Errorf("first args = %v, input = %q; want the second query to include the new file", firstArgs, input)
 	}
 }
 
@@ -447,7 +422,7 @@ func TestSeveralFilesReportHledgerFailure(t *testing.T) {
 	var input string
 	var args []string
 	client := newClient(nil, "/data/main.journal", "/data/2026.journal")
-	client.runInput = inputReturning("", "boom", errors.New("exit status 1"), &input, &args)
+	client.run = inputReturning("", "boom", errors.New("exit status 1"), &input, &args)
 
 	if _, err := client.Balances(context.Background()); err == nil || !strings.Contains(err.Error(), "boom") {
 		t.Errorf("expected an error carrying hledger's message, got: %v", err)
@@ -458,11 +433,11 @@ func TestSeveralFilesReportHledgerFailure(t *testing.T) {
 func TestACallThatOutlivesItsTimeLimitFails(t *testing.T) {
 	for name, run := range map[string]func() error{
 		"query": func() error {
-			_, _, err := execRunner("sleep", 20*time.Millisecond)(context.Background(), "5")
+			_, _, err := binary{"sleep", 20 * time.Millisecond}.run(context.Background(), nil, "5")
 			return err
 		},
 		"with input": func() error {
-			_, _, err := execInputRunner("sleep", 20*time.Millisecond)(context.Background(), "text", "5")
+			_, _, err := binary{"sleep", 20 * time.Millisecond}.run(context.Background(), strings.NewReader("text"), "5")
 			return err
 		},
 	} {

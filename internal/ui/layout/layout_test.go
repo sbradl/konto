@@ -1,9 +1,11 @@
 package layout
 
 import (
-	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/sbradl/konto/internal/ui/theme"
+	"github.com/sbradl/konto/internal/ui/uitest"
 )
 
 func screen(_, height int) string {
@@ -66,10 +68,10 @@ func TestColumnsFitTheWidthUpToTheMaximum(t *testing.T) {
 
 func TestPanelDrawsARoundedBorderWithTheTitleInsetTwoCells(t *testing.T) {
 	got := Panel("ACCOUNTS", 16, 4, "one\nthis line is far too long")
-	if !strings.Contains(got, "\x1b[36mACCOUNTS") {
+	if !strings.Contains(got, theme.PanelTitle.Render("ACCOUNTS")) {
 		t.Errorf("the title should be cyan, got %q", got)
 	}
-	got = regexp.MustCompile(`\x1b\[[0-9;]*m`).ReplaceAllString(got, "")
+	got = uitest.Plain(got)
 
 	want := "╭─ ACCOUNTS ───╮\n│one           │\n│this line is f│\n╰──────────────╯"
 	if got != want {
@@ -93,5 +95,24 @@ func TestOverlayFlushReachesTheLastRow(t *testing.T) {
 		if got[i] != want[i] {
 			t.Errorf("row %d = %q, want %q", i, got[i], want[i])
 		}
+	}
+}
+
+func TestPopupCapacityIsTheBodyUnderTheTitleInHalfTheScreenAtLeastOneLine(t *testing.T) {
+	for _, tc := range []struct{ lines, screen, want int }{
+		{3, 40, 3}, {30, 40, 19}, {19, 40, 19}, {0, 40, 1}, {5, 3, 1},
+	} {
+		if got := PopupCapacity(tc.lines, tc.screen); got != tc.want {
+			t.Errorf("PopupCapacity(%d, %d) = %d, want %d", tc.lines, tc.screen, got, tc.want)
+		}
+	}
+}
+
+func TestPopupIsTheTitleRuleOverTheBodyFittedToTheWidth(t *testing.T) {
+	got := strings.Split(uitest.Plain(Popup("keys", []string{"short", "a line too long"}, 10)), "\n")
+
+	want := []string{"─ keys ───", "short     ", "a line too"}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Errorf("popup = %q, want %q", got, want)
 	}
 }

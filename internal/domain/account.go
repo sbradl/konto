@@ -48,12 +48,21 @@ type Account struct {
 	Name    string
 	Source  Source
 	IBAN    string
+	Format  string    // the bank format an import-fed account's exports come in, as its konto:format tag names it
 	Closed  time.Time // the zero time while the account is open
 	Balance MultiAmount
 }
 
 // IsClosed reports whether the account carries a konto:closed date.
 func (a Account) IsClosed() bool { return !a.Closed.IsZero() }
+
+// Reported is the balance as the figures show it: income, which hledger books as credits, as a positive amount.
+func (a Account) Reported() MultiAmount {
+	if IsIncome(a.Name) {
+		return a.Balance.Negated()
+	}
+	return a.Balance
+}
 
 // IsClassifiable reports whether the account needs a source: only assets and
 // liabilities do; categories and equity never do.
@@ -67,9 +76,7 @@ type Declaration struct {
 	Name   string
 	Source Source
 	IBAN   string
-	// Format is the bank format an import-fed account's exports come in. Written now, read by nothing yet: Open must
-	// parse an export before it knows the account, and Postbank is the only format (spec §4.9).
-	Format string
+	Format string // as Account.Format
 	Closed time.Time
 }
 

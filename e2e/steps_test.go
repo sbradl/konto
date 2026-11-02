@@ -3,7 +3,6 @@
 package e2e
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -146,6 +145,8 @@ func registerWhenSteps(sc *godog.ScenarioContext, w *world) {
 func registerScreenSteps(sc *godog.ScenarioContext, w *world) {
 	step(sc, `^I see "([^"]*)"$`, func(text string) error { return w.expectScreen(true, text) })
 	step(sc, `^I do not see "([^"]*)"$`, func(text string) error { return w.expectScreen(false, text) })
+	step(sc, `^I do not see the word "([^"]*)"(?: anywhere)?$`, func(word string) error { return w.expectScreen(false, word) })
+	step(sc, `^I do not see ("[^"]*"(?: or "[^"]*"){1,3})$`, func(list string) error { return w.expectNoneOf(quotedList(list)...) })
 	step(sc, `^I see the tab bar$`, func() error { return w.expectScreen(true, tabBarMarker) })
 	step(sc, `^I do not see the tab bar$`, func() error { return w.expectScreen(false, tabBarMarker) })
 	step(sc, `^the tab bar reads "(.*)"$`, func(text string) error { return w.expectLine(0, "tab bar", text, strings.Contains) })
@@ -162,6 +163,7 @@ func registerScreenSteps(sc *godog.ScenarioContext, w *world) {
 		if err != nil {
 			return err
 		}
+		s.settle(w.suite.timeout)
 		if now := s.screenText(); now != w.baseline {
 			return fmt.Errorf("screen changed:\n--- before ---\n%s\n--- after ---\n%s", w.baseline, now)
 		}
@@ -184,9 +186,9 @@ func registerProcessSteps(sc *godog.ScenarioContext, w *world) {
 	step(sc, `^konto is still running$`, w.expectRunning)
 	step(sc, `^stderr mentions "([^"]*)"(?: and "([^"]*)")?$`, func(a, b string) error { return w.expectStderr(a, b) })
 	step(sc, `^stderr mentions the minimum version "([^"]*)"$`, func(v string) error { return w.expectStderr(v) })
-	step(sc, `^every recorded hledger invocation contains "-f <absolute journal path>"$`, func() error {
-		return w.expectEveryCall([]string{"-f", w.journal})
-	})
+	step(sc, `^every recorded hledger invocation names the journal$`, w.expectEveryCallNamesTheJournal)
+	step(sc, `^every recorded hledger invocation includes the journal and the year files ([\d, ]+) on stdin$`,
+		w.expectEveryCallIncludes)
 	step(sc, `^the editor was called with "(.*)"$`, w.expectEditorCall)
 }
 
@@ -239,7 +241,7 @@ func registerFileSteps(sc *godog.ScenarioContext, w *world) {
 		return w.eventually(func() error { return expectFileBlock(w.rules, doc.Content) })
 	})
 	step(sc, `^the journal is unchanged$`, w.expectJournalFilesUnchanged)
-	step(sc, `^categories.rules is unchanged$`, func() error { return expectUnchanged(w.rules, w.rulesAtStart) })
+	step(sc, `^categories.rules is unchanged$`, w.expectRulesUnchanged)
 	step(sc, `^(?:every )?hledger check passes$`, func() error {
 		return w.eventually(func() error { return runChecks(w.suite.realHledger, w.journal, false) })
 	})
@@ -250,6 +252,16 @@ func registerFileSteps(sc *godog.ScenarioContext, w *world) {
 const tabBarMarker = "1 dash │ 2 import"
 
 var extendedColour = regexp.MustCompile(`\x1b\[[0-9;:]*[34]8[;:][25][;:]`)
+
+// expectNoneOf checks that none of the texts is on screen.
+func (w *world) expectNoneOf(texts ...string) error {
+	for _, text := range texts {
+		if err := w.expectScreen(false, text); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
 func (w *world) expectScreen(present bool, text string) error {
 	s, err := w.session()
@@ -324,36 +336,74 @@ func (w *world) expectStderr(parts ...string) error {
 	return nil
 }
 
-func (w *world) expectEveryCall(want []string) error {
-	calls, err := w.hledgerCalls()
+// expectEveryCallNamesTheJournal checks that each hledger call names the absolute journal path: with -f, or
+// as `-f -` reading a journal on stdin that includes it (ADR 0013).
+func (w *world) expectEveryCallNamesTheJournal() error {
+	return w.expectEveryInvocation(func(call shimInvocation) bool {
+		return containsSeq(call.Args, []string{"-f", w.journal}) ||
+			containsSeq(call.Args, []string{"-f", "-"}) && slices.Contains(strings.Split(call.Stdin, "\n"), "include "+w.journal)
+	})
+}
+
+// expectEveryCallIncludes checks that each hledger call reads, on stdin, a journal including the main journal
+// and the year files of the years listed, in that order and nothing else.
+func (w *world) expectEveryCallIncludes(years string) error {
+	var want strings.Builder
+	want.WriteString("include " + w.journal + "\n")
+	for year := range strings.SplitSeq(years, ",") {
+		want.WriteString("include " + filepath.Join(filepath.Dir(w.journal), strings.TrimSpace(year)+".journal") + "\n")
+	}
+	return w.expectEveryInvocation(func(call shimInvocation) bool {
+		return containsSeq(call.Args, []string{"-f", "-"}) && call.Stdin == want.String()
+	})
+}
+
+func (w *world) expectEveryInvocation(ok func(shimInvocation) bool) error {
+	calls, err := w.hledgerInvocations()
 	if err != nil {
 		return err
 	}
 	if len(calls) == 0 {
 		return errors.New("konto made no hledger calls")
 	}
-	for _, c := range calls {
-		if !containsSeq(c, want) {
-			return fmt.Errorf("hledger call %q lacks %q", c, want)
+	for _, call := range calls {
+		if !ok(call) {
+			return fmt.Errorf("hledger call %q (stdin %q) does not name the journal %s as expected", call.Args, call.Stdin, w.journal)
 		}
 	}
 	return nil
 }
 
-// hledgerCalls reads the shim's log, skipping the version preflight.
+// shimInvocation is one line of the shim's log: the arguments, and the stdin of a `-f -` call.
+type shimInvocation struct {
+	Args  []string `json:"args"`
+	Stdin string   `json:"stdin"`
+}
+
+// hledgerCalls are the arguments of the logged calls, the version preflight left out.
 func (w *world) hledgerCalls() ([][]string, error) {
+	invocations, err := w.hledgerInvocations()
+	calls := make([][]string, len(invocations))
+	for i, call := range invocations {
+		calls[i] = call.Args
+	}
+	return calls, err
+}
+
+// hledgerInvocations reads the shim's log, skipping the version preflight.
+func (w *world) hledgerInvocations() ([]shimInvocation, error) {
 	log, err := os.ReadFile(w.shimLog)
 	if err != nil {
 		return nil, err
 	}
-	var calls [][]string
+	var calls []shimInvocation
 	for line := range strings.SplitSeq(strings.TrimSpace(string(log)), "\n") {
-		var args []string
-		if err := json.Unmarshal([]byte(line), &args); err != nil {
+		var call shimInvocation
+		if err := json.Unmarshal([]byte(line), &call); err != nil {
 			return nil, fmt.Errorf("hledger call log line %q: %w", line, err)
 		}
-		if len(args) != 1 || args[0] != "--version" {
-			calls = append(calls, args)
+		if len(call.Args) != 1 || call.Args[0] != "--version" {
+			calls = append(calls, call)
 		}
 	}
 	return calls, nil
@@ -409,37 +459,6 @@ func postbankRows(t *godog.Table) ([]postbankRow, error) {
 	return rows, nil
 }
 
-func expectFileBlock(path, want string) error {
-	b, err := os.ReadFile(path)
-	if err != nil {
-		return err
-	}
-	if !containsBlock(string(b), want) {
-		return fmt.Errorf("%s does not contain\n%s\n--- actual ---\n%s", filepath.Base(path), want, b)
-	}
-	return nil
-}
-
-// expectJournalBlock waits for the lines to appear in one of the ledger's journal files.
-func (w *world) expectJournalBlock(want string) error {
-	var names []string
-	for path, content := range w.journalFiles() {
-		if containsBlock(string(content), want) {
-			return nil
-		}
-		names = append(names, filepath.Base(path))
-	}
-	return fmt.Errorf("none of %v contains\n%s", names, want)
-}
-
-func expectUnchanged(path string, before []byte) error {
-	now, _ := os.ReadFile(path)
-	if !bytes.Equal(now, before) {
-		return fmt.Errorf("%s changed:\n--- before ---\n%s\n--- after ---\n%s", filepath.Base(path), before, now)
-	}
-	return nil
-}
-
 func containsSeq(have, want []string) bool {
 	for i := 0; i+len(want) <= len(have); i++ {
 		if equalLines(have[i:i+len(want)], want) {
@@ -462,30 +481,9 @@ func repeat(key string, n int) []string {
 	return keys
 }
 
-func expectAbsent(path string) error {
-	if _, err := os.Stat(path); !os.IsNotExist(err) {
-		return fmt.Errorf("%s exists", path)
-	}
-	return nil
-}
-
 func removeIfExists(path string) error {
 	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 		return err
-	}
-	return nil
-}
-
-// expectJournalFilesUnchanged compares every journal file of the sandbox with its state at start.
-func (w *world) expectJournalFilesUnchanged() error {
-	now := w.journalFiles()
-	for path, before := range w.filesAtStart {
-		if err := expectUnchanged(path, before); err != nil {
-			return err
-		}
-	}
-	if len(now) != len(w.filesAtStart) {
-		return errors.New("the set of journal files changed")
 	}
 	return nil
 }

@@ -5,7 +5,6 @@ import (
 	"regexp"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/sbradl/konto/internal/domain"
 )
@@ -363,20 +362,15 @@ func (s Staged) StagedRules() []Rule {
 	return slices.DeleteFunc(slices.Clone(s.Rules), func(r Rule) bool { return !r.Staged })
 }
 
-// identity is what makes a row the same row when the export is read again.
-func (r Row) identity() string {
-	return r.Date.Format(time.DateOnly) + "|" + r.Description + "|" + r.Amount.Value() + "|" + r.Purpose
-}
-
 // Restage brings what was staged in the earlier reading of this export over to this one, read again against a
 // journal that has since changed: the rules this import staged, the categories it created, the name it
 // gave the new account and the choices made for single rows. Rows the staged rules now match are
 // categorised by them.
 func (s Staged) Restage(earlier Staged) Staged {
 	next := s
-	next.NewAccounts = earlier.NewAccounts
-	if next.NewAccount {
-		next.Named = earlier.Named
+	next.Edits = earlier.Edits
+	if !next.NewAccount {
+		next.Named = ""
 	}
 	next.Rules = slices.Clone(s.Rules)
 	for _, rule := range earlier.StagedRules() {
@@ -387,16 +381,16 @@ func (s Staged) Restage(earlier Staged) Staged {
 		}
 	}
 	next.Rows = slices.Clone(s.Rows)
-	choices := map[string][]Row{}
+	choices := map[rowKey][]Row{}
 	for i := range earlier.Rows {
 		if row := earlier.Rows[i]; row.Once {
-			choices[row.identity()] = append(choices[row.identity()], row)
+			choices[row.key()] = append(choices[row.key()], row)
 		}
 	}
 	for i := range next.Rows {
-		if chosen := choices[next.Rows[i].identity()]; len(chosen) > 0 {
+		if chosen := choices[next.Rows[i].key()]; len(chosen) > 0 {
 			next.Rows[i].Target, next.Rows[i].RuleID, next.Rows[i].Once = chosen[0].Target, "", true
-			choices[next.Rows[i].identity()] = chosen[1:]
+			choices[next.Rows[i].key()] = chosen[1:]
 		}
 	}
 	for _, rule := range earlier.StagedRules() {
