@@ -489,3 +489,173 @@ func TestAPanelBodyIsTwoCellsNarrowerThanTheScreen(t *testing.T) {
 		t.Errorf("innerWidth = %d, want 98", got)
 	}
 }
+
+func detailed() Model {
+	import1 := staged()
+	import1.Rows[0].Type, import1.Rows[0].Payee, import1.Rows[0].Purpose = "SEPA Lastschrift", "REWE Markt", "Einkauf"
+	import1.Rows[1].Type, import1.Rows[1].Payee = "Kartenzahlung", "Bäckerei Schmidt"
+	import1.Rows[1].Purpose = strings.Repeat("Brötchen ", 200)
+	return New("/dl").Resize(60, 40).WithStaged(import1)
+}
+
+func TestTheRowPanelShowsWhatARuleCanMatchForTheRowUnderTheCursor(t *testing.T) {
+	first := strings.Join(lines(detailed()), "\n")
+	for _, want := range []string{"╭─ ROW ", "type      SEPA Lastschrift", "payee     REWE Markt", "purpose   Einkauf"} {
+		if !strings.Contains(first, want) {
+			t.Errorf("missing %q:\n%s", want, first)
+		}
+	}
+	moved, _ := detailed().Key(layout.KeyDown)
+	if view := strings.Join(lines(moved), "\n"); !strings.Contains(view, "type      Kartenzahlung") {
+		t.Errorf("the panel follows the cursor:\n%s", view)
+	}
+}
+
+func TestALongPurposeWrapsOverThePanelsLinesAndStaysInsideIt(t *testing.T) {
+	moved, _ := detailed().Key(layout.KeyDown)
+	got := lines(moved)
+	purpose := slices.IndexFunc(got, func(line string) bool { return strings.Contains(line, "purpose   ") })
+	if purpose < 0 || purpose+purposeLines >= len(got) {
+		t.Fatalf("no purpose line:\n%s", strings.Join(got, "\n"))
+	}
+	for i := range purposeLines {
+		if !strings.Contains(got[purpose+i], "Brötchen") {
+			t.Errorf("purpose line %d = %q", i, got[purpose+i])
+		}
+	}
+	if !strings.HasPrefix(got[purpose+purposeLines], "╰") {
+		t.Errorf("the panel closes after the purpose: %q", got[purpose+purposeLines])
+	}
+	if !strings.Contains(got[purpose+purposeLines-1], "…") {
+		t.Errorf("a cut purpose says so: %q", got[purpose+purposeLines-1])
+	}
+}
+
+func TestAPurposeThatFitsIsNotMarkedCut(t *testing.T) {
+	if view := strings.Join(lines(detailed()), "\n"); strings.Contains(view, "…") {
+		t.Errorf("nothing was cut:\n%s", view)
+	}
+}
+
+func TestTheRowPanelGivesWayOnAShortScreen(t *testing.T) {
+	if view := strings.Join(lines(New("/dl").Resize(100, detailMinHeight-1).WithStaged(staged())), "\n"); strings.Contains(view, "╭─ ROW ") {
+		t.Errorf("no room for the panel:\n%s", view)
+	}
+	if view := strings.Join(lines(New("/dl").Resize(100, detailMinHeight).WithStaged(staged())), "\n"); !strings.Contains(view, "╭─ ROW ") {
+		t.Errorf("room for the panel:\n%s", view)
+	}
+}
+
+func TestAnImportWithNothingNewHasAnEmptyRowPanel(t *testing.T) {
+	empty := staged()
+	empty.Rows = nil
+	view := strings.Join(lines(New("/dl").Resize(100, 40).WithStaged(empty)), "\n")
+	if !strings.Contains(view, "╭─ ROW ") || strings.Contains(view, "purpose") {
+		t.Errorf("an empty panel:\n%s", view)
+	}
+}
+
+// withPurpose is a 60-wide view of an import whose first row has this purpose; 47 cells fit on a line.
+func withPurpose(purpose string) []string {
+	import1 := staged()
+	import1.Rows[0].Purpose = purpose
+	return lines(New("/dl").Resize(60, 40).WithStaged(import1))
+}
+
+func purposeLine(t *testing.T, got []string, offset int) string {
+	t.Helper()
+	at := slices.IndexFunc(got, func(line string) bool { return strings.Contains(line, "purpose   ") })
+	if at < 0 {
+		t.Fatalf("no purpose line:\n%s", strings.Join(got, "\n"))
+	}
+	return got[at+offset]
+}
+
+func TestAPurposeWrapsAtTheEdgeOfThePanel(t *testing.T) {
+	const fits = 47
+	full := strings.Repeat("x", fits)
+	if got := withPurpose(full); !strings.Contains(purposeLine(t, got, 0), full) || strings.Contains(purposeLine(t, got, 1), "x") {
+		t.Errorf("a purpose as wide as the line stays on it:\n%s", strings.Join(got, "\n"))
+	}
+	got := withPurpose(strings.Repeat("x", fits-2) + " yy")
+	if !strings.Contains(purposeLine(t, got, 1), "yy") {
+		t.Errorf("one cell too wide wraps:\n%s", strings.Join(got, "\n"))
+	}
+}
+
+func TestAPurposeOfExactlyThePanelsLinesIsNotMarkedCut(t *testing.T) {
+	got := strings.Join(withPurpose(strings.Repeat("x", 47*purposeLines)), "\n")
+	if strings.Contains(got, cutMark) {
+		t.Errorf("nothing was cut:\n%s", got)
+	}
+}
+
+func TestTheCutMarkFitsOnAFullLine(t *testing.T) {
+	got := withPurpose(strings.Repeat("x", 47*purposeLines+1))
+	if line := purposeLine(t, got, purposeLines-1); !strings.Contains(line, cutMark) {
+		t.Errorf("the mark is on the last line: %q", line)
+	}
+}
+
+func TestABannerCountsAgainstTheRoomForTheRowPanel(t *testing.T) {
+	banner := New("/dl").Resize(100, detailMinHeight).WithStaged(staged()).WithMessage("note")
+	if view := strings.Join(lines(banner), "\n"); strings.Contains(view, "╭─ ROW ") {
+		t.Errorf("the banner takes the panel's room:\n%s", view)
+	}
+}
+
+func TestRowAmountsAlwaysShowTwoDecimals(t *testing.T) {
+	import1 := staged()
+	whole := domain.MultiAmount{{Commodity: "EUR", Mantissa: -6, Style: euro}}
+	import1.Rows[0].Amount, import1.Skipped[0].Amount = whole, whole
+	got := lines(New("/dl").Resize(100, 30).WithStaged(import1))
+	if row := rowLine(t, got, "REWE Markt"); !strings.Contains(row, "-6,00 EUR") {
+		t.Errorf("row = %q", row)
+	}
+	if row := rowLine(t, got, "Sparen"); !strings.Contains(row, "-6,00 EUR") {
+		t.Errorf("skipped row = %q", row)
+	}
+}
+
+func TestCJumpsToTheNextRowThatNeedsACategoryAndWrapsAround(t *testing.T) {
+	m, _ := opened().Key("c") // rows: matched, open, open
+	if m.table.Row != 1 {
+		t.Errorf("from the matched row: %d", m.table.Row)
+	}
+	if m, _ = m.Key("c"); m.table.Row != 2 {
+		t.Errorf("to the next: %d", m.table.Row)
+	}
+	if m, _ = m.Key("c"); m.table.Row != 1 {
+		t.Errorf("wrapping past the matched row: %d", m.table.Row)
+	}
+}
+
+func TestCStaysPutWhenNoRowNeedsACategory(t *testing.T) {
+	done := staged()
+	done.Rows = done.Rows[:1]
+	done.Rows = append(done.Rows, csvimport.Row{Date: day("2026-09-20"), Description: "B", Amount: eur(-100), Target: "expenses:b"})
+	m, _ := New("/dl").Resize(100, 30).WithStaged(done).Key("down")
+	if m, _ = m.Key("c"); m.table.Row != 1 || !strings.Contains(m.View(), "no row needs a category") {
+		t.Errorf("row = %d:\n%s", m.table.Row, m.View())
+	}
+	if empty, _ := New("/dl").Resize(100, 30).Key("c"); empty.table.Row != 0 || strings.Contains(empty.View(), "no row needs") {
+		t.Errorf("no import: %d\n%s", empty.table.Row, empty.View())
+	}
+	open, _ := New("/dl").Resize(100, 30).WithStaged(staged()).Key("c")
+	if strings.Contains(open.View(), "no row needs") {
+		t.Errorf("rows need one:\n%s", open.View())
+	}
+}
+
+func TestCScrollsTheTargetRowIntoView(t *testing.T) {
+	long := bigImport(40, 0)
+	for i := range long.Rows {
+		long.Rows[i].Target = "expenses:x"
+	}
+	last := len(long.Rows) - 1
+	long.Rows[last].Target = ""
+	m, _ := New("/dl").Resize(100, 30).WithStaged(long).Key("c")
+	if view := strings.Join(lines(m), "\n"); m.table.Row != last || !strings.Contains(view, long.Rows[last].Description) {
+		t.Errorf("row %d not in view:\n%s", m.table.Row, view)
+	}
+}

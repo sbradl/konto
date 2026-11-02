@@ -133,6 +133,15 @@ func (m MultiAmount) Format() string {
 // FormatNumber renders the quantity alone, without the commodity symbol: "13.240,00".
 func (a Amount) FormatNumber() string { return a.digits() }
 
+// WithPlaces is the same value shown with at least the given decimals; finer amounts keep theirs.
+func (m MultiAmount) WithPlaces(places int) MultiAmount {
+	shown := slices.Clone(m)
+	for i := range shown {
+		shown[i] = shown[i].plus(Amount{Places: places})
+	}
+	return shown
+}
+
 // Negated is the amount with its sign flipped.
 func (a Amount) Negated() Amount {
 	a.Mantissa = -a.Mantissa

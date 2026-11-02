@@ -9,7 +9,7 @@
 ╭─ ROWS ───────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ ✓ #2  2026-09-30  REWE Markt                                               expenses:groceries              -42,17 EUR│
 ─ category ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
-▸filter    ▏
+▸category  ▏  type to find or create · Enter picks · Esc back
  expenses:books                                                                                                         
  expenses:categoryaa
  expenses:categoryab

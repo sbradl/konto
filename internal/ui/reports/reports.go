@@ -21,7 +21,7 @@ const (
 
 // Model is the Reports view's local state: the period it shows and how far the tables are scrolled.
 type Model struct {
-	period  domain.Period
+	period  domain.ReportPeriod
 	report  domain.Report
 	scroll  layout.Cursor // how far both tables are scrolled
 	width   int
@@ -34,7 +34,7 @@ type Model struct {
 func New() Model { return Model{} }
 
 // Period is the period the view shows; the Dashboard's month to date is separate.
-func (m Model) Period() domain.Period { return m.period }
+func (m Model) Period() domain.ReportPeriod { return m.period }
 
 // Action is what a key asks the root model to do: LoadReport; nil asks for nothing.
 type Action interface{ isAction() }

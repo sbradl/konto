@@ -192,7 +192,7 @@ func TestFailedLoadIsShown(t *testing.T) {
 
 // A failed load leaves no journal to act on: the view keys do nothing, the root's keys still work.
 func TestAFailedLoadLeavesOnlyTheRootsKeys(t *testing.T) {
-	var periods []domain.Period
+	var periods []domain.ReportPeriod
 	model := New(journalPath, Ports{
 		Loader: fakeLoader{err: errors.New("hledger exploded")}, Checker: fakeChecker{}, Creator: &fakeCreator{},
 		Editor: recordingEditor(nil), Reports: fakeReporter{periods: &periods}, Importer: listing(), DownloadDir: "/dl",

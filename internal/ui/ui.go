@@ -44,7 +44,7 @@ type accountPlanner interface {
 
 // reportBuilder builds the Reports view's tables for a period.
 type reportBuilder interface {
-	Report(ctx context.Context, period domain.Period) (domain.Report, error)
+	Report(ctx context.Context, period domain.ReportPeriod) (domain.Report, error)
 }
 
 // forecaster builds the Forecast view's projection of the loaded ledger.
@@ -170,7 +170,7 @@ func (msg forecastLoadedMsg) takeIn(m Model) (Model, tea.Cmd) { return m.onForec
 // reportLoadedMsg carries a built report for the period and load it was asked for.
 type reportLoadedMsg struct {
 	load   int
-	period domain.Period
+	period domain.ReportPeriod
 	report domain.Report
 	err    error
 }

@@ -79,7 +79,7 @@ func exportOf(iban string, transactions []domain.Transaction) []byte {
 
 // booking builds a converted transaction seen from checking, categorised as target (empty: not yet).
 func converted(date, description, comment string, mantissa int64, target, rule string) domain.Transaction {
-	counter := domain.Posting{Account: Uncategorised, Amounts: eur(-mantissa)}
+	counter := domain.Posting{Account: unclaimedAccount, Amounts: eur(-mantissa)}
 	if target != "" {
 		counter = domain.Posting{Account: target, Amounts: eur(-mantissa), Tags: map[string]string{domain.RuleTag: rule}}
 	}

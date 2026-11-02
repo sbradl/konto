@@ -15,8 +15,8 @@ import (
 	"github.com/sbradl/konto/internal/domain"
 )
 
-// Uncategorised is the account the bank format gives a row no rule has claimed.
-const Uncategorised = "konto:uncategorised"
+// unclaimedAccount is the account the bank format gives a row no rule has claimed.
+const unclaimedAccount = "konto:uncategorised"
 
 // The ways an export can be unusable; both are the file's fault, not hledger's.
 var (
@@ -173,7 +173,7 @@ func rowsOf(transactions []domain.Transaction, account string) []Row {
 				row.Amount = posting.Amounts
 				continue
 			}
-			if posting.Account != Uncategorised {
+			if posting.Account != unclaimedAccount {
 				row.Target, row.RuleID = posting.Account, posting.Tags[domain.RuleTag]
 			}
 		}

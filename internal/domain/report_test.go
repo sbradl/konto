@@ -6,7 +6,7 @@ import (
 )
 
 func TestPeriodsCycleAndWrap(t *testing.T) {
-	order := []Period{MonthToDate, QuarterToDate, YearToDate, AllTime, MonthToDate}
+	order := []ReportPeriod{MonthToDate, QuarterToDate, YearToDate, AllTime, MonthToDate}
 	for i := 1; i < len(order); i++ {
 		if got := order[i-1].Next(); got != order[i] {
 			t.Errorf("%v.Next() = %v, want %v", order[i-1], got, order[i])
@@ -15,7 +15,7 @@ func TestPeriodsCycleAndWrap(t *testing.T) {
 }
 
 func TestPeriodNames(t *testing.T) {
-	want := map[Period]string{
+	want := map[ReportPeriod]string{
 		MonthToDate: "month to date", QuarterToDate: "quarter to date", YearToDate: "year to date", AllTime: "all time",
 	}
 	for period, name := range want {
@@ -28,7 +28,7 @@ func TestPeriodNames(t *testing.T) {
 func TestPeriodStart(t *testing.T) {
 	date := func(s string) time.Time { d, _ := time.Parse(time.DateOnly, s); return d }
 	for _, tc := range []struct {
-		period Period
+		period ReportPeriod
 		today  string
 		want   string
 		has    bool

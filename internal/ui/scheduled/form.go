@@ -59,6 +59,7 @@ type form struct {
 	editing    *domain.PeriodicRule
 	input      periodic.Input
 	focus      int
+	back       int // how far the caret of the text input with the focus stands before its end
 	currencies []string
 	accounts   []string          // the open accounts the pickers offer
 	held       map[string]string // the first currency each account holds
@@ -173,7 +174,7 @@ func (f *form) move(key string) {
 			break
 		}
 	}
-	f.filter, f.cursor, f.browsing = "", layout.Cursor{}, false
+	f.filter, f.back, f.cursor, f.browsing = "", 0, layout.Cursor{}, false
 }
 
 // isAccount reports that the focus is on an account picker.
@@ -232,7 +233,7 @@ func (f *form) edit(key string) {
 	case fieldFrom, fieldTo:
 		f.editPicker(key)
 	default: // a text field
-		*fields()[f.focus].text(&f.input), _ = layout.Edit(f.text(f.focus), key)
+		*fields()[f.focus].text(&f.input), f.back, _ = layout.Edit(f.text(f.focus), f.back, key)
 	}
 }
 
@@ -242,8 +243,11 @@ func (f *form) editPicker(key string) {
 		f.cursor, f.browsing = f.cursor.Move(key, len(f.matches()), pickerRows), true
 		return
 	}
-	f.filter, _ = layout.Edit(f.filter, key)
-	f.cursor, f.browsing = layout.Cursor{}, false
+	text, back, _ := layout.Edit(f.filter, f.back, key)
+	if text != f.filter {
+		f.cursor, f.browsing = layout.Cursor{}, false
+	}
+	f.filter, f.back = text, back
 }
 
 // cycle is the choice a left or right arrow moves to, staying at the ends.

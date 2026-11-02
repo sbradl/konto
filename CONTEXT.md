@@ -162,9 +162,16 @@ row, with a balance assertion. Written even when zero — every import-fed accou
 one. The only transaction in an import-fed account that is not a CSV row.
 
 **Import rule**:
-An `if` block in `categories.rules` mapping one or more description patterns (ORed lines)
-to a category (or a transfer counterpart), tagged `konto-rule:<id>`. Starts narrow (the
-full description, optionally shortened) and is widened by adding lines. Rules never overlap.
+An `if` block in `categories.rules` mapping one or more field patterns (`%payee`, `%type` or
+`%purpose`, ORed lines) to a category (or a transfer counterpart), tagged `konto-rule:<id>`.
+Starts narrow (the row's payee, else its transaction type, optionally shortened) and is widened
+by adding lines. Rules never overlap.
+
+**Fallback rule**:
+An import rule that holds only the rows no other rule matches, e.g. PayPal in general. It names a real
+category, so it is no catch-all account (ADR 0008). Its id starts with `f` (`#f7`) and its block goes first in
+`categories.rules`, because hledger lets the last matching block win. It overlaps other rules without a refusal
+and they take its rows; only two fallback rules cannot overlap. A row it holds can still get a rule of its own.
 
 **Rule match stats**:
 The live counts konto shows while building or widening a rule: rows it matches in this
@@ -180,8 +187,9 @@ _Avoid_: Draft, Pending import
 **Watermark**:
 Per import-fed account, the date of its latest transaction in the journal. CSV rows before
 it are skipped, after it are new, on it are compared by date + amount + description.
-Derived, never stored (ADR 0009). An account with no transactions yet has none: on its first
-import every row is new.
+Derived, never stored (ADR 0009). The year carry-over is left out, except that an account whose
+only transaction in the loaded years is the carry takes the carry's date. An account with neither
+has none: on its first import every row is new.
 _Avoid_: Dedup marker, Cursor, `.latest`
 
 **Bank format**:
@@ -226,5 +234,5 @@ first; konto runs checks individually and assigns severity by check name.
 
 **Report table**:
 konto's shape for a balance sheet or income statement — rows each tagged with a kind
-(section header, leaf, negative leaf, subtotal, grand total) that drives styling. Mapped
+(section header, leaf, subtotal, grand total) that drives styling. Mapped
 from hledger's compound balance report, not passed through.

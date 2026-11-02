@@ -202,3 +202,25 @@ func TestParseNumberRefusesWhatIsNoNumber(t *testing.T) {
 		}
 	}
 }
+
+func TestWithPlacesShowsAtLeastThatManyDecimalsAndKeepsTheValue(t *testing.T) {
+	style := AmountStyle{Spaced: true, DecimalMark: ","}
+	for _, c := range []struct {
+		mantissa int64
+		places   int
+		want     string
+	}{
+		{-6, 0, "-6,00 EUR"},
+		{-65, 1, "-6,50 EUR"},
+		{-650, 2, "-6,50 EUR"},
+		{-6505, 3, "-6,505 EUR"},
+	} {
+		amounts := MultiAmount{{Commodity: "EUR", Mantissa: c.mantissa, Places: c.places, Style: style}}
+		if got := amounts.WithPlaces(2).Format(); got != c.want {
+			t.Errorf("%d at %d places = %q, want %q", c.mantissa, c.places, got, c.want)
+		}
+		if amounts[0].Places != c.places {
+			t.Errorf("WithPlaces changed the amount it was given: %+v", amounts[0])
+		}
+	}
+}

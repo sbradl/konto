@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"charm.land/lipgloss/v2"
+
 	"github.com/sbradl/konto/internal/csvimport"
 	"github.com/sbradl/konto/internal/domain"
 	"github.com/sbradl/konto/internal/ui/layout"
@@ -16,22 +18,29 @@ import (
 const (
 	infoLines    = 6
 	infoHeight   = infoLines + layout.PanelChrome
-	minPanel     = 4
-	rowsShare    = 60 // percent of the room below the info block the row table takes
-	columnGap    = 2
-	ruleIDWidth  = 4
-	targetWidth  = 24
-	amountWidth  = 18
-	dateWidth    = len("2026-09-30")
-	parentEntry  = ".."
-	needsARule   = "needs a rule"
-	pickerTitle  = "OPEN A CSV FILE"
-	emptyHint    = "press n for a new file"
-	nothingNew   = "nothing new"
-	createHint   = "create account"
-	noWatermark  = "no watermark"
-	noItems      = "—"
-	transferMark = " ⇄"
+	purposeLines = 3
+	detailHeight = 7 // type, payee, the purpose lines and the frame
+	// detailMinHeight is the screen the row panel needs, the info block and two minimal panels besides it:
+	// with less, the row table keeps the room.
+	detailMinHeight = 23
+	cutMark         = "…"
+	minPanel        = 4
+	rowsShare       = 60 // percent of the room below the info block the row table takes
+	columnGap       = 2
+	ruleIDWidth     = 4
+	targetWidth     = 24
+	amountWidth     = 18
+	amountPlaces    = 2
+	dateWidth       = len("2026-09-30")
+	parentEntry     = ".."
+	needsARule      = "needs a rule"
+	pickerTitle     = "OPEN A CSV FILE"
+	emptyHint       = "press n for a new file"
+	nothingNew      = "nothing new"
+	createHint      = "create account"
+	noWatermark     = "no watermark"
+	noItems         = "—"
+	transferMark    = " ⇄"
 )
 
 // Action is what the view asks the root to do: Browse, Open or Write; nil asks for nothing.
@@ -54,6 +63,7 @@ func (Write) isAction()  {}
 const (
 	keyNewFile = "n"
 	keyWrite   = "w"
+	keyNext    = "c"
 )
 
 // Bindings are the keys Key acts on besides the cursor keys, as the root hints them.
@@ -61,6 +71,7 @@ func Bindings() []layout.Binding {
 	return []layout.Binding{
 		{Key: keyNewFile, Action: "new file"},
 		{Key: layout.KeyEnter, Action: "categorise"},
+		{Key: keyNext, Action: "next to categorise"},
 		{Key: keyWrite, Action: "write"},
 	}
 }
@@ -178,6 +189,8 @@ func (m Model) Key(key string) (Model, Action) {
 			return next, nil
 		}
 		return next, Write{}
+	case keyNext:
+		return next.jumpToCategorise(), nil
 	default:
 		return next.moveRows(key), nil
 	}
@@ -205,6 +218,27 @@ func (m Model) moveRows(key string) Model {
 	return next
 }
 
+// jumpToCategorise moves the cursor to the next row that needs a category, or says that none does.
+func (m Model) jumpToCategorise() Model {
+	next := m.rowsTo(m.nextToCategorise())
+	if next.staged != nil && next.staged.NeedCategory() == 0 {
+		next.message = "no row needs a category"
+	}
+	return next
+}
+
+// nextToCategorise is the first row after the cursor that needs a category, from the top again after the last;
+// the cursor's own row when no other does.
+func (m Model) nextToCategorise() int {
+	count := m.rowCount()
+	for step := range count {
+		if at := (m.table.Row + 1 + step) % count; m.staged.Rows[at].NeedsCategory() {
+			return at
+		}
+	}
+	return m.table.Row
+}
+
 func (m Model) rowsTo(row int) Model {
 	next := m
 	next.table = m.table.To(row, m.rowCount(), m.rowPage())
@@ -220,7 +254,7 @@ func (m Model) scrollRows() Model {
 // layoutHeights are the heights of the row table and the skipped panel below the info block; the skipped
 // panel takes what the row table leaves.
 func (m Model) layoutHeights() (rows, skipped int) {
-	room := m.height - infoHeight - m.bannerRows()
+	room := m.height - infoHeight - m.bannerRows() - m.detailRows()
 	rows = max(minPanel, room*rowsShare/100)
 	return rows, max(0, room-rows)
 }
@@ -229,6 +263,14 @@ func (m Model) layoutHeights() (rows, skipped int) {
 func (m Model) innerWidth() int { return m.width - layout.PanelChrome }
 
 func (m Model) rowPage() int { rows, _ := m.layoutHeights(); return max(1, rows-layout.PanelChrome) }
+
+// detailRows is the height of the row panel on this screen.
+func (m Model) detailRows() int {
+	if m.height-m.bannerRows() < detailMinHeight {
+		return 0
+	}
+	return detailHeight
+}
 
 func (m Model) bannerRows() int {
 	if m.message == "" {
@@ -262,7 +304,11 @@ func (m Model) stagedView() string {
 	rowsHeight, skippedHeight := m.layoutHeights()
 	rowsPanel := layout.Panel("ROWS", m.width, rowsHeight, m.rowLines())
 	skipped := layout.Panel("SKIPPED", m.width, skippedHeight, m.skippedLines(max(0, skippedHeight-layout.PanelChrome)))
-	return strings.Join([]string{m.info(), rowsPanel, skipped}, "\n")
+	panels := []string{m.info(), rowsPanel, skipped}
+	if m.detailRows() > 0 { // above the rows, where the bottom-anchored dialogs leave it readable
+		panels = []string{m.info(), layout.Panel("ROW", m.width, detailHeight, m.rowDetail()), rowsPanel, skipped}
+	}
+	return strings.Join(panels, "\n")
 }
 
 // info is the file, the account it goes to, the bank format, the watermark and what is left to do.
@@ -283,12 +329,46 @@ func (m Model) info() string {
 	if len(staged.Rows) > 0 {
 		summary = fmt.Sprintf("%d need a category", staged.NeedCategory())
 	}
-	label := func(name, value string) string { return " " + theme.Dim.Render(fmt.Sprintf("%-10s", name)) + value }
 	lines := []string{
 		label("file", staged.File), label("account", account), label("format", staged.Format),
 		label("watermark", watermark), label("staged", m.stagedSummary()), label("", theme.Bold.Render(summary)),
 	}
 	return layout.Panel("IMPORT", m.width, infoHeight, strings.Join(lines, "\n"))
+}
+
+// label is a line of a panel: a dim name, then its value.
+func label(name, value string) string {
+	return " " + theme.Dim.Render(fmt.Sprintf("%-*s", labelWidth, name)) + value
+}
+
+// rowDetail is what a rule can match on the row under the cursor; the table has room for its description only.
+func (m Model) rowDetail() string {
+	if m.rowCount() == 0 {
+		return ""
+	}
+	row := m.staged.Rows[m.table.Row]
+	lines := []string{label("type", row.Type), label("payee", row.Payee)}
+	for i, line := range wrapped(row.Purpose, max(1, m.innerWidth()-labelWidth-1), purposeLines) {
+		name := ""
+		if i == 0 {
+			name = "purpose"
+		}
+		lines = append(lines, label(name, line))
+	}
+	return strings.Join(lines, "\n")
+}
+
+// wrapped is text broken to width, at most limit lines, the last marked when more was cut.
+// shortcut: the end of a very long purpose stays unseen, add scrolling if a rule ever needs it.
+func wrapped(text string, width, limit int) []string {
+	lines := strings.Split(lipgloss.NewStyle().Width(width).Render(text), "\n")
+	if len(lines) <= limit {
+		return lines
+	}
+	lines = lines[:limit]
+	last := strings.TrimRight(layout.Fit(lines[limit-1], max(1, width-1)), " ")
+	lines[limit-1] = last + cutMark
+	return lines
 }
 
 // stagedSummary lists what the import would add to the journal besides the transactions: the rules and the
@@ -337,7 +417,7 @@ type rowCells struct {
 func cellsOf(row csvimport.Row, width int) rowCells {
 	cells := rowCells{
 		mark: "?", date: row.Date.Format(time.DateOnly), target: needsARule, needsCategory: row.NeedsCategory(),
-		amount: layout.AlignRight(row.Amount.Format(), amountWidth),
+		amount: layout.AlignRight(row.Amount.WithPlaces(amountPlaces).Format(), amountWidth),
 	}
 	if !row.NeedsCategory() {
 		cells.mark, cells.target = "✓", row.Target
@@ -401,7 +481,7 @@ func (m Model) skippedLines(capacity int) string {
 // skippedLine is a row the journal already has: its date, description and amount, dim, across the width.
 func skippedLine(row *csvimport.Row, width int) string {
 	description := layout.Fit(row.Description, width-1-dateWidth-columnGap-amountWidth-1)
-	amount := layout.AlignRight(row.Amount.Format(), amountWidth)
+	amount := layout.AlignRight(row.Amount.WithPlaces(amountPlaces).Format(), amountWidth)
 	line := " " + row.Date.Format(time.DateOnly) + "  " + description + amount
 	return theme.Dim.Render(layout.Fit(line, width))
 }

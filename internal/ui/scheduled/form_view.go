@@ -9,7 +9,6 @@ import (
 )
 
 const (
-	caret      = "▏"
 	focusMark  = "▸"
 	labelWidth = 20
 	pickerRows = 5
@@ -77,16 +76,16 @@ func (f *form) shownValue(field int) string {
 	case fieldFrom, fieldTo:
 		text := f.text(field)
 		if focused && f.filter != "" {
-			return f.filter + caret
+			return layout.WithCaret(f.filter, f.back)
 		}
 		if text == "" {
 			text = theme.Dim.Render(noValue)
 		}
-		return text + map[bool]string{true: caret, false: ""}[focused]
+		return text + map[bool]string{true: layout.Caret, false: ""}[focused]
 	}
 	text := f.text(field)
 	if focused {
-		text += caret
+		text = layout.WithCaret(text, f.back)
 	}
 	return text
 }

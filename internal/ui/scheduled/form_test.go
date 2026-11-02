@@ -6,6 +6,7 @@ import (
 
 	"github.com/sbradl/konto/internal/domain"
 	"github.com/sbradl/konto/internal/periodic"
+	"github.com/sbradl/konto/internal/ui/layout"
 	"github.com/sbradl/konto/internal/ui/uitest"
 )
 
@@ -336,6 +337,34 @@ func TestARefusalIsShownAndClearedByTheNextKey(t *testing.T) {
 }
 
 func Capturing(m Model) bool { return m.Capturing() }
+
+func TestATextFieldEditsAtItsCaretAndTheNextStartsAtItsEnd(t *testing.T) {
+	m, _ := pressed(opened(), "tab", "tab", "tab")
+	m = typed(m, "ac")
+	m, _ = pressed(m, "left")
+	m = typed(m, "b")
+	if view := screen(m); !strings.Contains(view, "ab"+layout.Caret+"c") {
+		t.Errorf("typed at the caret:\n%s", view)
+	}
+	m, _ = pressed(m, "tab")
+	m = typed(m, "1")
+	if view := screen(m); strings.Contains(view, layout.Caret+"1") || !strings.Contains(view, "1"+layout.Caret) {
+		t.Errorf("the next field starts at its end:\n%s", view)
+	}
+}
+
+func TestAPickerFilterEditsAtItsCaretAndMovingItKeepsTheMatchesCursor(t *testing.T) {
+	m, _ := pressed(opened(), "tab", "tab", "tab", "tab", "tab", "tab")
+	m = typed(m, "as")
+	m, _ = pressed(m, "down", "left")
+	if m.form.cursor.Row != 1 || !m.form.browsing {
+		t.Errorf("left moved the matches cursor: %d, %v", m.form.cursor.Row, m.form.browsing)
+	}
+	m = typed(m, "x")
+	if view := screen(m); !strings.Contains(view, "ax"+layout.Caret+"s") || m.form.cursor.Row != 0 || m.form.browsing {
+		t.Errorf("typed at the caret, the cursor starts over: %d, %v\n%s", m.form.cursor.Row, m.form.browsing, view)
+	}
+}
 
 func TestOpenEditFillsTheFormAndTitlesItEdit(t *testing.T) {
 	rule := household().Rules[1]

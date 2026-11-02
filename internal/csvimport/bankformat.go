@@ -79,7 +79,7 @@ func (b bankFormat) rules() string {
 		"date-format " + b.dateFormat, "newest-first", "fields " + strings.Join(fields, ", "),
 		"if ^" + strings.TrimSuffix(b.header, separator), " skip", "if ^" + b.trailer, " skip",
 		"description %" + fieldPayee, "if %" + fieldPayee + " ^$", " description %" + fieldType,
-		"comment %" + fieldPurpose, "amount %" + fieldAmount + " " + b.currency, "account2 " + Uncategorised, "",
+		"comment %" + fieldPurpose, "amount %" + fieldAmount + " " + b.currency, "account2 " + unclaimedAccount, "",
 	}, "\n")
 }
 

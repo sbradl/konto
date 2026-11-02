@@ -19,3 +19,8 @@ Amendment (2026-09-30): "categorised" means the counterpart is a category **or**
 account. A **transfer** (to savings, card payoff) picks an asset/liability account in the
 category picker; an **opening balance** posts against `equity:opening-balances`. Forcing
 either into a category would distort net income.
+
+Amendment (2026-11-02): a **fallback rule** holds the rows no other rule matches (PayPal in general), so that a
+large import can be written before every payee has its own rule. It names a category the user chose and a pattern
+they typed, so this is still no catch-all account: no row lands somewhere konto picked. A pattern of `.` makes one
+cover every remaining row that has a payee; that is the user's choice to make.

@@ -210,7 +210,7 @@ func (s Staged) ruleEdits() []domain.Edit {
 	rules := s.StagedRules()
 	edits := make([]domain.Edit, 0, len(rules))
 	for _, rule := range rules {
-		edits = append(edits, domain.SetCategoryRule{ID: rule.ID, Text: rule.Text()})
+		edits = append(edits, domain.SetCategoryRule{ID: rule.ID, Text: rule.Text(), First: rule.Fallback()})
 	}
 	return edits
 }

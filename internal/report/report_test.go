@@ -210,7 +210,7 @@ func TestAnAccountThatEndsAtZeroStillCountsItsChange(t *testing.T) {
 }
 
 func TestReportPassesOnGatewayFailures(t *testing.T) {
-	for _, period := range []domain.Period{domain.MonthToDate, domain.AllTime} {
+	for _, period := range []domain.ReportPeriod{domain.MonthToDate, domain.AllTime} {
 		_, err := NewService(&fakeGateway{err: errors.New("boom")}, sept30).Report(context.Background(), period)
 
 		if err == nil || !strings.Contains(err.Error(), "boom") {

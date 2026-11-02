@@ -202,30 +202,37 @@ func (s Staged) Once(index int, candidate Candidate) Staged {
 // NextRuleID is the id a rule staged now gets.
 func (s Staged) NextRuleID() string { return nextRuleID(s.Rules) }
 
-// Draft is a rule being written: what to match and the extra condition on the purpose.
-type Draft struct {
+// NextFallbackID is the id a fallback rule staged now gets.
+func (s Staged) NextFallbackID() string { return fallbackMark + nextRuleID(s.Rules) }
+
+// RuleDraft is a rule being written: what to match and the extra condition on the purpose.
+type RuleDraft struct {
 	Field   string
 	Pattern string
 	Purpose string
 }
 
-// DraftFor starts a rule for the row: its payee, else its transaction type, as an escaped literal.
-func (s Staged) DraftFor(index int) Draft {
+// RuleDraftFor starts a rule for the row: its payee, else its transaction type, as an escaped literal.
+func (s Staged) RuleDraftFor(index int) RuleDraft {
 	row := s.Rows[index]
-	return Draft{Field: row.MatchField(), Pattern: regexp.QuoteMeta(row.field(row.MatchField()))}
+	return RuleDraft{Field: row.MatchField(), Pattern: regexp.QuoteMeta(row.field(row.MatchField()))}
 }
 
-// Alternative is the draft as the conditions of one alternative of a rule.
-func (d Draft) Alternative() []Condition {
-	conditions := []Condition{{Field: d.Field, Pattern: d.Pattern}}
-	if d.Purpose != "" {
-		conditions = append(conditions, Condition{Field: fieldPurpose, Pattern: d.Purpose})
+// Alternative is the draft as the conditions of one alternative of a rule: the match and the purpose both, or
+// the purpose alone when the match is left empty.
+func (d RuleDraft) Alternative() []Condition {
+	purpose := Condition{Field: fieldPurpose, Pattern: d.Purpose}
+	if d.Purpose == "" {
+		return []Condition{{Field: d.Field, Pattern: d.Pattern}}
 	}
-	return conditions
+	if d.Pattern == "" {
+		return []Condition{purpose}
+	}
+	return []Condition{{Field: d.Field, Pattern: d.Pattern}, purpose}
 }
 
 // Rule is the draft as a rule of the given id and category.
-func (d Draft) Rule(id, category string) Rule {
+func (d RuleDraft) Rule(id, category string) Rule {
 	return Rule{ID: id, Category: category, Alternatives: [][]Condition{d.Alternative()}, Staged: true}
 }
 
@@ -246,7 +253,7 @@ func (s Staged) Impact(rule Rule) Impact {
 			continue
 		}
 		impact.Matches++
-		if row.RuleID != "" && row.RuleID != rule.ID {
+		if row.RuleID != "" && row.RuleID != rule.ID && row.HeldByFallback() == rule.Fallback() {
 			impact.Takes++
 			if !slices.Contains(impact.From, row.RuleID) {
 				impact.From = append(impact.From, row.RuleID)
@@ -329,11 +336,12 @@ func (s Staged) withAlternative(id string, alternative []Condition) (rule Rule, 
 	return rule, index
 }
 
-// apply gives the rule's category to every row it matches that no rule or choice has claimed.
+// apply gives the rule's category to every row it matches that no rule or choice has claimed, or that only a
+// fallback rule has while this is none.
 func (s Staged) apply(rule Rule) Staged {
 	rows, matches := slices.Clone(s.Rows), rule.matcher()
 	for i := range rows {
-		if rows[i].Target == "" && matches(rows[i]) {
+		if (rows[i].Target == "" || rows[i].HeldByFallback() && !rule.Fallback()) && matches(rows[i]) {
 			rows[i].Target, rows[i].RuleID = rule.Category, rule.ID
 		}
 	}

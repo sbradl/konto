@@ -36,7 +36,7 @@ func TestEveryHintedKeyIsHandled(t *testing.T) {
 		"sched":  func(t *testing.T) Model { t.Helper(); return scheduledWithForm(t, &fakeRules{}).model },
 		"reports": func(t *testing.T) Model {
 			t.Helper()
-			model, _ := press(startedWithReports(t, fakeReporter{periods: new([]domain.Period)}), "5")
+			model, _ := press(startedWithReports(t, fakeReporter{periods: new([]domain.ReportPeriod)}), "5")
 			return model
 		},
 	}

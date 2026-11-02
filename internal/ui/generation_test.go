@@ -24,7 +24,7 @@ func (c countingLoader) Load(context.Context) (domain.Ledger, error) {
 // countingReporter builds a report whose single row says which build it was.
 type countingReporter struct{ builds *int }
 
-func (c countingReporter) Report(_ context.Context, period domain.Period) (domain.Report, error) {
+func (c countingReporter) Report(_ context.Context, period domain.ReportPeriod) (domain.Report, error) {
 	*c.builds++
 	return domain.Report{Period: period, IncomeStatement: []domain.ReportRow{
 		{Kind: domain.RowLeaf, Label: fmt.Sprintf("build %d", *c.builds)},

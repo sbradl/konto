@@ -320,7 +320,8 @@ jump-to-location — its only use in v1 (no `e`-to-editor on list views, ADR 001
   per-row balance — the trailer is the period-end balance → `=` assertion on the newest
   transaction. Mapping: booking date only; description = payee (else `Umsatzart`);
   transaction comment = purpose; rule id as posting tag `konto-rule:<id>` (`comment2`,
-  kept, declared). Rules match payee, optionally `& %purpose …` (PayPal/Klarna). Nothing
+  kept, declared). Rules match payee, optionally `& %purpose …` (PayPal/Klarna), or the
+  purpose alone when the pattern is left empty; widening takes the same two inputs. Nothing
   else written. Full format notes: ticket 08.
 
 ### 4.10 Forecast (ticket 09, ADR 0007)
@@ -527,7 +528,7 @@ letter means the same action in every view (`d` = delete, `n` new, `e` edit, `c`
 | Global | `1`–`5` views · `?` keys popup · `!` checks panel · `r` refresh · `q` / `Ctrl+C` quit · `Esc` cancel / close popup |
 | Movement | `↑`/`↓` row · `PgUp`/`PgDn` page · `Home`/`End` ends — the same in every list, popup and scrolled view (`layout.Cursor`) · `Tab`/`Shift+Tab` or `↓`/`↑` form fields (in the Scheduled form's account picker the arrows move through the matches; `←`/`→` cycle a dropdown). No `j`/`k`. |
 | Dashboard | Accounts panel: `c` close · `o` reopen |
-| Import | `Enter` categorise row (popup: new rule / add to rule / once — `✓` rows: once only; picked with arrows + Enter) · `w` write import (y/n, only with no `?` rows) · `n` new file |
+| Import | `Enter` categorise row (popup: new rule / add to rule / once — `✓` rows: once only; picked with arrows + Enter) · `c` next row that needs a category (wraps) · `w` write import (y/n, only with no `?` rows) · `n` new file |
 | Scheduled | `n` new · `e` edit · `d` delete |
 | Reports | `p` cycle report period (Reports-local state; Dashboard is always month to date). Read-only, no cursor; arrows scroll both tables together. |
 | `!` panel | arrows select · `Enter` jump to `$EDITOR` |
@@ -575,7 +576,7 @@ through. konto draws with hand-rolled helpers in `ui/layout`:
 |---|---|
 | `Panel`, `TitleRule`, `Fit`, `AlignRight`, `More` | bordered panels, popup title rules, cell fitting, `… N more` |
 | `Cursor`, `Visible` | the one selectable list per view (Accounts, rule list, import rows, pickers), the dialogs' lists, and — offset only, `Scroll` — the Reports tables and the write preview |
-| `Edit` | text input of the forms, dialogs and pickers (typed text, backspace, clear) |
+| `Edit`, `WithCaret` | text input of the forms, dialogs and pickers: typed text at a caret, `←`/`→`, `Home`/`End` (in a list's input they stay with the list; `Ctrl+A`/`Ctrl+E` there), `Ctrl+←`/`Ctrl+→` by word, `Backspace`/`Delete`, `Ctrl+Backspace` / `Ctrl+W` / `Alt+Backspace` delete a word, `Ctrl+U` clears |
 | `Popup`, `PopupCapacity`, `Overlay`, `OverlayFlush`, `Columns` | every titled bottom popup — keys, checks, write preview, Import dialogs, Scheduled form (§6.5) — and the `?` reflow |
 | `Binding`, `Key…` | key hints and the shared key names |
 | `ChartStyle`, `Number` | `ntcharts` braille charts (Dashboard spend, Forecast) |
@@ -725,7 +726,8 @@ bar at fixed sizes only, not whole views during active development.
   `hledger balance --forecast`-style projection.
 - **CSV dedup** derives the watermark from the journal (ADR 0009); konto surfaces skipped
   rows as a **list**, not a count.
-- **No overlapping import rules**; a failing import balance assertion blocks the write.
+- **No overlapping import rules**, except that a fallback rule yields to the others (CONTEXT); a failing
+  import balance assertion blocks the write.
 - On CSV import, konto **writes a `= <balance>` assertion** on the account's posting of the
   newest imported transaction, stating the bank's closing balance for the export (Postbank:
   the `Kontostand` trailer) — this is the reconciliation mechanism.
@@ -766,6 +768,9 @@ The handoff (`design_handoff_hledger_tui/README.md`) is otherwise authoritative.
   transactions cannot be uncategorised.
 - **ADR 0009** — **Import has no watched-folder file list, no `.latest`, no `d`/`u`
   override**; files come from a filepicker, dedup from the journal.
+- **Import has a `ROW` panel** above the row table: the selected row's type, payee and purpose
+  (up to 3 lines), what a rule can match. The handoff shows the description only. Dropped below
+  23 rows of content height.
 - **ADR 0010** — **no Entry view in v1**: five tabs on `1`–`5`, no manual-account UI, no
   classify-on-open prompt; accounts are created by first import.
 - **ADR 0011** — **keyboard and chrome**: arrows not `j`/`k`; views on `1`–`5` only (no `:`

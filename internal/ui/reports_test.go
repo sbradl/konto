@@ -15,11 +15,11 @@ import (
 
 // fakeReporter builds a report whose single row names the period it was asked for.
 type fakeReporter struct {
-	periods *[]domain.Period
+	periods *[]domain.ReportPeriod
 	err     error
 }
 
-func (f fakeReporter) Report(_ context.Context, period domain.Period) (domain.Report, error) {
+func (f fakeReporter) Report(_ context.Context, period domain.ReportPeriod) (domain.Report, error) {
 	*f.periods = append(*f.periods, period)
 	return domain.Report{Period: period, IncomeStatement: []domain.ReportRow{
 		{Kind: domain.RowLeaf, Label: "for " + period.String()},
@@ -60,7 +60,7 @@ func deliver(m Model, cmd tea.Cmd) Model {
 }
 
 func TestTheReportLoadsWithTheLedgerAndShowsOnTheReportsTab(t *testing.T) {
-	var periods []domain.Period
+	var periods []domain.ReportPeriod
 	model := startedWithReports(t, fakeReporter{periods: &periods})
 
 	reports, _ := press(model, "5")
@@ -74,7 +74,7 @@ func TestTheReportLoadsWithTheLedgerAndShowsOnTheReportsTab(t *testing.T) {
 }
 
 func TestPCyclesTheReportsPeriodAndKeepsItAcrossViews(t *testing.T) {
-	var periods []domain.Period
+	var periods []domain.ReportPeriod
 	model, _ := press(startedWithReports(t, fakeReporter{periods: &periods}), "5")
 
 	model, cmd := press(model, "p")
@@ -88,7 +88,7 @@ func TestPCyclesTheReportsPeriodAndKeepsItAcrossViews(t *testing.T) {
 }
 
 func TestPDoesNothingOutsideReports(t *testing.T) {
-	var periods []domain.Period
+	var periods []domain.ReportPeriod
 	model := startedWithReports(t, fakeReporter{periods: &periods})
 
 	_, cmd := press(model, "p")
@@ -99,7 +99,7 @@ func TestPDoesNothingOutsideReports(t *testing.T) {
 }
 
 func TestAStaleReportIsDropped(t *testing.T) {
-	var periods []domain.Period
+	var periods []domain.ReportPeriod
 	model, _ := press(startedWithReports(t, fakeReporter{periods: &periods}), "5")
 	model, _ = press(model, "p")
 
@@ -113,7 +113,7 @@ func TestAStaleReportIsDropped(t *testing.T) {
 }
 
 func TestAFailedReportKeepsTheOldOneAndFlagsTheError(t *testing.T) {
-	var periods []domain.Period
+	var periods []domain.ReportPeriod
 	model, _ := press(startedWithReports(t, fakeReporter{periods: &periods}), "5")
 
 	failed, _ := model.Update(reportLoadedMsg{period: domain.MonthToDate, err: errors.New("hledger bal: boom")})
@@ -125,7 +125,7 @@ func TestAFailedReportKeepsTheOldOneAndFlagsTheError(t *testing.T) {
 }
 
 func TestAReportOfANewPeriodThatFailsSaysWhyInTheView(t *testing.T) {
-	var periods []domain.Period
+	var periods []domain.ReportPeriod
 	model, _ := press(startedWithReports(t, fakeReporter{periods: &periods}), "5")
 	model, _ = press(model, "p")
 
@@ -139,7 +139,7 @@ func TestAReportOfANewPeriodThatFailsSaysWhyInTheView(t *testing.T) {
 }
 
 func TestArrowsScrollTheReportsAndOtherViewsIgnoreThem(t *testing.T) {
-	var periods []domain.Period
+	var periods []domain.ReportPeriod
 	model, _ := press(startedWithReports(t, fakeReporter{periods: &periods}), "5")
 
 	for _, key := range []string{"down", "end", "home", "pgdown", "pgup", "up"} {
@@ -151,7 +151,7 @@ func TestArrowsScrollTheReportsAndOtherViewsIgnoreThem(t *testing.T) {
 }
 
 func TestReportsHaveNoPositionCounter(t *testing.T) {
-	var periods []domain.Period
+	var periods []domain.ReportPeriod
 	model, _ := press(startedWithReports(t, fakeReporter{periods: &periods}), "5")
 
 	if got := lastLine(model); regexpPosition.MatchString(got) {
@@ -160,7 +160,7 @@ func TestReportsHaveNoPositionCounter(t *testing.T) {
 }
 
 func TestReportsFollowTheTerminalSize(t *testing.T) {
-	var periods []domain.Period
+	var periods []domain.ReportPeriod
 	model, _ := press(startedWithReports(t, fakeReporter{periods: &periods}), "5")
 
 	resizedModel := resized(model, 160, 50)

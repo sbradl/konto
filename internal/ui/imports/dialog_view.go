@@ -10,12 +10,12 @@ import (
 )
 
 const (
-	caret         = "▏"
 	focusMark     = "▸"
 	createLabel   = "+ create"
 	transferLabel = "(transfer)"
 	noCategory    = "—"
 	labelWidth    = 10
+	pickerHint    = "type to find or create · Enter picks · Esc back"
 )
 
 // overlay draws the open dialog over the staged import, bottom-anchored like the keys popup.
@@ -46,6 +46,9 @@ func (m Model) dialogBody() (title string, body []string) {
 	case modeChoice:
 		return "categorise", m.choiceLines()
 	case modeRuleForm:
+		if m.dlg.fallback {
+			return "fallback rule", m.formLines()
+		}
 		return "new rule", m.formLines()
 	case modeRuleList:
 		return "add to rule", m.ruleListLines()
@@ -79,12 +82,12 @@ func (m Model) choiceLines() []string {
 }
 
 // field is a labelled text input line; the one whose number is the focus shows the caret.
-func field(label, text string, focus, own int) string {
-	mark, tail := " ", ""
-	if focus == own {
-		mark, tail = theme.Warn.Render(focusMark), caret
+func (d dialog) field(label, text string, own int) string {
+	mark := " "
+	if d.focus == own {
+		mark, text = theme.Warn.Render(focusMark), layout.WithCaret(text, d.back)
 	}
-	return mark + theme.Dim.Render(fmt.Sprintf("%-*s", labelWidth, label)) + text + tail
+	return mark + theme.Dim.Render(fmt.Sprintf("%-*s", labelWidth, label)) + text
 }
 
 func (m Model) formLines() []string {
@@ -94,9 +97,9 @@ func (m Model) formLines() []string {
 	}
 	rule := m.currentRule()
 	lines := []string{
-		field("pattern", m.dlg.draft.Pattern, m.dlg.focus, fieldPattern),
-		field("purpose", m.dlg.draft.Purpose, m.dlg.focus, fieldPurpose),
-		field("category", category, m.dlg.focus, -1),
+		m.dlg.field("pattern", m.dlg.draft.Pattern, fieldPattern),
+		m.dlg.field("purpose", m.dlg.draft.Purpose, fieldPurpose),
+		m.dlg.field("category", category, -1),
 		" " + m.impactLine(rule),
 	}
 	for line := range strings.SplitSeq(rule.Text(), "\n") {
@@ -115,7 +118,7 @@ func (m Model) refusalLines() []string {
 
 // impactLine says how many rows of this file the rule matches, and whether it would take rows from others.
 func (m Model) impactLine(rule csvimport.Rule) string {
-	if m.dlg.draft.Pattern == "" {
+	if m.dlg.draft.Pattern == "" && m.dlg.draft.Purpose == "" {
 		return theme.Dim.Render("enter a pattern")
 	}
 	impact := m.staged.Impact(rule)
@@ -129,7 +132,7 @@ func (m Model) impactLine(rule csvimport.Rule) string {
 
 func (m Model) ruleListLines() []string {
 	rules := m.ruleChoices()
-	lines := append(make([]string, 0, 1+len(rules)), field("filter", m.dlg.filter, 0, 0))
+	lines := append(make([]string, 0, 1+len(rules)), m.dlg.field("filter", m.dlg.filter, 0))
 	for i, rule := range rules {
 		text := fmt.Sprintf("#%-3s %-24s %s", rule.ID, rule.Category, ruleSummary(rule))
 		lines = append(lines, listLine(text, i, m.dlg.cursor.Row, m.width))
@@ -151,9 +154,10 @@ func ruleSummary(rule csvimport.Rule) string {
 }
 
 func (m Model) addFormLines() []string {
-	widened, _ := m.staged.Widened(m.dlg.ruleID, m.addition())
+	widened, _ := m.staged.Widened(m.dlg.ruleID, m.dlg.draft.Alternative())
 	lines := []string{
-		field("match "+m.staged.Rows[m.table.Row].MatchField(), m.dlg.matcher, 0, 0),
+		m.dlg.field(m.dlg.draft.Field, m.dlg.draft.Pattern, fieldPattern),
+		m.dlg.field("purpose", m.dlg.draft.Purpose, fieldPurpose),
 		" " + m.impactLine(widened),
 	}
 	for line := range strings.SplitSeq(widened.Text(), "\n") {
@@ -163,7 +167,7 @@ func (m Model) addFormLines() []string {
 }
 
 func (m Model) pickerLines() []string {
-	lines := []string{field("filter", m.dlg.filter, 0, 0)}
+	lines := []string{m.dlg.field("category", m.dlg.filter, 0) + "  " + theme.Dim.Render(pickerHint)}
 	candidates, create := m.pickerEntries()
 	for i, candidate := range candidates {
 		text := candidate.Name
@@ -183,7 +187,7 @@ func (m Model) pickerLines() []string {
 // accountLines is the name input for the account a new IBAN stands for.
 func (m Model) accountLines() []string {
 	return append([]string{
-		field("name", m.dlg.name, 0, 0),
+		m.dlg.field("name", m.dlg.name, 0),
 		" " + theme.Dim.Render("for "+m.staged.IBAN+" · Enter creates · Esc abandons"),
 	}, m.refusalLines()...)
 }

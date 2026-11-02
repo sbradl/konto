@@ -18,7 +18,7 @@ import (
 // when hledger reads the export through the bank format.
 func TestWrittenRuleForARowWithoutPayeeCategorisesItInHledger(t *testing.T) {
 	dir := t.TempDir()
-	rule := csvimport.Staged{Rows: []csvimport.Row{{Type: "Auszahlung"}}}.DraftFor(0).Rule("1", "expenses:cash")
+	rule := csvimport.Staged{Rows: []csvimport.Row{{Type: "Auszahlung"}}}.RuleDraftFor(0).Rule("1", "expenses:cash")
 	export := "Umsätze\nKonto;Kontonummer;IBAN;Währung\nGiro;0123456789;DE89370400440532013000;EUR\n;\n" +
 		"1.9.2026 - 30.9.2026\nLetzter Kontostand;;;;0,00;EUR\nVorgemerkte\n" +
 		"Buchungstag;Wert;Umsatzart;Begünstigter / Auftraggeber;Verwendungszweck\n" +

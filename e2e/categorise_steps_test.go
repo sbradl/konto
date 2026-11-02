@@ -12,7 +12,7 @@ import (
 )
 
 // dialogTitle is the top edge of a categorising dialog: a rule with the title inset, like a popup.
-var dialogTitle = regexp.MustCompile(`^─ (categorise|new rule|add to rule|widen rule \d+|category|create account|write) `)
+var dialogTitle = regexp.MustCompile(`^─ (categorise|new rule|fallback rule|add to rule|widen rule \w+|category|create account|write) `)
 
 // dialog is the categorising dialog as drawn: its title and the rows below it down to the status bar.
 type dialog struct {

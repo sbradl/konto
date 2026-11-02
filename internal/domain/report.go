@@ -2,12 +2,12 @@ package domain
 
 import "time"
 
-// Period is the stretch of time a report covers; every period ends today.
-type Period int
+// ReportPeriod is the stretch of time a report covers; every period ends today.
+type ReportPeriod int
 
 // The periods the Reports view cycles through (spec §6.4).
 const (
-	MonthToDate Period = iota
+	MonthToDate ReportPeriod = iota
 	QuarterToDate
 	YearToDate
 	AllTime // the loaded window, this year and last (ADR 0013), not every year the journal has
@@ -16,7 +16,7 @@ const (
 const monthsPerQuarter = 3
 
 // String is the period as the Reports view names it.
-func (p Period) String() string {
+func (p ReportPeriod) String() string {
 	switch p {
 	case MonthToDate:
 		return "month to date"
@@ -30,7 +30,7 @@ func (p Period) String() string {
 }
 
 // Next is the period after p, wrapping from all time back to the month.
-func (p Period) Next() Period {
+func (p ReportPeriod) Next() ReportPeriod {
 	if p == AllTime {
 		return MonthToDate
 	}
@@ -38,7 +38,7 @@ func (p Period) Next() Period {
 }
 
 // Start is the first day of the period ending today; false for all time, which has none.
-func (p Period) Start(today time.Time) (time.Time, bool) {
+func (p ReportPeriod) Start(today time.Time) (time.Time, bool) {
 	month := today.Month()
 	switch p {
 	case MonthToDate:
@@ -74,7 +74,7 @@ type ReportRow struct {
 
 // Report is both tables for one period.
 type Report struct {
-	Period          Period
+	Period          ReportPeriod
 	BalanceSheet    []ReportRow
 	IncomeStatement []ReportRow
 }

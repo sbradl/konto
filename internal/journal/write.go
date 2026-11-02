@@ -125,6 +125,11 @@ func (w *workspace) setCategoryRule(edit domain.SetCategoryRule) error {
 	}
 	block := strings.Split(edit.Text, "\n")
 	first, end, found := rulesfile.Block(w.rules.lines, edit.ID)
+	if !found && edit.First {
+		w.rules.lines = slices.Concat(block, []string{""}, w.rules.lines)
+		w.rules.dirty = true
+		return nil
+	}
 	if !found {
 		appendBlock(w.rules, block)
 		return nil

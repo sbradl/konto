@@ -184,6 +184,20 @@ Feature: Import — picking a file, the row table, skipped rows
       Then the second table row is selected
       And the status bar shows "2/5"
 
+    Scenario: the row panel shows what a rule can match on the selected row
+      Then I see "SEPA Lastschrift"
+      And I see "Einkauf"
+      When I press "↓"
+      Then I see "Kartenzahlung"
+      And I see "Brötchen"
+
+    Scenario: c jumps to the next row that needs a category
+      Then the first table row is selected
+      When I press "c"
+      Then the second table row is selected
+      And the status bar shows "2/5"
+      And the status bar hint lists "c next to categorise"
+
     Scenario: cursor limits
       When I press "↑"
       Then the first table row is selected

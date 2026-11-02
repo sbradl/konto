@@ -222,6 +222,28 @@ func TestSetCategoryRuleAppendsABlockAfterABlankLine(t *testing.T) {
 	}
 }
 
+func TestAFirstRuleGoesAboveTheOthersSoThatTheyWinInHledger(t *testing.T) {
+	file := journalWith(t, "x\n")
+	rules := filepath.Join(filepath.Dir(file.path), "categories.rules")
+	if err := os.WriteFile(rules, []byte("if %payee A\n    account2 a\n    comment2 konto-rule:1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	apply(t, file, domain.SetCategoryRule{ID: "f2", Text: "if %payee B\n    account2 b\n    comment2 konto-rule:f2", First: true})
+
+	want := "if %payee B\n    account2 b\n    comment2 konto-rule:f2\n\nif %payee A\n    account2 a\n    comment2 konto-rule:1\n"
+	if got := readFile(t, rules); got != want {
+		t.Errorf("rules = %q, want %q", got, want)
+	}
+
+	apply(t, file, domain.SetCategoryRule{ID: "f2", Text: "if %payee C\n    account2 b\n    comment2 konto-rule:f2", First: true})
+
+	want = strings.Replace(want, "%payee B", "%payee C", 1)
+	if got := readFile(t, rules); got != want {
+		t.Errorf("a rule replaced stays where it is: %q, want %q", got, want)
+	}
+}
+
 func TestSetCategoryRuleCreatesTheFileWhenThereIsNone(t *testing.T) {
 	file := journalWith(t, "x\n")
 

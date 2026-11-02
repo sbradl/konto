@@ -25,6 +25,16 @@ type Rule struct {
 	Staged       bool // not yet in categories.rules
 }
 
+// fallbackMark starts the id of a fallback rule: a rule that holds only the rows no other rule matches. It has its
+// place in the id because the posting's tag is all a row read back from hledger knows of its rule.
+const fallbackMark = "f"
+
+// Fallback reports a rule that yields to any other rule; only other fallback rules can overlap it.
+func (r Rule) Fallback() bool { return strings.HasPrefix(r.ID, fallbackMark) }
+
+// HeldByFallback reports a row categorised by a fallback rule, which any other rule may take it from.
+func (r Row) HeldByFallback() bool { return strings.HasPrefix(r.RuleID, fallbackMark) }
+
 // Matches reports whether any alternative of the rule holds for the row.
 func (r Rule) Matches(row Row) bool { return r.matcher()(row) }
 
@@ -137,7 +147,7 @@ func (r Rule) andCondition(text string) Rule {
 func nextRuleID(rules []Rule) string {
 	highest := 0
 	for _, rule := range rules {
-		if n, err := strconv.Atoi(rule.ID); err == nil {
+		if n, err := strconv.Atoi(strings.TrimPrefix(rule.ID, fallbackMark)); err == nil {
 			highest = max(highest, n)
 		}
 	}

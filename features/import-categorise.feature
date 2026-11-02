@@ -28,7 +28,7 @@ Feature: Import — categorising rows, building and widening rules, the category
     Scenario: Enter on a ? row offers new rule, add to rule, once
       Given I select the row "Kiosk"
       When I press "Enter"
-      Then I see a popup offering exactly "new rule", "add to rule", "once"
+      Then I see a popup offering exactly "new rule", "add to rule", "once", "fallback rule"
 
     Scenario: choices are picked with arrows and Enter
       Given I select the row "Kiosk"
@@ -91,6 +91,16 @@ Feature: Import — categorising rows, building and widening rules, the category
       When I press "Enter"
       And I choose "new rule"
       Then the pattern input contains "Kaffeehaus"
+
+    Scenario: the caret moves and Ctrl+Backspace deletes a word
+      Given I select the row "Kaffeehaus Nord"
+      When I press "Enter"
+      And I choose "new rule"
+      And I press "Ctrl+Backspace"
+      Then the pattern input contains "Kaffeehaus "
+      When I press "←"
+      And I type "X"
+      Then the pattern input contains "KaffeehausX▏"
 
     @proposed
     Scenario: the pattern is an escaped literal
@@ -277,6 +287,74 @@ Feature: Import — categorising rows, building and widening rules, the category
       When I confirm
       Then I see a refusal naming "rule 2"
 
+    Scenario: ^$ tells a row without a purpose from the rows a rule has by theirs
+      Given a Postbank CSV "e.csv" for IBAN "DE89370400440532013000" with closing balance 13.210,00 EUR:
+        | date      | type             | payee | purpose | amount |
+        | 29.9.2026 | SEPA Überweisung | Foo   |         | -10,00 |
+        | 28.9.2026 | SEPA Überweisung | Foo   | Thalia  | -20,00 |
+      When I open "e.csv" in Import
+      And I select the row "Foo" dated "2026-09-28"
+      And I press "Enter"
+      And I choose "new rule"
+      And I add the purpose condition "Thalia"
+      And I pick the category "expenses:books"
+      And I confirm the rule
+      And I select the row "Foo" dated "2026-09-29"
+      And I press "Enter"
+      And I choose "new rule"
+      Then I see "saving is blocked"
+      When I add the purpose condition "^$"
+      Then I see "matches 1 row in this file"
+      When I pick the category "expenses:rent"
+      And I confirm the rule
+      Then I see no refusal
+      When I write the import
+      Then hledger check passes
+
+  Rule: Fallback rule
+
+    Background:
+      Given a Postbank CSV "pp.csv" for IBAN "DE89370400440532013000" with closing balance 13.210,00 EUR:
+        | date      | type             | payee  | purpose     | amount |
+        | 29.9.2026 | SEPA Lastschrift | PayPal | Thalia Buch | -10,00 |
+        | 28.9.2026 | SEPA Lastschrift | PayPal | Spotify     | -20,00 |
+      When I open "pp.csv" in Import
+      And I select the row "PayPal" dated "2026-09-28"
+      And I press "Enter"
+      And I choose "fallback rule"
+      And I pick the category "expenses:rent"
+      And I confirm the rule
+
+    Scenario: a fallback rule categorises every row it matches that no rule has
+      Then the row dated "2026-09-29" shows "#f"
+      And the row dated "2026-09-28" shows "#f"
+
+    Scenario: a row a fallback rule holds can still get a rule of its own
+      When I select the row "PayPal" dated "2026-09-29"
+      And I press "Enter"
+      Then I see a popup offering exactly "new rule", "add to rule", "once"
+
+    Scenario: a specific rule takes rows from a fallback rule, and hledger agrees after the write
+      When I select the row "PayPal" dated "2026-09-29"
+      And I press "Enter"
+      And I choose "new rule"
+      And I add the purpose condition "Thalia"
+      Then I see no refusal
+      And I see "matches 1 row in this file"
+      When I pick the category "expenses:books"
+      And I confirm the rule
+      Then the row dated "2026-09-28" shows "#f"
+      And the row dated "2026-09-29" shows "expenses:books"
+      When I write the import
+      Given a Postbank CSV "next.csv" for IBAN "DE89370400440532013000" with closing balance 13.199,00 EUR:
+        | date      | type             | payee  | purpose     | amount |
+        | 30.9.2026 | SEPA Lastschrift | PayPal | Thalia Heft | -5,00  |
+        | 30.9.2026 | SEPA Lastschrift | PayPal | Netflix     | -6,00  |
+      When I open "next.csv" in Import
+      Then I see "expenses:books"
+      And I see "expenses:rent"
+      And I see "0 need a category"
+
   Rule: Add to existing rule
 
     Scenario: the rule list is filterable
@@ -311,6 +389,44 @@ Feature: Import — categorising rows, building and widening rules, the category
       And I confirm
       Then the row "Kaffeehaus" shows "✓" and rule id "6"
 
+    Scenario: widening with another string in the purpose
+      Given a Postbank CSV "pp.csv" for IBAN "DE89370400440532013000" with closing balance 13.182,03 EUR:
+        | date      | type             | payee  | purpose          | amount |
+        | 29.9.2026 | SEPA Lastschrift | PayPal | Hugendubel Buch  | -10,00 |
+        | 28.9.2026 | SEPA Lastschrift | PayPal | Thalia Buch      | -20,00 |
+        | 27.9.2026 | SEPA Lastschrift | PayPal | Spotify          | -30,00 |
+      When I open "pp.csv" in Import
+      And I select the row "PayPal" dated "2026-09-28"
+      And I press "Enter"
+      And I choose "add to rule"
+      And I pick the rule "2"
+      And I add the purpose condition "Thalia|Hugendubel"
+      Then I see "matches 2 rows in this file"
+      And I see "& %purpose Thalia|Hugendubel"
+      When I confirm
+      Then the row dated "2026-09-29" shows "✓"
+      And the row dated "2026-09-28" shows "✓"
+      And the row dated "2026-09-27" still shows "?"
+
+    Scenario: widening on the purpose alone is read back by hledger
+      Given a Postbank CSV "pp.csv" for IBAN "DE89370400440532013000" with closing balance 13.230,00 EUR:
+        | date      | type             | payee  | purpose     | amount |
+        | 29.9.2026 | SEPA Lastschrift | PayPal | Thalia Buch | -10,00 |
+      When I open "pp.csv" in Import
+      And I select the row "PayPal" dated "2026-09-29"
+      And I press "Enter"
+      And I choose "add to rule"
+      And I pick the rule "2"
+      And I edit the added matcher to ""
+      And I add the purpose condition "Thalia"
+      Then I see "%purpose Thalia"
+      When I confirm
+      Then the row dated "2026-09-29" shows "✓"
+      When I write the import
+      Then hledger check passes
+      When I open "pp.csv" in Import
+      Then I see "nothing new"
+
     Scenario: the rule keeps its original category
       Given I select the row "Bäckerei Schmidt"
       And I press "Enter"
@@ -337,6 +453,11 @@ Feature: Import — categorising rows, building and widening rules, the category
       When I type "gro"
       Then the picker lists "expenses:groceries"
       And the picker does not list "expenses:rent"
+
+    Scenario: the input is named for what it does, the rule list keeps its filter
+      Then I see "category"
+      And I see "type to find or create · Enter picks · Esc back"
+      And I do not see "filter"
 
     Scenario: outflows list expense categories first
       Then the picker's first group is the "expenses:*" categories

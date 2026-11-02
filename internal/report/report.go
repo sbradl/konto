@@ -32,7 +32,7 @@ func sheetPrefixes() []string { return []string{domain.AssetsPrefix, domain.Liab
 func statementPrefixes() []string { return []string{domain.IncomePrefix, domain.ExpensesPrefix} }
 
 // Report builds both tables for the period, ending today.
-func (s *Service) Report(ctx context.Context, period domain.Period) (domain.Report, error) {
+func (s *Service) Report(ctx context.Context, period domain.ReportPeriod) (domain.Report, error) {
 	today := s.today()
 	start, bounded := period.Start(today)
 	balances, err := s.gw.BalancesUntil(ctx, today, sheetPrefixes()...)
@@ -63,7 +63,7 @@ func (s *Service) Report(ctx context.Context, period domain.Period) (domain.Repo
 
 // statementActivity is what income and expense accounts did within the period.
 func (s *Service) statementActivity(
-	ctx context.Context, period domain.Period, today time.Time,
+	ctx context.Context, period domain.ReportPeriod, today time.Time,
 ) ([]domain.Account, error) {
 	if start, bounded := period.Start(today); bounded {
 		return s.gw.Activity(ctx, start, today, statementPrefixes()...) //nolint:wrapcheck // Report adds the context

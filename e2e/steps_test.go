@@ -219,7 +219,12 @@ func (w *world) expectRunning() error {
 	return nil
 }
 
+// expectEditorCall polls: the editor runs through tea.Exec, which the idle signal does not track.
 func (w *world) expectEditorCall(want string) error {
+	return w.eventually(func() error { return w.editorCalled(want) })
+}
+
+func (w *world) editorCalled(want string) error {
 	if included, ok := strings.CutPrefix(want, "+<line> <absolute path of "); ok {
 		return w.expectEditorOpenedIncluded(strings.TrimSuffix(included, ">"))
 	}

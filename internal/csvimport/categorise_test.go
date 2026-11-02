@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -276,25 +277,43 @@ func TestNextRuleIDContinuesAfterTheHighestNumericID(t *testing.T) {
 	}
 }
 
-func TestDraftForEscapesTheDescriptionAndTestsTheTypeWithoutAPayee(t *testing.T) {
+func TestADraftsAlternativeHoldsWhatWasTyped(t *testing.T) {
+	payee := Condition{Field: "payee", Pattern: "PayPal"}
+	purpose := Condition{Field: "purpose", Pattern: "Thalia"}
+	for _, c := range []struct {
+		draft RuleDraft
+		want  []Condition
+	}{
+		{RuleDraft{Field: "payee", Pattern: "PayPal"}, []Condition{payee}},
+		{RuleDraft{Field: "payee", Pattern: "PayPal", Purpose: "Thalia"}, []Condition{payee, purpose}},
+		{RuleDraft{Field: "payee", Purpose: "Thalia"}, []Condition{purpose}},
+		{RuleDraft{Field: "payee"}, []Condition{{Field: "payee"}}},
+	} {
+		if got := c.draft.Alternative(); !slices.Equal(got, c.want) {
+			t.Errorf("%+v: %+v, want %+v", c.draft, got, c.want)
+		}
+	}
+}
+
+func TestRuleDraftForEscapesTheDescriptionAndTestsTheTypeWithoutAPayee(t *testing.T) {
 	payee := Row{Payee: "Café (Nord) & Söhne.", Type: "Kartenzahlung"}
 	cash := Row{Type: "Auszahlung"}
 	s := stagedRows(payee, cash)
-	if got := s.DraftFor(0); got != (Draft{Field: "payee", Pattern: `Café \(Nord\) & Söhne\.`}) {
+	if got := s.RuleDraftFor(0); got != (RuleDraft{Field: "payee", Pattern: `Café \(Nord\) & Söhne\.`}) {
 		t.Errorf("draft = %+v", got)
 	}
-	if got := s.DraftFor(1); got != (Draft{Field: "type", Pattern: "Auszahlung"}) {
+	if got := s.RuleDraftFor(1); got != (RuleDraft{Field: "type", Pattern: "Auszahlung"}) {
 		t.Errorf("draft = %+v", got)
 	}
 }
 
 func TestDraftBecomesARuleWithAnOptionalPurposeCondition(t *testing.T) {
-	rule := Draft{Field: "payee", Pattern: "PayPal", Purpose: "Thalia"}.Rule("6", "expenses:books")
+	rule := RuleDraft{Field: "payee", Pattern: "PayPal", Purpose: "Thalia"}.Rule("6", "expenses:books")
 	want := "if %payee PayPal\n& %purpose Thalia\n    account2 expenses:books\n    comment2 konto-rule:6"
 	if rule.Text() != want || !rule.Staged {
 		t.Errorf("rule = %q staged %v", rule.Text(), rule.Staged)
 	}
-	if got := (Draft{Field: "payee", Pattern: "x"}).Alternative(); len(got) != 1 {
+	if got := (RuleDraft{Field: "payee", Pattern: "x"}).Alternative(); len(got) != 1 {
 		t.Errorf("alternative = %v", got)
 	}
 }
@@ -303,11 +322,11 @@ func TestImpactCountsMatchesAndWhatItWouldTakeFromOtherRules(t *testing.T) {
 	s := stagedRows(debit("Kaffeehaus"), debit("Kaffeehaus Nord"), debit("REWE Markt"), debit("REWE Nord"))
 	s.Rows[2].Target, s.Rows[2].RuleID = "expenses:groceries", "2"
 	s.Rows[3].Target, s.Rows[3].RuleID = "expenses:groceries", "2"
-	rule := Draft{Field: "payee", Pattern: "Kaffeehaus"}.Rule("6", "expenses:cafe")
+	rule := RuleDraft{Field: "payee", Pattern: "Kaffeehaus"}.Rule("6", "expenses:cafe")
 	if got := s.Impact(rule); got.Matches != 2 || got.Takes != 0 {
 		t.Errorf("impact = %+v", got)
 	}
-	broad := Draft{Field: "payee", Pattern: "e"}.Rule("6", "expenses:cafe")
+	broad := RuleDraft{Field: "payee", Pattern: "e"}.Rule("6", "expenses:cafe")
 	got := s.Impact(broad)
 	if got.Matches != 4 || got.Takes != 2 || !reflect.DeepEqual(got.From, []string{"2"}) {
 		t.Errorf("impact = %+v", got)
@@ -317,7 +336,7 @@ func TestImpactCountsMatchesAndWhatItWouldTakeFromOtherRules(t *testing.T) {
 func TestAddRuleCategorisesEveryUnclaimedRowItMatches(t *testing.T) {
 	s := stagedRows(debit("Kaffeehaus"), debit("Kaffeehaus Nord"), debit("Kiosk"))
 	s = s.Once(1, Candidate{Target: "expenses:groceries"})
-	next, err := s.AddRule(Draft{Field: "payee", Pattern: "Kaffeehaus"}.Rule("6", "expenses:cafe"))
+	next, err := s.AddRule(RuleDraft{Field: "payee", Pattern: "Kaffeehaus"}.Rule("6", "expenses:cafe"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -340,15 +359,15 @@ func TestAddRuleRefusesWhatItCannotStage(t *testing.T) {
 	rewe.Target, rewe.RuleID = "expenses:groceries", "2"
 	s := stagedRows(rewe, debit("Kiosk"))
 	for _, c := range []struct {
-		draft    Draft
+		draft    RuleDraft
 		category string
 		mention  string
 	}{
-		{Draft{Field: "payee", Pattern: "rewe"}, "expenses:x", "rule 2"},
-		{Draft{Field: "payee", Pattern: ""}, "expenses:x", "pattern is required"},
-		{Draft{Field: "payee", Pattern: "Kiosk", Purpose: ""}, "", "choose a category"},
-		{Draft{Field: "payee", Pattern: "Ki", Purpose: "("}, "expenses:x", "not a valid"},
-		{Draft{Field: "payee", Pattern: "("}, "expenses:x", "not a valid"},
+		{RuleDraft{Field: "payee", Pattern: "rewe"}, "expenses:x", "rule 2"},
+		{RuleDraft{Field: "payee", Pattern: ""}, "expenses:x", "pattern is required"},
+		{RuleDraft{Field: "payee", Pattern: "Kiosk", Purpose: ""}, "", "choose a category"},
+		{RuleDraft{Field: "payee", Pattern: "Ki", Purpose: "("}, "expenses:x", "not a valid"},
+		{RuleDraft{Field: "payee", Pattern: "("}, "expenses:x", "not a valid"},
 	} {
 		_, err := s.AddRule(c.draft.Rule("6", c.category))
 		if reason := refusal(t, err); !strings.Contains(reason, c.mention) {
@@ -600,5 +619,77 @@ func TestWidenRefusesAnInvalidPattern(t *testing.T) {
 func TestColumnIsEmptyBeyondTheEndOfALine(t *testing.T) {
 	if column([]string{"a"}, 3) != "" || column([]string{"a", "b"}, 1) != "b" {
 		t.Error("column misreads a short line")
+	}
+}
+
+func fallbackStaged() Staged {
+	return Staged{Rows: []Row{
+		{Payee: "PayPal", Purpose: "Thalia", Description: "PayPal"},
+		{Payee: "PayPal", Purpose: "Spotify", Description: "PayPal"},
+		{Payee: "REWE", Description: "REWE", Target: "expenses:groceries", RuleID: "2"},
+	}, Rules: []Rule{{ID: "2", Category: "expenses:groceries", Alternatives: [][]Condition{{{Field: "payee", Pattern: "REWE"}}}}}}
+}
+
+func TestAFallbackRuleClaimsOnlyRowsNoRuleHasAndOverlapsNoSpecificRule(t *testing.T) {
+	s := fallbackStaged()
+	everything := RuleDraft{Field: "payee", Pattern: "."}.Rule(s.NextFallbackID(), "expenses:misc")
+	if !everything.Fallback() || everything.ID != "f3" {
+		t.Fatalf("rule = %+v", everything)
+	}
+	if impact := s.Impact(everything); impact.Matches != 3 || impact.Takes != 0 {
+		t.Errorf("impact = %+v", impact)
+	}
+	got, err := s.AddRule(everything)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Rows[0].RuleID != "f3" || got.Rows[1].RuleID != "f3" || got.Rows[2].RuleID != "2" {
+		t.Errorf("rows = %+v", got.Rows)
+	}
+}
+
+func TestAFallbackRulesRowsAreKnownByTheirRuleAndItsNumberIsTaken(t *testing.T) {
+	got, err := fallbackStaged().AddRule(RuleDraft{Field: "payee", Pattern: "PayPal"}.Rule("f3", "expenses:misc"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.Rows[0].HeldByFallback() || got.Rows[2].HeldByFallback() || (Row{}).HeldByFallback() {
+		t.Errorf("held = %+v", got.Rows)
+	}
+	if next := got.NextRuleID(); next != "4" {
+		t.Errorf("the numbers go on past a fallback rule's: %s", next)
+	}
+}
+
+func TestASpecificRuleTakesRowsFromAFallbackRuleButNotFromAChoiceOrARule(t *testing.T) {
+	s, err := fallbackStaged().AddRule(RuleDraft{Field: "payee", Pattern: "PayPal"}.Rule("f3", "expenses:misc"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Rows = append(s.Rows, Row{Payee: "PayPal", Purpose: "Thalia", Description: "PayPal", Target: "expenses:gift", Once: true})
+	specific := RuleDraft{Field: "payee", Pattern: "PayPal", Purpose: "Thalia"}.Rule("4", "expenses:books")
+	if impact := s.Impact(specific); impact.Matches != 2 || impact.Takes != 0 {
+		t.Errorf("impact = %+v", impact)
+	}
+	got, err := s.AddRule(specific)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Rows[0].RuleID != "4" || got.Rows[1].RuleID != "f3" || got.Rows[3].Target != "expenses:gift" {
+		t.Errorf("rows = %+v", got.Rows)
+	}
+}
+
+func TestAFallbackRuleLeavesARowAnotherFallbackHasOrRefusesToTakeIt(t *testing.T) {
+	s, err := fallbackStaged().AddRule(RuleDraft{Field: "payee", Pattern: "PayPal"}.Rule("f3", "expenses:misc"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.AddRule(RuleDraft{Field: "payee", Pattern: "Pay"}.Rule("f4", "expenses:other")); err == nil {
+		t.Error("two fallback rules overlap")
+	}
+	widened, err := s.Widen("f3", []Condition{{Field: "purpose", Pattern: "x"}})
+	if err != nil || !widened.Rules[1].Fallback() {
+		t.Errorf("a widened fallback rule stays one: %+v, %v", widened.Rules, err)
 	}
 }

@@ -102,6 +102,9 @@ const RuleTag = "konto-rule"
 type SetCategoryRule struct {
 	ID   string
 	Text string // the block as categories.rules spells it
+	// First puts a new block above the others: in hledger's rules the last block that matches wins, so the
+	// others then beat it.
+	First bool
 }
 
 func (Declare) isEdit()         {}

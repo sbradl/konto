@@ -47,7 +47,7 @@ func TestPeriodBarNamesThePeriodAndCyclesWithNext(t *testing.T) {
 		t.Errorf("a new Reports view starts on month to date:\n%s", uitest.Plain(m.View()))
 	}
 
-	for _, want := range []domain.Period{domain.QuarterToDate, domain.YearToDate, domain.AllTime, domain.MonthToDate} {
+	for _, want := range []domain.ReportPeriod{domain.QuarterToDate, domain.YearToDate, domain.AllTime, domain.MonthToDate} {
 		m = m.NextPeriod()
 		if m.Period() != want {
 			t.Errorf("period = %v, want %v", m.Period(), want)

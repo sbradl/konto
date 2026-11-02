@@ -46,7 +46,7 @@ func (m *idleSignal) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, tea.Batch(cmds...)
 		}
-		// shortcut: a sequence or an exec runs untracked; the UI uses neither for loads or writes.
+		// shortcut: a sequence or an exec runs untracked: no load or write uses them (e2e editor steps poll).
 		if fromRuntime(msg.msg) {
 			return m, func() tea.Msg { return msg.msg }
 		}
