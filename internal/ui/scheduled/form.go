@@ -73,7 +73,7 @@ type form struct {
 func (f *form) text(field int) string { return *fields()[field].text(&f.input) }
 
 // Capturing reports whether the form has the keyboard: letters and digits are then text, not view keys.
-func (m Model) Capturing() bool { return m.form != nil }
+func (m Model) Capturing() bool { return m.form != nil || m.copying != nil }
 
 // OpenNew opens an empty form for a new rule.
 func (m Model) OpenNew() Model {
@@ -124,6 +124,9 @@ func (m Model) WithFormError(text string) Model {
 // fields (on an account field the arrows move through its matches), Enter and Ctrl+S save, Esc cancels;
 // anything else edits the field with the focus.
 func (m Model) FormKey(key string) (Model, Action) {
+	if m.copying != nil {
+		return m.copyKey(key), nil
+	}
 	next := *m.form
 	next.message = ""
 	switch key {

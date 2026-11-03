@@ -331,3 +331,26 @@ func TestReplaceRefusesInputThatIsWrong(t *testing.T) {
 		t.Error("expected a refusal")
 	}
 }
+
+func TestInputFromCopiesATransactionIntoANewMonthlyRule(t *testing.T) {
+	style := domain.DefaultAmount("EUR").Style
+	rent := domain.Transaction{
+		Date: time.Date(2026, 9, 2, 0, 0, 0, 0, time.UTC), Description: "Vermieter Mueller",
+		Postings: []domain.Posting{
+			{Account: "expenses:rent", Amounts: domain.MultiAmount{{Commodity: "EUR", Mantissa: 120000, Places: 2, Style: style}}},
+			{Account: "assets:checking", Amounts: domain.MultiAmount{{Commodity: "EUR", Mantissa: -120000, Places: 2, Style: style}}},
+			{Account: "assets:other", Amounts: domain.MultiAmount{{Commodity: "EUR", Mantissa: -1, Places: 2, Style: style}}},
+			{Account: "expenses:other", Amounts: domain.MultiAmount{{Commodity: "EUR", Mantissa: 1, Places: 2, Style: style}}},
+		},
+	}
+	want := Input{
+		Date: "2026-10-02", Frequency: Monthly, Description: "Vermieter Mueller",
+		Amount: "1.200,00", Currency: "EUR", From: "assets:checking", To: "expenses:rent",
+	}
+	if got := InputFrom(rent); got != want {
+		t.Errorf("InputFrom = %+v, want %+v", got, want)
+	}
+	if got := InputFrom(domain.Transaction{Description: "empty", Postings: []domain.Posting{{Account: "a"}}}); got.From != "" || got.To != "" || got.Amount != "" {
+		t.Errorf("a posting without an amount fills nothing: %+v", got)
+	}
+}

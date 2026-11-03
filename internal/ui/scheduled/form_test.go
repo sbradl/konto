@@ -1,6 +1,8 @@
 package scheduled
 
 import (
+	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
@@ -468,5 +470,118 @@ func TestTheHighlightedPickerRowIsTheOneUnderTheCursor(t *testing.T) {
 	if !strings.Contains(highlighted, "assets:nothing") || strings.Contains(highlighted, "assets:checking") ||
 		strings.Contains(highlighted, "assets:wallet") {
 		t.Errorf("highlighted rows:\n%s", highlighted)
+	}
+}
+
+func copyLedger() domain.Ledger {
+	ledger := withAccounts()
+	style := domain.DefaultAmount("EUR").Style
+	booking := func(day int, description, to string, cents int64) domain.Transaction {
+		return domain.Transaction{Date: date(fmt.Sprintf("2026-09-%02d", day)), Description: description, Postings: []domain.Posting{
+			{Account: to, Amounts: domain.MultiAmount{{Commodity: "EUR", Mantissa: cents, Places: 2, Style: style}}},
+			{Account: "assets:checking", Amounts: domain.MultiAmount{{Commodity: "EUR", Mantissa: -cents, Places: 2, Style: style}}},
+		}}
+	}
+	ledger.Transactions = []domain.Transaction{
+		booking(2, "Vermieter Mueller", "expenses:rent", 90000),
+		booking(10, "Thalia", "expenses:books", 2000),
+		booking(20, "REWE", "expenses:groceries", 4217),
+	}
+	return ledger
+}
+
+func copyList(t *testing.T) Model {
+	t.Helper()
+	m := New().Resize(180, 40).WithLedger(copyLedger()).OpenCopy()
+	if !m.Capturing() || !strings.Contains(screen(m), "─ copy a transaction ") {
+		t.Fatalf("no copy picker:\n%s", screen(m))
+	}
+	return m
+}
+
+func TestCopyListsTheTransactionsNewestFirstAndFiltersThem(t *testing.T) {
+	m := copyList(t)
+	view := screen(m)
+	rewe, rent := strings.Index(view, "2026-09-20  REWE"), strings.Index(view, "2026-09-02  Vermieter Mueller")
+	if rewe < 0 || rent < 0 || rewe > rent || !strings.Contains(view, "42,17 EUR") || !strings.Contains(view, "assets:checking → expenses:groceries") {
+		t.Errorf("the list:\n%s", view)
+	}
+}
+
+func TestTheCopyListFiltersByDescription(t *testing.T) {
+	m := typed(copyList(t), "thal")
+	if view := screen(m); !strings.Contains(view, "Thalia") || strings.Contains(view, "REWE") {
+		t.Errorf("filtered:\n%s", view)
+	}
+	if m = typed(m, "x"); !strings.Contains(screen(m), "no transaction matches") {
+		t.Errorf("nothing left:\n%s", screen(m))
+	}
+	if m, _ = pressed(m, "enter"); m.form != nil || m.copying == nil {
+		t.Error("Enter with nothing listed opened a form")
+	}
+}
+
+func TestMovingTheCaretKeepsTheTransactionUnderTheCursor(t *testing.T) {
+	m, _ := pressed(typed(copyList(t), "e"), "down", "left")
+	if m.copying.cursor.Row != 1 || m.copying.back != 1 {
+		t.Errorf("cursor %d, caret %d", m.copying.cursor.Row, m.copying.back)
+	}
+}
+
+func TestALongCopyListScrollsAndHighlightsTheTransactionUnderTheCursor(t *testing.T) {
+	ledger := copyLedger()
+	for day := 1; day <= 9; day++ {
+		ledger.Transactions = append(ledger.Transactions, domain.Transaction{
+			Date:        date(fmt.Sprintf("2026-08-%02d", day)),
+			Description: fmt.Sprintf("Old %d", day),
+		})
+	}
+	m, _ := pressed(New().Resize(120, 12).WithLedger(ledger).OpenCopy(), "end")
+	lines := strings.Split(m.View(), "\n")
+	title := slices.IndexFunc(lines, func(line string) bool { return strings.Contains(line, copyTitle) })
+	var highlighted []string
+	for _, line := range lines[title+1:] {
+		if strings.HasPrefix(line, "\x1b[") { // an unselected row starts with its plain margin
+			highlighted = append(highlighted, uitest.Plain(line))
+		}
+	}
+	if shown := len(lines) - title - 1; shown != 5 { // half the screen: the title, the filter and four rows
+		t.Errorf("the list takes %d lines:\n%s", shown, screen(m))
+	}
+	if len(highlighted) != 1 || !strings.Contains(highlighted[0], "Old 1") {
+		t.Errorf("highlighted %q in:\n%s", highlighted, screen(m))
+	}
+}
+
+func TestEnterOpensTheNewRuleFormFilledFromTheTransaction(t *testing.T) {
+	m, _ := pressed(copyList(t), "down", "enter")
+	if m.copying != nil || m.form == nil || m.form.editing != nil {
+		t.Fatalf("no new-rule form: %+v", m.form)
+	}
+	want := periodic.Input{
+		Date: "2026-10-10", Frequency: periodic.Monthly, Description: "Thalia", Amount: "20,00",
+		Currency: "EUR", From: "assets:checking", To: "expenses:books",
+	}
+	if m.form.input != want {
+		t.Errorf("input = %+v, want %+v", m.form.input, want)
+	}
+}
+
+func TestTheCopyListMovesItsCursorAndEscClosesIt(t *testing.T) {
+	m, _ := pressed(copyList(t), "end")
+	if m.copying.cursor.Row != 2 {
+		t.Errorf("end: %d", m.copying.cursor.Row)
+	}
+	if m, _ = pressed(typed(m, "e"), "left"); m.copying.back != 1 || m.copying.cursor.Row != 0 {
+		t.Errorf("typing starts the list over and left moves the caret: %+v", *m.copying)
+	}
+	if m, _ = pressed(m, "esc"); m.Capturing() || strings.Contains(screen(m), "copy a transaction") {
+		t.Errorf("esc did not close:\n%s", screen(m))
+	}
+}
+
+func TestCAsksForTheCopyList(t *testing.T) {
+	if _, action := New().Resize(180, 40).WithLedger(copyLedger()).Key("c"); action != (CopyTransaction{}) {
+		t.Errorf("action = %#v", action)
 	}
 }

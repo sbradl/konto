@@ -14,6 +14,19 @@ Feature: Scheduled — periodic rules (forecast-only)
     And I start konto
     And I press "3"
 
+  Rule: Copy a transaction
+
+    Scenario: c copies a transaction into the new-rule form
+      When I press "c"
+      Then I see "copy a transaction"
+      When I type "REWE"
+      And I press "Enter"
+      Then I see "new periodic rule"
+      And I see "2026-10-10"
+      And I see "250,00"
+      And I see "assets:checking"
+      And I see "expenses:groceries"
+
   Rule: The list
 
     Scenario: rules are sorted by next occurrence

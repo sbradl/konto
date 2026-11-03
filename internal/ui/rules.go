@@ -52,6 +52,10 @@ func (m Model) onScheduledKey(key string) (Model, tea.Cmd) {
 		if m.rules != nil {
 			m.scheduled = m.scheduled.OpenNew()
 		}
+	case scheduled.CopyTransaction:
+		if m.rules != nil {
+			m.scheduled = m.scheduled.OpenCopy()
+		}
 	case scheduled.EditSelected, scheduled.DeleteSelected:
 		return m.onSelectedRule(action)
 	}

@@ -27,7 +27,8 @@ const (
 // Model is the Scheduled view's state: the rules with their projections and the cursor.
 type Model struct {
 	ledger    domain.Ledger
-	form      *form // the open new-rule or edit-rule form
+	form      *form    // the open new-rule or edit-rule form
+	copying   *copying // the open list of transactions to copy into a new rule
 	schedules []domain.RuleSchedule
 	total     domain.MultiAmount
 	cursor    layout.Cursor
@@ -75,21 +76,29 @@ type EditSelected struct{}
 // DeleteSelected asks whether to delete the selected rule.
 type DeleteSelected struct{}
 
-func (NewRule) isAction()        {}
-func (EditSelected) isAction()   {}
-func (DeleteSelected) isAction() {}
+// CopyTransaction asks for the list of transactions a new rule can be copied from.
+type CopyTransaction struct{}
+
+func (NewRule) isAction()         {}
+func (EditSelected) isAction()    {}
+func (DeleteSelected) isAction()  {}
+func (CopyTransaction) isAction() {}
 
 // The rule list's own keys.
 const (
 	keyNew    = "n"
 	keyEdit   = "e"
 	keyDelete = "d"
+	keyCopy   = "c"
 )
 
 // Bindings are the keys Key acts on besides the cursor keys, as the root hints them.
 func Bindings() []layout.Binding {
 	return []layout.Binding{
-		{Key: keyNew, Action: "new"}, {Key: keyEdit, Action: "edit"}, {Key: keyDelete, Action: "delete"},
+		{Key: keyNew, Action: "new"},
+		{Key: keyEdit, Action: "edit"},
+		{Key: keyDelete, Action: "delete"},
+		{Key: keyCopy, Action: "copy transaction"},
 	}
 }
 
@@ -98,6 +107,9 @@ func Bindings() []layout.Binding {
 func (m Model) Key(key string) (Model, Action) {
 	if key == keyNew {
 		return m, NewRule{}
+	}
+	if key == keyCopy {
+		return m, CopyTransaction{}
 	}
 	if _, selected := m.Selected(); !selected {
 		return m.Move(key), nil
@@ -144,7 +156,7 @@ func (m Model) View() string {
 		layout.Panel("ANNUAL IMPACT", right, impactHeight,
 			m.impact(right-layout.PanelChrome, impactHeight-layout.PanelChrome))
 	lower := lipgloss.JoinHorizontal(lipgloss.Top, layout.Panel("ENTRY", entryWidth, bottom, m.entry()), column)
-	return m.withForm(m.list(listHeight) + "\n" + lower)
+	return m.withCopy(m.withForm(m.list(listHeight) + "\n" + lower))
 }
 
 // list is the RULES panel: next date, description, raw cadence and status of each rule.

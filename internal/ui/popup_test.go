@@ -173,7 +173,7 @@ func TestKeysBodyFillsColumnsTopToBottom(t *testing.T) {
 
 	want := []string{
 		"─ keys " + strings.Repeat("─", 93),
-		" 1–5    switch view       r      refresh           n      new" + "",
+		" 1–5    switch view       r      refresh           n      new               c      copy transaction",
 		" ?      keys              q      quit              e      edit" + "",
 		" !      checks            Esc    close popup       d      delete" + "",
 	}

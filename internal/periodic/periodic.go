@@ -1,6 +1,7 @@
 package periodic
 
 import (
+	"cmp"
 	"context"
 	"strconv"
 	"strings"
@@ -184,4 +185,30 @@ func (s *Service) endAfter(ctx context.Context, rule []string, read entered) (ti
 		return time.Time{}, domain.RefusalError{Reason: "the rule does not have that many payments"}
 	}
 	return dates[read.remaining-1].AddDate(0, 0, 1), nil
+}
+
+// InputFrom is a new monthly rule copied from a transaction: its description, the account the money left and
+// the one it went to, with the amount that arrived, due a month after the transaction.
+// shortcut: the date is a month on from the copied one whatever the frequency; the user corrects it in the form.
+func InputFrom(transaction domain.Transaction) Input {
+	input := Input{
+		Date: transaction.Date.AddDate(0, 1, 0).Format(time.DateOnly), Frequency: Monthly,
+		Description: transaction.Description,
+	}
+	for _, posting := range transaction.Postings {
+		if len(posting.Amounts) == 0 {
+			continue
+		}
+		amount := posting.Amounts[0]
+		if amount.IsNegative() {
+			input.From = cmp.Or(input.From, posting.Account)
+			continue
+		}
+		if input.To == "" {
+			input.To, input.Currency = posting.Account, amount.Commodity
+			amount.Commodity = ""
+			input.Amount = amount.Format()
+		}
+	}
+	return input
 }

@@ -529,7 +529,7 @@ letter means the same action in every view (`d` = delete, `n` new, `e` edit, `c`
 | Movement | `↑`/`↓` row · `PgUp`/`PgDn` page · `Home`/`End` ends — the same in every list, popup and scrolled view (`layout.Cursor`) · `Tab`/`Shift+Tab` or `↓`/`↑` form fields (in the Scheduled form's account picker the arrows move through the matches; `←`/`→` cycle a dropdown). No `j`/`k`. |
 | Dashboard | `Tab`/`Shift+Tab` focus Accounts → Upcoming → Recent (ADR 0014) · arrows move the Accounts cursor or scroll the focused panel · `c` close · `o` reopen |
 | Import | `Enter` categorise row (popup: new rule / add to rule / once — `✓` rows: once only; picked with arrows + Enter) · `c` next row that needs a category (wraps) · `w` write import (y/n, only with no `?` rows) · `n` new file |
-| Scheduled | `n` new · `e` edit · `d` delete |
+| Scheduled | `n` new · `c` copy a transaction into a new rule (filterable list, newest first) · `e` edit · `d` delete |
 | Reports | `p` cycle report period (Reports-local state; Dashboard is always month to date). Read-only, no cursor; arrows scroll both tables together. |
 | `!` panel | arrows select · `Enter` jump to `$EDITOR` |
 
