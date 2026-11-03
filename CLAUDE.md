@@ -15,7 +15,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   0007 forecast = balances + schedules, 0008 always categorised,
   0009 import: journal is the watermark, 0010 no manual-entry UI in v1, 0011 v1 keyboard and chrome,
   0012 context-owned models, Account aggregate, shared Changeset write model,
-  0013 konto-owned year-partitioned ledger, only this and last year loaded).
+  0013 konto-owned year-partitioned ledger, only this and last year loaded,
+  0014 Dashboard panel focus).
 - **`docs/design_handoff_hledger_tui/README.md`** — the frozen UX spec (six views — Entry deferred in v1,
   keymaps, panels, tokens). Authoritative except the deviations listed in `docs/spec.md` §11.
   The bundled `.dc.html` is a browser mock, **not code to port** — consult it for the `HINTS`
@@ -28,7 +29,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `konto` — a terminal UI frontend for [hledger](https://hledger.org) (plain-text accounting),
 single-user personal finance. Five views in v1: dashboard, CSV import with rule-building,
-scheduled/periodic transactions, forecast, reports (manual entry deferred, ADR 0010). Keyboard-only: arrows move, `1`–`5` switch views, keys are the first letter of their action.
+scheduled/periodic transactions, forecast, reports (manual entry deferred, ADR 0010). Keyboard-only: arrows move, `1`–`5` switch views, `Tab` moves the Dashboard's panel focus, keys are the first letter of their action.
 
 ## State
 

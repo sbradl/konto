@@ -224,6 +224,23 @@ Feature: Dashboard
       Then the Upcoming panel is empty
       And the status bar shows no error indicator
 
+  Rule: Panel focus
+
+    Scenario: Tab moves the focus from Accounts through Upcoming to Recent
+      Then I see "╭─ ACCOUNTS ◂"
+      When I press "Tab"
+      Then I see "╭─ UPCOMING ◂"
+      When I press "Tab"
+      Then I see "╭─ RECENT ◂"
+      When I press "Shift+Tab"
+      Then I see "╭─ UPCOMING ◂"
+
+    Scenario: the arrows scroll the focused read-only panel
+      When I press "Tab" twice
+      And I press "↓"
+      Then the status bar shows "2/"
+      And the status bar shows "Tab focus"
+
   Rule: Monthly spend chart
 
     Scenario: last six complete months of total expenses
@@ -299,11 +316,6 @@ Feature: Dashboard
         | 100 | 30 |
         | 120 | 40 |
         | 180 | 60 |
-
-    @proposed
-    Scenario: hidden panels are counted in the status bar
-      Given the terminal is 100×30
-      Then the status bar shows "hidden · widen terminal"
 
     Scenario: dropped panels come back when the terminal grows
       Given the terminal is 100×30

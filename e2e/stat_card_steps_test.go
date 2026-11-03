@@ -41,7 +41,7 @@ func (w *world) statCards() ([]statCard, error) {
 			continue
 		}
 		title, _, _ := strings.Cut(strings.TrimLeft(string(runes[x+3:]), " "), " ─")
-		if title == "ACCOUNTS" {
+		if strings.TrimSuffix(title, " ◂") == "ACCOUNTS" { // the focus mark (ADR 0014)
 			continue
 		}
 		cards = append(cards, statCard{

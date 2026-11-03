@@ -114,6 +114,17 @@ func TestChartsTheTerminalHasNoRoomForAreCountedInTheStatusBar(t *testing.T) {
 	}
 }
 
+func TestOneHiddenChartIsCountedInTheSingular(t *testing.T) {
+	model := withForecaster(t, &fakeForecaster{forecast: oneChart("EUR", "PLN", "CZK")})
+	small, _ := model.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+
+	shown, _ := press(small.(Model), "4")
+
+	if got := lastLine(shown); !strings.Contains(got, "1 panel hidden · widen terminal") {
+		t.Errorf("status bar = %q", got)
+	}
+}
+
 func TestOtherViewsReportNoHiddenForecastPanels(t *testing.T) {
 	model := withForecaster(t, &fakeForecaster{forecast: oneChart("EUR", "PLN", "CZK", "USD")})
 	small, _ := model.Update(tea.WindowSizeMsg{Width: 100, Height: 30})

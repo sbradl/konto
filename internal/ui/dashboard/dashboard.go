@@ -1,5 +1,6 @@
-// Package dashboard is the Dashboard view: the Accounts panel with its cursor, and beside it the stat cards,
-// Recent, Upcoming and the monthly spend chart as far as the terminal has room for them.
+// Package dashboard is the Dashboard view: the Accounts panel with its cursor over Upcoming, and beside them
+// the stat cards, Recent and the monthly spend chart as far as the terminal has room for them. Tab moves the
+// focus between Accounts, Upcoming and Recent; the cursor keys move the Accounts cursor or scroll the others.
 package dashboard
 
 import (
@@ -25,10 +26,10 @@ const (
 	descriptionShare    = 60 // percent of the room beside the date and amount that description takes
 	recentGap           = 2
 	recentFixed         = 16 // a Recent row's edges, its date and the gaps around the middle columns
-	upcomingHeight      = 10 // the Upcoming panel and the spend chart beside it
-	bandPanels          = 2  // Upcoming and the spend chart share the lower band
-	minBandWidth        = 40 // narrower than this each, the chart gives way
-	minRecentHeight     = 5  // Upcoming gives way rather than squeeze Recent below this
+	upcomingHeight      = 10 // the least Upcoming takes under Accounts; it gets all the room Accounts leaves
+	minAccountsHeight   = 5  // Upcoming gives way rather than squeeze Accounts below this
+	spendHeight         = 10 // the spend chart under Recent
+	minRecentHeight     = 5  // the chart gives way rather than squeeze Recent below this
 )
 
 // Model is the Dashboard's view-local state; the ledger is replaced wholesale on refresh.
@@ -39,9 +40,21 @@ type Model struct {
 	spend    []domain.MonthSpend
 	figures  figures
 	cursor   layout.Cursor
+	focus    panel
+	scrolls  [panelCount]layout.Cursor // the first row Upcoming and Recent show; Accounts uses cursor
 	width    int
 	height   int
 }
+
+// panel is one of the panels the focus moves between, in tab order.
+type panel int
+
+const (
+	accountsPanel panel = iota
+	upcomingPanel
+	recentPanel
+	panelCount
+)
 
 // figures are the numbers the stat cards show.
 type figures struct {
@@ -123,26 +136,98 @@ const (
 
 // Bindings are the keys Key acts on besides the cursor keys, as the root hints them.
 func Bindings() []layout.Binding {
-	return []layout.Binding{{Key: keyClose, Action: "close"}, {Key: keyReopen, Action: "reopen"}}
+	return []layout.Binding{
+		{Key: layout.KeyTab, Action: "focus"}, {Key: keyClose, Action: "close"}, {Key: keyReopen, Action: "reopen"},
+	}
 }
 
-// Key applies a key: c and o ask for the selected account to be closed or reopened, the cursor keys move.
+// Key applies a key: c and o ask for the selected account to be closed or reopened, tab and shift+tab move
+// the focus, the cursor keys move or scroll the focused panel.
 func (m Model) Key(key string) (Model, Action) {
 	switch key {
 	case keyClose:
 		return m, CloseSelected{}
 	case keyReopen:
 		return m, ReopenSelected{}
+	case layout.KeyTab:
+		return m.cycle(1), nil
+	case layout.KeyBackTab:
+		return m.cycle(-1), nil
 	}
 	return m.Move(key), nil
 }
 
-// Move applies a cursor key: up, down, home, end, pgup or pgdown. The cursor stops at both ends.
-func (m Model) Move(key string) Model {
+// cycle moves the focus by step through the panels shown, wrapping around.
+func (m Model) cycle(step int) Model {
 	next := m
-	next.cursor = m.cursor.Move(key, len(m.accounts), m.pageSize())
+	shown := m.shownPanels()
+	at := slices.Index(shown, m.focused())
+	next.focus = shown[(at+step+len(shown))%len(shown)]
 	return next
 }
+
+// shownPanels are the focusable panels the terminal has room for, in tab order.
+func (m Model) shownPanels() []panel {
+	fit := m.fit()
+	shown := []panel{accountsPanel}
+	if fit.upcoming {
+		shown = append(shown, upcomingPanel)
+	}
+	if fit.right {
+		shown = append(shown, recentPanel)
+	}
+	return shown
+}
+
+// focused is the panel with the focus; Accounts when the focused panel no longer fits.
+func (m Model) focused() panel {
+	if slices.Contains(m.shownPanels(), m.focus) {
+		return m.focus
+	}
+	return accountsPanel
+}
+
+// Move applies a cursor key: up, down, home, end, pgup or pgdown. It moves the Accounts cursor, stopping at
+// both ends, or scrolls the focused Upcoming or Recent panel until its last entry shows.
+func (m Model) Move(key string) Model {
+	next := m
+	focus := m.focused()
+	if focus == accountsPanel {
+		next.cursor = m.cursor.Move(key, len(m.accounts), m.pageSize())
+		return next
+	}
+	entries, capacity := m.entries(focus), m.capacity(focus)
+	next.scrolls[focus] = m.scrolls[focus].Scroll(key, lastOffset(len(entries), capacity), capacity)
+	return next
+}
+
+// entries are what the Upcoming or Recent panel lists.
+func (m Model) entries(focus panel) []domain.RecentEntry {
+	if focus == upcomingPanel {
+		return m.upcoming
+	}
+	return m.recent
+}
+
+// capacity is how many rows fit inside the Upcoming or Recent panel.
+func (m Model) capacity(focus panel) int {
+	return max(0, m.panelHeight(focus)-layout.PanelChrome)
+}
+
+// panelHeight is the Upcoming or Recent panel's height: Upcoming takes what Accounts leaves, Recent what
+// the cards and the chart leave.
+func (m Model) panelHeight(focus panel) int {
+	if focus == upcomingPanel {
+		return m.height - m.accountsHeight()
+	}
+	if m.fit().chart {
+		return m.height - cardHeight - spendHeight
+	}
+	return m.height - cardHeight
+}
+
+// lastOffset is the furthest a panel of capacity rows scrolls into count entries: its last page.
+func lastOffset(count, capacity int) int { return max(0, count-capacity) }
 
 // moveTo puts the cursor on row i, clamped, and scrolls to keep it visible.
 func (m Model) moveTo(i int) Model {
@@ -152,14 +237,46 @@ func (m Model) moveTo(i int) Model {
 }
 
 // pageSize is how many account rows the panel shows at once.
-func (m Model) pageSize() int { return max(1, m.height-layout.PanelChrome) }
+func (m Model) pageSize() int { return max(1, m.accountsHeight()-layout.PanelChrome) }
 
-// Position is the 1-based cursor row and the row count; (0, 0) when there are no accounts.
+// accountsHeight is just tall enough for every account when Upcoming fits under it, leaving Upcoming at
+// least upcomingHeight; the whole height when it does not.
+func (m Model) accountsHeight() int {
+	if !m.fit().upcoming {
+		return m.height
+	}
+	return min(len(m.accounts)+layout.PanelChrome, m.height-upcomingHeight)
+}
+
+// Position is the focused panel's 1-based cursor row, or first row shown, and its row count; (0, 0) when the
+// panel is empty.
 func (m Model) Position() (row, total int) {
-	if len(m.accounts) == 0 {
+	focus := m.focused()
+	if focus == accountsPanel {
+		if len(m.accounts) == 0 {
+			return 0, 0
+		}
+		return m.cursor.Row + 1, len(m.accounts)
+	}
+	entries := m.entries(focus)
+	if len(entries) == 0 {
 		return 0, 0
 	}
-	return m.cursor.Row + 1, len(m.accounts)
+	return m.offset(focus) + 1, len(entries)
+}
+
+// offset is the first entry the Upcoming or Recent panel shows, kept within its last page as the ledger and
+// the terminal change.
+func (m Model) offset(focus panel) int {
+	return min(m.scrolls[focus].Offset, lastOffset(len(m.entries(focus)), m.capacity(focus)))
+}
+
+// title is the panel's title, marked when the panel has the focus.
+func (m Model) title(focus panel, title string) string {
+	if m.focused() == focus {
+		return title + " ◂"
+	}
+	return title
 }
 
 // Selected is the account under the cursor; false when the panel is empty.
@@ -170,41 +287,47 @@ func (m Model) Selected() (domain.Account, bool) {
 	return m.accounts[m.cursor.Row], true
 }
 
-// View draws the Accounts panel in the left column and the stat cards above whatever fills the right.
+// View draws Accounts over Upcoming in the left column and the stat cards over Recent and the spend chart
+// in the right.
 func (m Model) View() string {
-	left := m.accountsPanel()
 	fit := m.fit()
+	left := m.accountsPanel()
+	if fit.upcoming {
+		left += "\n" + m.entriesPanel(upcomingPanel, "UPCOMING", m.accountsWidth())
+	}
 	if !fit.right {
 		return left
 	}
 	right := m.width - m.accountsWidth()
-	cards := lipgloss.JoinHorizontal(lipgloss.Top, m.cards(right)...)
-	column := cards + "\n" + m.listPanels(fit, right, m.height-cardHeight)
+	column := lipgloss.JoinHorizontal(lipgloss.Top, m.cards(right)...)
+	column += "\n" + m.entriesPanel(recentPanel, "RECENT", right)
+	if fit.chart {
+		column += "\n" + spendPanel(m.spend, right, spendHeight)
+	}
 	return lipgloss.JoinHorizontal(lipgloss.Top, left, column)
 }
 
-// fitting is which of the panels beside Accounts the terminal has room for: the right column (the stat
-// cards over Recent), the lower band below Recent (Upcoming) and, beside Upcoming, the spend chart.
-type fitting struct{ right, band, chart bool }
+// fitting is which panels besides Accounts the terminal has room for: Upcoming under Accounts, the right
+// column (the stat cards over Recent) and, under Recent, the spend chart.
+type fitting struct{ upcoming, right, chart bool }
 
-// fit decides which panels beside Accounts are shown; View draws them and HiddenPanels counts the others.
+// fit decides which panels besides Accounts are shown; View draws them and HiddenPanels counts the others.
 func (m Model) fit() fitting {
-	right := m.width - m.accountsWidth()
 	var fit fitting
-	fit.right = right >= cardCount*minCardWidth
-	fit.band = fit.right && m.height-cardHeight >= upcomingHeight+minRecentHeight
-	fit.chart = fit.band && right >= bandPanels*minBandWidth
+	fit.upcoming = m.height >= minAccountsHeight+upcomingHeight
+	fit.right = m.width-m.accountsWidth() >= cardCount*minCardWidth
+	fit.chart = fit.right && m.height-cardHeight >= spendHeight+minRecentHeight
 	return fit
 }
 
-// HiddenPanels is how many of the panels beside Accounts the terminal is too small to show: each part of
-// the fit left out hides its own panels and, since the parts nest, those of the parts within it.
+// HiddenPanels is how many panels besides Accounts the terminal is too small to show; the chart sits in the
+// right column, so it hides with it.
 func (m Model) HiddenPanels() int {
 	fit, hidden := m.fit(), 0
 	parts := []struct {
 		shown  bool
 		panels int
-	}{{fit.right, cardCount + 1}, {fit.band, 1}, {fit.chart, 1}} // the cards and Recent, Upcoming, the chart
+	}{{fit.upcoming, 1}, {fit.right, cardCount + 1}, {fit.chart, 1}} // Upcoming, the cards and Recent, the chart
 	for _, part := range parts {
 		if !part.shown {
 			hidden += part.panels
@@ -213,20 +336,9 @@ func (m Model) HiddenPanels() int {
 	return hidden
 }
 
-// listPanels stacks Recent over Upcoming beside the spend chart, leaving out what does not fit.
-func (m Model) listPanels(fit fitting, width, height int) string {
-	if !fit.band {
-		return entriesPanel("RECENT", m.recent, width, height)
-	}
-	recent := entriesPanel("RECENT", m.recent, width, height-upcomingHeight)
-	if !fit.chart {
-		return recent + "\n" + entriesPanel("UPCOMING", m.upcoming, width, upcomingHeight)
-	}
-	half := width / bandPanels
-	band := lipgloss.JoinHorizontal(lipgloss.Top,
-		entriesPanel("UPCOMING", m.upcoming, half, upcomingHeight),
-		spendPanel(m.spend, width-half, upcomingHeight))
-	return recent + "\n" + band
+// entriesPanel is the Upcoming or Recent panel from its scroll offset on.
+func (m Model) entriesPanel(focus panel, title string, width int) string {
+	return entriesPanel(m.title(focus, title), m.entries(focus)[m.offset(focus):], width, m.panelHeight(focus))
 }
 
 // entriesPanel lists transactions one per row: date, description, category, amount. When they do not
@@ -316,7 +428,7 @@ func number(amounts domain.MultiAmount) string {
 // accountsWidth is a third of the screen, but never narrower than minAccountsWidth.
 func (m Model) accountsWidth() int { return min(m.width, max(minAccountsWidth, m.width/columnDivisor)) }
 
-// accountsPanel is the Accounts panel, a third of the screen wide.
+// accountsPanel is the Accounts panel, a third of the screen wide and as tall as accountsHeight.
 func (m Model) accountsPanel() string {
 	width := m.accountsWidth()
 	inner := max(0, width-layout.PanelChrome)
@@ -326,7 +438,7 @@ func (m Model) accountsPanel() string {
 	for i, account := range visible {
 		rows[i] = accountLine(account, inner, m.cursor.Offset+i == m.cursor.Row)
 	}
-	return layout.Panel("ACCOUNTS", width, m.height, strings.Join(rows, "\n"))
+	return layout.Panel(m.title(accountsPanel, "ACCOUNTS"), width, m.accountsHeight(), strings.Join(rows, "\n"))
 }
 
 // accountLine is one account: source glyph, name, right-aligned balance.

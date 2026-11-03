@@ -527,14 +527,14 @@ letter means the same action in every view (`d` = delete, `n` new, `e` edit, `c`
 |---|---|
 | Global | `1`–`5` views · `?` keys popup · `!` checks panel · `r` refresh · `q` / `Ctrl+C` quit · `Esc` cancel / close popup |
 | Movement | `↑`/`↓` row · `PgUp`/`PgDn` page · `Home`/`End` ends — the same in every list, popup and scrolled view (`layout.Cursor`) · `Tab`/`Shift+Tab` or `↓`/`↑` form fields (in the Scheduled form's account picker the arrows move through the matches; `←`/`→` cycle a dropdown). No `j`/`k`. |
-| Dashboard | Accounts panel: `c` close · `o` reopen |
+| Dashboard | `Tab`/`Shift+Tab` focus Accounts → Upcoming → Recent (ADR 0014) · arrows move the Accounts cursor or scroll the focused panel · `c` close · `o` reopen |
 | Import | `Enter` categorise row (popup: new rule / add to rule / once — `✓` rows: once only; picked with arrows + Enter) · `c` next row that needs a category (wraps) · `w` write import (y/n, only with no `?` rows) · `n` new file |
 | Scheduled | `n` new · `e` edit · `d` delete |
 | Reports | `p` cycle report period (Reports-local state; Dashboard is always month to date). Read-only, no cursor; arrows scroll both tables together. |
 | `!` panel | arrows select · `Enter` jump to `$EDITOR` |
 
-No panel focus: each view has at most one cursor panel; read-only panels that overflow show
-`… N more`.
+No panel focus outside the Dashboard (ADR 0014): each other view has at most one cursor panel;
+read-only panels that overflow show `… N more`.
 
 ### 6.4a Chrome and Dashboard (v1)
 
@@ -545,8 +545,10 @@ No panel focus: each view has at most one cursor panel; read-only panels that ov
   errors, amber warnings-only) · `? keys`. No mode badge.
 - **Dashboard**: two stat cards — `NET WORTH` (sum of open assets + liabilities) and
   `<MONTH> NET INCOME` (calendar month to date, income − expenses from `is`, note
-  `<in> in / <out> out`, green/red). Left column: Accounts, full height. Right: Recent
-  (newest first, all accounts, not selectable), Upcoming (next occurrences, not selectable),
+  `<in> in / <out> out`, green/red). Left column: Accounts, only as tall as its rows
+  (scrolls once Upcoming would get under 10 rows), and under it Upcoming (next occurrences, rows not
+  selectable, scrolls when focused) taking the rest. Right: Recent (newest first, all accounts, rows not
+  selectable, scrolls when focused), under it the
   monthly spend chart (total `expenses:*` per month, last 6 complete months, one line).
 - **`!` panel**: issues only; when clean a single dim-green `✓ all N checks pass`.
 - **Reports**: `p` cycles `month to date · quarter to date · year to date · all time`, all
@@ -771,10 +773,14 @@ The handoff (`design_handoff_hledger_tui/README.md`) is otherwise authoritative.
 - **Import has a `ROW` panel** above the row table: the selected row's type, payee and purpose
   (up to 3 lines), what a rule can match. The handoff shows the description only. Dropped below
   23 rows of content height.
+- **Dashboard layout**: Accounts is only as tall as its rows, with Upcoming under it in the left
+  column taking the rest; the spend chart sits under Recent on the right, full width. The handoff
+  has Accounts full height and Upcoming beside the chart under Recent, which left Accounts mostly
+  empty.
 - **ADR 0010** — **no Entry view in v1**: five tabs on `1`–`5`, no manual-account UI, no
   classify-on-open prompt; accounts are created by first import.
 - **ADR 0011** — **keyboard and chrome**: arrows not `j`/`k`; views on `1`–`5` only (no `:`
-  command line, no `g` prefix / which-key goto, no mode badge); no panel focus; EUR-only UI
+  command line, no `g` prefix / which-key goto, no mode badge); no panel focus outside the Dashboard (ADR 0014); EUR-only UI
   (no `v`, no Market Prices panel); no Budget panel; no Dashboard Journal Checks panel or
   stat card (check status lives in the status bar); no Reports drill-in; no `y` export; no
   Recent `e` edit; `!` panel lists issues only (no `OK` rows); Reports period is `p`,

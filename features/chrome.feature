@@ -209,10 +209,6 @@ Feature: Chrome, navigation and global keys
         | 180 | 60 |
         | 240 | 70 |
 
-    Scenario: hidden panels are announced
-      Given the terminal is 100×30
-      Then the status bar shows "hidden · widen terminal"
-
     Scenario: no hint when nothing is hidden
       Given the terminal is 180×60
       Then the status bar does not show "hidden"

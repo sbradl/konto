@@ -32,4 +32,4 @@ behind it (valuation, prices, budgets).
 Reversible: adding a panel-focus model, `:` or `g` later needs no change to views' data or
 use cases — only `internal/ui` routing and `ui/keys`.
 
-Status: accepted.
+Status: accepted; panel focus amended for the Dashboard by ADR 0014.
