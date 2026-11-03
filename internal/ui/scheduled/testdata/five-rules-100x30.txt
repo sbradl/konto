@@ -16,9 +16,9 @@
 │                                                │╭─ ANNUAL IMPACT ────────────────────────────────╮
 │                                                ││ Vermieter Mueller                 -6.300,00 EUR│
 │                                                ││ Streaming                            -26,00 EUR│
-│                                                ││ Old once-off                                  0│
-│                                                ││ Rule 00                                       0│
-│                                                ││ Rule 01                                       0│
+│                                                ││ Old once-off                           0,00 EUR│
+│                                                ││ Rule 00                                0,00 EUR│
+│                                                ││ Rule 01                                0,00 EUR│
 │                                                ││ Total                             -6.326,00 EUR│
 │                                                ││                                                │
 │                                                ││                                                │

@@ -102,7 +102,7 @@ func TestStylesFollowRowKindsAndSigns(t *testing.T) {
 		"negative balance red": "\x1b[31m-140,00 EUR",
 		"positive delta green": "\x1b[32m1.350,00 EUR",
 		"negative delta red":   "\x1b[31m-35,00 EUR",
-		"zero delta dim":       "\x1b[90m0\x1b[m",
+		"zero delta dim":       "\x1b[90m0,00 EUR\x1b[m",
 		"grand total emphasis": "\x1b[1;97mNet worth",
 	} {
 		if !strings.Contains(view, want) {
@@ -286,12 +286,12 @@ func TestRowsAndColumnsSitWhereTheLayoutPutsThem(t *testing.T) {
 	wantTop := top +
 		"│ Assets                                         ││  income:salary                   3.000,00 EUR  │\n" +
 		"│  assets:checking  13.240,00 EUR  1.350,00 EUR  ││ Net                              1.815,00 EUR  │\n" +
-		"│  assets:savings   13.500,00 EUR             0  ││                                                │\n" +
+		"│  assets:savings   13.500,00 EUR      0,00 EUR  ││                                                │\n" +
 		"│ Liabilities                                    ││                                                │\n" +
 		"│ … 2 more                                       ││                                                │\n" + bottom
 	wantEnd := top +
 		"│  assets:checking  13.240,00 EUR  1.350,00 EUR  ││  income:salary                   3.000,00 EUR  │\n" +
-		"│  assets:savings   13.500,00 EUR             0  ││ Net                              1.815,00 EUR  │\n" +
+		"│  assets:savings   13.500,00 EUR      0,00 EUR  ││ Net                              1.815,00 EUR  │\n" +
 		"│ Liabilities                                    ││                                                │\n" +
 		"│  liabilities:cred   -140,00 EUR    -35,00 EUR  ││                                                │\n" +
 		"│ Net worth         26.600,00 EUR  1.315,00 EUR  ││                                                │\n" + bottom

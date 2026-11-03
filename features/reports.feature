@@ -91,11 +91,11 @@ Feature: Reports — balance sheet and income statement
       And "-35,00 EUR" in the Δ column of "liabilities:creditcard" is coloured 1
 
     @proposed
-    Scenario: a zero Δ is a dim 0
+    Scenario: a zero Δ is dim
       Given today is 2026-10-01
       And I start konto
       And I press "5"
-      Then the Δ of "assets:savings" is "0" coloured 8
+      Then the Δ of "assets:savings" is "0,00 EUR" coloured 8
       And the balance of "assets:savings" is "13.500,00 EUR"
 
     Scenario: row kinds are styled

@@ -551,7 +551,7 @@ No panel focus: each view has at most one cursor panel; read-only panels that ov
 - **`!` panel**: issues only; when clean a single dim-green `✓ all N checks pass`.
 - **Reports**: `p` cycles `month to date · quarter to date · year to date · all time`, all
   ending today. Balance sheet = balance at today (`bs -H`) + **`Δ period`** = change within
-  the period (second call, `bs --change -p <period>`), green/red, `0` dim; the Δ column is
+  the period (second call, `bs --change -p <period>`), green/red, a zero dim; the Δ column is
   hidden under `all time`. Income statement = account + amount for the period only — no
   share, no third column.
 

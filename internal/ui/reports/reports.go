@@ -168,18 +168,10 @@ func columnsOf(rows []domain.ReportRow) columns {
 			widths.amount = max(widths.amount, lipgloss.Width(row.Amount.Format()))
 		}
 		if row.Delta != nil {
-			widths.delta = max(widths.delta, lipgloss.Width(deltaText(*row.Delta)), lipgloss.Width(deltaTitle))
+			widths.delta = max(widths.delta, lipgloss.Width(row.Delta.Format()), lipgloss.Width(deltaTitle))
 		}
 	}
 	return widths
-}
-
-// deltaText is the change as a figure; a change of nothing is a plain 0.
-func deltaText(delta domain.MultiAmount) string {
-	if delta.IsZero() {
-		return "0"
-	}
-	return delta.Format()
 }
 
 func (c columns) titleRow(width int) string {
@@ -195,7 +187,7 @@ func (c columns) line(row domain.ReportRow, width int) string {
 	if c.delta > 0 {
 		change = strings.Repeat(" ", columnGap+c.delta)
 		if row.Delta != nil {
-			delta := deltaStyle(*row.Delta).Render(deltaText(*row.Delta))
+			delta := deltaStyle(*row.Delta).Render(row.Delta.Format())
 			change = strings.Repeat(" ", columnGap) + layout.AlignRight(delta, c.delta)
 		}
 	}

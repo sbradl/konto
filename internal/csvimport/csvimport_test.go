@@ -72,7 +72,7 @@ func exportOf(iban string, transactions []domain.Transaction) []byte {
 	var lines strings.Builder
 	for _, transaction := range transactions {
 		lines.WriteString("\n" + transaction.Date.Format("2.1.2006") + ";;;" + transaction.Description + ";" +
-			transaction.Comment + ";;;;;;;" + transaction.Postings[0].Amounts[0].FormatNumber())
+			transaction.Comment + ";;;;;;;" + bareNumber(transaction.Postings[0].Amounts[0]))
 	}
 	return []byte(strings.Replace(string(export(iban)), "\nKontostand;", lines.String()+"\nKontostand;", 1))
 }
@@ -414,4 +414,10 @@ func TestColumnIsEmptyBeyondTheLastField(t *testing.T) {
 	if got := column(fields, 2); got != "" {
 		t.Errorf("column 2 = %q, want empty", got)
 	}
+}
+
+// bareNumber is the amount as the export spells it, without its commodity.
+func bareNumber(amount domain.Amount) string {
+	amount.Commodity = ""
+	return amount.Format()
 }

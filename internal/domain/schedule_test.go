@@ -66,7 +66,7 @@ func TestImpactIsTheSignedChangeOfNetWorth(t *testing.T) {
 		got[schedule.Rule.Description] = schedule.Impact().Format()
 	}
 
-	want := map[string]string{"Rent": "-1.800,00 EUR", "Salary": "3.000,00 EUR", "Transfer": "0,00 EUR", "Never": "0", "Never too": "0"}
+	want := map[string]string{"Rent": "-1.800,00 EUR", "Salary": "3.000,00 EUR", "Transfer": "0,00 EUR", "Never": "0,00 EUR", "Never too": "0,00 EUR"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("impacts = %v, want %v", got, want)
 	}

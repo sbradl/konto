@@ -30,7 +30,6 @@ const (
 	ruleIDWidth     = 4
 	targetWidth     = 24
 	amountWidth     = 18
-	amountPlaces    = 2
 	dateWidth       = len("2026-09-30")
 	parentEntry     = ".."
 	needsARule      = "needs a rule"
@@ -417,7 +416,7 @@ type rowCells struct {
 func cellsOf(row csvimport.Row, width int) rowCells {
 	cells := rowCells{
 		mark: "?", date: row.Date.Format(time.DateOnly), target: needsARule, needsCategory: row.NeedsCategory(),
-		amount: layout.AlignRight(row.Amount.WithPlaces(amountPlaces).Format(), amountWidth),
+		amount: layout.AlignRight(row.Amount.Format(), amountWidth),
 	}
 	if !row.NeedsCategory() {
 		cells.mark, cells.target = "✓", row.Target
@@ -481,7 +480,7 @@ func (m Model) skippedLines(capacity int) string {
 // skippedLine is a row the journal already has: its date, description and amount, dim, across the width.
 func skippedLine(row *csvimport.Row, width int) string {
 	description := layout.Fit(row.Description, width-1-dateWidth-columnGap-amountWidth-1)
-	amount := layout.AlignRight(row.Amount.WithPlaces(amountPlaces).Format(), amountWidth)
+	amount := layout.AlignRight(row.Amount.Format(), amountWidth)
 	line := " " + row.Date.Format(time.DateOnly) + "  " + description + amount
 	return theme.Dim.Render(layout.Fit(line, width))
 }

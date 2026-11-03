@@ -728,3 +728,13 @@ func TestKeyAsksToCloseOrReopenAndMovesOnCursorKeys(t *testing.T) {
 		t.Errorf("down: action = %v, row = %d; want the cursor moved", action, moved.cursor.Row)
 	}
 }
+
+func TestBalancesWrittenWithoutAllTheirDecimalsStillShowTwo(t *testing.T) {
+	style := domain.DefaultAmount("EUR").Style
+	whole := domain.Account{Name: "assets:whole", Balance: domain.MultiAmount{{Commodity: "EUR", Mantissa: -6, Style: style}}}
+	half := domain.Account{Name: "assets:half", Balance: domain.MultiAmount{{Commodity: "EUR", Mantissa: 65, Places: 1, Style: style}}}
+	view := strings.Join(lines(New().Resize(120, 30).WithAccounts([]domain.Account{whole, half})), "\n")
+	if !strings.Contains(view, "-6,00 EUR") || !strings.Contains(view, "6,50 EUR") {
+		t.Errorf("the accounts panel:\n%s", view)
+	}
+}

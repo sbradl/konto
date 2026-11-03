@@ -2,6 +2,7 @@ package domain
 
 import (
 	"errors"
+	"fmt"
 	"slices"
 	"strconv"
 	"strings"
@@ -48,19 +49,24 @@ func (a Amount) Format() string {
 	return number + gap + a.Commodity
 }
 
+// minPlaces is the fewest decimals an amount is shown with: hledger hands out a quantity with the places it was
+// written with, so "-6" and "-6,5" would otherwise stand beside "-6,50".
+const minPlaces = 2
+
 func (a Amount) digits() string {
-	magnitude := a.Mantissa
+	shown := a
+	if a.Style.DecimalMark != "" { // without a mark the decimals would run into the whole number: 100 as 10000
+		shown = a.plus(Amount{Places: minPlaces})
+	}
+	magnitude, places := shown.Mantissa, shown.Places
 	sign := ""
 	if magnitude < 0 {
 		magnitude, sign = -magnitude, "-"
 	}
-	digits := strconv.FormatInt(magnitude, 10)
-	if len(digits) <= a.Places {
-		digits = strings.Repeat("0", a.Places-len(digits)+1) + digits
-	}
-	whole, fraction := digits[:len(digits)-a.Places], digits[len(digits)-a.Places:]
+	digits := fmt.Sprintf("%0*d", places+1, magnitude) // at least one digit before the decimals
+	whole, fraction := digits[:len(digits)-places], digits[len(digits)-places:]
 	number := a.group(whole)
-	if a.Places > 0 {
+	if fraction != "" {
 		number += a.Style.DecimalMark + fraction
 	}
 	return sign + number
@@ -121,25 +127,13 @@ func (m MultiAmount) IsAllNegative() bool {
 // Format renders the first commodity, plus " + N cur" when there are more.
 func (m MultiAmount) Format() string {
 	if len(m) == 0 {
-		return "0"
+		return DefaultAmount("EUR").Format()
 	}
 	text := m[0].Format()
 	if extra := m.ExtraCount(); extra > 0 {
 		text += " + " + strconv.Itoa(extra) + " cur"
 	}
 	return text
-}
-
-// FormatNumber renders the quantity alone, without the commodity symbol: "13.240,00".
-func (a Amount) FormatNumber() string { return a.digits() }
-
-// WithPlaces is the same value shown with at least the given decimals; finer amounts keep theirs.
-func (m MultiAmount) WithPlaces(places int) MultiAmount {
-	shown := slices.Clone(m)
-	for i := range shown {
-		shown[i] = shown[i].plus(Amount{Places: places})
-	}
-	return shown
 }
 
 // Negated is the amount with its sign flipped.
@@ -195,12 +189,12 @@ func (m MultiAmount) IsZero() bool {
 	return true
 }
 
-// Value is the quantities and commodities without their display style or trailing zero decimals, so equal
+// Value is the quantities and commodities without their display style or decimals that say nothing, so equal
 // amounts compare equal however the journal or the export writes them: "1234.56EUR".
 func (m MultiAmount) Value() string {
 	values := make([]string, len(m))
 	for i, amount := range m {
-		for amount.Places > 0 && amount.Mantissa%decimalBase == 0 {
+		for amount.Places != 0 && amount.Mantissa%decimalBase == 0 {
 			amount.Mantissa, amount.Places = amount.Mantissa/decimalBase, amount.Places-1
 		}
 		amount.Style = AmountStyle{DecimalMark: "."}

@@ -27,9 +27,9 @@ func TestAmountFormat(t *testing.T) {
 		"symbol left":      {Amount{Commodity: "$", Mantissa: 12345, Places: 2, Style: dollar}, "$123.45"},
 		"symbol left gap":  {Amount{Commodity: "USD", Mantissa: 100, Places: 0, Style: AmountStyle{SymbolLeft: true, Spaced: true}}, "USD 100"},
 		"no space":         {Amount{Commodity: "EUR", Mantissa: 100, Places: 2, Style: AmountStyle{DecimalMark: ","}}, "1,00EUR"},
-		"no commodity":     {Amount{Mantissa: 150, Places: 1, Style: AmountStyle{DecimalMark: "."}}, "15.0"},
+		"no commodity":     {Amount{Mantissa: 150, Places: 1, Style: AmountStyle{DecimalMark: "."}}, "15.00"},
 		"ungrouped":        {Amount{Commodity: "EUR", Mantissa: 1234567, Places: 2, Style: AmountStyle{Spaced: true, DecimalMark: ","}}, "12345,67 EUR"},
-		"no decimal place": {Amount{Commodity: "EUR", Mantissa: -2500, Places: 0, Style: euro}, "-2.500 EUR"},
+		"no decimal place": {Amount{Commodity: "EUR", Mantissa: -2500, Places: 0, Style: euro}, "-2.500,00 EUR"},
 	} {
 		if got := tc.amount.Format(); got != tc.want {
 			t.Errorf("%s: Format() = %q, want %q", name, got, tc.want)
@@ -44,10 +44,10 @@ func TestMultiAmountFormat(t *testing.T) {
 		amounts MultiAmount
 		want    string
 	}{
-		"empty is a bare zero": {nil, "0"},
-		"one commodity":        {MultiAmount{eur(100)}, "1,00 EUR"},
-		"two commodities":      {MultiAmount{eur(100), pln}, "1,00 EUR + 1 cur"},
-		"three commodities":    {MultiAmount{eur(100), pln, pln}, "1,00 EUR + 2 cur"},
+		"empty is a zero":   {nil, "0,00 EUR"},
+		"one commodity":     {MultiAmount{eur(100)}, "1,00 EUR"},
+		"two commodities":   {MultiAmount{eur(100), pln}, "1,00 EUR + 1 cur"},
+		"three commodities": {MultiAmount{eur(100), pln, pln}, "1,00 EUR + 2 cur"},
 	} {
 		if got := tc.amounts.Format(); got != tc.want {
 			t.Errorf("%s: Format() = %q, want %q", name, got, tc.want)
@@ -84,12 +84,6 @@ func TestMultiAmountIsAllNegative(t *testing.T) {
 func TestAmountFormatPadsAFractionOnlyQuantity(t *testing.T) {
 	if got := eur(50).Format(); got != "0,50 EUR" {
 		t.Errorf("Format() = %q, want 0,50 EUR", got)
-	}
-}
-
-func TestAmountFormatNumberOmitsTheCommodity(t *testing.T) {
-	if got := eur(-1324000).FormatNumber(); got != "-13.240,00" {
-		t.Errorf("FormatNumber() = %q, want -13.240,00", got)
 	}
 }
 
@@ -161,9 +155,9 @@ func TestValueIsTheSameHoweverTheAmountIsStyled(t *testing.T) {
 		amounts MultiAmount
 		want    string
 	}{
-		{MultiAmount{eur(123456), {Commodity: "PLN", Mantissa: 10}}, "1234.56EUR 10PLN"},
-		{MultiAmount{eur(0)}, "0EUR"},
-		{MultiAmount{eur(-100)}, "-1EUR"},
+		{MultiAmount{eur(123456), {Commodity: "PLN", Mantissa: 10}}, "1234.56EUR 10.00PLN"},
+		{MultiAmount{eur(0)}, "0.00EUR"},
+		{MultiAmount{eur(-100)}, "-1.00EUR"},
 	} {
 		if got := tt.amounts.Value(); got != tt.want {
 			t.Errorf("Value of %+v = %q, want %q", tt.amounts, got, tt.want)
@@ -203,7 +197,7 @@ func TestParseNumberRefusesWhatIsNoNumber(t *testing.T) {
 	}
 }
 
-func TestWithPlacesShowsAtLeastThatManyDecimalsAndKeepsTheValue(t *testing.T) {
+func TestFormatAlwaysShowsAtLeastTwoDecimalsAndKeepsFinerOnes(t *testing.T) {
 	style := AmountStyle{Spaced: true, DecimalMark: ","}
 	for _, c := range []struct {
 		mantissa int64
@@ -214,13 +208,21 @@ func TestWithPlacesShowsAtLeastThatManyDecimalsAndKeepsTheValue(t *testing.T) {
 		{-65, 1, "-6,50 EUR"},
 		{-650, 2, "-6,50 EUR"},
 		{-6505, 3, "-6,505 EUR"},
+		{0, 0, "0,00 EUR"},
+		{50, 2, "0,50 EUR"},
 	} {
-		amounts := MultiAmount{{Commodity: "EUR", Mantissa: c.mantissa, Places: c.places, Style: style}}
-		if got := amounts.WithPlaces(2).Format(); got != c.want {
+		amount := Amount{Commodity: "EUR", Mantissa: c.mantissa, Places: c.places, Style: style}
+		if got := amount.Format(); got != c.want {
 			t.Errorf("%d at %d places = %q, want %q", c.mantissa, c.places, got, c.want)
 		}
-		if amounts[0].Places != c.places {
-			t.Errorf("WithPlaces changed the amount it was given: %+v", amounts[0])
+		if got := (MultiAmount{amount}).Format(); got != c.want {
+			t.Errorf("as a multi-amount: %q, want %q", got, c.want)
 		}
+	}
+}
+
+func TestNoAmountFormatsAsAZeroInTheDefaultStyle(t *testing.T) {
+	if got, want := (MultiAmount{}).Format(), DefaultAmount("EUR").Format(); got != want || got != "0,00 EUR" {
+		t.Errorf("no amount = %q, want %q", got, want)
 	}
 }

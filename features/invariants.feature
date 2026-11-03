@@ -239,7 +239,7 @@ Feature: Product invariants that must hold across the whole app
       When I start konto
       Then I see the tab bar
       And the tab bar shows "0" transactions
-      And I see a "NET WORTH" card showing "0"
+      And I see a "NET WORTH" card showing "0,00 EUR"
 
     Scenario: unicode and spaces in paths
       Given the journal "household" at "<tmp>/mein Konto ä/main.journal"

@@ -306,7 +306,9 @@ func card(title string, width int, value, note string) string {
 // number is the amount without its commodity when there is just one, else as Format shows it.
 func number(amounts domain.MultiAmount) string {
 	if len(amounts) == 1 {
-		return amounts[0].FormatNumber()
+		plain := amounts[0]
+		plain.Commodity = ""
+		return plain.Format()
 	}
 	return amounts.Format()
 }
