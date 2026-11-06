@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -44,11 +45,17 @@ func commitAll(files []*source) error {
 }
 
 // stage writes the source's lines to a temp file beside it, with the mode the file has, or a new file's
-// mode when it is not there yet. A read-only file is refused: the rename would replace it all the same.
+// mode when it is not there yet. A read-only file is refused: the rename would replace it all the same. A
+// symlink is followed, so the rename replaces the file it points to, not the link.
 func stage(file *source) (stagedFile, error) {
 	mode := fs.FileMode(fileMode)
 
-	info, err := os.Stat(file.path)
+	path := file.path
+	if target, err := filepath.EvalSymlinks(path); err == nil {
+		path = target
+	}
+
+	info, err := os.Stat(path)
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return stagedFile{}, fmt.Errorf("writing %s: %w", file.path, err)
 	}
@@ -60,12 +67,24 @@ func stage(file *source) (stagedFile, error) {
 		mode = info.Mode().Perm()
 	}
 
-	staged := stagedFile{path: file.path, temp: file.path + ".konto-tmp"}
-	if err := os.WriteFile(staged.temp, []byte(strings.Join(file.lines, "\n")), mode); err != nil {
+	staged := stagedFile{path: path, temp: path + ".konto-tmp"}
+	if err := writeSynced(staged.temp, strings.Join(file.lines, "\n"), mode); err != nil {
 		return stagedFile{}, fmt.Errorf("writing %s: %w", file.path, err)
 	}
 
 	return staged, nil
+}
+
+// writeSynced writes content to path and flushes it to disk before returning, so a crash after the rename
+// cannot leave the file empty.
+func writeSynced(path, content string, mode fs.FileMode) error {
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, mode) //nolint:gosec // beside the journal
+	if err != nil {
+		return err //nolint:wrapcheck // stage names the file
+	}
+	_, writeErr := file.WriteString(content)
+
+	return errors.Join(writeErr, file.Sync(), file.Close())
 }
 
 // discard removes the staged temp files; the files they were for stay as they were.

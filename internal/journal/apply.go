@@ -142,7 +142,7 @@ func (w *workspace) apply(edit domain.Edit) error {
 	case domain.SetCarry:
 		return w.setCarry(change)
 	case domain.DeleteRule:
-		return deleteRule(w.sources, change.Pos)
+		return deleteRule(w.sources, change)
 	case domain.ReplaceRule:
 		return replaceRule(w.sources, change)
 	}
@@ -168,16 +168,17 @@ func applyInfallible(sources []*source, edit domain.Edit) bool {
 	return true
 }
 
-// ruleAt is the file and the first line index of the `~` block that starts at pos. The line there must be a
-// rule line, or the journal changed under konto.
-func ruleAt(sources []*source, pos domain.SourcePos) (file *source, first int, err error) {
+// ruleAt is the file and the first line index of the `~` block that starts at pos. The block there must still
+// read as was, or the journal changed under konto.
+func ruleAt(sources []*source, pos domain.SourcePos, was string) (file *source, first int, err error) {
 	for _, source := range sources {
 		if source.path != pos.File {
 			continue
 		}
 
 		first = pos.Line - 1
-		if first < 0 || first >= len(source.lines) || !isRuleHeader(source.lines[first]) {
+		if first < 0 || first >= len(source.lines) || !isRuleHeader(source.lines[first]) ||
+			strings.Join(source.lines[first:blockEnd(source.lines, first)], "\n") != was {
 			return nil, 0, fmt.Errorf("%s:%d is no longer a periodic rule: reload and try again", pos.File, pos.Line)
 		}
 
@@ -188,8 +189,8 @@ func ruleAt(sources []*source, pos domain.SourcePos) (file *source, first int, e
 }
 
 // deleteRule removes the `~` block that starts at pos.
-func deleteRule(sources []*source, pos domain.SourcePos) error {
-	file, first, err := ruleAt(sources, pos)
+func deleteRule(sources []*source, edit domain.DeleteRule) error {
+	file, first, err := ruleAt(sources, edit.Pos, edit.Was)
 	if err != nil {
 		return err
 	}
@@ -202,7 +203,7 @@ func deleteRule(sources []*source, pos domain.SourcePos) error {
 
 // replaceRule puts the lines in place of the `~` block that starts at pos.
 func replaceRule(sources []*source, edit domain.ReplaceRule) error {
-	file, first, err := ruleAt(sources, edit.Pos)
+	file, first, err := ruleAt(sources, edit.Pos, edit.Was)
 	if err != nil {
 		return err
 	}

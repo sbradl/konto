@@ -92,7 +92,7 @@ func (r PeriodicRule) Entry() string { return strings.Join(r.Lines, "\n") }
 // Delete is the changeset that removes the rule from the journal. Any rule can be deleted,
 // whether or not the form could have edited it.
 func (r PeriodicRule) Delete() Changeset {
-	return Changeset{Edits: []Edit{DeleteRule{Pos: r.Pos}}}
+	return Changeset{Edits: []Edit{DeleteRule{Pos: r.Pos, Was: r.Entry()}}}
 }
 
 // compareNext orders schedules by their next occurrence; those without one sort after those with.

@@ -870,7 +870,7 @@ func TestDOnASelectedRuleAsksAndYDeletesItsBlock(t *testing.T) {
 	_, cmd := press(model, "y")
 	_ = cmd()
 
-	want := domain.DeleteRule{Pos: domain.SourcePos{File: "j", Line: 3}}
+	want := domain.DeleteRule{Pos: domain.SourcePos{File: "j", Line: 3}, Was: "~ monthly  Rent"}
 	if len(writer.applied) != 1 || writer.applied[0].Edits[0] != want {
 		t.Errorf("applied = %+v, want a DeleteRule at j:3", writer.applied)
 	}

@@ -324,7 +324,20 @@ account assets:checking
 `
 
 func deleteAt(file File, line int) error {
-	return file.Apply(domain.PeriodicRule{Pos: domain.SourcePos{File: file.path, Line: line}}.Delete())
+	return file.Apply(ruleRead(file, file.path, line).Delete())
+}
+
+// ruleRead is the rule the journal holds at path:line as konto reads it, or a rule with only that position.
+func ruleRead(file File, path string, line int) domain.PeriodicRule {
+	pos := domain.SourcePos{File: path, Line: line}
+	rules, _ := file.PeriodicRules()
+	for _, rule := range rules {
+		if rule.Pos == pos {
+			return rule
+		}
+	}
+
+	return domain.PeriodicRule{Pos: pos}
 }
 
 func TestApplyDeletesTheWholeBlockAndKeepsCommentsAboveIt(t *testing.T) {
@@ -378,7 +391,7 @@ func TestApplyDeletesARuleInAnIncludedFileAndLeavesTheMainOneAlone(t *testing.T)
 	rules := filepath.Join(dir, "rules.journal")
 	writeJournal(t, dir, "rules.journal", "~ monthly  X\n    p  1,00 EUR\n    q\n")
 
-	err := main.Apply(domain.PeriodicRule{Pos: domain.SourcePos{File: rules, Line: 1}}.Delete())
+	err := main.Apply(ruleRead(main, rules, 1).Delete())
 
 	if err != nil || readFile(t, rules) != "" || readFile(t, main.path) != "include rules.journal\n" {
 		t.Errorf("rules = %q, main = %q, %v", readFile(t, rules), readFile(t, main.path), err)
@@ -445,5 +458,35 @@ func TestApplyRefusesAReadOnlyJournalAndLeavesItAlone(t *testing.T) {
 
 	if got := readFile(t, file.path); got != directive+"\n" {
 		t.Errorf("journal = %q, want it untouched", got)
+	}
+}
+
+// A rule read before the journal changed under konto is not the rule now at its line: deleting or replacing
+// it is refused, and the rule that moved there stays.
+func TestApplyRefusesARuleWhoseLineAnotherRuleNowHolds(t *testing.T) {
+	file := journalWith(t, ruleJournal)
+
+	rules, err := file.PeriodicRules()
+	if err != nil {
+		t.Fatal(err)
+	}
+	gym := rules[0]
+
+	edited := strings.Replace(ruleJournal, "~ monthly from 2026-10-20  Gym\n    expenses:rent  25,00 EUR  ; posting note\n    ; own line\n    assets:checking\n\n", "", 1)
+	if err := os.WriteFile(file.path, []byte(edited), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	for name, changeset := range map[string]domain.Changeset{
+		"delete":  gym.Delete(),
+		"replace": {Edits: []domain.Edit{domain.ReplaceRule{Pos: gym.Pos, Was: gym.Entry(), Lines: []string{"~ weekly  Z"}}}},
+	} {
+		if err := file.Apply(changeset); err == nil {
+			t.Errorf("%s: expected an error", name)
+		}
+	}
+
+	if got := readFile(t, file.path); got != edited {
+		t.Errorf("a refused edit must not touch the journal, got %q", got)
 	}
 }

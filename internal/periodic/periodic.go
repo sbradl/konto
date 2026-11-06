@@ -56,7 +56,9 @@ func (s *Service) Replace(
 		return domain.Changeset{}, err
 	}
 
-	return domain.Changeset{Edits: []domain.Edit{domain.ReplaceRule{Pos: rule.Pos, Lines: lines}}}, nil
+	replace := domain.ReplaceRule{Pos: rule.Pos, Was: rule.Entry(), Lines: lines}
+
+	return domain.Changeset{Edits: []domain.Edit{replace}}, nil
 }
 
 // Form is what the form shows for editing the rule: its next occurrence as hledger projects it, and the

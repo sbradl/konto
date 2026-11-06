@@ -148,12 +148,15 @@ func TestOnceIgnoresARemainingCount(t *testing.T) {
 }
 
 func TestReplacePlansTheNewBlockInPlace(t *testing.T) {
-	rule := domain.PeriodicRule{Pos: domain.SourcePos{File: "/j/main.journal", Line: 10}}
+	rule := domain.PeriodicRule{
+		Pos: domain.SourcePos{File: "/j/main.journal", Line: 10}, Lines: []string{"~ monthly  Old", "    a  1 EUR", "    b"},
+	}
 
 	changeset, err := NewService(&fakeGateway{}, today).Replace(context.Background(), valid(), rule, ledger())
 
 	replace, ok := changeset.Edits[0].(domain.ReplaceRule)
-	if err != nil || !ok || replace.Pos != rule.Pos || len(replace.Lines) != 3 {
+	if err != nil || !ok || replace.Pos != rule.Pos || replace.Was != rule.Entry() ||
+		len(replace.Lines) != 3 {
 		t.Errorf("changeset = %+v, %v", changeset, err)
 	}
 }

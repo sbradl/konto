@@ -1,6 +1,10 @@
 package config
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 const (
 	home = "/home/alex"
@@ -118,5 +122,30 @@ func TestResolveKeepsTheHomeDirectory(t *testing.T) {
 		if cfg := mustResolve(t, args, nil); cfg.Home != "/home/alex" {
 			t.Errorf("%v: Home = %q, want /home/alex", args, cfg.Home)
 		}
+	}
+}
+
+// A journal that is a symlink resolves to the file it points to, so writes and year files land beside the real file.
+func TestSymlinkedJournalResolvesToItsTarget(t *testing.T) {
+	dir := t.TempDir()
+
+	target := filepath.Join(dir, "sync", "main.journal")
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.WriteFile(target, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	link := filepath.Join(dir, ".hledger.journal")
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := mustResolve(t, []string{"--file", link}, nil)
+
+	if cfg.JournalPath != target {
+		t.Errorf("JournalPath = %q, want %q", cfg.JournalPath, target)
 	}
 }

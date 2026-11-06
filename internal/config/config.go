@@ -40,7 +40,7 @@ func Resolve(args []string, env Environment) (Config, error) {
 		return Config{}, errors.New("invalid arguments: unexpected " + flags.Arg(0))
 	}
 
-	return Config{JournalPath: journalPath(*file, env), Home: env.Home}, nil
+	return Config{JournalPath: followLinks(journalPath(*file, env)), Home: env.Home}, nil
 }
 
 // journalPath is --file, else $LEDGER_FILE, else ~/.hledger.journal, always absolute.
@@ -58,6 +58,16 @@ func journalPath(flagged string, env Environment) string {
 func expandHome(home, path string) string {
 	if path == "~" || strings.HasPrefix(path, "~/") {
 		return home + path[1:]
+	}
+
+	return path
+}
+
+// followLinks is the file a symlinked journal points to, so a write's rename replaces the file, not the link, and
+// year files land beside it; a journal not created yet keeps its path.
+func followLinks(path string) string {
+	if target, err := filepath.EvalSymlinks(path); err == nil {
+		return target
 	}
 
 	return path

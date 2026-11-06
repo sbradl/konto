@@ -486,7 +486,7 @@ func TestReplaceRuleSwapsTheBlockInPlaceAndKeepsTheCommentAbove(t *testing.T) {
 	file := journalWith(t, rulesAndTransaction)
 
 	apply(t, file, domain.ReplaceRule{
-		Pos:   domain.SourcePos{File: file.path, Line: 8},
+		Pos: domain.SourcePos{File: file.path, Line: 8}, Was: ruleRead(file, file.path, 8).Entry(),
 		Lines: []string{"~ weekly from 2026-10-09  B2", "    expenses:y  9,00 EUR", "    assets:checking"},
 	})
 
@@ -568,5 +568,29 @@ func TestApplyChangesNoFileWhenOneOfThemCannotBeWritten(t *testing.T) {
 
 	if entries, _ := os.ReadDir(filepath.Dir(file.path)); len(entries) != 2 {
 		t.Errorf("directory holds %d files, want the two journal files alone (no temp file left)", len(entries))
+	}
+}
+
+// A year file that is a symlink stays one: the write goes to the file it points to.
+func TestApplyWritesThroughASymlinkedFile(t *testing.T) {
+	file := journalWith(t, "decimal-mark ,\n")
+
+	target := filepath.Join(t.TempDir(), "2026.journal")
+	if err := os.WriteFile(target, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.Symlink(target, file.yearPath(2026)); err != nil {
+		t.Fatal(err)
+	}
+
+	apply(t, file, domain.AddTransactions{Transactions: []domain.NewTransaction{spend(day(1), "Shop")}})
+
+	if info, err := os.Lstat(file.yearPath(2026)); err != nil || info.Mode()&os.ModeSymlink == 0 {
+		t.Errorf("the year file is no longer a symlink: %v", err)
+	}
+
+	if got := readFile(t, target); !strings.Contains(got, "Shop") {
+		t.Errorf("target = %q, want the transaction", got)
 	}
 }

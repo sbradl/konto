@@ -4,6 +4,7 @@ package domain
 // comments within the block included. Comment lines above it stay.
 type DeleteRule struct {
 	Pos SourcePos
+	Was string // the block as it was read (PeriodicRule.Entry): a journal changed under konto is refused
 }
 
 // AddRule appends a `~` block to the main journal after a blank line (ADR 0013: rules go to main.journal).
@@ -15,6 +16,7 @@ type AddRule struct {
 // lines above it stay.
 type ReplaceRule struct {
 	Pos   SourcePos
+	Was   string // the block as it was read (PeriodicRule.Entry): a journal changed under konto is refused
 	Lines []string
 }
 
