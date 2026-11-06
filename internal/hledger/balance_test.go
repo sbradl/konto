@@ -114,7 +114,7 @@ func TestActivityAsksForTheGivenQueriesOverTheInclusivePeriod(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	want := []string{"-f", "/data/main.journal", "bal", "--flat", "-O", "json", "-b", "2026-07-01", "-e", "2026-10-01", "^assets:", "^liabilities:"}
+	want := []string{"-f", "/data/main.journal", "bal", "--flat", "-O", "json", "-b", "2026-07-01", "-e", "2026-10-01", "not:tag:konto=carry", "^assets:", "^liabilities:"}
 	assertOneCall(t, calls, want)
 }
 

@@ -108,11 +108,13 @@ func (a Amount) group(whole string) string {
 // anywhere but the front and anything but digits are errors.
 func ParseNumber(text, decimalMark, groupMark string, places int) (int64, error) {
 	number, negative := strings.CutPrefix(strings.TrimSpace(text), "-")
-	if groupMark != "" {
-		number = strings.ReplaceAll(number, groupMark, "")
-	}
 
 	whole, fraction, _ := strings.Cut(number, decimalMark)
+	if !groupedInThrees(whole, groupMark) {
+		return 0, errors.New("not a number")
+	}
+	whole = strings.ReplaceAll(whole, groupMark, "")
+
 	if len(fraction) > places {
 		return 0, errors.New("too many decimals")
 	}
@@ -128,6 +130,23 @@ func ParseNumber(text, decimalMark, groupMark string, places int) (int64, error)
 
 	return mantissa, nil
 }
+
+// groupedInThrees reports whether every group mark in whole stands between groups of three digits, the first
+// group one to three: 9.99, typed with a dot for the decimals, is no 999.
+func groupedInThrees(whole, groupMark string) bool {
+	if groupMark == "" || !strings.Contains(whole, groupMark) {
+		return true
+	}
+
+	groups := strings.Split(whole, groupMark)
+	if first := len(groups[0]); first < 1 || first > groupSize {
+		return false
+	}
+
+	return !slices.ContainsFunc(groups[1:], func(group string) bool { return len(group) != groupSize })
+}
+
+const groupSize = 3
 
 // MultiAmount holds one Amount per commodity, in hledger's order.
 type MultiAmount []Amount

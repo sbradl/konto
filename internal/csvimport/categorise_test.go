@@ -673,6 +673,25 @@ func TestWidenRefusesAnInvalidPattern(t *testing.T) {
 	}
 }
 
+// hledger's regular expressions know no \d, \s or \w: a rule using one would match here and never in hledger.
+func TestAddRuleRefusesEscapesHledgerDoesNotKnow(t *testing.T) {
+	for _, pattern := range []string{`REWE \d+`, `\D`, `a\sb`, `\S`, `\w+`, `\W`} {
+		rule := Rule{ID: "9", Category: "expenses:x", Alternatives: [][]Condition{{{"payee", pattern}}}}
+
+		_, err := stagedRows(debit("REWE 5541")).AddRule(rule)
+		if reason := refusal(t, err); !strings.Contains(reason, "[0-9]") {
+			t.Errorf("%s: reason = %q, want the POSIX spelling suggested", pattern, reason)
+		}
+	}
+}
+
+func TestAddRuleAcceptsAnEscapedBackslashBeforeALetter(t *testing.T) {
+	rule := Rule{ID: "9", Category: "expenses:x", Alternatives: [][]Condition{{{"payee", `C:\\data`}}}}
+	if _, err := stagedRows(debit(`C:\data`)).AddRule(rule); err != nil {
+		t.Errorf("err = %v, want the escaped backslash accepted", err)
+	}
+}
+
 func TestColumnIsEmptyBeyondTheEndOfALine(t *testing.T) {
 	if column([]string{"a"}, 3) != "" || column([]string{"a", "b"}, 1) != "b" {
 		t.Error("column misreads a short line")

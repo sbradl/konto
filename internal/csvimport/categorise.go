@@ -322,10 +322,22 @@ func checkPattern(rule Rule) error {
 		if _, err := regexp.Compile(condition.Pattern); err != nil {
 			return domain.RefusalError{Reason: "the pattern is not a valid expression"}
 		}
+
+		if goOnlyEscape.MatchString(condition.Pattern) {
+			return errUnknownEscape
+		}
 	}
 
 	return nil
 }
+
+var errUnknownEscape = domain.RefusalError{
+	Reason: `hledger knows no \d, \s or \w: write [0-9], [[:space:]] or [[:alnum:]_]`,
+}
+
+// goOnlyEscape finds an escape Go's expressions know and hledger's POSIX ones do not, where it matches nothing,
+// so the rule would categorise here and never on the next import: \d, \s or \w after an even run of backslashes.
+var goOnlyEscape = regexp.MustCompile(`(^|[^\\])(\\\\)*\\[dDsSwW]`)
 
 // checkOverlap refuses a rule that would take rows another rule categorises.
 func (s Staged) checkOverlap(rule Rule) error {

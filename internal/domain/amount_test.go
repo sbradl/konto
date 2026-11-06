@@ -183,6 +183,22 @@ func TestParseNumberReadsThePlacesTheStyleHas(t *testing.T) {
 	}
 }
 
+// A group mark stands only between groups of three digits: 9.99, typed with a dot for the decimals, is no
+// 999,00.
+func TestParseNumberRefusesAGroupMarkThatGroupsNoThreeDigits(t *testing.T) {
+	for _, text := range []string{"9.99", "1.23.456", "12.3456,00", ".123", "1.", "1..234"} {
+		if got, err := ParseNumber(text, ",", ".", 2); err == nil {
+			t.Errorf("ParseNumber(%q) = %d, want an error", text, got)
+		}
+	}
+
+	for text, want := range map[string]int64{"-1.234.567,89": -123456789, "123.456,00": 12345600} {
+		if got, err := ParseNumber(text, ",", ".", 2); err != nil || got != want {
+			t.Errorf("ParseNumber(%q) = %d, %v; want %d", text, got, err, want)
+		}
+	}
+}
+
 func TestParseNumberWithDotAsDecimalMarkAndNoGroups(t *testing.T) {
 	if got, err := ParseNumber("12.5", ".", "", 2); err != nil || got != 1250 {
 		t.Errorf("got %d, %v", got, err)

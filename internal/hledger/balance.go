@@ -174,8 +174,11 @@ func amounts(cell []jsonAmount) (domain.MultiAmount, error) {
 // Activity returns the change in the accounts under the prefixes (all when there are none) from
 // first through last (inclusive).
 func (c *Client) Activity(ctx context.Context, first, last time.Time, prefixes ...string) ([]domain.Account, error) {
-	return c.flatBalances(ctx, append(through(first, last).flags(), under(prefixes...)...)...)
+	return c.flatBalances(ctx, slices.Concat(through(first, last).flags(), []string{notCarry}, under(prefixes...))...)
 }
+
+// notCarry leaves the carry out: bringing last year's balance into 1 January is no change of the period.
+const notCarry = "not:tag:" + domain.KontoTag + "=" + domain.CarryValue
 
 // BalancesUntil returns the balances of the accounts under the prefixes, counting everything
 // dated up to and including last; zero balances are left out.
