@@ -24,6 +24,7 @@ func withAccounts() domain.Ledger {
 		{Name: "expenses:books"},
 		{Name: "income:salary"},
 	}
+
 	return ledger
 }
 
@@ -35,12 +36,14 @@ func pressed(m Model, keys ...string) (Model, Action) {
 	for _, key := range keys {
 		m, action = m.FormKey(key)
 	}
+
 	return m, action
 }
 
 // saved is the save the action asks for; nil when it asks for none.
 func saved(action Action) *Save {
 	save, _ := action.(*Save)
+
 	return save
 }
 
@@ -48,6 +51,7 @@ func typed(m Model, text string) Model {
 	for _, r := range text {
 		m, _ = m.FormKey(string(r))
 	}
+
 	return m
 }
 
@@ -65,6 +69,7 @@ func TestNOpensTheFormWithItsFieldsAndFrequencyMonthly(t *testing.T) {
 			t.Errorf("form lacks %q:\n%s", want, view)
 		}
 	}
+
 	if !m.Capturing() {
 		t.Error("the form does not capture the keyboard")
 	}
@@ -84,6 +89,7 @@ func TestOnceHidesTheRemainingPaymentsField(t *testing.T) {
 	if view := screen(m); !strings.Contains(view, "[once]") || strings.Contains(view, "remaining payments") {
 		t.Errorf("once keeps the remaining payments:\n%s", view)
 	}
+
 	m, _ = pressed(m, "right")
 	if view := screen(m); !strings.Contains(view, "[weekly]") || !strings.Contains(view, "remaining payments") {
 		t.Errorf("weekly hides the remaining payments:\n%s", view)
@@ -92,12 +98,14 @@ func TestOnceHidesTheRemainingPaymentsField(t *testing.T) {
 
 func TestTabAndShiftTabMoveBetweenTheFieldsAndSkipTheHiddenOne(t *testing.T) {
 	m := opened()
+
 	focusOn := func(label string) bool {
 		for line := range strings.SplitSeq(screen(m), "\n") {
 			if strings.Contains(line, "▸") {
 				return strings.Contains(line, label)
 			}
 		}
+
 		return false
 	}
 	if !focusOn("next due date") {
@@ -108,14 +116,17 @@ func TestTabAndShiftTabMoveBetweenTheFieldsAndSkipTheHiddenOne(t *testing.T) {
 	if !focusOn("frequency") {
 		t.Errorf("Tab moved the focus elsewhere:\n%s", screen(m))
 	}
+
 	m, _ = pressed(m, "shift+tab")
 	if !focusOn("next due date") {
 		t.Errorf("Shift+Tab did not go back:\n%s", screen(m))
 	}
+
 	m, _ = pressed(m, "shift+tab")
 	if !focusOn("to account") {
 		t.Errorf("Shift+Tab does not wrap to the last field:\n%s", screen(m))
 	}
+
 	m, _ = pressed(m, "tab", "tab", "left", "left", "left", "tab")
 	if !focusOn("description") {
 		t.Errorf("a once rule's Tab does not skip the remaining payments:\n%s", screen(m))
@@ -131,10 +142,12 @@ func TestTypingIntoATextFieldIsTextAndBackspaceAndCtrlUEditIt(t *testing.T) {
 	}
 	m, _ = pressed(m, "backspace")
 	m = typed(m, "é")
+
 	m, _ = pressed(m, "backspace", "backspace")
 	if view := screen(m); !strings.Contains(view, "description         q2") {
 		t.Errorf("backspace did not remove a character:\n%s", view)
 	}
+
 	m, _ = pressed(m, "ctrl+u")
 	if view := screen(m); strings.Contains(view, "q2") {
 		t.Errorf("ctrl+u did not clear:\n%s", view)
@@ -164,6 +177,7 @@ func TestTheCurrencyDropdownCyclesTheDeclaredCurrenciesAndStopsAtTheEnds(t *test
 	if view := screen(m); !strings.Contains(view, "EUR  [PLN]") {
 		t.Errorf("right did not stop at the last currency:\n%s", view)
 	}
+
 	m, _ = pressed(m, "left", "left", "left")
 	if view := screen(m); !strings.Contains(view, "[EUR]  PLN") {
 		t.Errorf("left did not stop at the first currency:\n%s", view)
@@ -214,20 +228,25 @@ func TestTheUpAndDownArrowsMoveBetweenTheFieldsAndLeaveTheDropdownsAlone(t *test
 				return line
 			}
 		}
+
 		return ""
 	}
+
 	m, _ := pressed(opened(), "down")
 	if line := focus(m); !strings.Contains(line, "frequency") || !strings.Contains(line, "[monthly]") {
 		t.Errorf("down did not move to the frequency: %q", line)
 	}
+
 	m, _ = pressed(m, "down", "down", "up")
 	if line := focus(m); !strings.Contains(line, "remaining payments") {
 		t.Errorf("down twice and up once did not end on the remaining payments: %q", line)
 	}
+
 	m, _ = pressed(m, "up", "up")
 	if line := focus(m); !strings.Contains(line, "next due date") {
 		t.Errorf("up did not go back to the first field: %q", line)
 	}
+
 	if view := screen(m); !strings.Contains(view, "[monthly]") {
 		t.Errorf("the arrows changed the frequency:\n%s", view)
 	}
@@ -240,6 +259,7 @@ func TestPageKeysMoveThePickersCursorToItsEnds(t *testing.T) {
 	if end, _ := pressed(m, "end", "enter"); !strings.Contains(screen(end), "from account        assets:wallet") {
 		t.Errorf("end did not take the last match:\n%s", screen(end))
 	}
+
 	if home, _ := pressed(m, "pgdown", "home", "enter"); !strings.Contains(screen(home), "from account        assets:checking") {
 		t.Errorf("home did not take the first match:\n%s", screen(home))
 	}
@@ -333,6 +353,7 @@ func TestARefusalIsShownAndClearedByTheNextKey(t *testing.T) {
 	if view := screen(m); strings.Contains(view, "description is required") {
 		t.Errorf("the refusal stays:\n%s", view)
 	}
+
 	if view := screen(New().Resize(180, 40).WithLedger(withAccounts()).WithFormError("x")); strings.Contains(view, "x") && Capturing(New()) {
 		t.Error("an error without a form opened one")
 	}
@@ -344,11 +365,13 @@ func TestATextFieldEditsAtItsCaretAndTheNextStartsAtItsEnd(t *testing.T) {
 	m, _ := pressed(opened(), "tab", "tab", "tab")
 	m = typed(m, "ac")
 	m, _ = pressed(m, "left")
+
 	m = typed(m, "b")
 	if view := screen(m); !strings.Contains(view, "ab"+layout.Caret+"c") {
 		t.Errorf("typed at the caret:\n%s", view)
 	}
 	m, _ = pressed(m, "tab")
+
 	m = typed(m, "1")
 	if view := screen(m); strings.Contains(view, layout.Caret+"1") || !strings.Contains(view, "1"+layout.Caret) {
 		t.Errorf("the next field starts at its end:\n%s", view)
@@ -358,10 +381,12 @@ func TestATextFieldEditsAtItsCaretAndTheNextStartsAtItsEnd(t *testing.T) {
 func TestAPickerFilterEditsAtItsCaretAndMovingItKeepsTheMatchesCursor(t *testing.T) {
 	m, _ := pressed(opened(), "tab", "tab", "tab", "tab", "tab", "tab")
 	m = typed(m, "as")
+
 	m, _ = pressed(m, "down", "left")
 	if m.form.cursor.Row != 1 || !m.form.browsing {
 		t.Errorf("left moved the matches cursor: %d, %v", m.form.cursor.Row, m.form.browsing)
 	}
+
 	m = typed(m, "x")
 	if view := screen(m); !strings.Contains(view, "ax"+layout.Caret+"s") || m.form.cursor.Row != 0 || m.form.browsing {
 		t.Errorf("typed at the caret, the cursor starts over: %d, %v\n%s", m.form.cursor.Row, m.form.browsing, view)
@@ -386,6 +411,7 @@ func TestOpenEditFillsTheFormAndTitlesItEdit(t *testing.T) {
 			t.Errorf("form lacks %q:\n%s", want, view)
 		}
 	}
+
 	_, action := pressed(m, "ctrl+s")
 	if saved(action) == nil || saved(action).Editing == nil || saved(action).Editing.Pos != rule.Pos {
 		t.Errorf("action = %+v, want a save of the rule being edited", action)
@@ -403,6 +429,7 @@ func TestWithNoDeclaredCurrenciesTheFormStillOpens(t *testing.T) {
 	}
 	m, _ = pressed(m, "tab")
 	m = typed(m, "assets:c")
+
 	m, _ = pressed(m, "enter")
 	if view := screen(m); !strings.Contains(view, "from account        assets:checking") || !strings.Contains(view, "▸to account") {
 		t.Errorf("view:\n%s", view)
@@ -413,6 +440,7 @@ func TestTheViewBehindTheFormStaysWhenThereIsNoForm(t *testing.T) {
 	if view := screen(loaded()); strings.Contains(view, "periodic rule") {
 		t.Errorf("a form is drawn without being opened:\n%s", view)
 	}
+
 	if m := loaded().CloseForm(); m.Capturing() {
 		t.Error("closing nothing opened a form")
 	}
@@ -487,21 +515,25 @@ func copyLedger() domain.Ledger {
 		booking(10, "Thalia", "expenses:books", 2000),
 		booking(20, "REWE", "expenses:groceries", 4217),
 	}
+
 	return ledger
 }
 
 func copyList(t *testing.T) Model {
 	t.Helper()
+
 	m := New().Resize(180, 40).WithLedger(copyLedger()).OpenCopy()
 	if !m.Capturing() || !strings.Contains(screen(m), "─ copy a transaction ") {
 		t.Fatalf("no copy picker:\n%s", screen(m))
 	}
+
 	return m
 }
 
 func TestCopyListsTheTransactionsNewestFirstAndFiltersThem(t *testing.T) {
 	m := copyList(t)
 	view := screen(m)
+
 	rewe, rent := strings.Index(view, "2026-09-20  REWE"), strings.Index(view, "2026-09-02  Vermieter Mueller")
 	if rewe < 0 || rent < 0 || rewe > rent || !strings.Contains(view, "42,17 EUR") || !strings.Contains(view, "assets:checking → expenses:groceries") {
 		t.Errorf("the list:\n%s", view)
@@ -513,9 +545,11 @@ func TestTheCopyListFiltersByDescription(t *testing.T) {
 	if view := screen(m); !strings.Contains(view, "Thalia") || strings.Contains(view, "REWE") {
 		t.Errorf("filtered:\n%s", view)
 	}
+
 	if m = typed(m, "x"); !strings.Contains(screen(m), "no transaction matches") {
 		t.Errorf("nothing left:\n%s", screen(m))
 	}
+
 	if m, _ = pressed(m, "enter"); m.form != nil || m.copying == nil {
 		t.Error("Enter with nothing listed opened a form")
 	}
@@ -545,9 +579,11 @@ func TestALongCopyListScrollsAndHighlightsTheTransactionUnderTheCursor(t *testin
 			highlighted = append(highlighted, uitest.Plain(line))
 		}
 	}
+
 	if shown := len(lines) - title - 1; shown != 5 { // half the screen: the title, the filter and four rows
 		t.Errorf("the list takes %d lines:\n%s", shown, screen(m))
 	}
+
 	if len(highlighted) != 1 || !strings.Contains(highlighted[0], "Old 1") {
 		t.Errorf("highlighted %q in:\n%s", highlighted, screen(m))
 	}
@@ -558,6 +594,7 @@ func TestEnterOpensTheNewRuleFormFilledFromTheTransaction(t *testing.T) {
 	if m.copying != nil || m.form == nil || m.form.editing != nil {
 		t.Fatalf("no new-rule form: %+v", m.form)
 	}
+
 	want := periodic.Input{
 		Date: "2026-10-10", Frequency: periodic.Monthly, Description: "Thalia", Amount: "20,00",
 		Currency: "EUR", From: "assets:checking", To: "expenses:books",
@@ -572,9 +609,11 @@ func TestTheCopyListMovesItsCursorAndEscClosesIt(t *testing.T) {
 	if m.copying.cursor.Row != 2 {
 		t.Errorf("end: %d", m.copying.cursor.Row)
 	}
+
 	if m, _ = pressed(typed(m, "e"), "left"); m.copying.back != 1 || m.copying.cursor.Row != 0 {
 		t.Errorf("typing starts the list over and left moves the caret: %+v", *m.copying)
 	}
+
 	if m, _ = pressed(m, "esc"); m.Capturing() || strings.Contains(screen(m), "copy a transaction") {
 		t.Errorf("esc did not close:\n%s", screen(m))
 	}

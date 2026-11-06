@@ -10,12 +10,14 @@ import (
 
 func journalIn(t *testing.T) string {
 	t.Helper()
+
 	return filepath.Join(t.TempDir(), "main.journal")
 }
 
 // While one konto holds a journal, a second one is refused.
 func TestSecondAcquireIsRefused(t *testing.T) {
 	path := journalIn(t)
+
 	first, err := Acquire(path)
 	if err != nil {
 		t.Fatalf("first Acquire failed: %v", err)
@@ -27,6 +29,7 @@ func TestSecondAcquireIsRefused(t *testing.T) {
 	if !errors.Is(err, ErrAlreadyRunning) {
 		t.Fatalf("second Acquire error = %v, want ErrAlreadyRunning", err)
 	}
+
 	if !strings.Contains(err.Error(), "already running") {
 		t.Errorf("error should say konto is already running, got: %v", err)
 	}
@@ -35,10 +38,12 @@ func TestSecondAcquireIsRefused(t *testing.T) {
 // Releasing the lock lets the next konto in.
 func TestAcquireSucceedsAfterRelease(t *testing.T) {
 	path := journalIn(t)
+
 	first, err := Acquire(path)
 	if err != nil {
 		t.Fatalf("first Acquire failed: %v", err)
 	}
+
 	if err := first.Release(); err != nil {
 		t.Fatalf("Release failed: %v", err)
 	}
@@ -94,6 +99,7 @@ func TestReleaseTwiceFails(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Acquire failed: %v", err)
 	}
+
 	if err := lock.Release(); err != nil {
 		t.Fatalf("first Release failed: %v", err)
 	}

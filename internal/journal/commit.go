@@ -27,6 +27,7 @@ func commitAll(files []*source) error {
 		next, err := stage(file)
 		if err != nil {
 			discard(staged)
+
 			return err
 		}
 		staged = append(staged, next)
@@ -34,9 +35,11 @@ func commitAll(files []*source) error {
 	for i, file := range staged {
 		if err := os.Rename(file.temp, file.path); err != nil {
 			discard(staged[i:])
+
 			return fmt.Errorf("writing %s: %w", file.path, err)
 		}
 	}
+
 	return nil
 }
 
@@ -44,20 +47,24 @@ func commitAll(files []*source) error {
 // mode when it is not there yet. A read-only file is refused: the rename would replace it all the same.
 func stage(file *source) (stagedFile, error) {
 	mode := fs.FileMode(fileMode)
+
 	info, err := os.Stat(file.path)
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return stagedFile{}, fmt.Errorf("writing %s: %w", file.path, err)
 	}
+
 	if err == nil {
 		if info.Mode().Perm()&ownerWrite == 0 {
 			return stagedFile{}, fmt.Errorf("writing %s: %w", file.path, fs.ErrPermission)
 		}
 		mode = info.Mode().Perm()
 	}
+
 	staged := stagedFile{path: file.path, temp: file.path + ".konto-tmp"}
 	if err := os.WriteFile(staged.temp, []byte(strings.Join(file.lines, "\n")), mode); err != nil {
 		return stagedFile{}, fmt.Errorf("writing %s: %w", file.path, err)
 	}
+
 	return staged, nil
 }
 

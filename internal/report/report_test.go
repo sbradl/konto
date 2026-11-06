@@ -13,6 +13,7 @@ import (
 
 func eur(mantissa int64) domain.MultiAmount {
 	style := domain.DefaultAmount("EUR").Style
+
 	return domain.MultiAmount{{Commodity: "EUR", Mantissa: mantissa, Places: 2, Style: style}}
 }
 
@@ -30,11 +31,13 @@ type fakeGateway struct {
 
 func (f *fakeGateway) BalancesUntil(_ context.Context, last time.Time, prefixes ...string) ([]domain.Account, error) {
 	f.calls = append(f.calls, "until "+last.Format(time.DateOnly)+" "+strings.Join(prefixes, ","))
+
 	return f.until[prefixes[0]], f.err
 }
 
 func (f *fakeGateway) Activity(_ context.Context, first, last time.Time, prefixes ...string) ([]domain.Account, error) {
 	f.calls = append(f.calls, "activity "+first.Format(time.DateOnly)+".."+last.Format(time.DateOnly)+" "+strings.Join(prefixes, ","))
+
 	return f.activity[prefixes[0]], f.err
 }
 
@@ -60,10 +63,12 @@ func rows(table []domain.ReportRow) []string {
 		if row.Kind != domain.RowHeader {
 			lines[i] += row.Amount.Format()
 		}
+
 		if row.Delta != nil {
 			lines[i] += "|" + row.Delta.Format()
 		}
 	}
+
 	return lines
 }
 
@@ -89,6 +94,7 @@ func TestBalanceSheetShowsBalancesAtTodayAndTheChangeWithinThePeriod(t *testing.
 	if !reflect.DeepEqual(rows(got.BalanceSheet), want) {
 		t.Errorf("balance sheet = %q, want %q", rows(got.BalanceSheet), want)
 	}
+
 	if got.BalanceSheet[0].Kind != domain.RowHeader || got.BalanceSheet[1].Kind != domain.RowLeaf ||
 		got.BalanceSheet[3].Kind != domain.RowSubtotal || got.BalanceSheet[7].Kind != domain.RowGrandTotal {
 		t.Errorf("row kinds = %v", got.BalanceSheet)
@@ -146,9 +152,11 @@ func TestAllTimeHasNoDeltaAndReadsTheStatementFromBalances(t *testing.T) {
 			t.Errorf("row %q has a Δ under all time", row.Label)
 		}
 	}
+
 	if want := "until 2026-09-30 income:,expenses:"; gw.calls[1] != want || len(gw.calls) != 2 {
 		t.Errorf("calls = %q, want the second to be %q", gw.calls, want)
 	}
+
 	if got.IncomeStatement[len(got.IncomeStatement)-1].Amount.Format() != "6.300,00 EUR" {
 		t.Errorf("all-time net = %v", got.IncomeStatement)
 	}
@@ -228,6 +236,7 @@ func (f failingLater) Activity(ctx context.Context, first, last time.Time, prefi
 	if len(f.calls)+1 == f.failOn {
 		return nil, errors.New("later boom")
 	}
+
 	return f.fakeGateway.Activity(ctx, first, last, prefixes...)
 }
 

@@ -21,10 +21,12 @@ import (
 
 func fixture(t *testing.T, name string) string {
 	t.Helper()
+
 	path, err := filepath.Abs(filepath.Join("testdata", name))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	return path
 }
 
@@ -33,6 +35,7 @@ func fixture(t *testing.T, name string) string {
 func ledger(t *testing.T) *Client {
 	t.Helper()
 	files := []string{fixture(t, "ledger/main.journal"), fixture(t, "ledger/2025.journal"), fixture(t, "ledger/2026.journal")}
+
 	return New(Binary, func() []string { return files })
 }
 
@@ -40,6 +43,7 @@ func ledger(t *testing.T) *Client {
 func single(t *testing.T, name string) *Client {
 	t.Helper()
 	path := fixture(t, name)
+
 	return New(Binary, func() []string { return []string{path} })
 }
 
@@ -53,19 +57,23 @@ func balancesOf(accounts []domain.Account) map[string]string {
 	for _, account := range accounts {
 		shown[account.Name] = account.Balance.Format()
 	}
+
 	return shown
 }
 
 // printed is the fixture ledger's transactions as Print reads them.
 func printed(t *testing.T) []domain.Transaction {
 	t.Helper()
+
 	got, err := ledger(t).Print(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if len(got) != 3 {
 		t.Fatalf("transactions = %+v, want 3", got)
 	}
+
 	return got
 }
 
@@ -75,6 +83,7 @@ func TestRealPrintReadsDatesCommentsAndSources(t *testing.T) {
 	if salary.Date != on(9, 1) || salary.Description != "Acme GmbH" || salary.Comment != "September" {
 		t.Errorf("salary = %+v", salary)
 	}
+
 	if want := (domain.SourcePos{File: fixture(t, "ledger/2026.journal"), Line: 1}); salary.Source != want {
 		t.Errorf("source = %+v, want %+v", salary.Source, want)
 	}
@@ -87,6 +96,7 @@ func TestRealPrintReadsAmountsAndTags(t *testing.T) {
 		posting.Tags["konto-rule"] != "1" {
 		t.Errorf("rent posting = %+v, want 900,00 EUR to expenses:rent tagged konto-rule:1", posting)
 	}
+
 	if amount := rent.Postings[1].Amounts; amount.Format() != "-900,00 EUR" || amount[0].Style != euroStyle {
 		t.Errorf("inferred amount = %+v, want -900,00 EUR in the declared style", amount)
 	}
@@ -101,6 +111,7 @@ func TestRealUpcomingProjectsThePeriodicRule(t *testing.T) {
 	if len(got) != 2 || got[0].Date != on(10, 1) || got[1].Date != on(11, 1) || got[0].Description != "Rent" {
 		t.Fatalf("occurrences = %+v, want Rent on 2026-10-01 and 2026-11-01", got)
 	}
+
 	if want := (domain.SourcePos{File: fixture(t, "ledger/main.journal"), Line: 11}); got[0].Source != want {
 		t.Errorf("source = %+v, want the `~` line %+v", got[0].Source, want)
 	}
@@ -131,6 +142,7 @@ func TestRealMonthlyActivityIsOneEntryPerMonth(t *testing.T) {
 	if len(got) != 2 || len(got[0]) != 0 {
 		t.Fatalf("months = %+v, want August empty and September", got)
 	}
+
 	if shown := balancesOf(got[1]); len(shown) != 2 || shown["expenses:rent"] != "900,00 EUR" ||
 		shown["income:salary"] != "-2.000,00 EUR" {
 		t.Errorf("September = %v", shown)
@@ -142,6 +154,7 @@ func TestRealActivityAndBalancesUntilKeepToTheirDaysAndPrefixes(t *testing.T) {
 	if shown := balancesOf(activity); err != nil || len(shown) != 1 || shown["expenses:rent"] != "900,00 EUR" {
 		t.Errorf("activity = %v, %v; want only the September rent", shown, err)
 	}
+
 	until, err := ledger(t).BalancesUntil(context.Background(), on(9, 1), "assets")
 	if shown := balancesOf(until); err != nil || len(shown) != 1 || shown["assets:checking"] != "4.000,00 EUR" {
 		t.Errorf("balances until 2026-09-01 = %v, %v; want the salary day counted", shown, err)
@@ -171,6 +184,7 @@ func TestRealProjectionGivesMonthEndsWithTheForecast(t *testing.T) {
 	for i, balance := range got.Balances {
 		balances[i] = balance.Format()
 	}
+
 	wantEnds := []time.Time{on(10, 1), on(11, 1), on(12, 1)}
 	if !slices.Equal(got.Ends, wantEnds) || !slices.Equal(balances, []string{"3.100,00 EUR", "2.200,00 EUR", "1.300,00 EUR"}) {
 		t.Errorf("ends = %v, balances = %v", got.Ends, balances)
@@ -199,6 +213,7 @@ func TestRealConvertCSVAppliesTheRules(t *testing.T) {
 	if len(got) != 1 || got[0].Date != on(9, 30) || got[0].Description != "REWE" {
 		t.Fatalf("transactions = %+v", got)
 	}
+
 	if postings := got[0].Postings; postings[0].Amounts[0].Mantissa != -4217 || postings[0].Amounts[0].Commodity != "EUR" ||
 		postings[1].Account != "expenses:groceries" || postings[1].Tags["konto-rule"] != "7" {
 		t.Errorf("postings = %+v", postings)
@@ -209,12 +224,14 @@ func TestRealCheckPassesAndLocatesFailures(t *testing.T) {
 	if issue, err := ledger(t).Check(context.Background(), "assertions"); issue != nil || err != nil {
 		t.Errorf("assertions across the ledger's files = %+v, %v; want them to hold", issue, err)
 	}
+
 	issue, err := single(t, "broken/checks.journal").Check(context.Background(), "accounts")
 	if err != nil || issue == nil {
 		t.Fatalf("issue = %+v, %v; want the undeclared account", issue, err)
 	}
 	want := domain.CheckIssue{Check: "accounts", Severity: domain.SeverityWarn, File: fixture(t, "broken/checks.journal"), Line: 8}
 	message := issue.Message
+
 	issue.Message = ""
 	if *issue != want || !strings.Contains(message, `account "expenses:undeclared" has not been declared.`) {
 		t.Errorf("issue = %+v with message %q, want %+v", *issue, message, want)
@@ -226,6 +243,7 @@ func TestRealCheckReadsAFailedAssertionWithItsColumn(t *testing.T) {
 	if err != nil || issue == nil {
 		t.Fatalf("issue = %+v, %v; want the failed assertion", issue, err)
 	}
+
 	if issue.Line != 5 || issue.Col == 0 || !strings.HasPrefix(issue.Message, "Balance assertion failed in assets:checking") {
 		t.Errorf("issue = %+v", *issue)
 	}
@@ -242,6 +260,7 @@ func TestRealCheckTextSaysWhyInHledgersWords(t *testing.T) {
 	if err == nil || !strings.HasPrefix(err.Error(), "Balance assertion failed in assets:checking") {
 		t.Errorf("error = %v", err)
 	}
+
 	if err := ledger(t).CheckText(context.Background(), "decimal-mark ,\n", []string{"assertions"}); err != nil {
 		t.Errorf("a clean text fails: %v", err)
 	}
@@ -259,6 +278,7 @@ func TestRealParseErrorsAreLocated(t *testing.T) {
 		if !errors.As(err, &got) {
 			t.Fatalf("%s: error = %v, want a JournalError", name, err)
 		}
+
 		want.Check, want.Severity, want.File = domain.ParseableCheck, domain.SeverityErr, fixture(t, name)
 		if got.Issue != want {
 			t.Errorf("%s: issue = %+v, want %+v", name, got.Issue, want)

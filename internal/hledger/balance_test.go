@@ -31,7 +31,7 @@ func TestBalancesReturnsEveryAccountWithItsAmounts(t *testing.T) {
 		row("assets:empty"),
 		row("assets:wallet", amountJSON("PLN", -500, eurStyle), amountJSON("USD", 100, `{"ascommodityside": "L", "ascommodityspaced": false, "asdecimalmark": ".", "asdigitgroups": null}`)),
 	)
-	client := newClient(recording(out, nil, new([]call)), "/data/main.journal")
+	client := answering(out)
 
 	got, err := client.Balances(context.Background())
 	if err != nil {
@@ -39,6 +39,7 @@ func TestBalancesReturnsEveryAccountWithItsAmounts(t *testing.T) {
 	}
 
 	euro := domain.DefaultAmount("EUR").Style
+
 	want := []domain.Account{
 		{Name: "assets:checking", Balance: domain.MultiAmount{{Commodity: "EUR", Mantissa: 1324000, Places: 2, Style: euro}}},
 		{Name: "assets:empty", Balance: domain.MultiAmount{}},
@@ -61,13 +62,11 @@ func TestBalancesAsksForAFlatReportIncludingEmptyAccounts(t *testing.T) {
 	}
 
 	want := []string{"-f", "/data/main.journal", "bal", "--flat", "-O", "json", "-E"}
-	if len(calls) != 1 || !reflect.DeepEqual(calls[0].args, want) {
-		t.Errorf("calls = %+v, want one call with %v", calls, want)
-	}
+	assertOneCall(t, calls, want)
 }
 
 func TestBalancesReportsHledgerFailure(t *testing.T) {
-	client := newClient(recording("", errors.New("exit status 1"), new([]call)), "/data/main.journal")
+	client := failingHledger()
 
 	if _, err := client.Balances(context.Background()); err == nil || !strings.Contains(err.Error(), "exit status 1") {
 		t.Errorf("expected an error carrying the cause, got: %v", err)
@@ -87,7 +86,7 @@ func TestBalancesRejectsGarbage(t *testing.T) {
 		"no group sizes":      balanceReport(row("a", amountJSON("EUR", 1, `{"asdigitgroups": [".", []]}`))),
 		"sizes not numbers":   balanceReport(row("a", amountJSON("EUR", 1, `{"asdigitgroups": [".", "x"]}`))),
 	} {
-		client := newClient(recording(out, nil, new([]call)), "/data/main.journal")
+		client := answering(out)
 
 		if _, err := client.Balances(context.Background()); err == nil {
 			t.Errorf("%s: expected an error, got nil", name)
@@ -96,7 +95,7 @@ func TestBalancesRejectsGarbage(t *testing.T) {
 }
 
 func TestBalancesSayWhenTheReportIsEmpty(t *testing.T) {
-	client := newClient(recording("[]", nil, new([]call)), "/data/main.journal")
+	client := answering("[]")
 
 	_, err := client.Balances(context.Background())
 
@@ -110,22 +109,20 @@ func TestActivityAsksForTheGivenQueriesOverTheInclusivePeriod(t *testing.T) {
 	client := newClient(recording(balanceReport(), nil, &calls), "/data/main.journal")
 
 	_, err := client.Activity(context.Background(),
-		time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC), "assets:", "liabilities:")
+		date(2026, 7, 1), date(2026, 9, 30), "assets:", "liabilities:")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
 	want := []string{"-f", "/data/main.journal", "bal", "--flat", "-O", "json", "-b", "2026-07-01", "-e", "2026-10-01", "^assets:", "^liabilities:"}
-	if len(calls) != 1 || !reflect.DeepEqual(calls[0].args, want) {
-		t.Errorf("calls = %+v, want one call with %v", calls, want)
-	}
+	assertOneCall(t, calls, want)
 }
 
 func TestBalancesUntilCountsEverythingUpToAndIncludingTheDay(t *testing.T) {
 	var calls []call
 	client := newClient(recording(balanceReport(row("assets:a", amountJSON("EUR", 100, eurStyle))), nil, &calls), "/data/main.journal")
 
-	got, err := client.BalancesUntil(context.Background(), time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC), "assets:")
+	got, err := client.BalancesUntil(context.Background(), date(2026, 9, 30), "assets:")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -141,6 +138,7 @@ func periodReport(ends []string, rows ...string) string {
 	for i, end := range ends {
 		dates[i] = `[{"contents": "2026-01-01", "tag": "Exact"}, {"contents": "` + end + `", "tag": "Exact"}]`
 	}
+
 	return `{"prDates": [` + strings.Join(dates, ",") + `], "prRows": [` + strings.Join(rows, ",") + `]}`
 }
 
@@ -149,6 +147,7 @@ func periodRow(periods ...[]string) string {
 	for i, amounts := range periods {
 		cells[i] = "[" + strings.Join(amounts, ",") + "]"
 	}
+
 	return `{"prrName": "assets:wallet", "prrAmounts": [` + strings.Join(cells, ",") + `]}`
 }
 
@@ -161,20 +160,23 @@ func TestProjectionReadsTheMonthEndBalancesOfOneAccount(t *testing.T) {
 	client := newClient(recording(out, nil, &calls), "/data/main.journal")
 
 	got, err := client.Projection(context.Background(), domain.ProjectionQuery{
-		Account: "assets:wallet", Begin: time.Date(2026, 3, 30, 0, 0, 0, 0, time.UTC),
-		ForecastFrom: time.Date(2026, 9, 27, 0, 0, 0, 0, time.UTC), ForecastTo: time.Date(2027, 9, 30, 0, 0, 0, 0, time.UTC),
+		Account: "assets:wallet", Begin: date(2026, 3, 30),
+		ForecastFrom: date(2026, 9, 27), ForecastTo: date(2027, 9, 30),
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	wantEnds := []time.Time{time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC), time.Date(2026, 10, 30, 0, 0, 0, 0, time.UTC)}
+
+	wantEnds := []time.Time{date(2026, 9, 30), date(2026, 10, 30)}
 	if !reflect.DeepEqual(got.Ends, wantEnds) {
 		t.Errorf("ends = %v, want %v", got.Ends, wantEnds)
 	}
+
 	if len(got.Balances[0]) != 0 || len(got.Balances[1]) != 2 || got.Balances[1][1].Commodity != "PLN" ||
 		got.Balances[1][1].Mantissa != 40000 {
 		t.Errorf("balances = %+v", got.Balances)
 	}
+
 	want := []string{
 		"-f", "/data/main.journal", "bal", `acct:^assets:wallet$`, "-M", "-H", "-E", "-I", "--layout=bare", "-b", "2026-03-30",
 		"--forecast=2026-09-27..2027-09-30", "-O", "json",
@@ -198,7 +200,7 @@ func TestProjectionEscapesTheAccountNameInTheQuery(t *testing.T) {
 }
 
 func TestProjectionOfAnAccountWithoutPostingsHasPeriodsButNoBalances(t *testing.T) {
-	client := newClient(recording(periodReport([]string{"2026-09-30"}), nil, new([]call)), "j")
+	client := answering(periodReport([]string{"2026-09-30"}))
 
 	got, err := client.Projection(context.Background(), domain.ProjectionQuery{Account: "assets:none"})
 
@@ -210,13 +212,13 @@ func TestProjectionOfAnAccountWithoutPostingsHasPeriodsButNoBalances(t *testing.
 func TestProjectionReportsWhatItCannotRead(t *testing.T) {
 	badAmount := `{"acommodity": "EUR", "aquantity": {"decimalMantissa": 1, "decimalPlaces": 2}, "astyle": {"asdigitgroups": [".", []]}}`
 	for name, client := range map[string]*Client{
-		"hledger fails": newClient(recording("", errors.New("exit status 1"), new([]call)), "j"),
-		"not json":      newClient(recording("oops", nil, new([]call)), "j"),
-		"bad date":      newClient(recording(periodReport([]string{"soon"}), nil, new([]call)), "j"),
-		"bad amount":    newClient(recording(periodReport([]string{"2026-09-30"}, periodRow([]string{badAmount})), nil, new([]call)), "j"),
-		"empty period":  newClient(recording(`{"prDates": [[]], "prRows": []}`, nil, new([]call)), "j"),
-		"short row":     newClient(recording(periodReport([]string{"2026-09-30", "2026-10-31"}, periodRow(nil)), nil, new([]call)), "j"),
-		"long row":      newClient(recording(periodReport([]string{"2026-09-30"}, periodRow(nil, nil)), nil, new([]call)), "j"),
+		"hledger fails": failingHledger(),
+		"not json":      answering("oops"),
+		"bad date":      answering(periodReport([]string{"soon"})),
+		"bad amount":    answering(periodReport([]string{"2026-09-30"}, periodRow([]string{badAmount}))),
+		"empty period":  answering(`{"prDates": [[]], "prRows": []}`),
+		"short row":     answering(periodReport([]string{"2026-09-30", "2026-10-31"}, periodRow(nil))),
+		"long row":      answering(periodReport([]string{"2026-09-30"}, periodRow(nil, nil))),
 	} {
 		if _, err := client.Projection(context.Background(), domain.ProjectionQuery{Account: "assets:x"}); err == nil {
 			t.Errorf("%s: expected an error", name)
@@ -227,6 +229,7 @@ func TestProjectionReportsWhatItCannotRead(t *testing.T) {
 // periodicOutput is `hledger bal -M -O json`: one date column per month, one row per account, one cell per column.
 func periodicOutput(months int, rows ...string) string {
 	dates := strings.TrimSuffix(strings.Repeat(`[],`, months), ",")
+
 	return `{"prDates": [` + dates + `], "prRows": [` + strings.Join(rows, ",") + `], "prTotals": {}}`
 }
 
@@ -239,7 +242,7 @@ func TestMonthlyActivityAsksForIncomeAndExpensesPerMonthOverTheInclusivePeriod(t
 	client := newClient(recording(periodicOutput(2), nil, &calls), "/data/main.journal")
 
 	if _, err := client.MonthlyActivity(context.Background(),
-		time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC)); err != nil {
+		date(2026, 8, 1), date(2026, 9, 30)); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -247,9 +250,7 @@ func TestMonthlyActivityAsksForIncomeAndExpensesPerMonthOverTheInclusivePeriod(t
 		"-f", "/data/main.journal", "bal", "--flat", "-O", "json", "-M",
 		"-b", "2026-08-01", "-e", "2026-10-01", "^expenses:", "^income:",
 	}
-	if len(calls) != 1 || !reflect.DeepEqual(calls[0].args, want) {
-		t.Errorf("calls = %+v, want one call with %v", calls, want)
-	}
+	assertOneCall(t, calls, want)
 }
 
 func TestMonthlyActivitySplitsTheAccountsByMonth(t *testing.T) {
@@ -257,10 +258,10 @@ func TestMonthlyActivitySplitsTheAccountsByMonth(t *testing.T) {
 		periodicRow("expenses:rent", `[`+amountJSON("EUR", 90000, eurStyle)+`]`, `[]`, `[`+amountJSON("EUR", 91000, eurStyle)+`]`),
 		periodicRow("income:salary", `[]`, `[`+amountJSON("EUR", -300000, eurStyle)+`]`, `[]`),
 	)
-	client := newClient(recording(out, nil, new([]call)), "/data/main.journal")
+	client := answering(out)
 
 	got, err := client.MonthlyActivity(context.Background(),
-		time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC))
+		date(2026, 7, 1), date(2026, 9, 30))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -269,6 +270,7 @@ func TestMonthlyActivitySplitsTheAccountsByMonth(t *testing.T) {
 	amount := func(mantissa int64) domain.MultiAmount {
 		return domain.MultiAmount{{Commodity: "EUR", Mantissa: mantissa, Places: 2, Style: euro}}
 	}
+
 	want := [][]domain.Account{
 		{{Name: "expenses:rent", Balance: amount(90000)}},
 		{{Name: "income:salary", Balance: amount(-300000)}},
@@ -280,10 +282,10 @@ func TestMonthlyActivitySplitsTheAccountsByMonth(t *testing.T) {
 }
 
 func TestMonthlyActivityKeepsEveryMonthEvenWithoutActivity(t *testing.T) {
-	client := newClient(recording(periodicOutput(2), nil, new([]call)), "/data/main.journal")
+	client := answering(periodicOutput(2))
 
 	got, err := client.MonthlyActivity(context.Background(),
-		time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC))
+		date(2026, 8, 1), date(2026, 9, 30))
 
 	if err != nil || len(got) != 2 {
 		t.Errorf("months = %v, %v; want two empty months", got, err)
@@ -291,7 +293,7 @@ func TestMonthlyActivityKeepsEveryMonthEvenWithoutActivity(t *testing.T) {
 }
 
 func TestMonthlyActivityReportsHledgerFailure(t *testing.T) {
-	client := newClient(recording("", errors.New("exit status 1"), new([]call)), "/data/main.journal")
+	client := failingHledger()
 
 	_, err := client.MonthlyActivity(context.Background(), time.Now(), time.Now())
 
@@ -308,7 +310,7 @@ func TestMonthlyActivityRejectsGarbage(t *testing.T) {
 		"bad amount":        periodicOutput(1, periodicRow("a", `[`+amountJSON("EUR", 1, `{"asdigitgroups": [1, [3]]}`)+`]`)),
 		"name not a string": periodicOutput(1, `{"prrName": 1, "prrAmounts": [[]]}`),
 	} {
-		client := newClient(recording(out, nil, new([]call)), "/data/main.journal")
+		client := answering(out)
 
 		if _, err := client.MonthlyActivity(context.Background(), time.Now(), time.Now()); err == nil {
 			t.Errorf("%s: expected an error, got nil", name)
@@ -322,21 +324,20 @@ func TestTextBalancesAskAboutAssetsAndLiabilitiesBeforeTheDayFromStandardInput(t
 	out := balanceReport(row("assets:checking", amountJSON("EUR", 90000, eurStyle)))
 	client := &Client{run: inputReturning(out, "", nil, &input, &args)}
 
-	got, err := client.TextBalances(context.Background(), "journal text", time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC))
+	got, err := client.TextBalances(context.Background(), "journal text", date(2027, 1, 1))
 
 	want := []string{"-f", "-", "bal", "--flat", "-O", "json", "-e", "2027-01-01", "^assets:", "^liabilities:"}
 	if err != nil || input != "journal text" || !reflect.DeepEqual(args, want) {
 		t.Fatalf("err = %v, input = %q, args = %v; want %v", err, input, args, want)
 	}
+
 	if len(got) != 1 || got[0].Name != "assets:checking" || got[0].Balance[0].Mantissa != 90000 {
 		t.Errorf("balances = %+v", got)
 	}
 }
 
 func TestTextBalancesReportHledgersWordsWhenItFails(t *testing.T) {
-	var input string
-	var args []string
-	client := &Client{run: inputReturning("", "bad journal\n", errors.New("exit 1"), &input, &args)}
+	client := hledgerOnText("", "bad journal\n", errors.New("exit 1"))
 
 	_, err := client.TextBalances(context.Background(), "x", time.Time{})
 
@@ -346,9 +347,7 @@ func TestTextBalancesReportHledgersWordsWhenItFails(t *testing.T) {
 }
 
 func TestTextBalancesRejectUnreadableOutput(t *testing.T) {
-	var input string
-	var args []string
-	client := &Client{run: inputReturning("oops", "", nil, &input, &args)}
+	client := hledgerOnText("oops", "", nil)
 
 	if _, err := client.TextBalances(context.Background(), "x", time.Time{}); err == nil {
 		t.Error("want an error for output that is no report")

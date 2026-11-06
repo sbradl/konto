@@ -36,8 +36,10 @@ func (w *world) questionRows() ([]questionRow, error) {
 			}
 			found = append(found, questionRow{index: i, description: match[3], inflow: !strings.Contains(match[4], "-")})
 		}
+
 		return nil
 	})
+
 	return found, err
 }
 
@@ -52,11 +54,13 @@ func (w *world) categoriseEveryRow() error {
 			return err
 		}
 		row := rows[0]
+
 		category := cmp.Or(transfers()[row.description], map[bool]string{true: "income:salary", false: "expenses:groceries"}[row.inflow])
 		if err := w.categoriseRowAt(row.index, category); err != nil {
 			return err
 		}
 	}
+
 	return errors.New("rows keep needing a category")
 }
 
@@ -64,6 +68,7 @@ func (w *world) categoriseOnce(description, date, category string) error {
 	if err := w.selectRow(description, date); err != nil {
 		return err
 	}
+
 	return w.chooseOnce(category)
 }
 
@@ -72,6 +77,7 @@ func (w *world) categoriseRowAt(index int, category string) error {
 	if err := w.press(append([]string{"Home"}, repeat("↓", index)...)...); err != nil {
 		return err
 	}
+
 	return w.chooseOnce(category)
 }
 
@@ -79,9 +85,11 @@ func (w *world) chooseOnce(category string) error {
 	if err := w.press("Enter"); err != nil {
 		return err
 	}
+
 	if err := w.chooseOption("once"); err != nil {
 		return err
 	}
+
 	return w.pickCategory(category)
 }
 
@@ -100,13 +108,16 @@ func (w *world) categoriseRows(table *godog.Table) error {
 		default:
 			err = w.startNewRule(name, strings.TrimPrefix(target, "transfer to "), false)
 		}
+
 		if err == nil && kind != "once" {
 			err = w.press("Enter")
 		}
+
 		if err != nil {
 			return fmt.Errorf("categorising %q: %w", name, err)
 		}
 	}
+
 	return nil
 }
 
@@ -120,14 +131,17 @@ func (w *world) writeAsked() (bool, error) {
 		return false, err
 	}
 	asked := false
+
 	answered := s.waitFor(w.suite.timeout, func(string) bool {
 		line, err := w.statusLine()
 		asked = err == nil && strings.Contains(line, "(y/n)")
+
 		return asked || importBlocked(s.screenLines())
 	})
 	if !answered {
 		return false, fmt.Errorf("w neither asked to write nor said why not:\n%s", s.screenText())
 	}
+
 	return asked, nil
 }
 
@@ -135,6 +149,7 @@ func (w *world) writeAsked() (bool, error) {
 // top border.
 func importBlocked(lines []string) bool {
 	const underTabBar = 2
+
 	return len(lines) > underTabBar && strings.HasPrefix(lines[underTabBar], " ") &&
 		strings.TrimSpace(lines[underTabBar]) != ""
 }
@@ -143,15 +158,19 @@ func (w *world) writeImport() error {
 	if err := w.press("w"); err != nil {
 		return err
 	}
+
 	if asked, err := w.writeAsked(); err != nil || !asked { // not asked: the write is blocked, the view says why
 		return err
 	}
+
 	if err := w.press("y"); err != nil {
 		return err
 	}
+
 	if err := w.expectLine(-1, "status bar", "imported ", strings.Contains); err != nil {
 		return err
 	}
+
 	return w.awaitIdle()
 }
 
@@ -164,9 +183,11 @@ func (w *world) openUnlessStaged(file string) error {
 	}
 	w.waitLoaded(s)
 	s.settle(w.suite.timeout)
+
 	if strings.Contains(s.screenText(), "│ file      "+file) {
 		return nil
 	}
+
 	return w.openInImport(file)
 }
 
@@ -174,9 +195,11 @@ func (w *world) importEveryRow(file string) error {
 	if err := w.openUnlessStaged(file); err != nil {
 		return err
 	}
+
 	if err := w.categoriseEveryRow(); err != nil {
 		return err
 	}
+
 	return w.writeImport()
 }
 
@@ -184,15 +207,19 @@ func (w *world) importCreatingCategory(file, category, payee string) error {
 	if err := w.openUnlessStaged(file); err != nil {
 		return err
 	}
+
 	if err := w.startNewRule(payee, category, true); err != nil {
 		return err
 	}
+
 	if err := w.press("Enter"); err != nil {
 		return err
 	}
+
 	if err := w.categoriseEveryRow(); err != nil {
 		return err
 	}
+
 	return w.writeImport()
 }
 
@@ -200,11 +227,13 @@ func (w *world) setAccountName(name string) error {
 	if err := w.press("Ctrl+U"); err != nil {
 		return err
 	}
+
 	if name != "" {
 		if err := w.typeText(name); err != nil {
 			return err
 		}
 	}
+
 	return w.press("Enter")
 }
 
@@ -214,10 +243,12 @@ func (w *world) createAccount(name, file string) error {
 		if err := w.press("Esc"); err != nil {
 			return err
 		}
+
 		if err := w.openInImport(file); err != nil {
 			return err
 		}
 	}
+
 	return w.setAccountName(name)
 }
 
@@ -225,12 +256,15 @@ func (w *world) createAndImport(name, file string) error {
 	if err := w.createAccount(name, file); err != nil {
 		return err
 	}
+
 	if err := w.expectNoDialog(); err != nil { // the name is checked asynchronously before the dialog closes
 		return err
 	}
+
 	if err := w.categoriseEveryRow(); err != nil {
 		return err
 	}
+
 	return w.writeImport()
 }
 
@@ -240,6 +274,7 @@ func (w *world) accountNameInput() (string, error) {
 	if err != nil {
 		return "", err
 	}
+
 	if d.title != "create account" {
 		return "", fmt.Errorf("the %q dialog is open", d.title)
 	}
@@ -248,6 +283,7 @@ func (w *world) accountNameInput() (string, error) {
 			return strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(text), "▏")), nil
 		}
 	}
+
 	return "", fmt.Errorf("the dialog has no name input: %q", d.rows)
 }
 
@@ -258,44 +294,57 @@ func (w *world) expectWritePreview(want []string) error {
 		for i, line := range lines {
 			out[i] = normaliseLine(line)
 		}
+
 		return out
 	}
 	wanted := normalised(want)
+
 	return w.withDialog(func(d dialog) error {
 		if d.title != "write" {
 			return fmt.Errorf("the %q dialog is open, want the write preview", d.title)
 		}
+
 		if !containsSeq(normalised(d.rows), wanted) {
 			return fmt.Errorf("the preview %q does not show %q", d.rows, wanted)
 		}
+
 		return nil
 	})
 }
 
 // expectNoRowSkipped presses every key that might skip a row and checks the table did not shrink.
 func (w *world) expectNoRowSkipped() error {
-	count := func() (int, error) {
-		n := 0
-		err := w.expectPanel(rowsTitle, func(rows []recentRow) error { n = len(rows); return nil })
-		return n, err
-	}
-	before, err := count()
+	before, err := w.importRowCount()
 	if err != nil {
 		return err
 	}
-	for _, key := range []string{"s", "d", "x", "Delete", "Backspace", "Esc"} {
-		if err := w.press(key); err != nil {
-			return err
-		}
+
+	if err := w.press("s", "d", "x", "Delete", "Backspace", "Esc"); err != nil {
+		return err
 	}
-	after, err := count()
+
+	after, err := w.importRowCount()
 	if err != nil {
 		return err
 	}
+
 	if after != before {
 		return fmt.Errorf("the table had %d rows and now has %d", before, after)
 	}
+
 	return nil
+}
+
+// importRowCount is how many rows the Import row table shows.
+func (w *world) importRowCount() (int, error) {
+	n := 0
+	err := w.expectPanel(rowsTitle, func(rows []recentRow) error {
+		n = len(rows)
+
+		return nil
+	})
+
+	return n, err
 }
 
 func (w *world) expectEveryRowCategorised() error {
@@ -303,9 +352,11 @@ func (w *world) expectEveryRowCategorised() error {
 	if err != nil {
 		return err
 	}
+
 	if len(rows) > 0 {
 		return fmt.Errorf("%d rows still need a category", len(rows))
 	}
+
 	return w.expectScreen(true, "╭─ ROWS ")
 }
 
@@ -313,15 +364,27 @@ func (w *world) expectEveryRowCategorised() error {
 func (w *world) expectScreenLineWith(texts ...string) error {
 	return w.expectScreenLines(func(lines []string) error {
 		for _, line := range lines {
-			if !slices.ContainsFunc(texts, func(text string) bool { return !strings.Contains(line, text) }) {
+			if containsAll(line, texts) {
 				return nil
 			}
 		}
+
 		return fmt.Errorf("no screen line shows all of %q", texts)
 	})
 }
 
-// block is a transaction as written in a journal file: the dated line and the indented lines under it.
+// containsAll reports whether line shows every one of texts.
+func containsAll(line string, texts []string) bool {
+	for _, text := range texts {
+		if !strings.Contains(line, text) {
+			return false
+		}
+	}
+
+	return true
+}
+
+// blocksOf splits journal text into its transactions as written: each dated line and the indented lines under it.
 func blocksOf(text string) []string {
 	var blocks []string
 	var current []string
@@ -343,6 +406,7 @@ func blocksOf(text string) []string {
 		}
 	}
 	flush()
+
 	return blocks
 }
 
@@ -356,6 +420,7 @@ func (w *world) journalBlocks(mainOnly bool) []string {
 			blocks = append(blocks, blocksOf(string(content))...)
 		}
 	}
+
 	return blocks
 }
 
@@ -371,10 +436,12 @@ func (w *world) newBlocks(mainOnly bool) []string {
 	for _, block := range w.journalBlocks(mainOnly) {
 		if i := slices.Index(before, block); i >= 0 {
 			before = slices.Delete(before, i, i+1)
+
 			continue
 		}
 		added = append(added, block)
 	}
+
 	return added
 }
 
@@ -385,6 +452,7 @@ func blockStarting(blocks []string, header string) (string, error) {
 			return block, nil
 		}
 	}
+
 	return "", fmt.Errorf("no transaction starts %q", header)
 }
 
@@ -394,6 +462,7 @@ func (w *world) expectNewBlock(header string, check func(block string) error) er
 		if err != nil {
 			return err
 		}
+
 		return check(block)
 	})
 }
@@ -407,6 +476,7 @@ func (w *world) expectAssertion(header, assertion, account string) error {
 				return nil
 			}
 		}
+
 		return fmt.Errorf("%q has no %q on %s", block, assertion, account)
 	})
 }
@@ -418,12 +488,14 @@ func (w *world) expectNoOtherAssertion() error {
 				return fmt.Errorf("an imported transaction has an assertion: %q", block)
 			}
 		}
+
 		return nil
 	})
 }
 
 func (w *world) expectNoSecondaryDate() error {
 	secondary := regexp.MustCompile(`^\d{4}-\d{2}-\d{2}=`)
+
 	return w.eventually(func() error {
 		blocks := w.newBlocks(false)
 		if len(blocks) == 0 {
@@ -434,6 +506,7 @@ func (w *world) expectNoSecondaryDate() error {
 				return fmt.Errorf("a secondary date: %q", block)
 			}
 		}
+
 		return nil
 	})
 }
@@ -451,6 +524,7 @@ func (w *world) expectNoBankFields() error {
 				}
 			}
 		}
+
 		return nil
 	})
 }
@@ -463,9 +537,11 @@ func (w *world) expectCountOnDate(want int, description, checking, date string) 
 				count++
 			}
 		}
+
 		if count != want {
 			return fmt.Errorf("%d %q transactions on %s, want %d", count, description, date, want)
 		}
+
 		return nil
 	})
 }
@@ -474,17 +550,13 @@ func (w *world) expectCountOnDate(want int, description, checking, date string) 
 func headedBy(block, date, description string) bool {
 	header, _, _ := strings.Cut(block, "\n")
 	header, _, _ = strings.Cut(header, "  ;")
+
 	return header == date+" "+description
 }
 
 // postsWith reports a posting line of the block that holds every text.
 func postsWith(block string, texts ...string) bool {
-	for line := range strings.SplitSeq(block, "\n") {
-		if !slices.ContainsFunc(texts, func(text string) bool { return !strings.Contains(line, text) }) {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(strings.Split(block, "\n"), func(line string) bool { return containsAll(line, texts) })
 }
 
 // declaredLines counts the lines of every journal file that declare the directive text.
@@ -497,6 +569,7 @@ func (w *world) declaredLines(text string) int {
 			}
 		}
 	}
+
 	return count
 }
 
@@ -505,6 +578,7 @@ func (w *world) expectDeclares(text string, times int) error {
 		if got := w.declaredLines(text); got != times {
 			return fmt.Errorf("%q is declared %d times, want %d", text, got, times)
 		}
+
 		return nil
 	})
 }
@@ -515,12 +589,15 @@ func (w *world) expectBalance(account, want string) error {
 		if err != nil {
 			return fmt.Errorf("hledger bal: %w: %s", err, out)
 		}
+
 		if strings.HasPrefix(want, "0,00") && strings.TrimSpace(string(out)) == "" { // hledger prints nothing for zero
 			return nil
 		}
+
 		if !strings.Contains(string(out), want) {
 			return fmt.Errorf("the balance of %s is %q, want %s", account, strings.TrimSpace(string(out)), want)
 		}
+
 		return nil
 	})
 }
@@ -531,6 +608,7 @@ func (w *world) expectCheck(name string) error {
 		if err != nil {
 			return fmt.Errorf("check %s: %s", name, out)
 		}
+
 		return nil
 	})
 }
@@ -542,6 +620,7 @@ func (w *world) expectOpeningBalance(date, amount, account, assertion string) er
 				return nil
 			}
 		}
+
 		return fmt.Errorf("no opening balance on %s posts %s to %s with %s", date, amount, account, assertion)
 	})
 }
@@ -553,6 +632,7 @@ func (w *world) expectOpeningCounter(date, account string) error {
 				return nil
 			}
 		}
+
 		return fmt.Errorf("no opening balance on %s posts to %q", date, account)
 	})
 }
@@ -563,9 +643,11 @@ func (w *world) expectInYearFile(name, header string) error {
 		if err != nil {
 			return err
 		}
+
 		if _, err := blockStarting(blocksOf(string(content)), header); err != nil {
 			return fmt.Errorf("%s: %w", name, err)
 		}
+
 		return nil
 	})
 }
@@ -575,6 +657,7 @@ func (w *world) expectMainHasNoNewTransaction() error {
 		if added := w.newBlocks(true); len(added) > 0 {
 			return fmt.Errorf("the main journal got %q", added)
 		}
+
 		return nil
 	})
 }
@@ -585,9 +668,11 @@ func (w *world) expectMainContains(text string) error {
 		if err != nil {
 			return err
 		}
+
 		if !strings.Contains(string(content), text) {
 			return fmt.Errorf("the main journal lacks %q", text)
 		}
+
 		return nil
 	})
 }
@@ -601,10 +686,12 @@ func (w *world) expectLastTransactionDated(date string) error {
 		if err != nil {
 			return err
 		}
+
 		blocks := blocksOf(string(content))
 		if len(blocks) == 0 || !strings.HasPrefix(blocks[len(blocks)-1], date) {
 			return fmt.Errorf("the last transaction is not dated %s", date)
 		}
+
 		return nil
 	})
 }
@@ -616,10 +703,12 @@ func (w *world) expectAbove(upper, lower string) error {
 			return err
 		}
 		text := string(content)
+
 		first, second := strings.Index(text, upper), strings.Index(text, lower)
 		if first < 0 || second < 0 || first > second {
 			return fmt.Errorf("%q is not above %q", upper, lower)
 		}
+
 		return nil
 	})
 }
@@ -630,9 +719,11 @@ func (w *world) expectRulesMention(text string, want bool) error {
 		if err != nil {
 			return err
 		}
+
 		if strings.Contains(string(content), text) != want {
 			return fmt.Errorf("categories.rules mention %q is %v, want %v", text, !want, want)
 		}
+
 		return nil
 	})
 }
@@ -643,9 +734,11 @@ func (w *world) expectRulesKeepTheOldOnes() error {
 		if err != nil {
 			return err
 		}
+
 		if !strings.HasPrefix(string(content), strings.TrimRight(string(w.rulesAtStart), "\n")) {
 			return fmt.Errorf("categories.rules no longer starts with its old rules:\n%s", content)
 		}
+
 		return nil
 	})
 }
@@ -660,6 +753,7 @@ func (w *world) expectNoTempFiles() error {
 			return fmt.Errorf("left behind: %s", entry.Name())
 		}
 	}
+
 	return nil
 }
 
@@ -677,6 +771,7 @@ func registerWriteFlowSteps(sc *godog.ScenarioContext, w *world) {
 		if err := w.openInImport(file); err != nil {
 			return err
 		}
+
 		return w.categoriseEveryRow()
 	})
 	step(sc, `^I write the import$`, w.writeImport)
@@ -695,6 +790,7 @@ func registerWriteFlowSteps(sc *godog.ScenarioContext, w *world) {
 			if d.title != "write" || !d.holds(text) {
 				return fmt.Errorf("the %q dialog does not show %q: %q", d.title, text, d.rows)
 			}
+
 			return nil
 		})
 	})
@@ -713,6 +809,7 @@ func registerWriteJournalSteps(sc *godog.ScenarioContext, w *world) {
 			if len(w.newBlocks(false)) == 0 || strings.Contains(text, a) || strings.Contains(text, b) {
 				return fmt.Errorf("nothing was written, or the journal mentions %q or %q", a, b)
 			}
+
 			return nil
 		})
 	})
@@ -721,6 +818,7 @@ func registerWriteJournalSteps(sc *godog.ScenarioContext, w *world) {
 			if strings.Contains(block, tag) {
 				return fmt.Errorf("%q has a %s tag", block, tag)
 			}
+
 			return nil
 		})
 	})
@@ -749,6 +847,7 @@ func registerWriteFixtureSteps(sc *godog.ScenarioContext, w *world) {
 				return err
 			}
 			unrelated := date + " Unrelated\n    assets:savings  1,00 EUR\n    equity:opening-balances\n"
+
 			return os.WriteFile(w.yearJournal(), []byte(unrelated), 0o644)
 		})
 	step(sc, `^the new transactions are in the year file "([^"]*)"$`, func(file string) error {
@@ -770,6 +869,7 @@ func registerWriteFixtureSteps(sc *godog.ScenarioContext, w *world) {
 			if !strings.Contains(block, account) {
 				return fmt.Errorf("%q does not post against %s", block, account)
 			}
+
 			return nil
 		})
 	})
@@ -780,12 +880,17 @@ func registerWriteFixtureSteps(sc *godog.ScenarioContext, w *world) {
 }
 
 func registerWriteAccountSteps(sc *godog.ScenarioContext, w *world) {
-	step(sc, `^I see the account name input$`, func() error { _, err := w.accountNameInput(); return err })
+	step(sc, `^I see the account name input$`, func() error {
+		_, err := w.accountNameInput()
+
+		return err
+	})
 	step(sc, `^the suggested name is not empty$`, func() error {
 		name, err := w.accountNameInput()
 		if err == nil && name == "" {
 			err = errors.New("the suggested name is empty")
 		}
+
 		return err
 	})
 	step(sc, `^the suggested name starts with "([^"]*)" or "([^"]*)"$`, func(a, b string) error {
@@ -793,6 +898,7 @@ func registerWriteAccountSteps(sc *godog.ScenarioContext, w *world) {
 		if err == nil && !strings.HasPrefix(name, a) && !strings.HasPrefix(name, b) {
 			err = fmt.Errorf("the suggested name %q starts with neither %q nor %q", name, a, b)
 		}
+
 		return err
 	})
 	step(sc, `^I set the account name to "([^"]*)"$`, w.setAccountName)
@@ -801,6 +907,7 @@ func registerWriteAccountSteps(sc *godog.ScenarioContext, w *world) {
 			if !d.holds("refused:") || !d.holds(text) {
 				return fmt.Errorf("no refusal mentions %q: %q", text, d.rows)
 			}
+
 			return nil
 		})
 	})

@@ -22,32 +22,53 @@ func (c *Client) Projection(ctx context.Context, query domain.ProjectionQuery) (
 	if err != nil {
 		return domain.Projection{}, err
 	}
+
 	var report multiPeriodReport
 	if err := json.Unmarshal(out, &report); err != nil {
 		return domain.Projection{}, fmt.Errorf("reading hledger bal output: %w", err)
 	}
-	months, err := report.months()
+
+	return report.projection()
+}
+
+// projection is the report's one account at the end of each of its months.
+func (r multiPeriodReport) projection() (domain.Projection, error) {
+	months, err := r.months()
 	if err != nil {
 		return domain.Projection{}, err
 	}
-	projection := domain.Projection{
-		Ends:     make([]time.Time, len(report.Dates)),
-		Balances: make([]domain.MultiAmount, len(report.Dates)),
+
+	ends, err := r.ends()
+	if err != nil {
+		return domain.Projection{}, err
 	}
-	for i, period := range report.Dates {
-		if len(period) == 0 {
-			return domain.Projection{}, errors.New("reading hledger bal output: a period without dates")
-		}
-		if projection.Ends[i], err = periodEnd(period[len(period)-1].Contents); err != nil {
-			return domain.Projection{}, err
-		}
-	}
+
+	projection := domain.Projection{Ends: ends, Balances: make([]domain.MultiAmount, len(r.Dates))}
 	for i, accounts := range months {
 		if len(accounts) > 0 { // the one account, absent in a month it held nothing
 			projection.Balances[i] = accounts[0].Balance
 		}
 	}
+
 	return projection, nil
+}
+
+// ends are the last days of the report's periods.
+func (r multiPeriodReport) ends() ([]time.Time, error) {
+	ends := make([]time.Time, len(r.Dates))
+	for i, period := range r.Dates {
+		if len(period) == 0 {
+			return nil, errors.New("reading hledger bal output: a period without dates")
+		}
+
+		end, err := periodEnd(period[len(period)-1].Contents)
+		if err != nil {
+			return nil, err
+		}
+		ends[i] = end
+	}
+
+	return ends, nil
 }
 
 func periodEnd(text string) (time.Time, error) {
@@ -55,6 +76,7 @@ func periodEnd(text string) (time.Time, error) {
 	if err != nil {
 		return time.Time{}, fmt.Errorf("reading hledger bal output: %w", err)
 	}
+
 	return end, nil
 }
 
@@ -66,13 +88,21 @@ func (c *Client) Occurrences(ctx context.Context, text string, begin, until time
 	if err != nil {
 		return nil, err
 	}
+
 	transactions, err := readTransactions(out, jsonTransaction.isGenerated)
 	if err != nil {
 		return nil, err
 	}
+
+	return datesOf(transactions), nil
+}
+
+// datesOf is the date of each transaction.
+func datesOf(transactions []domain.Transaction) []time.Time {
 	dates := make([]time.Time, len(transactions))
 	for i, transaction := range transactions {
 		dates[i] = transaction.Date
 	}
-	return dates, nil
+
+	return dates
 }

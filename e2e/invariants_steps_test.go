@@ -40,6 +40,7 @@ func (w *world) performWrite(kind string) error {
 	if !ok {
 		return fmt.Errorf("unknown write %q", kind)
 	}
+
 	return write(w)
 }
 
@@ -47,9 +48,11 @@ func (w *world) importIntoNewAccount() error {
 	if err := w.writeExport("new.csv", newAccountExport()); err != nil {
 		return err
 	}
+
 	if err := w.openInImport("new.csv"); err != nil {
 		return err
 	}
+
 	return w.createAndImport("assets:holiday", "")
 }
 
@@ -58,9 +61,11 @@ func (w *world) newPeriodicRule() error {
 		if err := w.press("3", "n"); err != nil {
 			return err
 		}
+
 		if err := w.fillForm(validForm()); err != nil {
 			return err
 		}
+
 		return w.press("Ctrl+S")
 	})
 }
@@ -70,18 +75,23 @@ func (w *world) editPeriodicRule() error {
 		if err := w.press("3"); err != nil {
 			return err
 		}
+
 		if err := w.selectRule("Acme GmbH"); err != nil {
 			return err
 		}
+
 		if err := w.awaitIdle(); err != nil {
 			return err
 		}
+
 		if err := w.press("e"); err != nil {
 			return err
 		}
+
 		if err := w.changeAmount("3.100,00"); err != nil {
 			return err
 		}
+
 		return w.press("Ctrl+S")
 	})
 }
@@ -91,9 +101,11 @@ func (w *world) selectAndPress(account string, keys ...string) error {
 	if err := w.press("1"); err != nil {
 		return err
 	}
+
 	if err := w.selectAccount(account); err != nil {
 		return err
 	}
+
 	return w.press(keys...)
 }
 
@@ -102,6 +114,7 @@ func (w *world) afterWrite(write func() error) error {
 	if err := write(); err != nil {
 		return err
 	}
+
 	return w.awaitIdle()
 }
 
@@ -121,6 +134,7 @@ func (w *world) performEveryWrite() error {
 			return fmt.Errorf("%s: %w", kind, err)
 		}
 	}
+
 	return nil
 }
 
@@ -128,6 +142,7 @@ func (w *world) expectChecksAllClear() error {
 	if err := w.press("!"); err != nil {
 		return err
 	}
+
 	return w.expectScreen(true, "✓ all")
 }
 
@@ -135,6 +150,7 @@ func (w *world) closeAndReopen(account string) error {
 	if err := w.selectAndPress(account, "c", "y"); err != nil {
 		return err
 	}
+
 	return w.afterWrite(func() error { return w.selectAndPress(account, "o", "y") })
 }
 
@@ -144,9 +160,11 @@ func (w *world) expectOneSourceTag(account string) error {
 		if err != nil {
 			return err
 		}
+
 		if n := strings.Count(line, "konto:source:"); n != 1 {
 			return fmt.Errorf("%q carries %d source tags", line, n)
 		}
+
 		return nil
 	})
 }
@@ -164,6 +182,7 @@ func (w *world) expectCounterpartsAreAccounts() error {
 				}
 			}
 		}
+
 		return nil
 	})
 }
@@ -175,10 +194,12 @@ func (w *world) visitEveryView() error {
 		if view == "5" {
 			keys = append(keys, "p")
 		}
+
 		if err := w.press(keys...); err != nil {
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -191,6 +212,7 @@ func (w *world) expectSkippedRow(text string) error {
 				return nil
 			}
 		}
+
 		return fmt.Errorf("the skipped list lacks %q", text)
 	})
 }
@@ -198,6 +220,7 @@ func (w *world) expectSkippedRow(text string) error {
 // startAgain starts konto anew after the previous one has gone.
 func (w *world) startAgain() error {
 	w.s = nil
+
 	return w.start()
 }
 
@@ -206,9 +229,11 @@ func (w *world) tryWriteImport() error {
 	if err := w.openUnlessStaged("sept.csv"); err != nil {
 		return err
 	}
+
 	if err := w.categoriseEveryRow(); err != nil {
 		return err
 	}
+
 	return w.press("w", "y")
 }
 
@@ -220,6 +245,7 @@ func (w *world) expectNoCategoryRows() error {
 				return fmt.Errorf("the Accounts panel lists the category %q", name)
 			}
 		}
+
 		return err
 	})
 }
@@ -229,6 +255,7 @@ func (w *world) expectLockFile() error {
 		if _, err := os.Stat(w.journal + ".lock"); err != nil {
 			return fmt.Errorf("no lock file next to the journal: %w", err)
 		}
+
 		return nil
 	})
 }
@@ -240,12 +267,15 @@ func (w *world) signalKonto(signal syscall.Signal) error {
 		return err
 	}
 	w.waitLoaded(s)
+
 	if err := s.cmd.Process.Signal(signal); err != nil {
 		return err
 	}
+
 	if _, err := s.waitExit(w.suite.timeout); err != nil && signal != syscall.SIGKILL {
 		return err
 	}
+
 	return nil
 }
 
@@ -254,13 +284,16 @@ func (w *world) expectTerminalRestored() error {
 	if err != nil {
 		return err
 	}
+
 	if _, err := s.waitExit(w.suite.timeout); err != nil {
 		return err
 	}
+
 	raw := string(s.rawOutput())
 	if !strings.Contains(raw, "\x1b[?1049l") || !strings.Contains(raw, "\x1b[?25h") {
 		return errors.New("konto left the alternate screen or hid the cursor for good")
 	}
+
 	return nil
 }
 
@@ -270,6 +303,7 @@ func (w *world) expectNoSockets() error {
 		return err
 	}
 	dir := fmt.Sprintf("/proc/%d/fd", s.cmd.Process.Pid)
+
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return err
@@ -279,6 +313,7 @@ func (w *world) expectNoSockets() error {
 			return fmt.Errorf("konto holds a socket: %s", target)
 		}
 	}
+
 	return nil
 }
 
@@ -289,8 +324,10 @@ func treeFiles(root string) []string {
 		if err == nil && !entry.IsDir() {
 			files = append(files, path)
 		}
+
 		return nil
 	})
+
 	return files
 }
 
@@ -300,6 +337,7 @@ func (w *world) expectNoStateInHome() error {
 			return fmt.Errorf("files were created in %s: %v", dir, files)
 		}
 	}
+
 	return nil
 }
 
@@ -307,19 +345,23 @@ func (w *world) useJournalAt(name, path string) error {
 	if err := w.useJournal(name, ""); err != nil {
 		return err
 	}
+
 	target := w.expand(path)
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 		return err
 	}
+
 	content, err := os.ReadFile(w.journal)
 	if err != nil {
 		return err
 	}
+
 	if err := os.WriteFile(target, content, 0o644); err != nil {
 		return err
 	}
 	w.env["LEDGER_FILE"] = target
 	w.journal = target
+
 	return nil
 }
 
@@ -327,37 +369,46 @@ func (w *world) useReadOnly(name string) error {
 	if err := w.useJournal(name, ""); err != nil {
 		return err
 	}
+
 	return os.Chmod(w.journal, 0o444)
 }
 
 func (w *world) deleteJournal() error {
 	w.waitLoaded(w.s)
+
 	return os.Remove(w.journal)
 }
 
 func (w *world) expectReportsWithin(seconds int) error {
 	started := time.Now()
+
 	if err := w.press("5"); err != nil {
 		return err
 	}
+
 	if err := w.expectScreen(true, "BALANCE SHEET"); err != nil {
 		return err
 	}
+
 	if elapsed := time.Since(started); elapsed > time.Duration(seconds)*time.Second {
 		return fmt.Errorf("the reports took %v", elapsed)
 	}
+
 	return nil
 }
 
 func (w *world) expectTabBarWithin(seconds int) error {
 	started := time.Now()
+
 	s, err := w.session()
 	if err != nil {
 		return err
 	}
+
 	if !s.waitFor(time.Duration(seconds)*time.Second, func(screen string) bool { return strings.Contains(screen, tabBarMarker) }) {
 		return fmt.Errorf("no tab bar after %v", time.Since(started))
 	}
+
 	return nil
 }
 
@@ -375,6 +426,7 @@ func registerInvariantSteps(sc *godog.ScenarioContext, w *world) {
 		if err := w.visitEveryView(); err != nil {
 			return err
 		}
+
 		return w.press("q")
 	})
 	step(sc, `^the transaction count is still (\d+)$`, w.expectTransactionCount)
@@ -382,11 +434,16 @@ func registerInvariantSteps(sc *godog.ScenarioContext, w *world) {
 	step(sc, `^a lock file exists next to the journal$`, w.expectLockFile)
 	step(sc, `^konto was killed with SIGKILL$`, func() error { return w.signalKonto(syscall.SIGKILL) })
 	step(sc, `^konto receives SIGTERM$`, func() error { return w.signalKonto(syscall.SIGTERM) })
-	step(sc, `^konto exits$`, func() error { _, err := w.s.waitExit(w.suite.timeout); return err })
+	step(sc, `^konto exits$`, func() error {
+		_, err := w.s.waitExit(w.suite.timeout)
+
+		return err
+	})
 	step(sc, `^I can start konto again$`, func() error {
 		if err := w.startAgain(); err != nil {
 			return err
 		}
+
 		return w.expectScreen(true, tabBarMarker)
 	})
 	step(sc, `^the terminal left the alternate screen$`, w.expectTerminalRestored)
@@ -401,6 +458,7 @@ func registerInvariantSteps(sc *godog.ScenarioContext, w *world) {
 				!strings.Contains(text, "No journal found") {
 				return errors.New("neither the tab bar nor an error screen is shown")
 			}
+
 			return nil
 		})
 	})

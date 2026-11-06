@@ -39,12 +39,15 @@ func TestCursorScrollsJustEnoughToStayInView(t *testing.T) {
 	if got := (Cursor{Row: 6, Offset: 0}).Scrolled(4); got != (Cursor{Row: 6, Offset: 3}) {
 		t.Errorf("below the window: %+v", got)
 	}
+
 	if got := (Cursor{Row: 2, Offset: 5}).Scrolled(4); got != (Cursor{Row: 2, Offset: 2}) {
 		t.Errorf("above the window: %+v", got)
 	}
+
 	if got := (Cursor{Row: 4, Offset: 0}).Scrolled(4); got != (Cursor{Row: 4, Offset: 1}) {
 		t.Errorf("one row past the window: %+v", got)
 	}
+
 	if got := (Cursor{Row: 4, Offset: 2}).Scrolled(4); got != (Cursor{Row: 4, Offset: 2}) {
 		t.Errorf("inside the window: %+v", got)
 	}
@@ -79,6 +82,7 @@ func TestMovesKnowsTheCursorKeys(t *testing.T) {
 			t.Errorf("%s is a cursor key", key)
 		}
 	}
+
 	if Moves("a") || Moves("left") {
 		t.Error("a and left are no cursor keys")
 	}

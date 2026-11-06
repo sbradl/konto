@@ -64,6 +64,7 @@ func TestReopenPlansRemovingTheClosedTag(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("changeset = %+v, want %+v", got, want)
 	}
+
 	if _, err := NewService(fakeRules{}, today).Reopen(domain.Account{Name: "assets:open"}); !errors.Is(err, domain.ErrNotClosed) {
 		t.Errorf("reopening an open account: error = %v, want ErrNotClosed", err)
 	}

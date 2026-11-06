@@ -11,7 +11,11 @@ import (
 	"github.com/sbradl/konto/internal/domain"
 )
 
-func day(s string) time.Time { d, _ := time.Parse(time.DateOnly, s); return d }
+func day(s string) time.Time {
+	d, _ := time.Parse(time.DateOnly, s)
+
+	return d
+}
 
 type fakeGateway struct {
 	dates []time.Time
@@ -23,6 +27,7 @@ type fakeGateway struct {
 func (f *fakeGateway) Occurrences(_ context.Context, text string, first, last time.Time) ([]time.Time, error) {
 	f.texts = append(f.texts, text)
 	f.spans = append(f.spans, [2]time.Time{first, last})
+
 	return f.dates, f.err
 }
 
@@ -51,6 +56,7 @@ func valid() Input {
 
 func lines(t *testing.T, changeset domain.Changeset, err error) []string {
 	t.Helper()
+
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -61,6 +67,7 @@ func lines(t *testing.T, changeset domain.Changeset, err error) []string {
 		return edit.Lines
 	}
 	t.Fatalf("edit = %+v", changeset.Edits[0])
+
 	return nil
 }
 
@@ -106,9 +113,11 @@ func TestRemainingPaymentsBecomeAnExclusiveEndOneDayAfterTheLastOccurrence(t *te
 	if got := lines(t, changeset, err)[0]; got != "~ monthly from 2026-10-15 to 2026-12-16  Book club" {
 		t.Errorf("header = %q", got)
 	}
+
 	if want := "~ monthly from 2026-10-15  Book club\n    expenses:books  12,00 EUR\n    assets:checking\n"; gw.texts[0] != want {
 		t.Errorf("hledger was asked about %q, want the rule without an end %q", gw.texts[0], want)
 	}
+
 	if !gw.spans[0][0].Equal(day("2026-10-15")) || !gw.spans[0][1].After(day("2029-10-15")) {
 		t.Errorf("span = %v", gw.spans[0])
 	}
@@ -190,6 +199,7 @@ func TestPlanningReportsHledgerFailingOrGivingTooFewDates(t *testing.T) {
 	if _, err := NewService(failing, today).Add(context.Background(), input, ledger()); err == nil {
 		t.Error("expected hledger's error")
 	}
+
 	short := &fakeGateway{dates: []time.Time{day("2026-10-15")}}
 	if _, err := NewService(short, today).Add(context.Background(), input, ledger()); err == nil {
 		t.Error("expected a refusal for a rule with fewer payments than asked for")
@@ -236,6 +246,7 @@ func TestFormCountsTheRemainingPaymentsFromTodayUntilTheEnd(t *testing.T) {
 	if err != nil || got.Remaining != "3" {
 		t.Errorf("form = %+v, %v", got, err)
 	}
+
 	if !gw.spans[0][0].Equal(day("2026-09-30")) || !gw.spans[0][1].Equal(day("2026-12-16")) ||
 		gw.texts[0] != gym.Entry()+"\n" {
 		t.Errorf("hledger was asked %q over %v", gw.texts[0], gw.spans[0])
@@ -312,12 +323,15 @@ func TestFrequenciesAreTheDropdownInOrder(t *testing.T) {
 	for _, frequency := range Frequencies() {
 		names = append(names, frequency.String())
 	}
+
 	if want := []string{"once", "weekly", "biweekly", "monthly", "quarterly", "half-yearly", "yearly"}; !slices.Equal(names, want) {
 		t.Errorf("frequencies = %v", names)
 	}
+
 	if got, ok := frequencyOf("every 6 months"); !ok || got != HalfYearly {
 		t.Errorf("every 6 months = %v, %v", got, ok)
 	}
+
 	if _, ok := frequencyOf("every 2 weeks"); ok {
 		t.Error("every 2 weeks is no dropdown choice")
 	}
@@ -343,6 +357,7 @@ func TestInputFromCopiesATransactionIntoANewMonthlyRule(t *testing.T) {
 			{Account: "expenses:other", Amounts: domain.MultiAmount{{Commodity: "EUR", Mantissa: 1, Places: 2, Style: style}}},
 		},
 	}
+
 	want := Input{
 		Date: "2026-10-02", Frequency: Monthly, Description: "Vermieter Mueller",
 		Amount: "1.200,00", Currency: "EUR", From: "assets:checking", To: "expenses:rent",
@@ -350,6 +365,7 @@ func TestInputFromCopiesATransactionIntoANewMonthlyRule(t *testing.T) {
 	if got := InputFrom(rent); got != want {
 		t.Errorf("InputFrom = %+v, want %+v", got, want)
 	}
+
 	if got := InputFrom(domain.Transaction{Description: "empty", Postings: []domain.Posting{{Account: "a"}}}); got.From != "" || got.To != "" || got.Amount != "" {
 		t.Errorf("a posting without an amount fills nothing: %+v", got)
 	}

@@ -61,6 +61,7 @@ func TestTwoPanelsShareTheScreenRowAndFillTheSize(t *testing.T) {
 	if len(got) != 30 {
 		t.Errorf("view has %d rows, want 30", len(got))
 	}
+
 	if !strings.Contains(got[1], "╭─ BALANCE SHEET ") || !strings.Contains(got[1], "╭─ INCOME STATEMENT ") {
 		t.Errorf("row 1 = %q, want both panel titles", got[1])
 	}
@@ -127,6 +128,7 @@ func many(n int) domain.Report {
 			domain.ReportRow{Kind: domain.RowLeaf, Label: fmt.Sprintf("expenses:cat%02d", i), Amount: eur(100)},
 			domain.ReportRow{Kind: domain.RowGrandTotal, Label: "Net", Amount: eur(0)})
 	}
+
 	return report
 }
 
@@ -145,6 +147,7 @@ func TestScrollingMovesBothTablesAndTheEndsShowTheLastRows(t *testing.T) {
 	if strings.Contains(scrolled, "Income") && strings.Contains(strings.Split(scrolled, "\n")[2], "Income") {
 		t.Errorf("after 3 downs the first rows should be scrolled off:\n%s", scrolled)
 	}
+
 	if !strings.Contains(scrolled, "expenses:cat02") {
 		t.Errorf("scrolling reveals later rows:\n%s", scrolled)
 	}
@@ -153,6 +156,7 @@ func TestScrollingMovesBothTablesAndTheEndsShowTheLastRows(t *testing.T) {
 	if !strings.Contains(end, "Net") || strings.Contains(end, "more") {
 		t.Errorf("End shows the last row, nothing hidden below:\n%s", end)
 	}
+
 	top := uitest.Plain(m.Move("end").Move("home").View())
 	if !strings.Contains(top, "Assets") || !strings.Contains(top, "Income") {
 		t.Errorf("Home shows the first rows:\n%s", top)
@@ -166,15 +170,19 @@ func TestPagingAndLimits(t *testing.T) {
 	if paged.scroll.Offset == 0 {
 		t.Errorf("pgdown should scroll")
 	}
+
 	if back := paged.Move("pgup"); back.scroll.Offset != 0 {
 		t.Errorf("pgup should return, offset %d", back.scroll.Offset)
 	}
+
 	if up := m.Move("up"); up.scroll.Offset != 0 {
 		t.Errorf("cannot scroll above the top")
 	}
+
 	if past := m.Move("end").Move("down"); past.scroll.Offset != m.Move("end").scroll.Offset {
 		t.Errorf("cannot scroll below the end")
 	}
+
 	if same := m.Move("x"); same.scroll.Offset != 0 {
 		t.Errorf("other keys do nothing")
 	}
@@ -213,6 +221,7 @@ func TestTheBarSaysLoadingUntilTheFirstReportArrives(t *testing.T) {
 	if !strings.Contains(loading, "loading the reports") {
 		t.Errorf("before the first report:\n%s", loading)
 	}
+
 	if strings.Contains(loaded, "loading") {
 		t.Errorf("after the first report:\n%s", loaded)
 	}
@@ -224,6 +233,7 @@ func TestTheNextPeriodDropsTheOldNumbersUntilItsReportArrives(t *testing.T) {
 	if !strings.Contains(view, "loading the reports") || strings.Contains(view, "assets:checking") {
 		t.Errorf("view:\n%s", view)
 	}
+
 	if next := loaded().Move("end").NextPeriod(); next.scroll.Offset != 0 {
 		t.Errorf("offset %d, want the next period's tables from the top", next.scroll.Offset)
 	}
@@ -236,12 +246,15 @@ func TestAReportThatCannotBeBuiltSaysWhyUntilOneIs(t *testing.T) {
 	if view := uitest.Plain(failed.View()); !strings.Contains(view, "hledger bal: boom") || strings.Contains(view, "loading") {
 		t.Errorf("failed first build:\n%s", view)
 	}
+
 	if view := uitest.Plain(refreshed.View()); strings.Contains(view, "boom") || !strings.Contains(view, "assets:checking") {
 		t.Errorf("a failed rebuild keeps the report on screen:\n%s", view)
 	}
+
 	if view := uitest.Plain(failed.WithReport(sample()).View()); strings.Contains(view, "boom") {
 		t.Errorf("a built report clears the failure:\n%s", view)
 	}
+
 	if view := uitest.Plain(failed.NextPeriod().View()); strings.Contains(view, "boom") {
 		t.Errorf("the next period clears the failure:\n%s", view)
 	}
@@ -299,6 +312,7 @@ func TestRowsAndColumnsSitWhereTheLayoutPutsThem(t *testing.T) {
 	if got := uitest.Plain(m.View()); got != wantTop {
 		t.Errorf("top =\n%s\nwant\n%s", got, wantTop)
 	}
+
 	if got := uitest.Plain(m.Move("end").View()); got != wantEnd {
 		t.Errorf("end =\n%s\nwant\n%s", got, wantEnd)
 	}
@@ -346,6 +360,7 @@ func TestKeyPMovesToTheNextPeriodAndAsksForItsReport(t *testing.T) {
 	if action != (LoadReport{}) || next.Period() != domain.QuarterToDate {
 		t.Errorf("p: action = %v, period = %v; want the quarter's report asked for", action, next.Period())
 	}
+
 	if _, action := m.Key("down"); action != nil {
 		t.Errorf("down: action = %v, want none", action)
 	}

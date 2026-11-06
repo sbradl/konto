@@ -25,6 +25,7 @@ func main() {
 			ports := buildPorts(cfg, os.Getenv, todayFunc(os.Getenv, time.Now))
 			model, opts := withIdleSignal(ui.New(cfg.JournalPath, ports), os.Getenv, os.Stdout)
 			_, err := tea.NewProgram(model, opts...).Run()
+
 			return err //nolint:wrapcheck // the program's own error is already self-describing
 		},
 		exit: os.Exit,

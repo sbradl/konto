@@ -9,6 +9,7 @@ import "github.com/cucumber/godog"
 func (w *world) startAnother() error {
 	w.earlier = append(w.earlier, w.s)
 	w.s = nil
+
 	return w.start()
 }
 

@@ -40,18 +40,22 @@ func Preflight(
 		return domain.HledgerVersion{}, fmt.Errorf(
 			"hledger binary not found on PATH (konto needs hledger %d.%d or newer): %w", minMajor, minMinor, err)
 	}
+
 	out, err := runVersion()
 	if err != nil {
 		return domain.HledgerVersion{}, fmt.Errorf("running hledger --version: %w", err)
 	}
+
 	version, err := parseVersion(out)
 	if err != nil {
 		return domain.HledgerVersion{}, err
 	}
+
 	if minimum := minVersion(); !version.AtLeast(minimum) {
 		return domain.HledgerVersion{}, fmt.Errorf("hledger %d.%d is too old; konto needs %d.%d or newer",
 			version.Major, version.Minor, minimum.Major, minimum.Minor)
 	}
+
 	return version, nil
 }
 
@@ -59,6 +63,7 @@ func Preflight(
 func PreflightOnPath() (domain.HledgerVersion, error) {
 	return Preflight(exec.LookPath, func() (string, error) {
 		out, _, err := callBinary(Binary).run(context.Background(), nil, "--version")
+
 		return string(out), err
 	})
 }
@@ -66,15 +71,17 @@ func PreflightOnPath() (domain.HledgerVersion, error) {
 // parseVersion extracts the version components from `hledger --version` output
 // of the form "hledger X.Y[.Z]".
 func parseVersion(out string) (domain.HledgerVersion, error) {
-	m := versionPattern.FindStringSubmatch(strings.TrimSpace(out))
-	if m == nil {
+	parts := versionPattern.FindStringSubmatch(strings.TrimSpace(out))
+	if parts == nil {
 		return domain.HledgerVersion{}, fmt.Errorf("unrecognised hledger version %q", out)
 	}
-	major, _ := strconv.Atoi(m[1])
-	minor, _ := strconv.Atoi(m[2])
+	major, _ := strconv.Atoi(parts[1])
+	minor, _ := strconv.Atoi(parts[2])
+
 	patch := 0
-	if m[3] != "" {
-		patch, _ = strconv.Atoi(m[3])
+	if parts[3] != "" {
+		patch, _ = strconv.Atoi(parts[3])
 	}
+
 	return domain.HledgerVersion{Major: major, Minor: minor, Patch: patch}, nil
 }

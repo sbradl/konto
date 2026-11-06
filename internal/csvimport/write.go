@@ -40,6 +40,7 @@ func (s Staged) AccountName() string {
 	if s.NewAccount {
 		return s.Named
 	}
+
 	return s.Account.Name
 }
 
@@ -47,38 +48,66 @@ func (s Staged) AccountName() string {
 // journal ending at the bank's balance, and a changeset that declares what is new, writes the rules and
 // adds the transactions, the opening balance first when the account is new.
 func (s Staged) Plan() (Plan, error) {
-	if len(s.Rows) == 0 {
-		return Plan{}, ErrNothingToWrite
+	if err := s.writeRefusal(); err != nil {
+		return Plan{}, err
 	}
-	if missing := s.NeedCategory(); missing > 0 {
-		return Plan{}, domain.RefusalError{Reason: needCategory(missing)}
-	}
-	if s.AccountName() == "" {
-		return Plan{}, errUnnamedAccount
-	}
+
 	closing, err := s.closing()
 	if err != nil {
 		return Plan{}, err
 	}
-	transactions := s.transactions(closing)
-	if s.NewAccount {
-		transactions = append([]domain.NewTransaction{s.openingBalance(closing)}, transactions...)
-	} else if err := s.checkBalance(closing); err != nil {
+
+	transactions, err := s.balancedTransactions(closing)
+	if err != nil {
 		return Plan{}, err
 	}
 	changeset := domain.Changeset{Edits: slices.Concat(
 		s.declarations(), []domain.Edit{domain.AddTransactions{Transactions: transactions}},
 		s.ruleEdits(),
 	)}
+
 	return Plan{
 		Changeset: changeset, Preview: preview(changeset), Count: len(s.Rows), Account: s.AccountName(),
 	}, nil
+}
+
+// writeRefusal says why the import cannot be written yet: no rows, rows without a category, or no account name.
+func (s Staged) writeRefusal() error {
+	if len(s.Rows) == 0 {
+		return ErrNothingToWrite
+	}
+
+	if missing := s.NeedCategory(); missing > 0 {
+		return domain.RefusalError{Reason: needCategory(missing)}
+	}
+
+	if s.AccountName() == "" {
+		return errUnnamedAccount
+	}
+
+	return nil
+}
+
+// balancedTransactions are the rows' transactions ending at the closing balance: a new account opens at the
+// balance that gets there, a known one must already get there.
+func (s Staged) balancedTransactions(closing domain.Amount) ([]domain.NewTransaction, error) {
+	transactions := s.transactions(closing)
+	if s.NewAccount {
+		return append([]domain.NewTransaction{s.openingBalance(closing)}, transactions...), nil
+	}
+
+	if err := s.checkBalance(closing); err != nil {
+		return nil, err
+	}
+
+	return transactions, nil
 }
 
 func needCategory(rows int) string {
 	if rows == 1 {
 		return "1 row needs a category"
 	}
+
 	return strconv.Itoa(rows) + " rows need a category"
 }
 
@@ -89,14 +118,17 @@ func (s Staged) closing() (domain.Amount, error) {
 	if !known {
 		return domain.Amount{}, fmt.Errorf("the bank format %q is unknown", s.Format)
 	}
+
 	like := domain.DefaultAmount(format.currency)
 	if len(s.Zero) > 0 {
 		like = s.Zero[0]
 	}
+
 	amount, err := format.amount(like, s.Closing)
 	if err != nil {
 		return domain.Amount{}, fmt.Errorf("the bank's closing balance %q is unreadable: %w", s.Closing, err)
 	}
+
 	return amount, nil
 }
 
@@ -106,6 +138,7 @@ func (s Staged) total() domain.MultiAmount {
 	for i := range s.Rows {
 		sum = sum.Plus(s.Rows[i].Amount)
 	}
+
 	return sum
 }
 
@@ -113,10 +146,12 @@ func (s Staged) total() domain.MultiAmount {
 func (s Staged) checkBalance(closing domain.Amount) error {
 	bank := domain.MultiAmount{closing}
 	journal := s.Account.Balance.Plus(s.total())
+
 	difference := bank.Plus(journal.Negated())
 	if difference.IsZero() {
 		return nil
 	}
+
 	return BalanceMismatchError{Bank: bank, Journal: journal, Difference: difference}
 }
 
@@ -125,20 +160,28 @@ func (s Staged) transactions(closing domain.Amount) []domain.NewTransaction {
 	transactions := make([]domain.NewTransaction, 0, len(s.Rows))
 	for i := len(s.Rows) - 1; i >= 0; i-- {
 		row := &s.Rows[i]
-		counter := domain.NewPosting{Account: row.Target, Amount: row.Amount.Negated()}
-		if row.RuleID != "" {
-			counter.Comment = domain.RuleTag + ":" + row.RuleID
-		}
+
 		own := domain.NewPosting{Account: s.AccountName()}
 		if i == 0 {
 			own.Amount, own.Assertion = row.Amount, domain.MultiAmount{closing}
 		}
 		transactions = append(transactions, domain.NewTransaction{
 			Date: row.Date, Description: row.Description, Comment: row.Purpose,
-			Postings: []domain.NewPosting{counter, own},
+			Postings: []domain.NewPosting{row.counterPosting(), own},
 		})
 	}
+
 	return transactions
+}
+
+// counterPosting is the row's posting to its category or transfer account, tagged with the rule that chose it.
+func (r Row) counterPosting() domain.NewPosting {
+	posting := domain.NewPosting{Account: r.Target, Amount: r.Amount.Negated()}
+	if r.RuleID != "" {
+		posting.Comment = domain.RuleTag + ":" + r.RuleID
+	}
+
+	return posting
 }
 
 // openingBalance is the balance the new account had the day before its oldest row, which brings the
@@ -146,6 +189,7 @@ func (s Staged) transactions(closing domain.Amount) []domain.NewTransaction {
 func (s Staged) openingBalance(closing domain.Amount) domain.NewTransaction {
 	opening := domain.MultiAmount{closing}.Plus(s.total().Negated())
 	oldest := s.Rows[len(s.Rows)-1].Date
+
 	return domain.NewTransaction{
 		Date: oldest.AddDate(0, 0, -1), Description: domain.OpeningDescription,
 		Postings: []domain.NewPosting{
@@ -158,7 +202,13 @@ func (s Staged) openingBalance(closing domain.Amount) domain.NewTransaction {
 // declarations are the directives the import adds: the new account, the categories it created that are used,
 // the payees and the rule tag. A directive the journal has already is left out when written.
 func (s Staged) declarations() []domain.Edit {
+	return slices.Concat(s.accountDeclarations(), s.payeeDeclarations(), s.ruleTagDeclaration())
+}
+
+// accountDeclarations declare the new account, tagged as import-fed, and the used categories this import created.
+func (s Staged) accountDeclarations() []domain.Edit {
 	var edits []domain.Edit
+
 	if s.NewAccount {
 		comment := domain.Declaration{Source: domain.SourceImport, IBAN: s.IBAN, Format: s.Format}.Comment()
 		edits = append(edits, domain.DeclareAccount(s.Named, comment))
@@ -166,16 +216,30 @@ func (s Staged) declarations() []domain.Edit {
 	for _, name := range s.usedNewAccounts() {
 		edits = append(edits, domain.DeclareAccount(name, ""))
 	}
+
+	return edits
+}
+
+// payeeDeclarations declare the rows' payees, and the opening balance's when the account is new.
+func (s Staged) payeeDeclarations() []domain.Edit {
+	var edits []domain.Edit
 	if s.NewAccount {
 		edits = append(edits, domain.DeclarePayee(domain.OpeningDescription))
 	}
 	for _, payee := range s.payees() {
 		edits = append(edits, domain.DeclarePayee(payee))
 	}
-	if len(s.StagedRules()) > 0 || s.usesRules() {
-		edits = append(edits, domain.DeclareTag(domain.RuleTag))
-	}
+
 	return edits
+}
+
+// ruleTagDeclaration declares the rule tag when a posting will carry it.
+func (s Staged) ruleTagDeclaration() []domain.Edit {
+	if len(s.StagedRules()) > 0 || s.usesRules() {
+		return []domain.Edit{domain.DeclareTag(domain.RuleTag)}
+	}
+
+	return nil
 }
 
 func (s Staged) usesRules() bool {
@@ -191,6 +255,7 @@ func (s Staged) usedNewAccounts() []string {
 	for _, rule := range s.StagedRules() {
 		used[rule.Category] = true
 	}
+
 	return slices.DeleteFunc(slices.Clone(s.NewAccounts), func(name string) bool { return !used[name] })
 }
 
@@ -202,6 +267,7 @@ func (s Staged) payees() []string {
 			payees = append(payees, s.Rows[i].Description)
 		}
 	}
+
 	return payees
 }
 
@@ -212,6 +278,7 @@ func (s Staged) ruleEdits() []domain.Edit {
 	for _, rule := range rules {
 		edits = append(edits, domain.SetCategoryRule{ID: rule.ID, Text: rule.Text(), First: rule.Fallback()})
 	}
+
 	return edits
 }
 
@@ -230,5 +297,6 @@ func preview(changeset domain.Changeset) []string {
 			others = append(others, strings.Split(change.Text, "\n")...)
 		}
 	}
+
 	return append(transactions, others...)
 }

@@ -43,12 +43,14 @@ func New() Model { return Model{} }
 // Resize gives the view the content area below the tab bar and above the status bar.
 func (m Model) Resize(width, height int) Model {
 	m.width, m.height = width, height
+
 	return m
 }
 
 // WithForecast shows a freshly built forecast.
 func (m Model) WithForecast(forecast forecastsvc.Forecast) Model {
 	m.forecast = &forecast
+
 	return m
 }
 
@@ -57,6 +59,7 @@ func (m Model) HiddenPanels() int {
 	if m.forecast == nil {
 		return 0
 	}
+
 	return len(m.forecast.Charts) - m.shownCharts()
 }
 
@@ -66,6 +69,7 @@ func (m Model) tableLines() int {
 	for _, chart := range m.forecast.Charts {
 		lines += 1 + len(chart.Lines)
 	}
+
 	return lines
 }
 
@@ -86,54 +90,66 @@ func (m Model) View() string {
 		return layout.Panel("FORECAST", m.width, m.height,
 			theme.Dim.Render(" nothing to forecast — no open asset or liability account"))
 	}
-	shown, room := m.shownCharts(), m.chartRoom()
-	tableHeight := m.height - room
+	tableHeight := m.height - m.chartRoom()
+	table := layout.Panel(tableTitle, m.width, min(tableHeight, m.height), m.table())
+
+	return strings.Join(append(m.chartPanels(), table), "\n")
+}
+
+// chartPanels are the charts that fit, sharing the room above the milestone table.
+func (m Model) chartPanels() []string {
+	shown := m.shownCharts()
 	panels := make([]string, 0, shown+1)
 	for i := range shown {
-		height := room / shown
-		if i < room%shown {
-			height++
-		}
 		chart := m.forecast.Charts[i]
+		height := m.chartHeight(i, shown)
 		body := m.chartBody(chart, m.width-layout.PanelChrome, height-layout.PanelChrome)
 		panels = append(panels, layout.Panel(chart.Commodity, m.width, height, body))
 	}
-	table := layout.Panel(tableTitle, m.width, min(tableHeight, m.height), m.table())
-	return strings.Join(append(panels, table), "\n")
+
+	return panels
+}
+
+// chartHeight is the height of chart i of shown: an even share of the room, the first ones taking a row of
+// what is left over each.
+func (m Model) chartHeight(i, shown int) int {
+	room := m.chartRoom()
+	if i < room%shown {
+		return room/shown + 1
+	}
+
+	return room / shown
 }
 
 // chartBody is the plot with its legend below.
 func (m Model) chartBody(chart forecastsvc.Chart, width, height int) string {
 	legend := legendLines(chart, width)
+
 	plot := ""
 	if width >= minChartWidth {
 		plot = m.plot(chart, width, height-len(legend))
 	}
+
 	return plot + "\n" + strings.Join(legend, "\n")
 }
 
 // legendLines name each line in its colour, on as many rows as the width needs.
 func legendLines(chart forecastsvc.Chart, width int) []string {
-	rows := make([]string, 0, 1)
-	row := make([]string, 0, len(chart.Lines))
-	used := 0
-	flush := func() {
-		rows = append(rows, " "+strings.Join(row, legendGap))
-		row, used = row[:0], 0
-	}
+	var rows, row []string
 	for _, line := range chart.Lines {
-		text := "● " + line.Account
-		if len(row) > 0 && used+len(legendGap)+lipgloss.Width(text) > width-1 {
-			flush()
+		entry := theme.Line(line.Rank).Render("● " + line.Account)
+		if len(row) > 0 && lipgloss.Width(legendRow(append(row, entry))) > width {
+			rows = append(rows, legendRow(row))
+			row = nil
 		}
-		if len(row) > 0 {
-			used += len(legendGap)
-		}
-		row, used = append(row, theme.Line(line.Rank).Render(text)), used+lipgloss.Width(text)
+		row = append(row, entry)
 	}
-	flush()
-	return rows
+
+	return append(rows, legendRow(row))
 }
+
+// legendRow is one row of the legend: its entries apart by the legend gap, one cell in from the edge.
+func legendRow(entries []string) string { return " " + strings.Join(entries, legendGap) }
 
 // plot draws every account's line over the six months behind and the twelve ahead, with a dim line at today.
 func (m Model) plot(chart forecastsvc.Chart, width, height int) string {
@@ -145,13 +161,18 @@ func (m Model) plot(chart forecastsvc.Chart, width, height int) string {
 	labels := monthLabels(plot, begin, chart.Lines[0].Points, span)
 	plot.XLabelFormatter = func(i int, _ float64) string { return labels[i] }
 	plot.DrawXYAxisAndLabel()
-	today := elapsed(begin, m.forecast.Today)
-	marker := [2]canvas.Float64Point{{X: today, Y: low}, {X: today, Y: high}}
-	plot.DrawBrailleLineWithStyle(marker[0], marker[1], theme.Dim)
+	drawToday(plot, elapsed(begin, m.forecast.Today), low, high)
 	for _, line := range chart.Lines {
 		drawLine(plot, line, begin)
 	}
+
 	return strings.TrimRight(plot.View(), "\n")
+}
+
+// drawToday draws the dim vertical line at today, from the bottom of the y range to its top.
+func drawToday(plot linechart.Model, today, low, high float64) {
+	bottom, top := canvas.Float64Point{X: today, Y: low}, canvas.Float64Point{X: today, Y: high}
+	plot.DrawBrailleLineWithStyle(bottom, top, theme.Dim)
 }
 
 // elapsed is the x coordinate of a date: the hours since the chart begins.
@@ -165,6 +186,7 @@ func bounds(chart forecastsvc.Chart) (low, high float64) {
 		}
 	}
 	low *= headroom // never above zero
+
 	return low, math.Max(high*headroom, low+1)
 }
 
@@ -179,6 +201,7 @@ func monthLabels(plot linechart.Model, begin time.Time, points []forecastsvc.Poi
 	for _, point := range points {
 		labels[column(elapsed(begin, point.End))] = point.End.AddDate(0, 0, -1).Format("Jan")
 	}
+
 	return labels
 }
 
@@ -196,19 +219,26 @@ func drawLine(plot linechart.Model, line forecastsvc.Line, begin time.Time) {
 // table is the milestone balances: a heading per currency, a row per account, negative balances red.
 func (m Model) table() string {
 	nameWidth, cell := m.tableWidths()
-	var header strings.Builder
-	header.WriteString("  " + strings.Repeat(" ", nameWidth))
-	for _, months := range forecastsvc.Milestones() {
-		header.WriteString(layout.AlignRight(milestoneTitle(months), cell))
-	}
-	rows := []string{theme.Dim.Render(header.String())}
+	rows := []string{tableHeader(nameWidth, cell)}
 	for _, chart := range m.forecast.Charts {
 		rows = append(rows, " "+theme.Bold.Render(chart.Commodity))
 		for _, line := range chart.Lines {
 			rows = append(rows, tableRow(line, nameWidth, cell))
 		}
 	}
+
 	return strings.Join(rows, "\n")
+}
+
+// tableHeader is the dim row of milestone titles above the balance columns.
+func tableHeader(nameWidth, cell int) string {
+	var header strings.Builder
+	header.WriteString("  " + strings.Repeat(" ", nameWidth))
+	for _, months := range forecastsvc.Milestones() {
+		header.WriteString(layout.AlignRight(milestoneTitle(months), cell))
+	}
+
+	return theme.Dim.Render(header.String())
 }
 
 // tableWidths are the width of the account column and of each balance column.
@@ -222,6 +252,7 @@ func (m Model) tableWidths() (name, cell int) {
 			}
 		}
 	}
+
 	return name, cell + nameGap
 }
 
@@ -236,6 +267,7 @@ func tableRow(line forecastsvc.Line, nameWidth, cell int) string {
 		}
 		row.WriteString(text)
 	}
+
 	return row.String()
 }
 
@@ -244,5 +276,6 @@ func milestoneTitle(months int) string {
 	if months == 0 {
 		return "today"
 	}
+
 	return fmt.Sprintf("+%d months", months)
 }

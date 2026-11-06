@@ -20,6 +20,7 @@ type source struct {
 // relative to the including file; one that matches nothing is skipped, as hledger does for globs.
 func (f File) sources() ([]*source, error) {
 	var sources []*source
+
 	seen := map[string]bool{}
 	if err := readSource(f.path, seen, &sources); err != nil {
 		return nil, err
@@ -29,6 +30,7 @@ func (f File) sources() ([]*source, error) {
 			return nil, err
 		}
 	}
+
 	return sources, nil
 }
 
@@ -38,6 +40,7 @@ func readSource(path string, seen map[string]bool, sources *[]*source) error {
 		return nil
 	}
 	seen[path] = true
+
 	text, err := os.ReadFile(path) //nolint:gosec // the journal path is the user's own configuration
 	if err != nil {
 		return fmt.Errorf("reading %s: %w", path, err)
@@ -55,6 +58,7 @@ func readSource(path string, seen map[string]bool, sources *[]*source) error {
 			}
 		}
 	}
+
 	return nil
 }
 
@@ -64,13 +68,16 @@ func includedFiles(from, line string) ([]string, error) {
 	if !ok {
 		return nil, nil
 	}
+
 	pattern = strings.TrimSpace(pattern)
 	if !filepath.IsAbs(pattern) {
 		pattern = filepath.Join(filepath.Dir(from), pattern)
 	}
+
 	matches, err := filepath.Glob(pattern)
 	if err != nil {
 		return nil, fmt.Errorf("including %s: %w", pattern, err)
 	}
+
 	return matches, nil
 }

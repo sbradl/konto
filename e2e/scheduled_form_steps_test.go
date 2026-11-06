@@ -39,8 +39,10 @@ func (w *world) formRows() ([]string, error) {
 		for _, row := range lines[y+1 : len(lines)-1] {
 			rows = append(rows, strings.TrimRight(row, " "))
 		}
+
 		return rows, nil
 	}
+
 	return nil, errors.New("no form is open")
 }
 
@@ -51,8 +53,10 @@ func (w *world) shownFocus() (string, error) {
 		if focused = focusedLabel(rows); focused == "" {
 			return errors.New("the form shows no focus yet")
 		}
+
 		return nil
 	})
+
 	return focused, err
 }
 
@@ -62,6 +66,7 @@ func (w *world) waitFocusMovedFrom(label string) {
 		if focusedLabel(rows) == label {
 			return errors.New("the focus has not moved")
 		}
+
 		return nil
 	})
 }
@@ -73,6 +78,7 @@ func (w *world) onForm(check func(rows []string) error) error {
 		if err != nil {
 			return err
 		}
+
 		return check(rows)
 	})
 }
@@ -84,6 +90,7 @@ func fieldRow(rows []string, label string) (string, bool) {
 			return strings.TrimSpace(rest), true
 		}
 	}
+
 	return "", false
 }
 
@@ -98,6 +105,7 @@ func focusedLabel(rows []string) string {
 			}
 		}
 	}
+
 	return ""
 }
 
@@ -109,14 +117,17 @@ func (w *world) focusField(label string) error {
 		if err != nil {
 			return err
 		}
+
 		if focused == label {
 			return nil
 		}
+
 		if err := w.press("Tab"); err != nil {
 			return err
 		}
 		w.waitFocusMovedFrom(focused)
 	}
+
 	return fmt.Errorf("the focus never reached %q", label)
 }
 
@@ -125,9 +136,11 @@ func (w *world) fillText(label, text string) error {
 	if err := w.focusField(label); err != nil {
 		return err
 	}
+
 	if err := w.press("Ctrl+U"); err != nil || text == "" {
 		return err
 	}
+
 	return w.typeText(text)
 }
 
@@ -136,6 +149,7 @@ func (w *world) pickAccount(label, account string) error {
 	if err := w.fillText(label, account); err != nil {
 		return err
 	}
+
 	return w.press("Enter")
 }
 
@@ -149,6 +163,7 @@ func (w *world) chooseFrom(label, name, back string, steps int) error {
 	if err := w.focusField(label); err != nil {
 		return err
 	}
+
 	if err := w.press(repeat(back, steps)...); err != nil {
 		return err
 	}
@@ -157,13 +172,16 @@ func (w *world) chooseFrom(label, name, back string, steps int) error {
 		if err != nil {
 			return err
 		}
+
 		if value, _ := fieldRow(rows, label); strings.Contains(value, "["+name+"]") {
 			return nil
 		}
+
 		if err := w.press("→"); err != nil {
 			return err
 		}
 	}
+
 	return fmt.Errorf("the %s dropdown has no choice %q", label, name)
 }
 
@@ -194,16 +212,19 @@ func (w *world) fillForm(values map[string]string) error {
 		default:
 			err = w.fillText(label, value)
 		}
+
 		if err != nil {
 			return fmt.Errorf("filling %s: %w", label, err)
 		}
 	}
+
 	return nil
 }
 
 func (w *world) fillExcept(field, value string) error {
 	values := validForm()
 	values[field] = value
+
 	return w.fillForm(values)
 }
 
@@ -219,9 +240,11 @@ func (w *world) createRule(date, frequency, remaining, description, amount, curr
 	if remaining != "" {
 		values["remaining payments"] = remaining
 	}
+
 	if err := w.fillForm(values); err != nil {
 		return err
 	}
+
 	return w.press("Ctrl+S")
 }
 
@@ -231,6 +254,7 @@ func (w *world) expectFieldHolds(label, text string) error {
 		if !found || !strings.Contains(strings.ReplaceAll(value, "▏", ""), text) {
 			return fmt.Errorf("the field %q holds %q, want it to hold %q", label, value, text)
 		}
+
 		return nil
 	})
 }
@@ -241,6 +265,7 @@ func (w *world) expectFieldIs(label, text string) error {
 		if !found || !strings.Contains(value, "["+text+"]") && strings.ReplaceAll(strings.TrimSpace(value), "▏", "") != text {
 			return fmt.Errorf("the field %q is %q, want %q", label, value, text)
 		}
+
 		return nil
 	})
 }
@@ -250,6 +275,7 @@ func (w *world) expectField(label string, shown bool) error {
 		if _, found := fieldRow(rows, label); found != shown {
 			return fmt.Errorf("the field %q shown is %v, want %v", label, found, shown)
 		}
+
 		return nil
 	})
 }
@@ -259,6 +285,7 @@ func (w *world) expectFormClosed(closed bool) error {
 		if _, err := w.formRows(); (err != nil) != closed {
 			return fmt.Errorf("the form closed is %v, want %v", err != nil, closed)
 		}
+
 		return nil
 	})
 }
@@ -270,6 +297,7 @@ func (w *world) expectFormMessage(field string) error {
 				return nil
 			}
 		}
+
 		return fmt.Errorf("no message about the missing %q: %q", field, rows)
 	})
 }
@@ -278,10 +306,12 @@ func (w *world) expectPickerOffers(label, account string, offered bool) error {
 	if err := w.focusField(label); err != nil {
 		return err
 	}
+
 	return w.onForm(func(rows []string) error {
 		if got := slices.ContainsFunc(rows, func(row string) bool { return strings.Contains(row, account) }); got != offered {
 			return fmt.Errorf("the %s picker offers %q is %v, want %v", label, account, got, offered)
 		}
+
 		return nil
 	})
 }
@@ -291,6 +321,7 @@ func (w *world) expectCurrencyChoices() error {
 	if err != nil {
 		return err
 	}
+
 	return w.onForm(func(rows []string) error {
 		value, _ := fieldRow(rows, "currency")
 		for _, name := range declared {
@@ -298,6 +329,7 @@ func (w *world) expectCurrencyChoices() error {
 				return fmt.Errorf("the currency choices %q lack the declared %s", value, name)
 			}
 		}
+
 		return nil
 	})
 }
@@ -311,9 +343,11 @@ func declaredCommodities(files map[string][]byte) ([]string, error) {
 			names = append(names, match[1])
 		}
 	}
+
 	if len(names) == 0 {
 		return nil, errors.New("the journal declares no commodity")
 	}
+
 	return names, nil
 }
 
@@ -328,6 +362,7 @@ func (w *world) expectFrequencyChoices(list string) error {
 			}
 			at += found + len(name)
 		}
+
 		return nil
 	})
 }
@@ -337,6 +372,7 @@ func (w *world) expectFocusOn(label string) error {
 		if got := focusedLabel(rows); got != label {
 			return fmt.Errorf("the focus is on %q, want %q", got, label)
 		}
+
 		return nil
 	})
 }
@@ -347,6 +383,7 @@ func (w *world) changeAmount(amount string) error { return w.fillText("amount", 
 // mainJournalText is the main journal as it is now.
 func (w *world) mainJournalText() (string, error) {
 	content, err := os.ReadFile(w.journal)
+
 	return string(content), err
 }
 
@@ -355,6 +392,7 @@ func (w *world) expectJournalHas(text string, want bool) error {
 		if got := strings.Contains(allJournalText(w.journalFiles()), text); got != want {
 			return fmt.Errorf("the journal contains %q is %v, want %v", text, got, want)
 		}
+
 		return nil
 	})
 }
@@ -365,9 +403,11 @@ func (w *world) expectFileHas(name, text string, want bool) error {
 		if err != nil {
 			return err
 		}
+
 		if strings.Contains(string(content), text) != want {
 			return fmt.Errorf("%s: contains %q is %v, want %v", name, text, !want, want)
 		}
+
 		return nil
 	})
 }
@@ -378,10 +418,12 @@ func (w *world) expectMainEndsWithRule() error {
 		if err != nil {
 			return err
 		}
+
 		blocks := ruleBlocks(text)
 		if len(blocks) == 0 || !strings.HasSuffix(strings.TrimRight(text, "\n"), blocks[len(blocks)-1]) {
 			return errors.New("the main journal does not end with a rule")
 		}
+
 		return nil
 	})
 }
@@ -395,9 +437,11 @@ func (w *world) expectSameLineCount() error {
 		for _, content := range w.journalFiles() {
 			now += strings.Count(string(content), "\n")
 		}
+
 		if before != now {
 			return fmt.Errorf("the journal has %d lines, had %d", now, before)
 		}
+
 		return nil
 	})
 }
@@ -409,6 +453,7 @@ func (w *world) blockOf(description string) (string, error) {
 			return block, nil
 		}
 	}
+
 	return "", fmt.Errorf("no rule %q in the journal", description)
 }
 
@@ -418,6 +463,7 @@ func (w *world) expectBlockShows(description, text string) error {
 		if err == nil && !strings.Contains(block, text) {
 			err = fmt.Errorf("the block of %q is %q, want it to show %q", description, block, text)
 		}
+
 		return err
 	})
 }
@@ -427,6 +473,7 @@ func (w *world) expectRuleGone(description string) error {
 		if _, err := w.blockOf(description); err == nil {
 			return fmt.Errorf("the rule %q is still in the journal", description)
 		}
+
 		return nil
 	})
 }
@@ -437,13 +484,16 @@ func (w *world) expectOthersUnchanged(names ...string) error {
 		now := allJournalText(w.journalFiles())
 		for _, block := range ruleBlocks(allJournalText(w.filesAtStart)) {
 			header, _, _ := strings.Cut(block, "\n")
+
 			if slices.ContainsFunc(names, func(name string) bool { return strings.Contains(header, name) }) {
 				continue
 			}
+
 			if !strings.Contains(now, block) {
 				return fmt.Errorf("the rule %q changed", header)
 			}
 		}
+
 		return nil
 	})
 }
@@ -458,6 +508,7 @@ func (w *world) expectRuleDirectlyBelow(comment string) error {
 				}
 			}
 		}
+
 		return fmt.Errorf("%q is not directly above a rule", comment)
 	})
 }
@@ -469,6 +520,7 @@ func (w *world) expectRuleListRow(description, date string) error {
 				return nil
 			}
 		}
+
 		return fmt.Errorf("no rule row shows %q with %s", description, date)
 	})
 }
@@ -477,6 +529,7 @@ func (w *world) expectOccurrencesFor(description string, table *godog.Table) err
 	if err := w.selectRule(description); err != nil {
 		return err
 	}
+
 	return w.expectOccurrences(table, true)
 }
 
@@ -492,6 +545,7 @@ func (w *world) expectHledgerPrints(description, first, second string) error {
 				return fmt.Errorf("hledger prints no %s occurrence on %s:\n%s", description, date, out)
 			}
 		}
+
 		return nil
 	})
 }
@@ -510,9 +564,11 @@ func (w *world) expectReloaded() error {
 				prints++
 			}
 		}
+
 		if prints < 2 {
 			return errors.New("the journal was not read again")
 		}
+
 		return nil
 	})
 }
@@ -526,6 +582,7 @@ func (w *world) expectUpcomingLists(description, date string) error {
 				return nil
 			}
 		}
+
 		return fmt.Errorf("Upcoming lacks %q on %s", description, date)
 	})
 }
@@ -537,6 +594,7 @@ func (w *world) expectCheckingChanged() error {
 		if strings.Contains(text, "17.761,00 EUR") {
 			return errors.New("the checking line is as it was")
 		}
+
 		return nil
 	})
 }
@@ -556,6 +614,7 @@ func registerFormFieldSteps(sc *godog.ScenarioContext, w *world) {
 				return err
 			}
 		}
+
 		return nil
 	})
 	step(sc, `^the frequency choices are ((?:"[^"]*"\s*)+)$`, w.expectFrequencyChoices)
@@ -575,6 +634,7 @@ func registerFormFieldSteps(sc *godog.ScenarioContext, w *world) {
 		if err != nil {
 			return err
 		}
+
 		return w.expectFieldIs("currency", declared[0])
 	})
 }
@@ -598,6 +658,7 @@ func (w *world) expectFormPickerLists(account string, listed bool) error {
 		if got != listed {
 			return fmt.Errorf("the picker lists %q is %v, want %v: %q", account, got, listed, rows)
 		}
+
 		return nil
 	})
 }
@@ -613,6 +674,7 @@ func registerFormInputSteps(sc *godog.ScenarioContext, w *world) {
 	step(sc, `^I fill the form with the same account for from and to$`, func() error {
 		values := validForm()
 		values["to account"] = values["from account"]
+
 		return w.fillForm(values)
 	})
 	step(sc, `^I confirm the form$`, func() error { return w.press("Ctrl+S") })
@@ -621,6 +683,7 @@ func registerFormInputSteps(sc *godog.ScenarioContext, w *world) {
 		if err := w.typeText(text); err != nil {
 			return err
 		}
+
 		return w.press(key)
 	})
 	step(sc, `^the field "to account" is empty or shows an error$`, func() error {
@@ -630,6 +693,7 @@ func registerFormInputSteps(sc *godog.ScenarioContext, w *world) {
 				!slices.ContainsFunc(rows, func(row string) bool { return strings.Contains(row, "no account matches") }) {
 				return fmt.Errorf("the to account holds %q", value)
 			}
+
 			return nil
 		})
 	})

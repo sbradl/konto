@@ -24,6 +24,7 @@ func (p checksPanel) issues() []domain.CheckIssue {
 	if p.run == nil {
 		return nil
 	}
+
 	return p.run.Issues
 }
 
@@ -37,18 +38,21 @@ func (p checksPanel) page(height int) int {
 func (p checksPanel) withRun(run domain.CheckRun, height int) checksPanel {
 	next := checksPanel{run: &run, cursor: p.cursor}
 	next.cursor = p.cursor.To(p.cursor.Row, len(run.Issues), next.page(height))
+
 	return next
 }
 
 // moved applies a cursor key; any other key leaves the cursor where it is.
 func (p checksPanel) moved(key string, height int) checksPanel {
 	p.cursor = p.cursor.Move(key, len(p.issues()), p.page(height))
+
 	return p
 }
 
 // scrolled keeps the selected issue in view on a screen height rows tall, as after a resize.
 func (p checksPanel) scrolled(height int) checksPanel {
 	p.cursor = p.cursor.Scrolled(p.page(height))
+
 	return p
 }
 
@@ -58,8 +62,12 @@ func (p checksPanel) selected() (domain.CheckIssue, bool) {
 	if len(issues) == 0 {
 		return domain.CheckIssue{}, false
 	}
+
 	return issues[p.cursor.Row], true
 }
+
+// isSelected reports whether the shown row, counted from the first one on screen, is the selected issue.
+func (p checksPanel) isSelected(shown int) bool { return p.cursor.Offset+shown == p.cursor.Row }
 
 // onChecksKey moves the panel's cursor, or jumps to the selected issue in the editor.
 func (m Model) onChecksKey(key string) (Model, tea.Cmd) {
@@ -67,6 +75,7 @@ func (m Model) onChecksKey(key string) (Model, tea.Cmd) {
 		return m, m.openEditor(issue)
 	}
 	m.checks = m.checks.moved(key, m.height)
+
 	return m, nil
 }
 
@@ -86,6 +95,7 @@ func (m Model) failureRows() []string {
 	for i, line := range lines {
 		lines[i] = " " + theme.Negative.Render(line)
 	}
+
 	return lines
 }
 
@@ -94,6 +104,7 @@ func (m Model) runRows() []string {
 	if m.checks.run == nil {
 		return []string{"no checks have run yet"}
 	}
+
 	if m.checks.run.IsClean() {
 		return []string{" " + theme.Ok.Render(fmt.Sprintf("✓ all %d checks pass", m.checks.run.Total))}
 	}
@@ -101,10 +112,11 @@ func (m Model) runRows() []string {
 	rows := make([]string, len(visible))
 	for i, issue := range visible {
 		rows[i] = m.issueLine(issue)
-		if m.checks.cursor.Offset+i == m.checks.cursor.Row {
+		if m.checks.isSelected(i) {
 			rows[i] = theme.Selected.Render(layout.Fit(" "+m.issueText(issue), m.width))
 		}
 	}
+
 	return rows
 }
 
@@ -114,6 +126,7 @@ func (m Model) issueText(issue domain.CheckIssue) string {
 	if issue.File != "" {
 		text += fmt.Sprintf("%s:%d  ", m.shortPath(issue.File), issue.Line)
 	}
+
 	return text + issue.Message
 }
 
@@ -124,6 +137,7 @@ func (m Model) issueLine(issue domain.CheckIssue) string {
 		style = theme.Negative
 	}
 	severity := issue.Severity.String()
+
 	return " " + style.Render(severity) + strings.TrimPrefix(m.issueText(issue), severity)
 }
 
@@ -133,20 +147,25 @@ func (m Model) checkStatus() (string, lipgloss.Style) {
 	if m.checks.run == nil {
 		return "", theme.StatusBar
 	}
+
 	if m.checks.run.IsClean() {
 		return "● clean", theme.StatusOk
 	}
+
 	var parts []string
 	if n := m.checks.run.Count(domain.SeverityErr); n > 0 {
 		parts = append(parts, fmt.Sprintf("%d err", n))
 	}
+
 	if n := m.checks.run.Count(domain.SeverityWarn); n > 0 {
 		parts = append(parts, fmt.Sprintf("%d warn", n))
 	}
+
 	text := "● " + strings.Join(parts, " · ")
 	if m.checks.run.Count(domain.SeverityErr) > 0 {
 		return text, theme.StatusErr
 	}
+
 	return text, theme.StatusWarn
 }
 
@@ -155,5 +174,6 @@ func (m Model) shortPath(file string) string {
 	if rel, err := filepath.Rel(filepath.Dir(m.journalPath), file); err == nil && !strings.HasPrefix(rel, "..") {
 		return rel
 	}
+
 	return file
 }

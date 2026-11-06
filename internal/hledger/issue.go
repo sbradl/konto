@@ -20,12 +20,14 @@ var sourceSnippet = regexp.MustCompile(`^\s*(\d+ )?\|`)
 // ok is false when stderr does not carry a location.
 func parseIssue(stderr string, messageOf func(text string) string) (domain.CheckIssue, bool) {
 	header, rest, _ := strings.Cut(stderr, "\n")
+
 	groups := errorHeader.FindStringSubmatch(header)
 	if groups == nil {
 		return domain.CheckIssue{}, false
 	}
 	line, _ := strconv.Atoi(groups[2])
 	col, _ := strconv.Atoi(groups[3])
+
 	return domain.CheckIssue{
 		Check:    domain.ParseableCheck,
 		Severity: domain.SeverityOf(domain.ParseableCheck),
@@ -43,6 +45,7 @@ func firstMessageLine(text string) string {
 			return strings.TrimSpace(line)
 		}
 	}
+
 	return ""
 }
 
@@ -55,12 +58,15 @@ func firstParagraph(text string) string {
 		if sourceSnippet.MatchString(line) {
 			continue
 		}
+
 		if line == "" && len(words) > 0 {
 			return strings.Join(words, " ")
 		}
+
 		if line != "" {
 			words = append(words, line)
 		}
 	}
+
 	return strings.Join(words, " ")
 }

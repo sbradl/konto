@@ -64,6 +64,7 @@ func (m Model) Capturing() bool { return m.mode.dialog() }
 // dropped. Every change of mode goes through it.
 func (m Model) show(mode mode, dlg dialog) Model {
 	m.mode, m.dlg, m.waiting = mode, dlg, nil
+
 	return m
 }
 
@@ -72,12 +73,14 @@ func (m Model) closeDialog() Model {
 	if m.mode.dialog() {
 		return m.show(modeRows, dialog{})
 	}
+
 	return m
 }
 
 // dialogPage is how many lines of the open dialog its popup shows at once.
 func (m Model) dialogPage() int {
 	_, body := m.dialogBody()
+
 	return layout.PopupCapacity(len(body), m.height)
 }
 
@@ -87,9 +90,11 @@ func (m Model) choices() []string {
 	if row.NeedsCategory() {
 		return []string{choiceNewRule, choiceAddToRule, choiceOnce, choiceFallback}
 	}
+
 	if row.HeldByFallback() {
 		return []string{choiceNewRule, choiceAddToRule, choiceOnce}
 	}
+
 	return []string{choiceOnce}
 }
 
@@ -113,6 +118,7 @@ func (m Model) dialogKey(key string) Model {
 		return m.accountKey(key)
 	case modeRows, modeFiles:
 	}
+
 	return m
 }
 
@@ -122,15 +128,18 @@ func (m Model) close() Model {
 	if m.mode == modeAccount {
 		return m.Cleared()
 	}
+
 	if m.mode == modeCategory && m.waiting != nil {
 		return m.show(modeRuleForm, *m.waiting)
 	}
+
 	return m.show(modeRows, dialog{})
 }
 
 // moved is the dialog with its list cursor moved by a cursor key within count entries.
 func (m Model) moved(key string, count int) Model {
 	m.dlg.cursor = m.dlg.cursor.Move(key, count, m.dialogPage())
+
 	return m
 }
 
@@ -157,6 +166,7 @@ func (m Model) currentRule() csvimport.Rule {
 	if m.dlg.fallback {
 		id = m.staged.NextFallbackID()
 	}
+
 	return m.dlg.draft.Rule(id, m.dlg.category.Target)
 }
 
@@ -169,6 +179,7 @@ func (m Model) formKey(key string) Model {
 	case layout.KeyEnter:
 		return m.confirmRule()
 	}
+
 	return m.editDraft(key)
 }
 
@@ -181,6 +192,7 @@ func (m Model) editDraft(key string) Model {
 	case fieldPurpose:
 		m.dlg.draft.Purpose, m.dlg.back, _ = layout.Edit(m.dlg.draft.Purpose, m.dlg.back, key)
 	}
+
 	return m
 }
 
@@ -193,6 +205,7 @@ func (m Model) focusField(field int) Model {
 	form := m.dlg
 	m = m.show(modeCategory, dialog{})
 	m.waiting = &form
+
 	return m
 }
 
@@ -201,15 +214,18 @@ func (m Model) confirmRule() Model {
 	staged, err := m.staged.AddRule(m.currentRule())
 	if err != nil {
 		m.dlg.refusal = err.Error()
+
 		return m
 	}
 	m.staged = &staged
+
 	return m.show(modeRows, dialog{})
 }
 
 // ruleChoices are the rules the list offers: those whose category contains the filter.
 func (m Model) ruleChoices() []csvimport.Rule {
 	needle := strings.ToLower(m.dlg.filter)
+
 	return slices.DeleteFunc(slices.Clone(m.staged.Rules), func(rule csvimport.Rule) bool {
 		return !strings.Contains(strings.ToLower(rule.Category), needle)
 	})
@@ -222,8 +238,10 @@ func (m Model) ruleListKey(key string) Model {
 			return m
 		}
 		widen := dialog{ruleID: rules[m.dlg.cursor.Row].ID, draft: m.staged.RuleDraftFor(m.table.Row)}
+
 		return m.show(modeAddForm, widen)
 	}
+
 	return m.filterKey(key, len(rules))
 }
 
@@ -233,11 +251,13 @@ func (m Model) filterKey(key string, count int) Model {
 	if layout.Moves(key) {
 		return m.moved(key, count)
 	}
+
 	text, back, _ := layout.Edit(m.dlg.filter, m.dlg.back, key)
 	if text != m.dlg.filter {
 		m.dlg.cursor, m.dlg.refusal = layout.Cursor{}, ""
 	}
 	m.dlg.filter, m.dlg.back = text, back
+
 	return m
 }
 
@@ -246,15 +266,20 @@ func (m Model) addFormKey(key string) Model {
 		staged, err := m.staged.Widen(m.dlg.ruleID, m.dlg.draft.Alternative())
 		if err != nil {
 			m.dlg.refusal = err.Error()
+
 			return m
 		}
 		m.staged = &staged
+
 		return m.show(modeRows, dialog{})
 	}
+
 	if slices.Contains([]string{layout.KeyTab, layout.KeyDown, layout.KeyBackTab, layout.KeyUp}, key) {
 		m.dlg.focus, m.dlg.back = fieldPurpose-m.dlg.focus, 0 // two inputs, each key moves to the other
+
 		return m
 	}
+
 	return m.editDraft(key)
 }
 
@@ -263,14 +288,18 @@ func (m Model) accountKey(key string) Model {
 	if key != layout.KeyEnter {
 		m.dlg.name, m.dlg.back, _ = layout.Edit(m.dlg.name, m.dlg.back, key)
 		m.dlg.refusal = ""
+
 		return m
 	}
+
 	named, err := m.staged.WithName(m.dlg.name)
 	if err != nil {
 		m.dlg.refusal = err.Error()
+
 		return m
 	}
 	m.staged = &named
+
 	return m.show(modeRows, dialog{})
 }
 
@@ -279,18 +308,22 @@ func (m Model) accountKey(key string) Model {
 func (m Model) pickerEntries() (candidates []csvimport.Candidate, create bool) {
 	row := m.staged.Rows[m.table.Row]
 	candidates = csvimport.Matching(m.staged.Candidates(row), m.dlg.filter)
+
 	return candidates, len(candidates) == 0 || m.dlg.filter == ""
 }
 
 func (m Model) pickerDialogKey(key string) Model {
 	candidates, create := m.pickerEntries()
+
 	count := len(candidates)
 	if create {
 		count++
 	}
+
 	if key == layout.KeyEnter {
 		return m.pick(candidates)
 	}
+
 	return m.filterKey(key, count)
 }
 
@@ -300,11 +333,14 @@ func (m Model) pick(candidates []csvimport.Candidate) Model {
 		return m.picked(*m.staged, candidates[m.dlg.cursor.Row])
 	}
 	row := m.staged.Rows[m.table.Row]
+
 	staged, candidate, err := m.staged.Create(csvimport.SuggestName(row, m.dlg.filter))
 	if err != nil {
 		m.dlg.refusal = err.Error()
+
 		return m
 	}
+
 	return m.picked(staged, candidate)
 }
 
@@ -314,9 +350,11 @@ func (m Model) picked(staged csvimport.Staged, candidate csvimport.Candidate) Mo
 		m = m.show(modeRuleForm, *m.waiting)
 		m.dlg.category, m.dlg.refusal = candidate, ""
 		m.staged = &staged
+
 		return m
 	}
 	once := staged.Once(m.table.Row, candidate)
 	m.staged = &once
+
 	return m.show(modeRows, dialog{})
 }

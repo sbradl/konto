@@ -26,6 +26,7 @@ func (p ReportPeriod) String() string {
 		return "year to date"
 	case AllTime:
 	}
+
 	return "all time" // of the loaded window (ADR 0013)
 }
 
@@ -34,6 +35,7 @@ func (p ReportPeriod) Next() ReportPeriod {
 	if p == AllTime {
 		return MonthToDate
 	}
+
 	return p + 1
 }
 
@@ -49,6 +51,7 @@ func (p ReportPeriod) Start(today time.Time) (time.Time, bool) {
 	case AllTime:
 		return time.Time{}, false
 	}
+
 	return time.Date(today.Year(), month, 1, 0, 0, 0, 0, today.Location()), true
 }
 

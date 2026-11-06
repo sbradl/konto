@@ -38,11 +38,13 @@ func (f fakeChecker) Run(_ context.Context, snapshot domain.Ledger) (domain.Chec
 	if f.err != nil {
 		return domain.CheckRun{}, f.err
 	}
+
 	run := f.run
 	if run.Total == 0 {
 		run.Total = 12
 	}
 	run.Issues = append(slices.Clone(run.Issues), snapshot.UnclassifiedIssues()...)
+
 	return run, nil
 }
 
@@ -53,6 +55,7 @@ type fakeCreator struct {
 
 func (f *fakeCreator) Create() error {
 	f.calls++
+
 	return f.err
 }
 
@@ -65,6 +68,7 @@ func (j journalLoader) Load(context.Context) (domain.Ledger, error) {
 	if j.creator.calls == 0 {
 		return domain.Ledger{}, ledger.ErrNoJournal
 	}
+
 	return domain.Ledger{}, nil
 }
 
@@ -74,6 +78,7 @@ func recordingEditor(calls *[]editorCall) func(file string, line int) *exec.Cmd 
 		if calls != nil {
 			*calls = append(*calls, editorCall{file, line})
 		}
+
 		return exec.CommandContext(context.Background(), "true")
 	}
 }
@@ -96,23 +101,27 @@ func ledgerWith(transactions int) domain.Ledger {
 func started(t *testing.T, loader fakeLoader) Model {
 	t.Helper()
 	model := New(journalPath, Ports{Loader: loader, Checker: fakeChecker{}, Creator: &fakeCreator{}, Editor: recordingEditor(nil)})
+
 	cmd := model.Init()
 	if cmd == nil {
 		t.Fatal("Init should start loading the ledger")
 	}
 	updated, _ := model.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	updated, _ = updated.Update(cmd())
+
 	return updated.(Model)
 }
 
-// plain is s as the terminal shows it, without styling.
+// firstLine is the top row of the screen as the terminal shows it.
 func firstLine(m Model) string {
 	first, _, _ := strings.Cut(uitest.Plain(m.View().Content), "\n")
+
 	return first
 }
 
 func lastLine(m Model) string {
 	lines := strings.Split(uitest.Plain(m.View().Content), "\n")
+
 	return lines[len(lines)-1]
 }
 
@@ -123,6 +132,7 @@ func TestViewShowsLoadingUntilLoaded(t *testing.T) {
 	if !strings.Contains(content, "loading journal…") {
 		t.Errorf("content = %q, want a loading indicator", content)
 	}
+
 	if strings.Contains(content, "1 dash") {
 		t.Errorf("content = %q, should not show the tab bar yet", content)
 	}
@@ -155,6 +165,7 @@ func TestQuitKeys(t *testing.T) {
 		if cmd == nil {
 			t.Fatalf("%v: expected a command, got nil", key)
 		}
+
 		if _, ok := cmd().(tea.QuitMsg); !ok {
 			t.Errorf("%v: command should quit", key)
 		}
@@ -207,10 +218,12 @@ func TestAFailedLoadLeavesOnlyTheRootsKeys(t *testing.T) {
 		for _, key := range keys {
 			pressed, cmd = press(pressed, key)
 		}
+
 		if cmd != nil || pressed.capturing() || pressed.reports.Period() != domain.MonthToDate {
 			t.Errorf("%v: cmd %v, capturing %v", keys, cmd, pressed.capturing())
 		}
 	}
+
 	if _, cmd := press(failed, "r"); cmd == nil {
 		t.Error("r must still reload after a failed load")
 	}
@@ -233,9 +246,11 @@ func TestTabBarShowsJournalPathAtRightEdge(t *testing.T) {
 	if !strings.HasPrefix(first, " 1 dash") {
 		t.Errorf("tabs should start the line, got %q", first)
 	}
+
 	if want := journalPath + " · 0 txns "; !strings.HasSuffix(first, want) {
 		t.Errorf("line should end with %q, got %q", want, first)
 	}
+
 	if width := lipgloss.Width(first); width != 120 {
 		t.Errorf("tab bar width = %d, want 120", width)
 	}
@@ -267,6 +282,7 @@ func TestFirstRunScreenOffersToCreateTheJournal(t *testing.T) {
 			t.Errorf("first-run screen should contain %q, got %q", want, content)
 		}
 	}
+
 	if strings.Contains(content, "1 dash") {
 		t.Errorf("first-run screen should not show the tab bar, got %q", content)
 	}
@@ -281,6 +297,7 @@ func TestLoadingIndicatorIsCentred(t *testing.T) {
 	if len(lines) != 31 {
 		t.Fatalf("screen has %d lines, want 31", len(lines))
 	}
+
 	want := strings.Repeat(" ", 42) + "loading journal…"
 	if !strings.HasPrefix(lines[15], want) {
 		t.Errorf("middle line = %q, want it to start with %q", lines[15], want)
@@ -291,16 +308,19 @@ func firstRunModel(t *testing.T, creator *fakeCreator) Model {
 	t.Helper()
 	model := New(journalPath, Ports{Loader: journalLoader{creator: creator}, Checker: fakeChecker{}, Creator: creator, Editor: recordingEditor(nil)})
 	updated, _ := model.Update(model.Init()())
+
 	return updated.(Model)
 }
 
 func press(m Model, text string) (Model, tea.Cmd) {
 	updated, cmd := m.Update(tea.KeyPressMsg{Code: rune(text[0]), Text: text})
+
 	return updated.(Model), cmd
 }
 
 func pressEnter(m Model) tea.Cmd {
 	_, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+
 	return cmd
 }
 
@@ -317,6 +337,7 @@ func TestYCreatesTheJournalAndEntersTheViews(t *testing.T) {
 	if creator.calls != 1 {
 		t.Errorf("Create called %d times, want 1", creator.calls)
 	}
+
 	if content := updated.View().Content; !strings.Contains(content, "1 dash") {
 		t.Errorf("after creating, content = %q, want the tab bar", content)
 	}
@@ -343,9 +364,11 @@ func TestNQuitsWithoutCreating(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("n should quit")
 	}
+
 	if _, ok := cmd().(tea.QuitMsg); !ok {
 		t.Error("n should produce a quit")
 	}
+
 	if creator.calls != 0 {
 		t.Errorf("Create called %d times, want 0", creator.calls)
 	}
@@ -378,6 +401,7 @@ func TestParseErrorScreenShowsIssueAndEditorOffer(t *testing.T) {
 			t.Errorf("parse-error screen should contain %q, got %q", want, content)
 		}
 	}
+
 	if strings.Contains(content, "1 dash") {
 		t.Errorf("parse-error screen should not show the tab bar, got %q", content)
 	}
@@ -389,6 +413,7 @@ func parseErrorModel(t *testing.T, calls *[]editorCall) Model {
 	loader := fakeLoader{err: fmt.Errorf("loading ledger: %w", domain.JournalError{Issue: issue})}
 	model := New(journalPath, Ports{Loader: loader, Checker: fakeChecker{}, Creator: &fakeCreator{}, Editor: recordingEditor(calls)})
 	updated, _ := model.Update(model.Init()())
+
 	return updated.(Model)
 }
 
@@ -400,6 +425,7 @@ func TestEnterOpensTheEditorAtTheIssue(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("Enter should start the editor")
 	}
+
 	if want := []editorCall{{"/data/household.journal", 3}}; !reflect.DeepEqual(calls, want) {
 		t.Errorf("editor calls = %v, want %v", calls, want)
 	}
@@ -425,6 +451,7 @@ func TestClosingTheEditorReloadsTheJournal(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("closing the editor should reload the journal")
 	}
+
 	if _, ok := cmd().(ledgerLoadedMsg); !ok {
 		t.Error("the reload should produce a ledgerLoadedMsg")
 	}
@@ -441,6 +468,7 @@ func TestEditorExitBecomesReload(t *testing.T) {
 
 func resized(m Model, width, height int) Model {
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: width, Height: height})
+
 	return updated.(Model)
 }
 
@@ -455,6 +483,7 @@ func TestTooSmallTerminalShowsOnlyTheFloorMessage(t *testing.T) {
 			t.Errorf("content should contain %q, got %q", want, content)
 		}
 	}
+
 	if strings.Contains(content, "1 dash") {
 		t.Errorf("content should not show the tab bar, got %q", content)
 	}
@@ -486,6 +515,7 @@ func TestOnlyQIsLiveWhenTooSmall(t *testing.T) {
 			t.Errorf("%s should do nothing on a too-small first-run screen", key)
 		}
 	}
+
 	if cmd := pressEnter(resized(parseErrorModel(t, nil), 80, 20)); cmd != nil {
 		t.Error("Enter should do nothing on a too-small parse-error screen")
 	}
@@ -495,6 +525,7 @@ func TestOnlyQIsLiveWhenTooSmall(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("q should still quit")
 	}
+
 	if _, ok := cmd().(tea.QuitMsg); !ok {
 		t.Error("q should quit")
 	}
@@ -535,6 +566,7 @@ func TestActiveTabIsSelected(t *testing.T) {
 	if !strings.Contains(content, theme.Selected.Render(" 3 sched ")) {
 		t.Errorf("tab 3 should be selected, got %q", content)
 	}
+
 	if strings.Contains(content, theme.Selected.Render(" 1 dash ")) {
 		t.Errorf("tab 1 should no longer be selected, got %q", content)
 	}
@@ -573,6 +605,7 @@ func TestLayoutFillsTheTerminal(t *testing.T) {
 	if len(lines) != 40 {
 		t.Fatalf("screen has %d lines, want 40", len(lines))
 	}
+
 	if want := strings.Repeat("─", 120); lines[1] != want {
 		t.Errorf("line 1 = %q, want a full-width rule", lines[1])
 	}
@@ -623,6 +656,7 @@ func TestStatusBarSpansTheWidthWithKeysAtTheRight(t *testing.T) {
 	if width := lipgloss.Width(line); width != 120 {
 		t.Errorf("status bar width = %d, want 120", width)
 	}
+
 	if !strings.HasSuffix(line, "? keys ") {
 		t.Errorf("status bar = %q, want it to end with \"? keys \"", line)
 	}
@@ -647,6 +681,7 @@ type sequenceLoader struct {
 func (s sequenceLoader) Load(ctx context.Context) (domain.Ledger, error) {
 	i := min(*s.calls, len(s.results)-1)
 	*s.calls++
+
 	return s.results[i].Load(ctx)
 }
 
@@ -656,11 +691,13 @@ func sequenceModel(t *testing.T, results ...fakeLoader) (ready Model, calls *int
 	model := New(journalPath, Ports{Loader: sequenceLoader{results: results, calls: calls}, Checker: fakeChecker{}, Creator: &fakeCreator{}, Editor: recordingEditor(nil)})
 	updated, _ := model.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	updated, _ = updated.Update(model.Init()())
+
 	return updated.(Model), calls
 }
 
 func count(m Model) string {
 	_, after, _ := strings.Cut(firstLine(m), "· ")
+
 	return strings.TrimSpace(after)
 }
 
@@ -688,9 +725,11 @@ func TestRefreshKeepsSnapshotAndShowsSpinner(t *testing.T) {
 	if count(refreshing) != "2 txns" {
 		t.Errorf("count = %q, want the stale 2 txns while refreshing", count(refreshing))
 	}
+
 	if !strings.Contains(lastLine(refreshing), "⣾") {
 		t.Errorf("status bar = %q, want a spinner", lastLine(refreshing))
 	}
+
 	if strings.Contains(lastLine(model), "⣾") {
 		t.Errorf("status bar = %q, want no spinner when idle", lastLine(model))
 	}
@@ -708,9 +747,11 @@ func TestFailedRefreshKeepsSnapshotAndFlagsError(t *testing.T) {
 	if got := count(failed.(Model)); got != "2 txns" {
 		t.Errorf("count = %q, want the stale 2 txns after a failed refresh", got)
 	}
+
 	if !strings.Contains(lastLine(failed.(Model)), "✗ error") {
 		t.Errorf("status bar = %q, want an error indicator", lastLine(failed.(Model)))
 	}
+
 	if strings.Contains(lastLine(failed.(Model)), "⣾") {
 		t.Error("the spinner should stop when the refresh fails")
 	}
@@ -729,6 +770,7 @@ func TestRDoesNothingOutsideTheNormalViews(t *testing.T) {
 	if _, cmd := press(firstRunModel(t, &fakeCreator{}), "r"); cmd != nil {
 		t.Error("r should do nothing on the first-run screen")
 	}
+
 	if _, cmd := press(resized(started(t, fakeLoader{}), 80, 20), "r"); cmd != nil {
 		t.Error("r should do nothing when the terminal is too small")
 	}
@@ -747,6 +789,7 @@ func TestDashboardHidesNothingAtTheSmallestTerminal(t *testing.T) {
 
 func scheduledLedger() domain.Ledger {
 	source := domain.SourcePos{File: "j", Line: 3}
+
 	return domain.Ledger{
 		Rules: []domain.PeriodicRule{
 			{Period: "monthly", Description: "Rent", Lines: []string{"~ monthly  Rent"}, Pos: source},
@@ -768,6 +811,7 @@ func TestSchedViewListsTheRulesWithACursorPosition(t *testing.T) {
 	if !strings.Contains(lastLine(moved.(Model)), "2/2") {
 		t.Errorf("the arrow moves the cursor: %q", lastLine(moved.(Model)))
 	}
+
 	if strings.Contains(lastLine(model), "hidden") {
 		t.Errorf("hidden panels are the Dashboard's notice")
 	}
@@ -782,6 +826,7 @@ func TestSchedKeysDoNotPostOrPause(t *testing.T) {
 			t.Errorf("%s must do nothing in Scheduled", key)
 		}
 	}
+
 	if _, cmd := model.Update(tea.KeyPressMsg{Code: tea.KeyEnter}); cmd != nil {
 		t.Errorf("Enter must do nothing in Scheduled")
 	}
@@ -806,6 +851,7 @@ func withRules(t *testing.T, writer *fakeWriter) Model {
 	updated, _ := model.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	updated, _ = updated.Update(model.load())
 	opened, _ := press(updated.(Model), "3")
+
 	return opened
 }
 
@@ -816,6 +862,7 @@ func TestDOnASelectedRuleAsksAndYDeletesItsBlock(t *testing.T) {
 	if model.prompt == nil || !strings.Contains(lastLine(model), `delete rule "Rent"?`) {
 		t.Fatalf("status bar = %q, want the question naming the rule", lastLine(model))
 	}
+
 	if len(writer.applied) != 0 {
 		t.Errorf("nothing is written before the answer")
 	}
@@ -854,6 +901,7 @@ func TestDWithoutRulesOrOutsideSchedDoesNothing(t *testing.T) {
 	if got, _ := press(noRules, "d"); got.prompt != nil {
 		t.Errorf("there is no rule to delete")
 	}
+
 	dash, _ := press(withRules(t, &fakeWriter{}), "1")
 	if got, _ := press(dash, "d"); got.prompt != nil {
 		t.Errorf("d only deletes in Scheduled")

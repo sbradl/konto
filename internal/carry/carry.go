@@ -45,23 +45,16 @@ func (w *Writer) Prepare(ctx context.Context, changeset domain.Changeset) (domai
 	if err != nil {
 		return domain.Changeset{}, fmt.Errorf("finding the carry to write: %w", err)
 	}
+
 	if len(years) == 0 {
 		return changeset, nil
 	}
-	edits := slices.Clone(changeset.Edits)
-	carried := false
-	for _, year := range years {
-		text, err := w.file.Render(domain.Changeset{Edits: append(slices.Clone(edits), domain.SetCarry{Year: year})})
-		if err != nil {
-			return domain.Changeset{}, fmt.Errorf("preparing the carry into %d: %w", year, err)
-		}
-		balances, err := w.gw.TextBalances(ctx, text, time.Date(year, time.January, 1, 0, 0, 0, 0, time.UTC))
-		if err != nil {
-			return domain.Changeset{}, fmt.Errorf("adding up the carry into %d: %w", year, err)
-		}
-		edits = append(edits, domain.SetCarry{Year: year, Balances: balances})
-		carried = carried || len(balances) > 0
+
+	edits, carried, err := w.carryInto(ctx, slices.Clone(changeset.Edits), years)
+	if err != nil {
+		return domain.Changeset{}, err
 	}
+
 	if carried {
 		edits = append(edits,
 			domain.DeclareAccount(domain.OpeningBalanceAccount, ""),
@@ -70,5 +63,36 @@ func (w *Writer) Prepare(ctx context.Context, changeset domain.Changeset) (domai
 			domain.DeclareTag(domain.KontoTag),
 		)
 	}
+
 	return domain.Changeset{Edits: edits}, nil
+}
+
+// carryInto appends a SetCarry for each year to edits, and reports whether any of them carries a balance.
+func (w *Writer) carryInto(ctx context.Context, edits []domain.Edit, years []int) ([]domain.Edit, bool, error) {
+	carried := false
+	for _, year := range years {
+		balances, err := w.balancesInto(ctx, edits, year)
+		if err != nil {
+			return nil, false, err
+		}
+		edits = append(edits, domain.SetCarry{Year: year, Balances: balances})
+		carried = carried || len(balances) > 0
+	}
+
+	return edits, carried, nil
+}
+
+// balancesInto are the balances at the start of year, on the journal as edits leave it without that year's carry.
+func (w *Writer) balancesInto(ctx context.Context, edits []domain.Edit, year int) ([]domain.Account, error) {
+	text, err := w.file.Render(domain.Changeset{Edits: append(slices.Clone(edits), domain.SetCarry{Year: year})})
+	if err != nil {
+		return nil, fmt.Errorf("preparing the carry into %d: %w", year, err)
+	}
+
+	balances, err := w.gw.TextBalances(ctx, text, time.Date(year, time.January, 1, 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		return nil, fmt.Errorf("adding up the carry into %d: %w", year, err)
+	}
+
+	return balances, nil
 }

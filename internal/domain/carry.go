@@ -51,6 +51,7 @@ func (c SetCarry) transaction(date time.Time, description string, signed func(Mu
 			postings = append(postings, NewPosting{Account: account.Name, Amount: MultiAmount{amount}})
 		}
 	}
+
 	return NewTransaction{
 		Date: date, Description: description, Comment: CarryTag,
 		Postings: append(postings, NewPosting{Account: OpeningBalanceAccount}),

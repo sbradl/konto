@@ -17,10 +17,15 @@ import (
 
 func euros(mantissa int64) domain.MultiAmount {
 	style := domain.DefaultAmount("EUR").Style
+
 	return domain.MultiAmount{{Commodity: "EUR", Mantissa: mantissa, Places: 2, Style: style}}
 }
 
-func dated(s string) time.Time { d, _ := time.Parse(time.DateOnly, s); return d }
+func dated(s string) time.Time {
+	d, _ := time.Parse(time.DateOnly, s)
+
+	return d
+}
 
 // writable is a categorised import of two rows that brings checking from 13.240,00 to the bank's balance.
 func writable() csvimport.Staged {
@@ -41,6 +46,7 @@ type fakeVerifier struct {
 
 func (f *fakeVerifier) Verify(_ context.Context, changeset domain.Changeset) error {
 	f.checked = append(f.checked, changeset)
+
 	return f.err
 }
 
@@ -66,6 +72,7 @@ func stagedForWrite(t *testing.T, staged csvimport.Staged) writeRig {
 	opened = deliver(opened, cmd)
 	opened, _ = pressCode(opened, tea.KeyDown)
 	opened, cmd = pressCode(opened, tea.KeyEnter)
+
 	return writeRig{model: deliver(opened, cmd), writer: writer, verifier: verifier}
 }
 
@@ -91,6 +98,7 @@ func TestWAsksYNAndShowsWhatWillBeWritten(t *testing.T) {
 			t.Errorf("screen lacks %q:\n%s", want, content)
 		}
 	}
+
 	if got := lastLine(model); !strings.Contains(got, "write 2 transactions into assets:checking? (y/n)") {
 		t.Errorf("status bar = %q", got)
 	}
@@ -137,13 +145,16 @@ func TestYChecksThenWritesAndThenConfirmsAndEmptiesTheImport(t *testing.T) {
 		t.Fatalf("checked %d, applied %d; want the same changeset checked and written once", len(rig.verifier.checked), len(rig.writer.applied))
 	}
 	updated, reload := model.Update(written)
+
 	done := updated.(Model)
 	if !done.busy() || reload == nil {
 		t.Error("a successful write refreshes the views")
 	}
+
 	if got := lastLine(done); !strings.Contains(got, "imported 2 transactions into assets:checking") {
 		t.Errorf("status bar = %q", got)
 	}
+
 	if content := uitest.Plain(done.View().Content); !strings.Contains(content, "press n for a new file") {
 		t.Errorf("the import is not emptied:\n%s", content)
 	}
@@ -257,6 +268,7 @@ func manyRows(n int) csvimport.Staged {
 	staged.Account.Balance = euros(int64(1324000))
 	staged.Closing = "13.230,00"
 	staged.Rows[0].Description = "Newest"
+
 	return staged
 }
 
@@ -269,6 +281,7 @@ func TestALongPreviewScrollsWithTheArrowKeys(t *testing.T) {
 	for range 40 {
 		model, _ = pressCode(model, tea.KeyDown)
 	}
+
 	scrolled := uitest.Plain(model.View().Content)
 	if strings.Contains(scrolled, "2026-09-30 Newest") || !strings.Contains(scrolled, "payee Newest") {
 		t.Errorf("the preview did not scroll to its end:\n%s", scrolled)
@@ -276,6 +289,7 @@ func TestALongPreviewScrollsWithTheArrowKeys(t *testing.T) {
 	for range 80 {
 		model, _ = pressCode(model, tea.KeyUp)
 	}
+
 	if content := uitest.Plain(model.View().Content); !strings.Contains(content, "2026-09-30 Newest") {
 		t.Errorf("the preview did not scroll back:\n%s", content)
 	}

@@ -18,6 +18,7 @@ func TestUnclassifiedIssuesListsEveryUnclassifiedAccount(t *testing.T) {
 	if len(issues) != 2 {
 		t.Fatalf("got %d issues, want 2: %+v", len(issues), issues)
 	}
+
 	want := CheckIssue{Check: "unclassified", Severity: SeverityWarn, Message: "assets:spare has no konto:source tag"}
 	if issues[0] != want {
 		t.Errorf("first issue = %+v, want %+v", issues[0], want)
@@ -67,6 +68,7 @@ func TestMonthNetIsIncomeLessExpenses(t *testing.T) {
 	if got := ledger.MonthNet(); got[0].Mantissa != 181500 {
 		t.Errorf("MonthNet = %+v, want 1.815,00", got)
 	}
+
 	if ledger.MonthIncome()[0].Mantissa != 300000 || ledger.MonthExpenses()[0].Mantissa != 118500 {
 		t.Error("income and expenses should pass through")
 	}
@@ -79,7 +81,6 @@ func TestZeroIsNilWithoutBalances(t *testing.T) {
 }
 
 func TestWatermarkIsTheLatestTransactionDateOfTheAccount(t *testing.T) {
-	day := func(d int) time.Time { return time.Date(2026, 9, d, 0, 0, 0, 0, time.UTC) }
 	ledger := Ledger{Transactions: []Transaction{
 		{Date: day(10), Postings: []Posting{{Account: "assets:checking"}}},
 		{Date: day(26), Postings: []Posting{{Account: "assets:savings"}, {Account: "assets:checking"}}},
@@ -92,6 +93,7 @@ func TestWatermarkIsTheLatestTransactionDateOfTheAccount(t *testing.T) {
 	if !ok || !got.Equal(day(26)) {
 		t.Errorf("watermark = %v, %v; want 2026-09-26", got, ok)
 	}
+
 	if _, ok := ledger.Watermark("assets:none"); ok {
 		t.Error("an account without transactions has no watermark")
 	}
@@ -106,31 +108,29 @@ func TestWatermarkOfAnAccountWhoseOnlyTransactionIsDatedTheZeroTime(t *testing.T
 }
 
 func TestWatermarkLeavesTheCarryOut(t *testing.T) {
-	day := func(y, m, d int) time.Time { return time.Date(y, time.Month(m), d, 0, 0, 0, 0, time.UTC) }
 	ledger := Ledger{Transactions: []Transaction{
-		{Date: day(2025, 12, 28), Postings: []Posting{{Account: "assets:b"}}},
-		{Date: day(2025, 12, 31), Tags: map[string]string{KontoTag: "carry"}, Postings: []Posting{{Account: "assets:b"}}},
-		{Date: day(2026, 1, 1), Tags: map[string]string{KontoTag: "carry"}, Postings: []Posting{{Account: "assets:b"}}},
+		{Date: date(2025, 12, 28), Postings: []Posting{{Account: "assets:b"}}},
+		{Date: date(2025, 12, 31), Tags: map[string]string{KontoTag: "carry"}, Postings: []Posting{{Account: "assets:b"}}},
+		{Date: date(2026, 1, 1), Tags: map[string]string{KontoTag: "carry"}, Postings: []Posting{{Account: "assets:b"}}},
 	}}
 
 	got, ok := ledger.Watermark("assets:b")
 
-	if !ok || !got.Equal(day(2025, 12, 28)) {
+	if !ok || !got.Equal(date(2025, 12, 28)) {
 		t.Errorf("watermark = %v, %v; want 2025-12-28, the carry moves no watermark", got, ok)
 	}
 }
 
 func TestWatermarkOfAnAccountWithOnlyTheCarryIsTheCarry(t *testing.T) {
-	day := func(y, m, d int) time.Time { return time.Date(y, time.Month(m), d, 0, 0, 0, 0, time.UTC) }
 	ledger := Ledger{Transactions: []Transaction{
-		{Date: day(2026, 1, 1), Tags: map[string]string{KontoTag: "carry"}, Postings: []Posting{{Account: "assets:b"}}},
-		{Date: day(2025, 1, 1), Tags: map[string]string{KontoTag: "carry"}, Postings: []Posting{{Account: "assets:b"}}},
-		{Date: day(2026, 3, 1), Postings: []Posting{{Account: "assets:other"}}},
+		{Date: date(2026, 1, 1), Tags: map[string]string{KontoTag: "carry"}, Postings: []Posting{{Account: "assets:b"}}},
+		{Date: date(2025, 1, 1), Tags: map[string]string{KontoTag: "carry"}, Postings: []Posting{{Account: "assets:b"}}},
+		{Date: date(2026, 3, 1), Postings: []Posting{{Account: "assets:other"}}},
 	}}
 
 	got, ok := ledger.Watermark("assets:b")
 
-	if !ok || !got.Equal(day(2026, 1, 1)) {
+	if !ok || !got.Equal(date(2026, 1, 1)) {
 		t.Errorf("watermark = %v, %v; want 2026-01-01, the carry stands in for rows older than the journal", got, ok)
 	}
 }

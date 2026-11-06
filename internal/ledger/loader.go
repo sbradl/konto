@@ -47,24 +47,40 @@ func (l *Loader) Load(ctx context.Context) (domain.Ledger, error) {
 	if err != nil {
 		return domain.Ledger{}, fmt.Errorf("loading ledger: %w", err)
 	}
+
 	if !exists {
 		return domain.Ledger{}, ErrNoJournal
 	}
+
+	snapshot, err := l.read(ctx)
+	if err != nil {
+		return domain.Ledger{}, fmt.Errorf("loading ledger: %w", err)
+	}
+
+	return snapshot, nil
+}
+
+// read is the snapshot from hledger's reports, completed by the journal's directives and periodic rules.
+func (l *Loader) read(ctx context.Context) (domain.Ledger, error) {
 	snapshot, accounts, err := l.fromHledger(ctx)
 	if err != nil {
-		return domain.Ledger{}, fmt.Errorf("loading ledger: %w", err)
+		return domain.Ledger{}, err
 	}
+
 	declarations, err := l.file.AccountDeclarations()
 	if err != nil {
-		return domain.Ledger{}, fmt.Errorf("loading ledger: %w", err)
+		return domain.Ledger{}, err //nolint:wrapcheck // Load wraps it
 	}
+
 	if snapshot.Rules, err = l.file.PeriodicRules(); err != nil {
-		return domain.Ledger{}, fmt.Errorf("loading ledger: %w", err)
+		return domain.Ledger{}, err //nolint:wrapcheck // Load wraps it
 	}
+
 	if snapshot.Commodities, err = l.file.Commodities(); err != nil {
-		return domain.Ledger{}, fmt.Errorf("loading ledger: %w", err)
+		return domain.Ledger{}, err //nolint:wrapcheck // Load wraps it
 	}
 	snapshot.Accounts = declare(accounts, declarations)
+
 	return snapshot, nil
 }
 
@@ -78,10 +94,15 @@ func (l *Loader) fromHledger(ctx context.Context) (domain.Ledger, []domain.Accou
 		accounts []domain.Account
 	)
 	today := l.today()
+
 	err := parallel.RunAll(
 		func() error { return assign(&snapshot.Transactions)(l.gw.Print(ctx)) },
 		func() error { return assign(&accounts)(l.gw.Balances(ctx)) },
-		func() (err error) { snapshot.Month, snapshot.Spend, err = l.activity(ctx, today); return err },
+		func() (err error) {
+			snapshot.Month, snapshot.Spend, err = l.activity(ctx, today)
+
+			return err
+		},
 		func() error {
 			return assign(&snapshot.Upcoming)(l.gw.Upcoming(ctx, today.AddDate(0, 0, 1), today.AddDate(1, 0, 0)))
 		},
@@ -89,6 +110,7 @@ func (l *Loader) fromHledger(ctx context.Context) (domain.Ledger, []domain.Accou
 	if err != nil {
 		return domain.Ledger{}, nil, err //nolint:wrapcheck // Load adds the context
 	}
+
 	return snapshot, accounts, nil
 }
 
@@ -96,6 +118,7 @@ func (l *Loader) fromHledger(ctx context.Context) (domain.Ledger, []domain.Accou
 func assign[T any](dst *T) func(T, error) error {
 	return func(value T, err error) error {
 		*dst = value
+
 		return err
 	}
 }
@@ -103,28 +126,48 @@ func assign[T any](dst *T) func(T, error) error {
 // declare completes each account with what its `account` directive says. An account declared
 // but without postings is absent from hledger's balances, so it joins with an empty balance.
 func declare(accounts []domain.Account, declarations []domain.Declaration) []domain.Account {
+	byName := declarationsByName(declarations)
+	for i, account := range accounts {
+		accounts[i] = withDeclaration(account, byName[account.Name])
+	}
+
+	return append(accounts, declaredOnly(declarations, accounts)...)
+}
+
+// declarationsByName is each declaration under its account's name.
+func declarationsByName(declarations []domain.Declaration) map[string]domain.Declaration {
 	byName := make(map[string]domain.Declaration, len(declarations))
 	for _, declaration := range declarations {
 		byName[declaration.Name] = declaration
 	}
-	listed := make(map[string]bool, len(accounts))
-	for i, account := range accounts {
-		listed[account.Name] = true
-		declaration := byName[account.Name]
-		accounts[i].Source = declaration.Source
-		accounts[i].IBAN = declaration.IBAN
-		accounts[i].Format = declaration.Format
-		accounts[i].Closed = declaration.Closed
+
+	return byName
+}
+
+// withDeclaration is the account completed by what its directive says.
+func withDeclaration(account domain.Account, declaration domain.Declaration) domain.Account {
+	account.Source = declaration.Source
+	account.IBAN = declaration.IBAN
+	account.Format = declaration.Format
+	account.Closed = declaration.Closed
+
+	return account
+}
+
+// declaredOnly are the declared accounts hledger did not list, empty, once each, in the journal's order.
+func declaredOnly(declarations []domain.Declaration, listed []domain.Account) []domain.Account {
+	seen := make(map[string]bool, len(listed))
+	for _, account := range listed {
+		seen[account.Name] = true
 	}
+	var accounts []domain.Account
 	for _, declaration := range declarations {
-		if !listed[declaration.Name] {
-			listed[declaration.Name] = true
-			accounts = append(accounts, domain.Account{
-				Name: declaration.Name, Source: declaration.Source, IBAN: declaration.IBAN, Format: declaration.Format,
-				Closed: declaration.Closed,
-			})
+		if !seen[declaration.Name] {
+			seen[declaration.Name] = true
+			accounts = append(accounts, withDeclaration(domain.Account{Name: declaration.Name}, declaration))
 		}
 	}
+
 	return accounts
 }
 
@@ -135,20 +178,29 @@ const spendMonths = 6
 func (l *Loader) activity(ctx context.Context, today time.Time) (domain.MonthSummary, []domain.MonthSpend, error) {
 	thisMonth := time.Date(today.Year(), today.Month(), 1, 0, 0, 0, 0, today.Location())
 	oldest := thisMonth.AddDate(0, -spendMonths, 0)
+
 	months, err := l.gw.MonthlyActivity(ctx, oldest, today)
 	if err != nil {
 		return domain.MonthSummary{}, nil, err //nolint:wrapcheck // Load adds the context
 	}
+
 	if len(months) != spendMonths+1 {
 		return domain.MonthSummary{}, nil, fmt.Errorf(
 			"hledger reported %d months of activity, want %d", len(months), spendMonths+1)
 	}
-	history := make([]domain.MonthSpend, spendMonths)
-	for i := range history {
+
+	return summarise(months[spendMonths], thisMonth), spendHistory(months[:spendMonths], oldest), nil
+}
+
+// spendHistory is the expenses of each month's activity, the first month starting on oldest.
+func spendHistory(months [][]domain.Account, oldest time.Time) []domain.MonthSpend {
+	history := make([]domain.MonthSpend, len(months))
+	for i, activity := range months {
 		first := oldest.AddDate(0, i, 0)
-		history[i] = domain.MonthSpend{Month: first, Total: summarise(months[i], first).Expenses}
+		history[i] = domain.MonthSpend{Month: first, Total: summarise(activity, first).Expenses}
 	}
-	return summarise(months[spendMonths], thisMonth), history, nil
+
+	return history
 }
 
 // summarise sums income (as a positive figure) and expenses of a month's activity.
@@ -162,5 +214,6 @@ func summarise(activity []domain.Account, month time.Time) domain.MonthSummary {
 			summary.Expenses = summary.Expenses.Plus(account.Reported())
 		}
 	}
+
 	return summary
 }

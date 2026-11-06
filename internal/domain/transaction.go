@@ -41,6 +41,7 @@ func (l Ledger) Recent() []RecentEntry {
 		entries = append(entries, transaction.recentEntry(clearing))
 	}
 	slices.SortStableFunc(entries, func(a, b RecentEntry) int { return b.Date.Compare(a.Date) })
+
 	return entries
 }
 
@@ -52,6 +53,7 @@ func (l Ledger) UpcomingEntries() []RecentEntry {
 		entries = append(entries, transaction.recentEntry(clearing))
 	}
 	slices.SortStableFunc(entries, func(a, b RecentEntry) int { return a.Date.Compare(b.Date) })
+
 	return entries
 }
 
@@ -60,24 +62,44 @@ func (l Ledger) clearingAccounts() map[string]bool {
 	for _, account := range l.Accounts {
 		clearing[account.Name] = account.Source == SourceClearing
 	}
+
 	return clearing
 }
 
 func (t Transaction) recentEntry(clearing map[string]bool) RecentEntry {
 	entry := RecentEntry{Date: t.Date, Description: t.Description}
-	subject := slices.IndexFunc(t.Postings, func(p Posting) bool {
-		return HoldsMoney(p.Account) && !clearing[p.Account]
-	})
-	subject = max(subject, 0)
 	if len(t.Postings) == 0 {
 		return entry
 	}
+	subject := t.subjectPosting(clearing)
 	entry.Amount = t.Postings[subject].Amounts
+	entry.Category = t.counterpart(subject)
+
+	return entry
+}
+
+// subjectPosting is the index of the posting the transaction is seen from: its first asset or liability posting
+// that is not a clearing account, else its first posting.
+func (t Transaction) subjectPosting(clearing map[string]bool) int {
+	subject := slices.IndexFunc(t.Postings, func(p Posting) bool {
+		return HoldsMoney(p.Account) && !clearing[p.Account]
+	})
+
+	return max(subject, 0)
+}
+
+// counterpart is the account of the first posting other than the subject; empty when there is none.
+func (t Transaction) counterpart(subject int) string {
 	for i, posting := range t.Postings {
 		if i != subject {
-			entry.Category = posting.Account
-			break
+			return posting.Account
 		}
 	}
-	return entry
+
+	return ""
+}
+
+// postsTo reports whether any posting of the transaction is to the account.
+func (t Transaction) postsTo(account string) bool {
+	return slices.ContainsFunc(t.Postings, func(p Posting) bool { return p.Account == account })
 }

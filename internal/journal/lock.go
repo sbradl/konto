@@ -31,14 +31,18 @@ func Acquire(journalPath string) (*Lock, error) {
 	if err := os.MkdirAll(filepath.Dir(lockPath), dirMode); err != nil {
 		return nil, fmt.Errorf("creating lock directory: %w", err)
 	}
+
 	file, err := os.OpenFile(lockPath, lockFlags, lockMode) //nolint:gosec // derived from the configured journal
 	if err != nil {
 		return nil, fmt.Errorf("creating lock file: %w", err)
 	}
+
 	if err := syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
 		_ = file.Close()
+
 		return nil, fmt.Errorf("%s: %w (%w)", journalPath, ErrAlreadyRunning, err)
 	}
+
 	return &Lock{file: file}, nil
 }
 
@@ -47,5 +51,6 @@ func (l *Lock) Release() error {
 	if err := l.file.Close(); err != nil {
 		return fmt.Errorf("releasing lock: %w", err)
 	}
+
 	return nil
 }

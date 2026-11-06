@@ -17,6 +17,7 @@ func withIdleSignal(model tea.Model, getenv func(string) string, out *os.File) (
 	if getenv("KONTO_E2E") == "" {
 		return model, nil
 	}
+
 	return &idleSignal{inner: model}, []tea.ProgramOption{tea.WithOutput(titleLast{out})}
 }
 
@@ -36,25 +37,41 @@ func (m *idleSignal) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case commandDone:
 		m.pending--
-		switch done := msg.msg.(type) {
-		case nil:
-			return m, nil
-		case tea.BatchMsg:
-			cmds := make([]tea.Cmd, len(done))
-			for i, cmd := range done {
-				cmds[i] = m.track(cmd)
-			}
-			return m, tea.Batch(cmds...)
-		}
-		// shortcut: a sequence or an exec runs untracked: no load or write uses them (e2e editor steps poll).
-		if fromRuntime(msg.msg) {
-			return m, func() tea.Msg { return msg.msg }
-		}
-		return m.forward(msg.msg)
+
+		return m.settle(msg.msg)
 	case tea.KeyPressMsg, tea.WindowSizeMsg:
 		m.inputs++
 	}
+
 	return m.forward(msg)
+}
+
+// settle handles what a finished command returned: a batch is tracked command by command, a runtime message
+// goes back to the runtime, anything else reaches the UI.
+func (m *idleSignal) settle(result tea.Msg) (tea.Model, tea.Cmd) {
+	switch result := result.(type) {
+	case nil:
+		return m, nil
+	case tea.BatchMsg:
+		cmd := m.trackBatch(result)
+
+		return m, cmd
+	}
+	// shortcut: a sequence or an exec runs untracked: no load or write uses them (e2e editor steps poll).
+	if fromRuntime(result) {
+		return m, func() tea.Msg { return result }
+	}
+
+	return m.forward(result)
+}
+
+func (m *idleSignal) trackBatch(batch tea.BatchMsg) tea.Cmd {
+	cmds := make([]tea.Cmd, len(batch))
+	for i, cmd := range batch {
+		cmds[i] = m.track(cmd)
+	}
+
+	return tea.Batch(cmds...)
 }
 
 // fromRuntime reports a message of the runtime's own (quit, exec, …): it goes back to the runtime untracked.
@@ -66,6 +83,7 @@ func (m *idleSignal) forward(msg tea.Msg) (tea.Model, tea.Cmd) {
 	next, cmd := m.inner.Update(msg)
 	m.inner = next
 	cmd = m.track(cmd)
+
 	return m, cmd
 }
 
@@ -74,16 +92,19 @@ func (m *idleSignal) track(cmd tea.Cmd) tea.Cmd {
 		return nil
 	}
 	m.pending++
+
 	return func() tea.Msg { return commandDone{cmd()} }
 }
 
 func (m *idleSignal) View() tea.View {
 	view := m.inner.View()
+
 	state := "idle"
 	if m.pending > 0 {
 		state = "busy"
 	}
 	view.WindowTitle = fmt.Sprintf("konto %s %d", state, m.inputs)
+
 	return view
 }
 
@@ -96,16 +117,26 @@ type titleLast struct{ *os.File }
 const setTitle = "\x1b]2;"
 
 func (t titleLast) Write(frame []byte) (int, error) {
-	out := frame
-	if before, rest, found := bytes.Cut(frame, []byte(setTitle)); found {
-		if title, after, closed := bytes.Cut(rest, []byte("\a")); closed {
-			out = slices.Concat(before, after, []byte(setTitle), title, []byte("\a"))
-		}
-	}
-	if _, err := t.File.Write(out); err != nil {
+	if _, err := t.File.Write(titleBehindFrame(frame)); err != nil {
 		return 0, fmt.Errorf("write frame: %w", err)
 	}
+
 	return len(frame), nil
+}
+
+// titleBehindFrame moves frame's window title sequence, if it has a complete one, to the end of the frame.
+func titleBehindFrame(frame []byte) []byte {
+	before, rest, found := bytes.Cut(frame, []byte(setTitle))
+	if !found {
+		return frame
+	}
+
+	title, after, closed := bytes.Cut(rest, []byte("\a"))
+	if !closed {
+		return frame
+	}
+
+	return slices.Concat(before, after, []byte(setTitle), title, []byte("\a"))
 }
 
 // WriteString writes through Write, so a frame written as a string has its title moved too.

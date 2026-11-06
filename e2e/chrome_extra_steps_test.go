@@ -21,18 +21,22 @@ func (w *world) expectIndicatorColour(want int) error {
 	if err != nil {
 		return err
 	}
+
 	line, err := w.statusLine()
 	if err != nil {
 		return err
 	}
+
 	before, _, found := strings.Cut(line, "●")
 	if !found {
 		return fmt.Errorf("no ● in the status bar %q", line)
 	}
+
 	y := len(s.screenLines()) - 1
 	if got := s.cellColour(len([]rune(before)), y); got != want {
 		return fmt.Errorf("the indicator is coloured %d, want %d", got, want)
 	}
+
 	return nil
 }
 
@@ -46,6 +50,7 @@ func (w *world) expectNoModeBadge() error {
 			return fmt.Errorf("status bar %q shows the mode badge %s", line, badge)
 		}
 	}
+
 	return nil
 }
 
@@ -55,13 +60,16 @@ func (w *world) expectPanelTitleColour(want int) error {
 		return err
 	}
 	s.waitFor(w.suite.timeout, func(screen string) bool { return strings.Contains(screen, "ACCOUNTS") })
+
 	seen := s.colours("ACCOUNTS")
 	if len(seen) == 0 {
 		return errors.New("no panel title on screen")
 	}
+
 	if seen[0] != want {
 		return fmt.Errorf("a panel title is coloured %d, want %d", seen[0], want)
 	}
+
 	return nil
 }
 
@@ -79,10 +87,12 @@ func (w *world) expectSelectedRowColours(bg, fg int) error {
 				if got := s.cellColour(x, y); got != fg {
 					return fmt.Errorf("selected cell (%d,%d) has foreground %d, want %d", x, y, got, fg)
 				}
+
 				return nil
 			}
 		}
 	}
+
 	return fmt.Errorf("no cell with background %d in the body", bg)
 }
 
@@ -91,6 +101,7 @@ func (w *world) expectFillsTerminal(width, height int) error {
 		if len(lines) != height {
 			return fmt.Errorf("the screen has %d rows, want %d", len(lines), height)
 		}
+
 		if !strings.Contains(lines[0], "1 dash") || !strings.Contains(lines[height-1], "? keys") {
 			return fmt.Errorf("tab bar or status bar missing at %d×%d", width, height)
 		}
@@ -99,6 +110,7 @@ func (w *world) expectFillsTerminal(width, height int) error {
 				return fmt.Errorf("row %d is %d wide, want at most %d", y, n, width)
 			}
 		}
+
 		return nil
 	})
 }
@@ -110,6 +122,7 @@ func (w *world) useDefaultEditor() error {
 		return err
 	}
 	w.env["EDITOR"], w.env["VISUAL"] = "", ""
+
 	return nil
 }
 
@@ -120,6 +133,7 @@ func (w *world) expectStatusBarContents() error {
 				return false
 			}
 		}
+
 		return true
 	})
 }

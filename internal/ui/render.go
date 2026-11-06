@@ -19,6 +19,7 @@ const chromeRows = 3
 func (m Model) View() tea.View {
 	view := tea.NewView(m.content())
 	view.AltScreen = true
+
 	return view
 }
 
@@ -45,18 +46,23 @@ func (m Model) screen() screenKind {
 	if m.tooSmall() {
 		return screenTooSmall
 	}
+
 	if m.firstRun() {
 		return screenFirstRun
 	}
+
 	if m.parseIssue() != nil {
 		return screenParseIssue
 	}
+
 	if m.loadErr != nil {
 		return screenLoadFailed
 	}
+
 	if m.ledger == nil {
 		return screenLoading
 	}
+
 	return screenViews
 }
 
@@ -73,6 +79,7 @@ func (m Model) content() string {
 		return m.centred("loading journal…")
 	case screenViews, screenLoadFailed:
 	}
+
 	return m.withPreview(m.withPopup(m.views()))
 }
 
@@ -82,6 +89,7 @@ func (m Model) views() string {
 	bodyHeight := max(0, m.height-chromeRows)
 	body = lipgloss.NewStyle().Height(bodyHeight).MaxHeight(bodyHeight).Render(body)
 	rule := theme.Dim.Render(strings.Repeat("─", m.width))
+
 	return strings.Join([]string{m.tabBar(), rule, body, m.statusBar()}, "\n")
 }
 
@@ -90,6 +98,7 @@ func (m Model) body() string {
 	if m.loadErr != nil {
 		return m.loadErr.Error()
 	}
+
 	return m.activeTab().view(m)
 }
 
@@ -100,6 +109,7 @@ func (m Model) hint() string {
 	for _, binding := range keys {
 		parts = append(parts, binding.Label()+" "+binding.Action)
 	}
+
 	return strings.Join(parts, statusGap)
 }
 
@@ -115,6 +125,7 @@ func (m Model) statusBar() string {
 	status := m.statusChecks()
 	right := m.indicator() + "? keys" + statusEdge
 	gap := max(1, m.width-lipgloss.Width(left)-lipgloss.Width(status)-lipgloss.Width(right))
+
 	return theme.StatusBar.Render(left+strings.Repeat(" ", gap)) + status + theme.StatusBar.Render(right)
 }
 
@@ -124,6 +135,7 @@ func (m Model) statusChecks() string {
 	if status == "" {
 		return ""
 	}
+
 	return style.Render(status + statusGap)
 }
 
@@ -132,6 +144,7 @@ func (m Model) firstRunText() string {
 	if m.createErr != nil {
 		text += "\n\n" + m.createErr.Error()
 	}
+
 	return text
 }
 
@@ -145,9 +158,11 @@ func (m Model) indicator() string {
 	if m.busy() {
 		return "⣾ "
 	}
+
 	if m.failure != nil {
 		return "✗ error" + statusGap
 	}
+
 	return ""
 }
 
@@ -161,6 +176,7 @@ func (m Model) tabBar() string {
 	info += " "
 	tabs := m.renderTabs()
 	gap := max(0, m.width-lipgloss.Width(tabs)-lipgloss.Width(info))
+
 	return tabs + strings.Repeat(" ", gap) + info
 }
 
@@ -175,6 +191,7 @@ func (m Model) renderTabs() string {
 			labels[i] = theme.Dim.Render(label)
 		}
 	}
+
 	return strings.Join(labels, theme.Dim.Render("│"))
 }
 
@@ -184,6 +201,7 @@ func issueOf(err error) *domain.CheckIssue {
 	if !errors.As(err, &journalErr) {
 		return nil
 	}
+
 	return &journalErr.Issue
 }
 
@@ -198,19 +216,24 @@ func (m Model) statusLeft() string {
 	if m.prompt != nil {
 		return statusEdge + m.prompt.question + " (y/n)"
 	}
+
 	if m.notice != "" {
 		return statusEdge + m.notice
 	}
+
 	segments := []string{m.activeTab().name}
 	if hint := m.hint(); hint != "" {
 		segments = append(segments, hint)
 	}
+
 	if row, total := m.position(); total > 0 {
 		segments = append(segments, fmt.Sprintf("%d/%d", row, total))
 	}
+
 	if hidden := m.hiddenPanels(); hidden > 0 {
 		segments = append(segments, hiddenNotice(hidden))
 	}
+
 	return statusEdge + strings.Join(segments, statusGap)
 }
 
@@ -219,5 +242,6 @@ func hiddenNotice(hidden int) string {
 	if hidden == 1 {
 		return "1 panel hidden · widen terminal"
 	}
+
 	return fmt.Sprintf("%d panels hidden · widen terminal", hidden)
 }

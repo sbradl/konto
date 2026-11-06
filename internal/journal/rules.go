@@ -17,6 +17,7 @@ func (f File) PeriodicRules() ([]domain.PeriodicRule, error) {
 	for _, source := range sources {
 		rules = append(rules, blocksIn(source)...)
 	}
+
 	return rules, nil
 }
 
@@ -34,12 +35,14 @@ func blocksIn(source *source) []domain.PeriodicRule {
 			Pos:   domain.SourcePos{File: source.path, Line: i + 1},
 		})
 	}
+
 	return rules
 }
 
 // headerBody is a `~` line without its marker and trailing comment.
 func headerBody(header string) string {
 	body, _, _ := strings.Cut(strings.TrimPrefix(header, "~"), ";")
+
 	return strings.TrimSpace(body)
 }
 
@@ -54,6 +57,7 @@ func (f File) RulesReferencing(account string) ([]string, error) {
 	for _, source := range sources {
 		rules = append(rules, rulesIn(source, account)...)
 	}
+
 	return rules, nil
 }
 
@@ -65,6 +69,7 @@ func rulesIn(source *source, account string) []string {
 			rules = append(rules, rule.Description)
 		}
 	}
+
 	return rules
 }
 
@@ -74,5 +79,6 @@ func ruleName(header string) string {
 	if _, description, found := strings.Cut(body, "  "); found {
 		return strings.TrimSpace(description)
 	}
+
 	return body
 }

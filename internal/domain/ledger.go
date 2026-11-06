@@ -41,6 +41,7 @@ func (l Ledger) NetWorth() MultiAmount {
 			total = total.Plus(account.Balance)
 		}
 	}
+
 	return total
 }
 
@@ -52,6 +53,7 @@ func (l Ledger) Zero() MultiAmount {
 			return MultiAmount{account.Balance[0].Zero()}
 		}
 	}
+
 	return nil
 }
 
@@ -68,6 +70,7 @@ func (l Ledger) orZero(amounts MultiAmount) MultiAmount {
 	if len(amounts) == 0 {
 		return l.Zero()
 	}
+
 	return amounts
 }
 
@@ -83,6 +86,7 @@ func (l Ledger) UnclassifiedIssues() []CheckIssue {
 			})
 		}
 	}
+
 	return issues
 }
 
@@ -90,31 +94,35 @@ func (l Ledger) UnclassifiedIssues() []CheckIssue {
 // import can write it. An account with nothing but the carry in the loaded years takes the carry's date, as
 // the carry stands in for its older rows. False when it has neither.
 func (l Ledger) Watermark(account string) (time.Time, bool) {
-	var latest, carried time.Time
-	found, carry := false, false
+	if latest, found := l.latestDate(account, isBooking); found {
+		return latest, true
+	}
+
+	return l.latestDate(account, Transaction.IsCarry)
+}
+
+func isBooking(t Transaction) bool { return !t.IsCarry() }
+
+// latestDate is the date of the latest transaction that posts to the account and is of the kind; false when
+// there is none.
+func (l Ledger) latestDate(account string, ofKind func(Transaction) bool) (time.Time, bool) {
+	var latest time.Time
+	found := false
 	for i := range l.Transactions {
 		transaction := &l.Transactions[i]
-		for _, posting := range transaction.Postings {
-			if posting.Account != account {
-				continue
-			}
-			if transaction.IsCarry() {
-				carried, carry = laterOf(carried, transaction.Date), true
-			} else {
-				latest, found = laterOf(latest, transaction.Date), true
-			}
+		if ofKind(*transaction) && transaction.postsTo(account) {
+			latest, found = laterOf(latest, transaction.Date), true
 		}
 	}
-	if !found {
-		return carried, carry
-	}
-	return latest, true
+
+	return latest, found
 }
 
 func laterOf(a, b time.Time) time.Time {
 	if b.After(a) {
 		return b
 	}
+
 	return a
 }
 
@@ -130,6 +138,7 @@ func (l Ledger) AmountLike(commodity string) Amount {
 			}
 		}
 	}
+
 	return DefaultAmount(commodity)
 }
 

@@ -11,9 +11,11 @@ func TestSelectedIsBoldBrightWhiteOnSelectionBackground(t *testing.T) {
 	if got := Selected.GetForeground(); got != lipgloss.Color("15") {
 		t.Errorf("foreground = %v, want ANSI 15", got)
 	}
+
 	if got := Selected.GetBackground(); got != lipgloss.Color("8") {
 		t.Errorf("background = %v, want ANSI 8", got)
 	}
+
 	if !Selected.GetBold() {
 		t.Error("Selected should be bold")
 	}
@@ -24,6 +26,7 @@ func TestDimIsTheDimForegroundOnly(t *testing.T) {
 	if got := Dim.GetForeground(); got != lipgloss.Color("8") {
 		t.Errorf("foreground = %v, want ANSI 8", got)
 	}
+
 	if bg := Dim.GetBackground(); bg != (lipgloss.NoColor{}) {
 		t.Errorf("background = %v, want none", bg)
 	}
@@ -34,9 +37,11 @@ func TestStatusBarIsBrightWhiteOnSelectionBackground(t *testing.T) {
 	if got := StatusBar.GetForeground(); got != lipgloss.Color("15") {
 		t.Errorf("foreground = %v, want ANSI 15", got)
 	}
+
 	if got := StatusBar.GetBackground(); got != lipgloss.Color("8") {
 		t.Errorf("background = %v, want ANSI 8", got)
 	}
+
 	if StatusBar.GetBold() {
 		t.Error("StatusBar should not be bold")
 	}
@@ -51,6 +56,7 @@ func TestNegativeAndWarnAreForegroundOnlyAnsiColours(t *testing.T) {
 		if got := tc.style.GetForeground(); got != lipgloss.Color(tc.want) {
 			t.Errorf("%s foreground = %v, want ANSI %s", name, got, tc.want)
 		}
+
 		if bg := tc.style.GetBackground(); bg != (lipgloss.NoColor{}) {
 			t.Errorf("%s background = %v, want none", name, bg)
 		}
@@ -65,6 +71,7 @@ func TestStatusIndicatorsAreStatusBarWithAColouredText(t *testing.T) {
 		if got := tc.style.GetForeground(); got != lipgloss.Color(tc.want) {
 			t.Errorf("%s foreground = %v, want ANSI %s", name, got, tc.want)
 		}
+
 		if got := tc.style.GetBackground(); got != lipgloss.Color("8") {
 			t.Errorf("%s background = %v, want ANSI 8", name, got)
 		}
@@ -75,6 +82,7 @@ func TestOkIsAForegroundOnlyGreen(t *testing.T) {
 	if got := Ok.GetForeground(); got != lipgloss.Color("2") {
 		t.Errorf("foreground = %v, want ANSI 2", got)
 	}
+
 	if bg := Ok.GetBackground(); bg != (lipgloss.NoColor{}) {
 		t.Errorf("background = %v, want none", bg)
 	}

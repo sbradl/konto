@@ -26,6 +26,7 @@ func (m Model) overlay(base string) string {
 	title, body := m.dialogBody()
 	capacity := layout.PopupCapacity(len(body), m.height)
 	shown := layout.Cursor{Row: m.selectedLine()}.Scrolled(capacity) // the line the cursor marks stays in view
+
 	return layout.OverlayFlush(base, layout.Popup(title, layout.Visible(shown, body, capacity), m.width), m.height)
 }
 
@@ -34,6 +35,7 @@ func (m Model) selectedLine() int {
 	if m.mode == modeCategory || m.mode == modeRuleList {
 		return listHeader + m.dlg.cursor.Row
 	}
+
 	return 0
 }
 
@@ -49,6 +51,7 @@ func (m Model) dialogBody() (title string, body []string) {
 		if m.dlg.fallback {
 			return "fallback rule", m.formLines()
 		}
+
 		return "new rule", m.formLines()
 	case modeRuleList:
 		return "add to rule", m.ruleListLines()
@@ -60,6 +63,7 @@ func (m Model) dialogBody() (title string, body []string) {
 		return "create account", m.accountLines()
 	case modeRows, modeFiles:
 	}
+
 	return "", nil
 }
 
@@ -69,6 +73,7 @@ func listLine(text string, index, cursor, width int) string {
 	if index == cursor {
 		return theme.Selected.Render(layout.Fit(line, width))
 	}
+
 	return line
 }
 
@@ -78,6 +83,7 @@ func (m Model) choiceLines() []string {
 	for i, option := range options {
 		lines = append(lines, listLine(option, i, m.dlg.cursor.Row, m.width))
 	}
+
 	return lines
 }
 
@@ -87,6 +93,7 @@ func (d dialog) field(label, text string, own int) string {
 	if d.focus == own {
 		mark, text = theme.Warn.Render(focusMark), layout.WithCaret(text, d.back)
 	}
+
 	return mark + theme.Dim.Render(fmt.Sprintf("%-*s", labelWidth, label)) + text
 }
 
@@ -102,10 +109,19 @@ func (m Model) formLines() []string {
 		m.dlg.field("category", category, -1),
 		" " + m.impactLine(rule),
 	}
+	lines = append(lines, ruleTextLines(rule)...)
+
+	return append(lines, m.refusalLines()...)
+}
+
+// ruleTextLines are the rule as the journal would hold it, dim and indented.
+func ruleTextLines(rule csvimport.Rule) []string {
+	var lines []string
 	for line := range strings.SplitSeq(rule.Text(), "\n") {
 		lines = append(lines, "   "+theme.Dim.Render(line))
 	}
-	return append(lines, m.refusalLines()...)
+
+	return lines
 }
 
 // refusalLines is the refusal of the last confirm, if any.
@@ -113,6 +129,7 @@ func (m Model) refusalLines() []string {
 	if m.dlg.refusal == "" {
 		return nil
 	}
+
 	return []string{" " + theme.Negative.Render("refused: "+m.dlg.refusal)}
 }
 
@@ -122,11 +139,13 @@ func (m Model) impactLine(rule csvimport.Rule) string {
 		return theme.Dim.Render("enter a pattern")
 	}
 	impact := m.staged.Impact(rule)
+
 	line := "matches " + layout.Plural(impact.Matches, "row") + " in this file"
 	if impact.Takes == 0 {
 		return line
 	}
 	taken := "would take " + layout.Plural(impact.Takes, "row") + " from rule " + strings.Join(impact.From, ", ")
+
 	return line + " · " + theme.Negative.Render(taken+" — saving is blocked")
 }
 
@@ -137,6 +156,7 @@ func (m Model) ruleListLines() []string {
 		text := fmt.Sprintf("#%-3s %-24s %s", rule.ID, rule.Category, ruleSummary(rule))
 		lines = append(lines, listLine(text, i, m.dlg.cursor.Row, m.width))
 	}
+
 	return lines
 }
 
@@ -150,6 +170,7 @@ func ruleSummary(rule csvimport.Rule) string {
 		}
 		parts = append(parts, strings.Join(conditions, " & "))
 	}
+
 	return strings.Join(parts, " | ")
 }
 
@@ -160,9 +181,8 @@ func (m Model) addFormLines() []string {
 		m.dlg.field("purpose", m.dlg.draft.Purpose, fieldPurpose),
 		" " + m.impactLine(widened),
 	}
-	for line := range strings.SplitSeq(widened.Text(), "\n") {
-		lines = append(lines, "   "+theme.Dim.Render(line))
-	}
+	lines = append(lines, ruleTextLines(widened)...)
+
 	return append(lines, m.refusalLines()...)
 }
 
@@ -176,11 +196,13 @@ func (m Model) pickerLines() []string {
 		}
 		lines = append(lines, listLine(text, i, m.dlg.cursor.Row, m.width))
 	}
+
 	if create {
 		row := m.staged.Rows[m.table.Row]
 		text := createLabel + " " + csvimport.SuggestName(row, m.dlg.filter)
 		lines = append(lines, listLine(strings.TrimSpace(text), len(candidates), m.dlg.cursor.Row, m.width))
 	}
+
 	return append(lines, m.refusalLines()...)
 }
 

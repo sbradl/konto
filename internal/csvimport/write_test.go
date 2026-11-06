@@ -33,15 +33,18 @@ func weekImport() Staged {
 	staged.Rules = append(staged.Rules, Rule{
 		ID: "7", Category: "expenses:cafe", Alternatives: [][]Condition{{{Field: "payee", Pattern: "Kaffeehaus"}}}, Staged: true,
 	})
+
 	return staged
 }
 
 func planned(t *testing.T, staged Staged) Plan {
 	t.Helper()
+
 	plan, err := staged.Plan()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	return plan
 }
 
@@ -90,6 +93,7 @@ func TestPlanWritesRowsOldestFirstWithTheAssertionOnTheNewest(t *testing.T) {
 	for _, transaction := range added.Transactions {
 		lines = append(lines, transaction.Lines()...)
 	}
+
 	want := []string{
 		"2026-09-26 Kiosk  ; Zeitung",
 		"    expenses:books  2,00 EUR",
@@ -104,6 +108,7 @@ func TestPlanWritesRowsOldestFirstWithTheAssertionOnTheNewest(t *testing.T) {
 	if !slices.Equal(lines, want) {
 		t.Errorf("transactions =\n%s\nwant\n%s", strings.Join(lines, "\n"), strings.Join(want, "\n"))
 	}
+
 	if plan.Count != 3 || plan.Account != checking {
 		t.Errorf("count, account = %d, %q", plan.Count, plan.Account)
 	}
@@ -122,6 +127,7 @@ func TestPlanDeclaresWhatIsNewAndWritesTheStagedRules(t *testing.T) {
 	if got := plan.Changeset.Edits[:len(want)]; !reflect.DeepEqual(got, want) {
 		t.Errorf("declarations = %+v, want %+v", got, want)
 	}
+
 	last := plan.Changeset.Edits[len(plan.Changeset.Edits)-1]
 	if rule, ok := last.(domain.SetCategoryRule); !ok || rule.ID != "7" ||
 		rule.Text != "if %payee Kaffeehaus\n    account2 expenses:cafe\n    comment2 konto-rule:7" {
@@ -178,10 +184,12 @@ func TestPlanBlocksAnExportThatDoesNotReachTheBanksBalance(t *testing.T) {
 	if !errors.As(err, &blocked) {
 		t.Fatalf("err = %v, want a BalanceMismatchError", err)
 	}
+
 	if blocked.Bank.Format() != "13.182,03 EUR" || blocked.Journal.Format() != "13.192,63 EUR" ||
 		blocked.Difference.Format() != "-10,60 EUR" {
 		t.Errorf("mismatch = %+v", blocked)
 	}
+
 	want := "write blocked — bank 13.182,03 EUR · journal 13.192,63 EUR · difference -10,60 EUR"
 	if err.Error() != want {
 		t.Errorf("message = %q, want %q", err.Error(), want)
@@ -246,6 +254,7 @@ func TestPlanForANewAccountOpensItsBalanceTheDayBeforeTheOldestRow(t *testing.T)
 			t.Errorf("preview lacks %q:\n%s", want, text)
 		}
 	}
+
 	if plan.Count != 3 || plan.Account != "assets:holiday" {
 		t.Errorf("count, account = %d, %q", plan.Count, plan.Account)
 	}
@@ -284,6 +293,7 @@ func TestSuggestAccountNameEndsInTheLastDigitsOfTheIBAN(t *testing.T) {
 	if got := SuggestAccountName("DE27100777770209299700"); got != "assets:account-9700" {
 		t.Errorf("name = %q", got)
 	}
+
 	if got := SuggestAccountName("12"); got != "assets:account-12" {
 		t.Errorf("short name = %q", got)
 	}
@@ -307,6 +317,7 @@ func reread() Staged {
 		{Date: day("2026-09-28"), Description: "Kaffeehaus", Payee: "Kaffeehaus", Purpose: "Kaffee", Amount: eur(-320)},
 		{Date: day("2026-09-26"), Description: "Kiosk", Payee: "Kiosk", Purpose: "Zeitung", Amount: eur(-200)},
 	}
+
 	return fresh
 }
 
@@ -317,9 +328,11 @@ func TestRestageKeepsTheStagedRulesNewCategoriesAndChoicesOfTheEarlierImport(t *
 	if !reflect.DeepEqual(restaged.Rows, want) {
 		t.Errorf("rows =\n%+v\nwant\n%+v", restaged.Rows, want)
 	}
+
 	if rules := restaged.StagedRules(); len(rules) != 1 || rules[0].ID != "7" {
 		t.Errorf("staged rules = %+v, want rule 7", rules)
 	}
+
 	if !slices.Equal(restaged.NewAccounts, []string{"expenses:cafe", "expenses:unused"}) {
 		t.Errorf("new accounts = %v", restaged.NewAccounts)
 	}
@@ -349,6 +362,7 @@ func TestRestageReplacesAWidenedRuleAndLeavesNewlyMatchedRowsToIt(t *testing.T) 
 	if row := restaged.Rows[1]; row.Target != widened.Category || row.RuleID != widened.ID {
 		t.Errorf("row = %+v, want the widened rule's category", row)
 	}
+
 	if !reflect.DeepEqual(restaged.Rules[0], widened) {
 		t.Errorf("rule = %+v, want the widened one", restaged.Rules[0])
 	}

@@ -19,10 +19,15 @@ func eur(mantissa int64) domain.MultiAmount {
 	return domain.MultiAmount{{Commodity: "EUR", Mantissa: mantissa, Places: 2, Style: euro}}
 }
 
-func date(s string) time.Time { d, _ := time.Parse(time.DateOnly, s); return d }
+func date(s string) time.Time {
+	d, _ := time.Parse(time.DateOnly, s)
+
+	return d
+}
 
 func rule(line int, period, description string, extra ...string) domain.PeriodicRule {
 	lines := append([]string{"~ " + period + "  " + description}, extra...)
+
 	return domain.PeriodicRule{Period: period, Description: description, Lines: lines, Pos: domain.SourcePos{File: "j", Line: line}}
 }
 
@@ -33,6 +38,7 @@ func occurrences(line int, amount int64, dates ...string) []domain.Transaction {
 			{Account: "expenses:x", Amounts: eur(amount)}, {Account: "assets:checking", Amounts: eur(-amount)},
 		}})
 	}
+
 	return list
 }
 
@@ -46,6 +52,7 @@ func household() domain.Ledger {
 	ledger.Rules[0].Lines[0] = "~ monthly from 2026-10-05  Streaming  ; shared account"
 	ledger.Upcoming = append(occurrences(10, 1300, "2026-10-05", "2026-11-05"), occurrences(20, 90000,
 		"2026-10-01", "2026-11-01", "2026-12-01", "2027-01-01", "2027-02-01", "2027-03-01", "2027-04-01")...)
+
 	return ledger
 }
 
@@ -64,9 +71,11 @@ func TestRulesListSortedByNextOccurrenceWithCadenceAndStatus(t *testing.T) {
 			t.Errorf("row %d = %q, want it to hold %q", i, got[i+1], want)
 		}
 	}
+
 	if !strings.Contains(got[1], "monthly from 2026-10-01") || !strings.Contains(got[1], "upcoming") {
 		t.Errorf("row = %q, want the raw cadence and an upcoming status", got[1])
 	}
+
 	if !strings.Contains(got[3], "none in the next 12 months") {
 		t.Errorf("row = %q, want the none-in-12-months status", got[3])
 	}
@@ -77,6 +86,7 @@ func TestTheFirstRuleIsSelectedAndArrowsMoveTheCursorWithinLimits(t *testing.T) 
 	if row, total := m.Position(); row != 1 || total != 3 {
 		t.Errorf("position = %d/%d, want 1/3", row, total)
 	}
+
 	if !strings.Contains(m.View(), "\x1b[1;97;100m") && !strings.Contains(m.View(), "100m") {
 		t.Errorf("the selected row should be highlighted")
 	}
@@ -98,9 +108,11 @@ func TestEmptyViewHasNoPositionAndSaysHowToAddARule(t *testing.T) {
 	if row, total := m.Position(); row != 0 || total != 0 {
 		t.Errorf("position = %d/%d, want none", row, total)
 	}
+
 	if view := uitest.Plain(m.View()); !strings.Contains(view, "press n to add a rule") {
 		t.Errorf("empty state should hint at n:\n%s", view)
 	}
+
 	if got := m.Move("down"); got.cursor.Row != 0 {
 		t.Errorf("nothing to move over")
 	}
@@ -108,10 +120,12 @@ func TestEmptyViewHasNoPositionAndSaysHowToAddARule(t *testing.T) {
 
 func TestEntryShowsTheBlockAsWrittenWithTheRuleLineMagentaAndCommentsDim(t *testing.T) {
 	m := loaded()
+
 	view := uitest.Plain(m.View())
 	if !strings.Contains(view, "~ monthly from 2026-10-01  Vermieter Mueller") || !strings.Contains(view, "expenses:rent  900,00 EUR") {
 		t.Errorf("entry panel should show the first rule as written:\n%s", view)
 	}
+
 	if !strings.Contains(m.View(), "\x1b[35m~ monthly from 2026-10-01  Vermieter Mueller") {
 		t.Errorf("the ~ line should be magenta")
 	}
@@ -131,14 +145,17 @@ func TestOccurrencesListsTheNextSixOfTheSelectedRule(t *testing.T) {
 			t.Errorf("occurrences lack %s", want)
 		}
 	}
+
 	if strings.Contains(occurrencesPanel, "2027-04-01") {
 		t.Errorf("only the next six are listed")
 	}
 	next := uitest.Plain(loaded().Move("down").View())
+
 	_, panel, _ := strings.Cut(next, "OCCURRENCES")
 	if !strings.Contains(panel, "2026-10-05") {
 		t.Errorf("occurrences follow the cursor:\n%s", panel)
 	}
+
 	none := uitest.Plain(loaded().Move("end").View())
 	if _, panel, _ := strings.Cut(none, "OCCURRENCES"); !strings.Contains(panel, "none in the next 12 months") {
 		t.Errorf("a rule without occurrences says so:\n%s", panel)
@@ -155,6 +172,7 @@ func TestAnnualImpactListsEveryRuleAndTheTotalColoured(t *testing.T) {
 			t.Errorf("annual impact lacks %q:\n%s", want, impact)
 		}
 	}
+
 	if !strings.Contains(view, "\x1b[31m-6.300,00 EUR") || !strings.Contains(view, "\x1b[90m0") {
 		t.Errorf("negative impact should be red and zero dim:\n%q", view)
 	}
@@ -192,6 +210,7 @@ func TestLongRuleListsScrollWithTheCursorAndPageByTheListHeight(t *testing.T) {
 	if !strings.Contains(end, "Rule 39") || strings.Contains(end, "Rule 00") {
 		t.Errorf("End shows the last rule and scrolls the first away:\n%s", end)
 	}
+
 	if paged := m.Move("pgdown"); paged.cursor.Row <= 1 {
 		t.Errorf("pgdown should jump a page, cursor %d", paged.cursor.Row)
 	}
@@ -199,9 +218,11 @@ func TestLongRuleListsScrollWithTheCursorAndPageByTheListHeight(t *testing.T) {
 	for range 20 {
 		down = down.Move("down")
 	}
+
 	if !strings.Contains(uitest.Plain(down.View()), "Rule 20") {
 		t.Errorf("the selected row is always visible")
 	}
+
 	if back := down.Move("home"); back.cursor.Offset != 0 {
 		t.Errorf("home scrolls back to the top")
 	}
@@ -210,6 +231,7 @@ func TestLongRuleListsScrollWithTheCursorAndPageByTheListHeight(t *testing.T) {
 func TestViewFillsTheSizeAndNeverGetsWiderThanTheTerminal(t *testing.T) {
 	for _, size := range [][2]int{{100, 27}, {120, 37}, {180, 57}, {240, 67}} {
 		view := New().Resize(size[0], size[1]).WithLedger(household()).View()
+
 		got := strings.Split(uitest.Plain(view), "\n")
 		if len(got) != size[1] {
 			t.Errorf("%v: %d rows, want %d", size, len(got), size[1])
@@ -233,6 +255,7 @@ func TestSelectedIsTheRuleUnderTheCursor(t *testing.T) {
 	if !ok || rule.Description != "Streaming" {
 		t.Errorf("selected = %q, %v; want Streaming", rule.Description, ok)
 	}
+
 	if _, ok := New().Selected(); ok {
 		t.Errorf("an empty view has no selection")
 	}
@@ -249,6 +272,7 @@ func selectedLines(view string) []string {
 			rows = append(rows, uitest.Plain(row))
 		}
 	}
+
 	return rows
 }
 
@@ -281,6 +305,7 @@ func TestKeyAsksForNewEditOrDeleteOnlyWithARuleForEditAndDelete(t *testing.T) {
 			t.Errorf("no rules, %s: action = %v, want %v", key, got, want)
 		}
 	}
+
 	if moved, _ := loaded().Key("down"); moved.cursor.Row != 1 {
 		t.Errorf("down: row = %d, want the cursor moved", moved.cursor.Row)
 	}

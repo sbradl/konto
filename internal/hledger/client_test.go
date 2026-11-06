@@ -38,6 +38,7 @@ func recording(out string, err error, calls *[]call) runner {
 func recordingStderr(out, stderr string, err error, calls *[]call) runner {
 	return func(_ context.Context, _ io.Reader, args ...string) ([]byte, string, error) {
 		*calls = append(*calls, call{args})
+
 		return []byte(out), stderr, err
 	}
 }
@@ -51,9 +52,10 @@ func TestPrintReturnsTransactions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	want := []domain.Transaction{
-		{Date: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), Description: "opening balance", Postings: []domain.Posting{}},
-		{Date: time.Date(2026, 9, 14, 0, 0, 0, 0, time.UTC), Description: "Rent", Postings: []domain.Posting{
+		{Date: date(2026, 1, 1), Description: "opening balance", Postings: []domain.Posting{}},
+		{Date: date(2026, 9, 14), Description: "Rent", Postings: []domain.Posting{
 			{Account: "expenses:rent", Amounts: domain.MultiAmount{{Commodity: "EUR", Mantissa: 90000, Places: 2, Style: euroStyle}}},
 			{Account: "assets:checking", Amounts: domain.MultiAmount{{Commodity: "EUR", Mantissa: -90000, Places: 2, Style: euroStyle}}},
 		}},
@@ -94,7 +96,7 @@ func TestPrintNamesTheJournalExplicitly(t *testing.T) {
 
 // A journal without transactions prints an empty list, not an error.
 func TestPrintOfEmptyJournalIsEmpty(t *testing.T) {
-	client := newClient(recording("[]", nil, new([]call)), "/data/main.journal")
+	client := answering("[]")
 
 	got, err := client.Print(context.Background())
 
@@ -105,7 +107,7 @@ func TestPrintOfEmptyJournalIsEmpty(t *testing.T) {
 
 // A failing hledger call is reported with its cause.
 func TestPrintReportsHledgerFailure(t *testing.T) {
-	client := newClient(recording("", errors.New("exit status 1"), new([]call)), "/data/main.journal")
+	client := failingHledger()
 
 	_, err := client.Print(context.Background())
 
@@ -124,7 +126,7 @@ func TestPrintRejectsGarbage(t *testing.T) {
 		"bad posting amount": `[{"tdate": "2026-01-01", "tdescription": "x", "tpostings": [{"paccount": "a", "pamount": [` +
 			amountJSON("EUR", 1, `{"asdigitgroups": [1, [3]]}`) + `]}]}]`,
 	} {
-		client := newClient(recording(out, nil, new([]call)), "/data/main.journal")
+		client := answering(out)
 
 		if _, err := client.Print(context.Background()); err == nil {
 			t.Errorf("%s: expected an error, got nil", name)
@@ -156,6 +158,7 @@ func printErrors(t *testing.T, stderr string) error {
 	t.Helper()
 	client := newClient(recordingStderr("", stderr, errors.New("exit status 1"), new([]call)), "/data/main.journal")
 	_, err := client.Print(context.Background())
+
 	return err
 }
 
@@ -168,6 +171,7 @@ func TestPrintTurnsParseErrorIntoJournalError(t *testing.T) {
 	if !errors.As(err, &got) {
 		t.Fatalf("error = %v, want a JournalError", err)
 	}
+
 	want := domain.CheckIssue{
 		Check: "parseable", Severity: domain.SeverityErr, Message: "unexpected 't'",
 		File: "/data/main.journal", Line: 3, Col: 5,
@@ -186,6 +190,7 @@ func TestPrintReadsLineRanges(t *testing.T) {
 	if !errors.As(err, &got) {
 		t.Fatalf("error = %v, want a JournalError", err)
 	}
+
 	if got.Issue.Line != 2 || got.Issue.Col != 0 || got.Issue.Message != "This transaction is unbalanced." {
 		t.Errorf("issue = %+v, want line 2, no column and the first message line", got.Issue)
 	}
@@ -198,6 +203,7 @@ func TestPrintKeepsUnlocatedStderr(t *testing.T) {
 	if _, ok := errors.AsType[domain.JournalError](err); ok {
 		t.Fatalf("error = %v, should not be a JournalError", err)
 	}
+
 	if !strings.Contains(err.Error(), "something odd") {
 		t.Errorf("error = %v, want the stderr text", err)
 	}
@@ -206,6 +212,7 @@ func TestPrintKeepsUnlocatedStderr(t *testing.T) {
 // The real runner hands hledger's stderr to the parse-error mapping.
 func TestNewMapsRealStderrToJournalError(t *testing.T) {
 	dir := t.TempDir()
+
 	script := "#!/bin/sh\necho 'hledger: Error: /data/main.journal:1:1:' >&2\necho 'unexpected x' >&2\nexit 1\n"
 	if err := os.WriteFile(filepath.Join(dir, "hledger"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
@@ -242,7 +249,7 @@ var forecastJSON = `[
 func TestUpcomingReturnsOnlyGeneratedOccurrencesInThePeriod(t *testing.T) {
 	var calls []call
 	client := newClient(recording(forecastJSON, nil, &calls), "/data/main.journal")
-	from, to := time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC), time.Date(2027, 9, 30, 0, 0, 0, 0, time.UTC)
+	from, to := date(2026, 9, 30), date(2027, 9, 30)
 
 	got, err := client.Upcoming(context.Background(), from, to)
 	if err != nil {
@@ -250,23 +257,23 @@ func TestUpcomingReturnsOnlyGeneratedOccurrencesInThePeriod(t *testing.T) {
 	}
 
 	wantArgs := []string{"-f", "/data/main.journal", "print", "--forecast=2026-09-30..2027-09-30", "-O", "json"}
-	if len(calls) != 1 || !reflect.DeepEqual(calls[0].args, wantArgs) {
-		t.Errorf("calls = %+v, want one call with %v", calls, wantArgs)
-	}
+	assertOneCall(t, calls, wantArgs)
+
 	if len(got) == 1 && got[0].Source != (domain.SourcePos{File: "/data/main.journal", Line: 10}) {
 		t.Errorf("source = %+v, want the `~` line", got[0].Source)
 	}
-	if len(got) != 1 || got[0].Description != "Vermieter Mueller" || got[0].Date != time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC) {
+
+	if len(got) != 1 || got[0].Description != "Vermieter Mueller" || got[0].Date != date(2026, 10, 1) {
 		t.Errorf("occurrences = %+v, want only the generated Vermieter Mueller", got)
 	}
 }
 
 func TestUpcomingReportsFailureAndGarbage(t *testing.T) {
-	when := time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC)
+	when := date(2026, 9, 30)
 	for name, client := range map[string]*Client{
-		"hledger fails": newClient(recording("", errors.New("exit status 1"), new([]call)), "j"),
-		"not json":      newClient(recording("oops", nil, new([]call)), "j"),
-		"bad date":      newClient(recording(`[{"tdate": "x", "ttags": [["_generated-transaction", ""]]}]`, nil, new([]call)), "j"),
+		"hledger fails": failingHledger(),
+		"not json":      answering("oops"),
+		"bad date":      answering(`[{"tdate": "x", "ttags": [["_generated-transaction", ""]]}]`),
 	} {
 		if _, err := client.Upcoming(context.Background(), when, when); err == nil {
 			t.Errorf("%s: expected an error", name)
@@ -291,6 +298,7 @@ func TestConvertCSVRunsHledgerOnTheFileWithTheRulesAndReadsComments(t *testing.T
 		}
 		b, _ := os.ReadFile(args[4])
 		rulesSeen = string(b)
+
 		return []byte(out), "", nil
 	}
 
@@ -302,6 +310,7 @@ func TestConvertCSVRunsHledgerOnTheFileWithTheRulesAndReadsComments(t *testing.T
 	if rulesSeen != "skip 7\n" {
 		t.Errorf("rules file held %q", rulesSeen)
 	}
+
 	if len(got) != 1 || got[0].Comment != "Einkauf" || got[0].Postings[0].Tags["konto-rule"] != "2" || got[0].Postings[1].Tags != nil {
 		t.Errorf("transactions = %+v, want the comment and the rule tag", got)
 	}
@@ -322,6 +331,7 @@ func TestConvertCSVRemovesItsRulesFile(t *testing.T) {
 	var path string
 	run := func(_ context.Context, _ io.Reader, args ...string) ([]byte, string, error) {
 		path = args[4]
+
 		return []byte("[]"), "", nil
 	}
 
@@ -339,7 +349,8 @@ func TestConvertCSVReportsHledgersFailureAndGarbage(t *testing.T) {
 	if _, err := failing.ConvertCSV(context.Background(), "x.csv", ""); err == nil || !strings.Contains(err.Error(), "bad rules") {
 		t.Errorf("expected hledger's own words, got %v", err)
 	}
-	garbage := newClient(recording("not json", nil, new([]call)), "j")
+
+	garbage := answering("not json")
 	if _, err := garbage.ConvertCSV(context.Background(), "x.csv", ""); err == nil {
 		t.Errorf("expected an error for unreadable output")
 	}
@@ -349,6 +360,7 @@ func TestTagMapSkipsMalformedTagsAndIsNilWithoutAny(t *testing.T) {
 	if got := tagMap([][]string{{"only-a-key"}, {}}); got != nil {
 		t.Errorf("malformed tags give %v, want nil", got)
 	}
+
 	if got := tagMap([][]string{{"konto-rule", "2"}, {"broken"}}); len(got) != 1 || got["konto-rule"] != "2" {
 		t.Errorf("tags = %v", got)
 	}
@@ -378,6 +390,7 @@ func TestQueriesGiveSeveralFilesAsOneJournalThatIncludesThem(t *testing.T) {
 	}
 
 	wantArgs := []string{"-f", "-", "bal", "--flat", "-O", "json", "-E"}
+
 	wantInput := "include /data/main.journal\ninclude /data/2025.journal\ninclude /data/my 2026.journal\n"
 	if !reflect.DeepEqual(args, wantArgs) || input != wantInput {
 		t.Errorf("args = %v, input = %q; want %v and %q", args, input, wantArgs, wantInput)
@@ -419,10 +432,8 @@ func TestTheFilesAreResolvedOnEveryQuery(t *testing.T) {
 }
 
 func TestSeveralFilesReportHledgerFailure(t *testing.T) {
-	var input string
-	var args []string
 	client := newClient(nil, "/data/main.journal", "/data/2026.journal")
-	client.run = inputReturning("", "boom", errors.New("exit status 1"), &input, &args)
+	client.run = inputReturning("", "boom", errors.New("exit status 1"), new(string), new([]string))
 
 	if _, err := client.Balances(context.Background()); err == nil || !strings.Contains(err.Error(), "boom") {
 		t.Errorf("expected an error carrying hledger's message, got: %v", err)
@@ -434,10 +445,12 @@ func TestACallThatOutlivesItsTimeLimitFails(t *testing.T) {
 	for name, run := range map[string]func() error{
 		"query": func() error {
 			_, _, err := binary{"sleep", 20 * time.Millisecond}.run(context.Background(), nil, "5")
+
 			return err
 		},
 		"with input": func() error {
 			_, _, err := binary{"sleep", 20 * time.Millisecond}.run(context.Background(), strings.NewReader("text"), "5")
+
 			return err
 		},
 	} {
@@ -447,8 +460,33 @@ func TestACallThatOutlivesItsTimeLimitFails(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), "did not answer within 20ms") {
 			t.Errorf("%s: error = %v, want it to say hledger did not answer in time", name, err)
 		}
+
 		if took := time.Since(start); took > 2*time.Second {
 			t.Errorf("%s: the call took %s, want it cut off", name, took)
 		}
+	}
+}
+
+// answering is a Client whose hledger prints out and succeeds.
+func answering(out string) *Client {
+	return newClient(recording(out, nil, new([]call)), "/data/main.journal")
+}
+
+// failingHledger is a Client whose hledger exits with status 1.
+func failingHledger() *Client {
+	return newClient(recording("", errors.New("exit status 1"), new([]call)), "/data/main.journal")
+}
+
+// date is midnight UTC on the day, as hledger's dates are read.
+func date(year int, month time.Month, day int) time.Time {
+	return time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
+}
+
+// assertOneCall fails the test unless hledger was called exactly once, with want.
+func assertOneCall(t *testing.T, calls []call, want []string) {
+	t.Helper()
+
+	if len(calls) != 1 || !reflect.DeepEqual(calls[0].args, want) {
+		t.Errorf("calls = %+v, want one call with %v", calls, want)
 	}
 }

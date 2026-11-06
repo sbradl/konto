@@ -12,6 +12,7 @@ func freshAccount() csvimport.Staged {
 	s := categorisable()
 	s.NewAccount, s.Account = true, domain.Account{}
 	s.IBAN = "DE27100777770209299700"
+
 	return s
 }
 
@@ -30,6 +31,7 @@ func TestWKeyWithNothingStagedOrWhilePickingAsksForNothing(t *testing.T) {
 	if action != nil {
 		t.Error("w with nothing staged asks to write")
 	}
+
 	picking, _ := empty.Key("n")
 	if _, action := picking.Key("w"); action != nil {
 		t.Error("w in the picker asks to write")
@@ -45,6 +47,7 @@ func TestANewIBANOpensTheAccountNameDialogWithASuggestion(t *testing.T) {
 			t.Errorf("dialog lacks %q:\n%s", want, view)
 		}
 	}
+
 	if !m.Capturing() {
 		t.Error("the dialog does not capture the keyboard")
 	}
@@ -56,10 +59,12 @@ func TestEnterAcceptsTheSuggestedNameAndStagesTheAccount(t *testing.T) {
 	if m.Capturing() {
 		t.Error("the dialog stays open")
 	}
+
 	staged, _ := m.Staged()
 	if staged.Named != "assets:account-9700" {
 		t.Errorf("named = %q", staged.Named)
 	}
+
 	view := screen(m)
 	if !strings.Contains(view, "assets:account-9700 (new)") || !strings.Contains(view, "account assets:account-9700") {
 		t.Errorf("the info block does not show the new account:\n%s", view)
@@ -73,11 +78,13 @@ func TestTypingReplacesTheNameAndARefusalShowsUntilTheNextKey(t *testing.T) {
 	if view := screen(m); !strings.Contains(view, "refused: the name checking is already used by assets:checking") {
 		t.Errorf("no refusal:\n%s", view)
 	}
+
 	m = keys(m, "backspace")
 	if view := screen(m); strings.Contains(view, "refused:") {
 		t.Errorf("the refusal stays after typing:\n%s", view)
 	}
 	m = keys(m, "ctrl+u")
+
 	m = keys(typed(m, "assets:holiday"), "enter")
 	if staged, _ := m.Staged(); m.Capturing() || staged.Named != "assets:holiday" {
 		t.Errorf("a fresh name is not accepted: named %q", staged.Named)
@@ -98,6 +105,7 @@ func TestEscAbandonsAccountCreation(t *testing.T) {
 	if _, staged := m.Staged(); staged || m.Capturing() {
 		t.Error("Esc leaves the import staged")
 	}
+
 	if view := screen(m); !strings.Contains(view, "press n for a new file") {
 		t.Errorf("not the empty Import:\n%s", view)
 	}
@@ -129,6 +137,7 @@ func TestWithRefreshedKeepsTheCursorAndClosesADialogOverARow(t *testing.T) {
 	if refreshed.Capturing() {
 		t.Error("the dialog over a row stays open")
 	}
+
 	if row, total := refreshed.Position(); row != 2 || total != 3 {
 		t.Errorf("position = %d/%d, want the cursor where it was", row, total)
 	}

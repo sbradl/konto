@@ -17,10 +17,12 @@ import (
 
 func readFile(t *testing.T, path string) string {
 	t.Helper()
+
 	b, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	return string(b)
 }
 
@@ -55,6 +57,7 @@ func TestApplyRefusesAnEditItDoesNotKnowAndWritesNothing(t *testing.T) {
 	if err := file.Apply(changeset); err == nil || !strings.Contains(err.Error(), "unsupported edit") {
 		t.Errorf("err = %v, want the unsupported edit", err)
 	}
+
 	if got := readFile(t, file.path); got != directive+"\n" {
 		t.Errorf("journal = %q, want it untouched", got)
 	}
@@ -85,6 +88,7 @@ func TestApplyHandlesEveryKindOfEdit(t *testing.T) {
 			t.Errorf("apply does not handle %T", edit)
 		}
 	}
+
 	if marked := editImplementations(t); !slices.Equal(marked, slices.Sorted(slices.Values(kinds))) {
 		t.Errorf("domain.Edit implementations = %v, editKinds = %v; add the new kind to both", marked, kinds)
 	}
@@ -93,6 +97,7 @@ func TestApplyHandlesEveryKindOfEdit(t *testing.T) {
 // editImplementations are the types the domain package gives the isEdit marker, sorted by name.
 func editImplementations(t *testing.T) []string {
 	t.Helper()
+
 	files, err := filepath.Glob(filepath.Join("..", "domain", "*.go"))
 	if err != nil {
 		t.Fatal(err)
@@ -110,6 +115,7 @@ func editImplementations(t *testing.T) []string {
 		}
 	}
 	slices.Sort(names)
+
 	return names
 }
 
@@ -154,10 +160,12 @@ func TestRemovingTheLastTagLeavesABareDirective(t *testing.T) {
 
 func TestApplyEditsTheDirectiveInTheFileThatHoldsIt(t *testing.T) {
 	dir := t.TempDir()
+
 	mainPath := filepath.Join(dir, "main.journal")
 	if err := os.WriteFile(mainPath, []byte("include accounts.journal\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+
 	included := filepath.Join(dir, "accounts.journal")
 	if err := os.WriteFile(included, []byte(directive+"\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -170,6 +178,7 @@ func TestApplyEditsTheDirectiveInTheFileThatHoldsIt(t *testing.T) {
 	if got := readFile(t, included); !strings.Contains(got, "konto:closed:2026-09-30") {
 		t.Errorf("included file = %q, want the closed tag", got)
 	}
+
 	if got := readFile(t, mainPath); got != "include accounts.journal\n" {
 		t.Errorf("main journal = %q, want it untouched", got)
 	}
@@ -218,6 +227,7 @@ func TestApplyKeepsTheFileMode(t *testing.T) {
 	if err != nil || info.Mode().Perm() != 0o600 {
 		t.Errorf("mode = %v, %v; want 0600", info.Mode().Perm(), err)
 	}
+
 	if entries, _ := os.ReadDir(filepath.Dir(file.path)); len(entries) != 1 {
 		t.Errorf("directory holds %d files, want the journal alone (no temp file left)", len(entries))
 	}
@@ -231,10 +241,12 @@ func TestApplyReportsAnUnreadableJournal(t *testing.T) {
 
 func TestApplyReportsAFailedWrite(t *testing.T) {
 	dir := t.TempDir()
+
 	file := NewFile(filepath.Join(dir, "main.journal"), septemberOf(2026))
 	if err := os.WriteFile(file.path, []byte(directive+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+
 	if err := os.Chmod(dir, 0o500); err != nil {
 		t.Fatal(err)
 	}
@@ -243,6 +255,7 @@ func TestApplyReportsAFailedWrite(t *testing.T) {
 	if err := file.Apply(closeEdit()); err == nil {
 		t.Skip("running as a user that ignores directory permissions")
 	}
+
 	if got := readFile(t, file.path); got != directive+"\n" {
 		t.Errorf("journal = %q, want it untouched after the failed write", got)
 	}
@@ -261,6 +274,7 @@ func TestStageReportsAPathThatCannotBeLookedAt(t *testing.T) {
 
 func TestCommitAllLeavesNoTempFileWhenARenameFails(t *testing.T) {
 	dir := t.TempDir()
+
 	first, target := filepath.Join(dir, "first"), filepath.Join(dir, "target")
 	if err := os.Mkdir(target, 0o755); err != nil { // a directory cannot be replaced by a file
 		t.Fatal(err)
@@ -271,6 +285,7 @@ func TestCommitAllLeavesNoTempFileWhenARenameFails(t *testing.T) {
 	if err == nil {
 		t.Error("expected an error renaming a file over a directory")
 	}
+
 	if entries, _ := os.ReadDir(dir); len(entries) != 2 {
 		t.Errorf("directory holds %d entries, want the first file and the target only", len(entries))
 	}
@@ -383,6 +398,7 @@ func TestApplyRefusesToDeleteWhatIsNoLongerARule(t *testing.T) {
 			t.Errorf("%s: expected an error", name)
 		}
 	}
+
 	if got := readFile(t, file.path); got != ruleJournal {
 		t.Errorf("a refused delete must not touch the journal, got %q", got)
 	}
@@ -426,6 +442,7 @@ func TestApplyRefusesAReadOnlyJournalAndLeavesItAlone(t *testing.T) {
 		}
 		t.Errorf("error = %v, want it to name the file", err)
 	}
+
 	if got := readFile(t, file.path); got != directive+"\n" {
 		t.Errorf("journal = %q, want it untouched", got)
 	}

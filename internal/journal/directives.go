@@ -23,6 +23,7 @@ func (f File) AccountDeclarations() ([]domain.Declaration, error) {
 			}
 		}
 	}
+
 	return declarations, nil
 }
 
@@ -38,6 +39,7 @@ func parseDirective(line, keyword string) (directiveLine, bool) {
 	}
 	head, comment, _ := strings.Cut(rest, ";")
 	head = strings.TrimRight(head, blanks)
+
 	return directiveLine{head: head, name: accountField(head), comment: comment}, true
 }
 
@@ -51,6 +53,7 @@ func parseDeclaration(line string) (domain.Declaration, bool) {
 	for tag := range strings.SplitSeq(directive.comment, ",") {
 		declaration = declaration.WithTag(strings.TrimSpace(tag))
 	}
+
 	return declaration, true
 }
 
@@ -69,6 +72,7 @@ func (f File) Commodities() ([]string, error) {
 			}
 		}
 	}
+
 	return names, nil
 }
 
@@ -79,18 +83,27 @@ func commodityName(line string) (string, bool) {
 	if !found {
 		return "", false
 	}
+
 	rest, _, _ = strings.Cut(rest, ";")
 	if _, quoted, found := strings.Cut(rest, `"`); found {
 		symbol, _, _ := strings.Cut(quoted, `"`)
+
 		return symbol, symbol != ""
 	}
-	// an unquoted symbol has no digits, spaces or marks (hledger wants any that has them quoted), so it is
-	// what the sample amount leaves
-	symbol := strings.TrimSpace(strings.Map(func(r rune) rune {
-		if unicode.IsDigit(r) || strings.ContainsRune(".,-", r) {
-			return -1
-		}
-		return r
-	}, rest))
+	symbol := strings.TrimSpace(withoutNumberMarks(rest))
+
 	return symbol, symbol != ""
+}
+
+// withoutNumberMarks is the text without its digits and . , - marks: what an unquoted commodity's sample
+// amount leaves is its symbol, which has none of them (hledger wants any symbol that has them quoted).
+func withoutNumberMarks(text string) string { return strings.Map(dropNumberMark, text) }
+
+// dropNumberMark is the rune as strings.Map keeps it, or -1, which drops it, for a digit or a mark.
+func dropNumberMark(r rune) rune {
+	if unicode.IsDigit(r) || strings.ContainsRune(".,-", r) {
+		return -1
+	}
+
+	return r
 }

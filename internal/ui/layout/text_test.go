@@ -39,6 +39,7 @@ func TestTitleRuleInsetsTheTitleAndRunsToTheWidth(t *testing.T) {
 	if got != "─ keys ─────" {
 		t.Errorf("rule = %q", got)
 	}
+
 	if got := uitest.Plain(TitleRule("überschrift", 3)); got != "─ überschrift " {
 		t.Errorf("rule wider than the width = %q, want the title alone", got)
 	}

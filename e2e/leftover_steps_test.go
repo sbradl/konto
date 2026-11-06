@@ -19,6 +19,7 @@ func (w *world) expectFocusedInputHolds(text string) error {
 				return nil
 			}
 		}
+
 		return fmt.Errorf("the focused input does not hold %q: %q", text, rows)
 	})
 }
@@ -32,9 +33,11 @@ func (w *world) forecastLegendHas(account string, want bool) error {
 				listed = true
 			}
 		}
+
 		if listed != want {
 			return fmt.Errorf("%s in the forecast legend is %v, want %v", account, listed, want)
 		}
+
 		return nil
 	})
 }
@@ -44,6 +47,7 @@ func (w *world) expectInMilestones(account string, want bool) error {
 		if got := strings.Contains(table.text(), " "+account+" "); got != want {
 			return fmt.Errorf("%s in the milestone table is %v, want %v", account, got, want)
 		}
+
 		return nil
 	})
 }
@@ -53,12 +57,15 @@ func (w *world) deleteRuleInScheduled(description string) error {
 	if err := w.press("3"); err != nil {
 		return err
 	}
+
 	if err := w.selectRule(description); err != nil {
 		return err
 	}
+
 	if err := w.press("d", "y"); err != nil {
 		return err
 	}
+
 	return w.press("1")
 }
 
@@ -67,6 +74,7 @@ func (w *world) deleteRuleInScheduled(description string) error {
 func (w *world) useUndeclaredCash(name, account string) error {
 	text := fmt.Sprintf("\n2026-09-27 Cash in\n    %s  10,00 EUR\n    equity:opening-balances\n\n"+
 		"2026-09-28 Cash out\n    %s  -10,00 EUR\n    equity:opening-balances\n", account, account)
+
 	return w.useJournal(name, text)
 }
 
@@ -77,6 +85,7 @@ func (w *world) expectNewDirective(directive, tag string) error {
 				return nil
 			}
 		}
+
 		return fmt.Errorf("no %q directive with %q", directive, tag)
 	})
 }
@@ -86,6 +95,7 @@ func (w *world) useDirectiveInInclude(name, account, file string) error {
 	if err := w.useJournal(name, ""); err != nil {
 		return err
 	}
+
 	text, err := os.ReadFile(w.journal)
 	if err != nil {
 		return err
@@ -98,9 +108,11 @@ func (w *world) useDirectiveInInclude(name, account, file string) error {
 			kept = append(kept, line)
 		}
 	}
+
 	if err := os.WriteFile(filepath.Join(filepath.Dir(w.journal), file), []byte(strings.Join(moved, "\n")+"\n"), 0o644); err != nil {
 		return err
 	}
+
 	return os.WriteFile(w.journal, []byte("include "+file+"\n"+strings.Join(kept, "\n")), 0o644)
 }
 
@@ -110,12 +122,15 @@ func (w *world) importAsTransfer(file, description, target string) error {
 	if err := w.openUnlessStaged(file); err != nil {
 		return err
 	}
+
 	if err := w.categoriseOnce(description, "", target); err != nil {
 		return err
 	}
+
 	if err := w.categoriseEveryRow(); err != nil {
 		return err
 	}
+
 	return w.writeImport()
 }
 
@@ -126,6 +141,7 @@ func (w *world) expectNoCounterpart(account, counterpart string) error {
 				return fmt.Errorf("a transaction posts %s against %s: %q", account, counterpart, block)
 			}
 		}
+
 		return nil
 	})
 }
@@ -138,6 +154,7 @@ func (w *world) openSavingsCSV() error {
 	}); err != nil {
 		return err
 	}
+
 	return w.openInImport("savings.csv")
 }
 
@@ -145,10 +162,12 @@ func (w *world) expectNetWorth(value string) error {
 	if err := w.press("1"); err != nil {
 		return err
 	}
+
 	return w.expectCard("NET WORTH", func(card statCard) error {
 		if card.value != value {
 			return fmt.Errorf("the net worth is %s, want %s", card.value, value)
 		}
+
 		return nil
 	})
 }
@@ -157,6 +176,7 @@ func (w *world) expectDashboardShows(account, text string) error {
 	if err := w.press("1"); err != nil {
 		return err
 	}
+
 	return w.expectAccounts(expectShows(account, text))
 }
 

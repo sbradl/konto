@@ -18,6 +18,7 @@ import (
 // the journal passes every hledger check from the start.
 func skeleton() string {
 	clearing := domain.Declaration{Source: domain.SourceClearing}.Comment()
+
 	return strings.Join([]string{
 		"decimal-mark ,", "commodity 1.000,00 EUR", domain.DeclareAccount(domain.OpeningBalanceAccount, "").Line(),
 		domain.DeclareAccount(domain.ClearingAccount, clearing).Line(),
@@ -45,9 +46,11 @@ func (f File) Exists() (bool, error) {
 	if errors.Is(err, fs.ErrNotExist) {
 		return false, nil
 	}
+
 	if err != nil {
 		return false, fmt.Errorf("checking %s: %w", f.path, err)
 	}
+
 	return true, nil
 }
 
@@ -59,9 +62,11 @@ func (f File) Create() error {
 	if err := os.MkdirAll(dir, dirMode); err != nil {
 		return fmt.Errorf("creating %s: %w", dir, err)
 	}
+
 	if err := writeNew(f.path, skeleton()); err != nil {
 		return err
 	}
+
 	return touch(f.RulesPath())
 }
 
@@ -77,6 +82,7 @@ func (f File) Window() []string {
 			files = append(files, path)
 		}
 	}
+
 	return files
 }
 
@@ -88,6 +94,7 @@ func (f File) windowYears() []string {
 			files = append(files, path)
 		}
 	}
+
 	return files
 }
 
@@ -111,11 +118,13 @@ func (f File) yearsOnDisk() []int {
 		}
 	}
 	slices.Sort(years)
+
 	return years
 }
 
 func isFile(path string) bool {
 	info, err := os.Stat(path)
+
 	return err == nil && info.Mode().IsRegular()
 }
 
@@ -127,6 +136,7 @@ func writeNew(path, content string) error {
 		return fmt.Errorf("creating %s: %w", path, err)
 	}
 	_, writeErr := file.WriteString(content)
+
 	return errors.Join(writeErr, file.Close())
 }
 
@@ -137,5 +147,6 @@ func touch(path string) error {
 	if err != nil {
 		return fmt.Errorf("creating %s: %w", path, err)
 	}
+
 	return file.Close() //nolint:wrapcheck // closing a file we just opened; the path is not in play
 }

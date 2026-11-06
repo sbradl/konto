@@ -23,6 +23,7 @@ func (f *fakeGateway) Check(_ context.Context, name string) (*domain.CheckIssue,
 	f.mu.Lock()
 	f.ran = append(f.ran, name)
 	f.mu.Unlock()
+
 	return f.issues[name], f.errs[name]
 }
 
@@ -40,9 +41,11 @@ func TestRunRunsEveryHledgerCheckOnce(t *testing.T) {
 	}
 	slices.Sort(want)
 	slices.Sort(gw.ran)
+
 	if !reflect.DeepEqual(gw.ran, want) {
 		t.Errorf("checks run = %v, want %v", gw.ran, want)
 	}
+
 	if run.Total != 12 || !run.IsClean() {
 		t.Errorf("run = %+v, want a clean run of 12 checks", run)
 	}
@@ -64,6 +67,7 @@ func TestRunCollectsFailuresAndKontosOwnIssues(t *testing.T) {
 	for i, issue := range run.Issues {
 		checks[i] = issue.Check
 	}
+
 	if want := []string{"accounts", "payees", "unclassified"}; !reflect.DeepEqual(checks, want) {
 		t.Errorf("issues = %v, want %v", checks, want)
 	}
@@ -94,6 +98,7 @@ type fakeTextChecker struct {
 
 func (f *fakeTextChecker) CheckText(_ context.Context, text string, names []string) error {
 	f.text, f.names = text, names
+
 	return f.err
 }
 
@@ -105,6 +110,7 @@ func TestVerifyChecksTheRenderedJournalForErrorsOnly(t *testing.T) {
 	if err != nil || gw.text != "journal" {
 		t.Errorf("err = %v, text = %q", err, gw.text)
 	}
+
 	if want := []string{"parseable", "autobalanced", "assertions", "balanced"}; !slices.Equal(gw.names, want) {
 		t.Errorf("checks = %v, want %v", gw.names, want)
 	}

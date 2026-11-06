@@ -103,38 +103,77 @@ const newAccountName = "assets:new-account"
 
 // Open reads the export at path against the journal snapshot. A refused account is the error.
 func (s *Service) Open(ctx context.Context, path string, ledger domain.Ledger) (Staged, error) {
-	data, err := s.files.ReadFile(path)
-	if err != nil {
-		return Staged{}, fmt.Errorf("reading %s: %w", path, err)
-	}
 	format := postbank()
-	preamble, err := format.readPreamble(data)
+
+	preamble, err := s.readExport(path, format)
 	if err != nil {
 		return Staged{}, err
 	}
-	staged := Staged{
-		Path: path, File: filepath.Base(path), IBAN: preamble.iban, Format: format.name, Closing: preamble.closing,
-		Known: ledger.Accounts, Zero: domain.MultiAmount{ledger.AmountLike(format.currency)},
-	}
-	staged.Rules = s.readRules()
-	staged.Account, staged.NewAccount = accountOf(ledger, preamble.iban)
-	name := newAccountName
-	if !staged.NewAccount {
-		if err := staged.Account.ImportRefusal(); err != nil {
-			return Staged{}, err //nolint:wrapcheck // the refusal is the answer, in the words the user reads
-		}
-		name = staged.Account.Name
-	}
-	transactions, err := s.converter.ConvertCSV(ctx, path, s.rules(format, name))
+	staged := s.stage(path, format, preamble, ledger)
+
+	name, err := staged.importAccountName()
 	if err != nil {
-		return Staged{}, ConvertError{Err: err}
+		return Staged{}, err
 	}
-	rows, err := withRawFields(rowsOf(transactions, name), preamble.records)
+
+	rows, err := s.readRows(ctx, path, s.rules(format, name), name)
+	if err != nil {
+		return Staged{}, err
+	}
+
+	rows, err = withRawFields(rows, preamble.records)
 	if err != nil {
 		return Staged{}, err
 	}
 	staged.Rows, staged.Skipped, staged.Watermark = classify(rows, ledger, name)
+
 	return staged, nil
+}
+
+// readExport reads the export at path and recognises it as the format.
+func (s *Service) readExport(path string, format bankFormat) (preamble, error) {
+	data, err := s.files.ReadFile(path)
+	if err != nil {
+		return preamble{}, fmt.Errorf("reading %s: %w", path, err)
+	}
+
+	return format.readPreamble(data)
+}
+
+// stage is the export staged against the journal snapshot, before its rows are read.
+func (s *Service) stage(path string, format bankFormat, head preamble, ledger domain.Ledger) Staged {
+	staged := Staged{
+		Path: path, File: filepath.Base(path), IBAN: head.iban, Format: format.name, Closing: head.closing,
+		Known: ledger.Accounts, Zero: domain.MultiAmount{ledger.AmountLike(format.currency)},
+	}
+	staged.Rules = s.readRules()
+	staged.Account, staged.NewAccount = accountOf(ledger, head.iban)
+
+	return staged
+}
+
+// importAccountName is the account the rows are read into: the stand-in for a new one, or the known account
+// when it takes imports.
+func (s Staged) importAccountName() (string, error) {
+	if s.NewAccount {
+		return newAccountName, nil
+	}
+
+	if err := s.Account.ImportRefusal(); err != nil {
+		return "", err //nolint:wrapcheck // the refusal is the answer, in the words the user reads
+	}
+
+	return s.Account.Name, nil
+}
+
+// readRows converts the export with hledger under the rules, into the named account.
+func (s *Service) readRows(ctx context.Context, path, rules, name string) ([]Row, error) {
+	transactions, err := s.converter.ConvertCSV(ctx, path, rules)
+	if err != nil {
+		return nil, ConvertError{Err: err}
+	}
+
+	return rowsOf(transactions, name), nil
 }
 
 // readRules are the rules of categories.rules; a file that cannot be read has none, and hledger, which
@@ -144,6 +183,7 @@ func (s *Service) readRules() []Rule {
 	if err != nil {
 		return nil
 	}
+
 	return ParseRules(string(data))
 }
 
@@ -159,6 +199,7 @@ func accountOf(ledger domain.Ledger, iban string) (account domain.Account, isNew
 			return candidate, false
 		}
 	}
+
 	return domain.Account{}, true
 }
 
@@ -167,19 +208,28 @@ func accountOf(ledger domain.Ledger, iban string) (account domain.Account, isNew
 func rowsOf(transactions []domain.Transaction, account string) []Row {
 	rows := make([]Row, 0, len(transactions))
 	for _, transaction := range slices.Backward(transactions) {
-		row := Row{Date: transaction.Date, Description: transaction.Description, Purpose: transaction.Comment}
-		for _, posting := range transaction.Postings {
-			if posting.Account == account {
-				row.Amount = posting.Amounts
-				continue
-			}
-			if posting.Account != unclaimedAccount {
-				row.Target, row.RuleID = posting.Account, posting.Tags[domain.RuleTag]
-			}
-		}
-		rows = append(rows, row)
+		rows = append(rows, rowOf(transaction, account))
 	}
+
 	return rows
+}
+
+// rowOf is one converted transaction as a row of the import account.
+func rowOf(transaction domain.Transaction, account string) Row {
+	row := Row{Date: transaction.Date, Description: transaction.Description, Purpose: transaction.Comment}
+	for _, posting := range transaction.Postings {
+		if posting.Account == account {
+			row.Amount = posting.Amounts
+
+			continue
+		}
+
+		if posting.Account != unclaimedAccount {
+			row.Target, row.RuleID = posting.Account, posting.Tags[domain.RuleTag]
+		}
+	}
+
+	return row
 }
 
 // booking is what tells one booking on the account from another in the journal: its day, amount and
@@ -217,6 +267,7 @@ func journalBookings(ledger domain.Ledger, account string, day time.Time) []book
 			}
 		}
 	}
+
 	return bookings
 }
 
@@ -228,10 +279,7 @@ func classify(rows []Row, ledger domain.Ledger, account string) (fresh, skipped 
 	if !found {
 		return rows, nil, time.Time{}
 	}
-	remaining := map[booking]int{}
-	for _, b := range journalBookings(ledger, account, watermark) {
-		remaining[b]++
-	}
+	remaining := countBookings(journalBookings(ledger, account, watermark))
 	for i := range rows {
 		row := &rows[i]
 		key := row.booking()
@@ -247,7 +295,18 @@ func classify(rows []Row, ledger domain.Ledger, account string) (fresh, skipped 
 			fresh = append(fresh, *row)
 		}
 	}
+
 	return fresh, skipped, watermark
+}
+
+// countBookings is how often each booking occurs.
+func countBookings(bookings []booking) map[booking]int {
+	counts := map[booking]int{}
+	for _, b := range bookings {
+		counts[b]++
+	}
+
+	return counts
 }
 
 // Browse lists a directory for the file picker: its folders and its .csv files, folders first.
@@ -256,17 +315,25 @@ func (s *Service) Browse(dir string) ([]domain.FileEntry, error) {
 	if err != nil {
 		return nil, fmt.Errorf("listing %s: %w", dir, err)
 	}
-	listed := slices.DeleteFunc(slices.Clone(entries), func(entry domain.FileEntry) bool {
-		return !entry.IsDir && !strings.EqualFold(filepath.Ext(entry.Name), ".csv")
-	})
-	slices.SortFunc(listed, func(a, b domain.FileEntry) int {
-		if a.IsDir != b.IsDir {
-			if a.IsDir {
-				return -1
-			}
-			return 1
-		}
-		return strings.Compare(a.Name, b.Name)
-	})
+	listed := slices.DeleteFunc(slices.Clone(entries), func(entry domain.FileEntry) bool { return !pickable(entry) })
+	slices.SortFunc(listed, foldersFirst)
+
 	return listed, nil
+}
+
+// pickable reports an entry the file picker lists: a folder or a .csv file.
+func pickable(entry domain.FileEntry) bool {
+	return entry.IsDir || strings.EqualFold(filepath.Ext(entry.Name), ".csv")
+}
+
+// foldersFirst orders folders before files, each by name.
+func foldersFirst(first, second domain.FileEntry) int {
+	switch {
+	case first.IsDir && !second.IsDir:
+		return -1
+	case !first.IsDir && second.IsDir:
+		return 1
+	}
+
+	return strings.Compare(first.Name, second.Name)
 }

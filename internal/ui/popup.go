@@ -56,6 +56,7 @@ func (m Model) onPopupKey(key string) (Model, tea.Cmd) {
 			return m.onChecksKey(key)
 		}
 	}
+
 	return m, nil
 }
 
@@ -66,6 +67,7 @@ func (m Model) toggle(kind popupKind) Model {
 	} else {
 		m.popup = kind
 	}
+
 	return m
 }
 
@@ -74,6 +76,7 @@ func (m Model) withPopup(base string) string {
 	if m.popup == popupNone {
 		return base
 	}
+
 	return layout.Overlay(base, m.popupBox(), m.height)
 }
 
@@ -84,6 +87,7 @@ func (m Model) popupBox() string {
 		title, body = "checks", m.checksBody()
 	}
 	shown := layout.Visible(layout.Cursor{}, body, layout.PopupCapacity(len(body), m.height))
+
 	return layout.Popup(title, shown, m.width)
 }
 
@@ -102,5 +106,6 @@ func (m Model) keysBody() []string {
 		cell := " " + keyCell.Render(binding.Label()) + theme.Dim.Render(binding.Action)
 		body[i%rows] += columnCell.Render(cell)
 	}
+
 	return body
 }

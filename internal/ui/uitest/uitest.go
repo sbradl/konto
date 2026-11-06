@@ -25,16 +25,19 @@ const (
 func Golden(tb testing.TB, name, got string) {
 	tb.Helper()
 	path := filepath.Join("testdata", name+".txt")
+
 	got += "\n"
 	if os.Getenv("KONTO_UPDATE_GOLDEN") != "" {
 		if err := errors.Join(os.MkdirAll("testdata", dirMode), os.WriteFile(path, []byte(got), fileMode)); err != nil {
 			tb.Fatal(err)
 		}
 	}
+
 	want, err := os.ReadFile(path) //nolint:gosec // the path is the test's own golden file
 	if err != nil {
 		tb.Fatal(err)
 	}
+
 	if got != string(want) {
 		tb.Errorf("%s differs from %s:\n%s\nwant\n%s", name, path, got, want)
 	}

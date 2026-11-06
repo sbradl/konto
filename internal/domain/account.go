@@ -29,6 +29,7 @@ func ParseSource(value string) Source {
 			return source
 		}
 	}
+
 	return SourceNone
 }
 
@@ -61,6 +62,7 @@ func (a Account) Reported() MultiAmount {
 	if IsIncome(a.Name) {
 		return a.Balance.Negated()
 	}
+
 	return a.Balance
 }
 
@@ -96,6 +98,7 @@ func (d Declaration) WithTag(tag string) Declaration {
 			d.Closed = date
 		}
 	}
+
 	return d
 }
 
@@ -103,6 +106,7 @@ func (d Declaration) WithTag(tag string) Declaration {
 func splitTag(tag string) (key, value string) {
 	namespace, rest, _ := strings.Cut(tag, ":")
 	name, value, _ := strings.Cut(rest, ":")
+
 	return namespace + ":" + name, value
 }
 
@@ -110,12 +114,14 @@ func splitTag(tag string) (key, value string) {
 // creates an account; WithTag reads them back.
 func (d Declaration) Comment() string {
 	var tags []string
-	pairs := [][2]string{{SourceTagKey, d.Source.tagValue()}, {IBANTagKey, d.IBAN}, {FormatTagKey, d.Format}}
-	for _, tag := range pairs {
-		if tag[1] != "" {
-			tags = append(tags, tag[0]+":"+tag[1])
+	for _, tag := range []struct{ key, value string }{
+		{SourceTagKey, d.Source.tagValue()}, {IBANTagKey, d.IBAN}, {FormatTagKey, d.Format},
+	} {
+		if tag.value != "" {
+			tags = append(tags, tag.key+":"+tag.value)
 		}
 	}
+
 	return strings.Join(tags, ", ")
 }
 
@@ -140,15 +146,19 @@ func (a Account) Close(today time.Time, rules []string) (Changeset, error) {
 	if a.Source == SourceClearing {
 		return Changeset{}, RefusalError{"the transfer clearing account can never be closed"}
 	}
+
 	if a.IsClosed() {
 		return Changeset{}, ErrAlreadyClosed
 	}
+
 	if !a.Balance.IsZero() {
 		return Changeset{}, RefusalError{"balance is " + a.Balance.Format() + " — only a zero balance can be closed"}
 	}
+
 	if len(rules) > 0 {
 		return Changeset{}, RefusalError{"still used by: " + strings.Join(rules, ", ")}
 	}
+
 	return Changeset{Edits: []Edit{SetAccountTag{
 		Account: a.Name, Key: ClosedTagKey, Value: today.Format(time.DateOnly),
 	}}}, nil
@@ -159,6 +169,7 @@ func (a Account) Reopen() (Changeset, error) {
 	if !a.IsClosed() {
 		return Changeset{}, ErrNotClosed
 	}
+
 	return Changeset{Edits: []Edit{RemoveAccountTag{Account: a.Name, Key: ClosedTagKey}}}, nil
 }
 
@@ -180,5 +191,6 @@ func (a Account) ImportRefusal() error {
 	case a.Source == SourceNone:
 		return RefusalError{a.Name + " is unclassified (no konto:source tag) — it cannot be an import target"}
 	}
+
 	return nil
 }

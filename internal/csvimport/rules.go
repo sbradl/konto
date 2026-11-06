@@ -46,11 +46,26 @@ func (r Rule) matcher() func(Row) bool {
 			alternatives[i] = append(alternatives[i], condition.matcher())
 		}
 	}
+
 	return func(row Row) bool {
-		return slices.ContainsFunc(alternatives, func(conditions []func(Row) bool) bool {
-			return !slices.ContainsFunc(conditions, func(holds func(Row) bool) bool { return !holds(row) })
-		})
+		for _, conditions := range alternatives {
+			if allHold(conditions, row) {
+				return true
+			}
+		}
+
+		return false
 	}
+}
+
+func allHold(conditions []func(Row) bool, row Row) bool {
+	for _, holds := range conditions {
+		if !holds(row) {
+			return false
+		}
+	}
+
+	return true
 }
 
 func (c Condition) matcher() func(Row) bool {
@@ -58,6 +73,7 @@ func (c Condition) matcher() func(Row) bool {
 	if err != nil {
 		return func(Row) bool { return false }
 	}
+
 	return func(row Row) bool { return pattern.MatchString(row.field(c.Field)) }
 }
 
@@ -66,45 +82,70 @@ func (r Rule) Text() string {
 	var lines []string
 	for i, alternative := range r.Alternatives {
 		for j, condition := range alternative {
-			line := "%" + condition.Field + " " + condition.Pattern
-			switch {
-			case j > 0:
-				line = "& " + line
-			case i == 0:
-				line = "if " + line
-			}
-			lines = append(lines, line)
+			lines = append(lines, conditionLine(condition, i, j))
 		}
 	}
 	lines = append(lines, "    account2 "+r.Category, "    "+rulesfile.IDLine(r.ID))
+
 	return strings.Join(lines, "\n")
+}
+
+// conditionLine spells the condition at position j of alternative i: the rule's first condition opens it with
+// `if`, a later condition of the same alternative joins it with `&`, the first of another alternative stands
+// alone.
+func conditionLine(condition Condition, i, j int) string {
+	line := "%" + condition.Field + " " + condition.Pattern
+	if j > 0 {
+		return "& " + line
+	}
+
+	if i == 0 {
+		return "if " + line
+	}
+
+	return line
 }
 
 // ParseRules reads the rules konto wrote into categories.rules; a block without a konto-rule id is
 // somebody else's and is left out.
 func ParseRules(text string) []Rule {
 	var rules []Rule
-	current := Rule{}
-	open := false
-	flush := func() {
-		if open && current.ID != "" && current.Category != "" {
-			rules = append(rules, current)
+	for _, block := range ruleBlocks(text) {
+		if rule := parseRule(block); rule.ID != "" && rule.Category != "" {
+			rules = append(rules, rule)
 		}
-		current, open = Rule{}, false
 	}
+
+	return rules
+}
+
+// ruleBlocks are the `if` blocks of the text: each its `if` line and the lines up to the next blank or `if`
+// line. Lines outside a block are left out.
+func ruleBlocks(text string) [][]string {
+	var blocks [][]string
+	open := false
 	for line := range strings.SplitSeq(strings.ReplaceAll(text, "\r\n", "\n"), "\n") {
 		switch {
 		case strings.HasPrefix(line, "if "):
-			flush()
-			current, open = current.orCondition(strings.TrimPrefix(line, "if ")), true
+			blocks, open = append(blocks, []string{line}), true
 		case rulesfile.IsBlank(line):
-			flush()
+			open = false
 		case open:
-			current = current.withLine(line)
+			blocks[len(blocks)-1] = append(blocks[len(blocks)-1], line)
 		}
 	}
-	flush()
-	return rules
+
+	return blocks
+}
+
+// parseRule reads one `if` block.
+func parseRule(block []string) Rule {
+	rule := Rule{}.orCondition(strings.TrimPrefix(block[0], "if "))
+	for _, line := range block[1:] {
+		rule = rule.withLine(line)
+	}
+
+	return rule
 }
 
 // withLine applies one line of a block: a condition, the category or the rule id.
@@ -120,17 +161,20 @@ func (r Rule) withLine(line string) Rule {
 	case strings.HasPrefix(trimmed, rulesfile.IDLine("")):
 		r.ID = strings.TrimSpace(strings.TrimPrefix(trimmed, rulesfile.IDLine("")))
 	}
+
 	return r
 }
 
 func parseCondition(text string) Condition {
 	field, pattern, _ := strings.Cut(strings.TrimPrefix(strings.TrimSpace(text), "%"), " ")
+
 	return Condition{Field: field, Pattern: strings.TrimSpace(pattern)}
 }
 
 // orCondition is the rule with a new alternative that holds the condition.
 func (r Rule) orCondition(text string) Rule {
 	r.Alternatives = append(slices.Clone(r.Alternatives), []Condition{parseCondition(text)})
+
 	return r
 }
 
@@ -140,6 +184,7 @@ func (r Rule) andCondition(text string) Rule {
 	last := len(r.Alternatives) - 1
 	r.Alternatives = slices.Clone(r.Alternatives)
 	r.Alternatives[last] = append(slices.Clone(r.Alternatives[last]), parseCondition(text))
+
 	return r
 }
 
@@ -151,5 +196,6 @@ func nextRuleID(rules []Rule) string {
 			highest = max(highest, n)
 		}
 	}
+
 	return strconv.Itoa(highest + 1)
 }

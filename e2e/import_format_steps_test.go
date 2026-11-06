@@ -19,6 +19,7 @@ func (w *world) expectNoRowHolding(text string) error {
 				return fmt.Errorf("a row holds %q: %q", text, row.text)
 			}
 		}
+
 		return nil
 	})
 }
@@ -29,6 +30,7 @@ func (w *world) newestNewBlock() (string, error) {
 	if len(blocks) == 0 {
 		return "", errors.New("nothing was imported")
 	}
+
 	return slices.MaxFunc(blocks, func(a, b string) int { return strings.Compare(a[:len("2006-01-02")], b[:len("2006-01-02")]) }), nil
 }
 
@@ -38,9 +40,11 @@ func (w *world) expectNewestAssertion(assertion, account string) error {
 		if err != nil {
 			return err
 		}
+
 		if !postsWith(block, account, assertion) {
 			return fmt.Errorf("the newest imported transaction %q has no %q on %s", block, assertion, account)
 		}
+
 		return nil
 	})
 }
@@ -52,6 +56,7 @@ func (w *world) expectNoAssertionMentioning(text string) error {
 				return fmt.Errorf("an assertion mentions %q: %q", text, line)
 			}
 		}
+
 		return nil
 	})
 }
@@ -70,6 +75,7 @@ func (w *world) expectEveryPostingIn(commodity string) error {
 				}
 			}
 		}
+
 		return nil
 	})
 }
@@ -85,6 +91,7 @@ func registerFormatSteps(sc *godog.ScenarioContext, w *world) {
 		if err := w.expectImportRowHolds(name, ""); err != nil {
 			return err
 		}
+
 		return w.expectNoRowHolding("�")
 	})
 	step(sc, `^the newest imported transaction has the assertion "([^"]*)" on "([^"]*)"$`, w.expectNewestAssertion)

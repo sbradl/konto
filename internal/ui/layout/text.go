@@ -19,6 +19,7 @@ func Fit(text string, width int) string {
 		return text
 	}
 	cut := lipgloss.NewStyle().MaxWidth(width).Render(text)
+
 	return cut + strings.Repeat(" ", width-lipgloss.Width(cut))
 }
 
@@ -30,6 +31,7 @@ func AlignRight(text string, width int) string {
 // TitleRule is a dim top edge width cells wide with the title inset two cells, for a popup, dialog or form.
 func TitleRule(title string, width int) string {
 	rule := "─ " + title + " "
+
 	return theme.Dim.Render(rule + strings.Repeat("─", max(0, width-lipgloss.Width(rule))))
 }
 
@@ -41,6 +43,7 @@ func Plural(n int, noun string) string {
 	if n == 1 {
 		return "1 " + noun
 	}
+
 	return strconv.Itoa(n) + " " + noun + "s"
 }
 
@@ -52,15 +55,20 @@ const Caret = "▏"
 // is not for the input.
 func Edit(text string, back int, key string) (edited string, newBack int, forInput bool) {
 	runes := []rune(text)
-	at := max(0, len(runes)-back)
+
+	caret := max(0, len(runes)-back)
 	if edit, ok := editKeys()[key]; ok {
-		runes, at = edit(runes, at)
-		return string(runes), len(runes) - at, true
+		runes, caret = edit(runes, caret)
+
+		return string(runes), len(runes) - caret, true
 	}
+
 	if utf8.RuneCountInString(key) == 1 {
-		runes = slices.Insert(runes, at, []rune(key)...)
-		return string(runes), len(runes) - at - 1, true
+		runes = slices.Insert(runes, caret, []rune(key)...)
+
+		return string(runes), len(runes) - caret - 1, true
 	}
+
 	return text, back, false
 }
 
@@ -68,33 +76,67 @@ func Edit(text string, back int, key string) (edited string, newBack int, forInp
 func WithCaret(text string, back int) string {
 	runes := []rune(text)
 	at := max(0, len(runes)-back)
+
 	return string(runes[:at]) + Caret + string(runes[at:])
 }
 
 // editKeys are the keys a text input acts on besides typed characters. A terminal may send Ctrl+Backspace as
 // Ctrl+H or Ctrl+W, which is why those delete a word too.
 func editKeys() map[string]func(runes []rune, at int) ([]rune, int) {
-	wordLeft := func(runes []rune, at int) ([]rune, int) { return runes, wordStart(runes, at) }
-	wordRight := func(runes []rune, at int) ([]rune, int) { return runes, wordEnd(runes, at) }
-	home := func(runes []rune, _ int) ([]rune, int) { return runes, 0 }
-	end := func(runes []rune, _ int) ([]rune, int) { return runes, len(runes) }
-	deleteWordBefore := func(runes []rune, at int) ([]rune, int) { return cut(runes, wordStart(runes, at), at) }
-	deleteWordAfter := func(runes []rune, at int) ([]rune, int) { return cut(runes, at, wordEnd(runes, at)) }
 	return map[string]func(runes []rune, at int) ([]rune, int){
-		KeyLeft:  func(runes []rune, at int) ([]rune, int) { return runes, max(0, at-1) },
-		KeyRight: func(runes []rune, at int) ([]rune, int) { return runes, min(len(runes), at+1) },
-		KeyHome:  home, "ctrl+a": home,
-		KeyEnd: end, "ctrl+e": end,
-		"ctrl+left": wordLeft, "alt+left": wordLeft,
-		"ctrl+right": wordRight, "alt+right": wordRight,
-		"backspace":      func(runes []rune, at int) ([]rune, int) { return cut(runes, max(0, at-1), at) },
-		"delete":         func(runes []rune, at int) ([]rune, int) { return cut(runes, at, min(len(runes), at+1)) },
-		"ctrl+backspace": deleteWordBefore, "ctrl+h": deleteWordBefore, "ctrl+w": deleteWordBefore,
-		"alt+backspace": deleteWordBefore,
-		"ctrl+delete":   deleteWordAfter, "alt+delete": deleteWordAfter,
-		"ctrl+u": func([]rune, int) ([]rune, int) { return nil, 0 },
+		KeyLeft:          caretLeft,
+		KeyRight:         caretRight,
+		KeyHome:          caretHome,
+		"ctrl+a":         caretHome,
+		KeyEnd:           caretEnd,
+		"ctrl+e":         caretEnd,
+		"ctrl+left":      wordLeft,
+		"alt+left":       wordLeft,
+		"ctrl+right":     wordRight,
+		"alt+right":      wordRight,
+		"backspace":      deleteBefore,
+		"delete":         deleteAfter,
+		"ctrl+backspace": deleteWordBefore,
+		"ctrl+h":         deleteWordBefore,
+		"ctrl+w":         deleteWordBefore,
+		"alt+backspace":  deleteWordBefore,
+		"ctrl+delete":    deleteWordAfter,
+		"alt+delete":     deleteWordAfter,
+		"ctrl+u":         clearAll,
 	}
 }
+
+// The edits a key makes: each takes the text's runes and the caret, and returns them as the key leaves them.
+
+func caretLeft(runes []rune, at int) (edited []rune, caret int) { return runes, max(0, at-1) }
+
+func caretRight(runes []rune, at int) (edited []rune, caret int) { return runes, min(len(runes), at+1) }
+
+func caretHome(runes []rune, _ int) (edited []rune, caret int) { return runes, 0 }
+
+func caretEnd(runes []rune, _ int) (edited []rune, caret int) { return runes, len(runes) }
+
+func wordLeft(runes []rune, at int) (edited []rune, caret int) { return runes, wordStart(runes, at) }
+
+func wordRight(runes []rune, at int) (edited []rune, caret int) { return runes, wordEnd(runes, at) }
+
+func deleteBefore(runes []rune, at int) (edited []rune, caret int) {
+	return cut(runes, max(0, at-1), at)
+}
+
+func deleteAfter(runes []rune, at int) (edited []rune, caret int) {
+	return cut(runes, at, min(len(runes), at+1))
+}
+
+func deleteWordBefore(runes []rune, at int) (edited []rune, caret int) {
+	return cut(runes, wordStart(runes, at), at)
+}
+
+func deleteWordAfter(runes []rune, at int) (edited []rune, caret int) {
+	return cut(runes, at, wordEnd(runes, at))
+}
+
+func clearAll([]rune, int) (edited []rune, caret int) { return nil, 0 }
 
 // cut removes the runes from up to to, and leaves the caret where they were.
 func cut(runes []rune, from, to int) (left []rune, at int) {
@@ -112,6 +154,7 @@ func wordStart(runes []rune, at int) int {
 	for at > 0 && isWord(runes[at-1]) {
 		at--
 	}
+
 	return at
 }
 
@@ -123,5 +166,6 @@ func wordEnd(runes []rune, at int) int {
 	for at < len(runes) && isWord(runes[at]) {
 		at++
 	}
+
 	return at
 }

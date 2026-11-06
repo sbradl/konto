@@ -21,6 +21,7 @@ func withRun(t *testing.T, calls *[]editorCall, issues ...domain.CheckIssue) Mod
 	model := New(journalPath, Ports{Loader: fakeLoader{}, Checker: fakeChecker{}, Creator: &fakeCreator{}, Editor: recordingEditor(calls)})
 	updated, _ := model.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	updated, _ = updated.Update(ledgerLoadedMsg{run: domain.CheckRun{Total: 12, Issues: issues}})
+
 	return updated.(Model)
 }
 
@@ -52,6 +53,7 @@ func TestAFailedCheckRunKeepsTheLastRunAndFlagsTheError(t *testing.T) {
 	if len(model.checks.run.Issues) != 1 || model.failure == nil {
 		t.Errorf("run = %+v, failure = %v; want the old run and an error flag", model.checks.run, model.failure)
 	}
+
 	if got := lastLine(model); !strings.Contains(got, "✗ error") {
 		t.Errorf("status bar = %q, want the error indicator", got)
 	}
@@ -73,6 +75,7 @@ func TestStatusBarCountsAndColoursTheIssues(t *testing.T) {
 		model := withRun(t, nil, tc.issues...)
 
 		raw := strings.Split(model.View().Content, "\n")
+
 		last := raw[len(raw)-1]
 		if !strings.Contains(uitest.Plain(last), tc.want) || !strings.Contains(last, tc.escape) {
 			t.Errorf("%s: status bar = %q, want %q drawn as %q", name, last, tc.want, tc.escape)
@@ -87,6 +90,7 @@ func TestNoIndicatorWithoutACheckRun(t *testing.T) {
 	if got := lastLine(model); strings.Contains(got, "●") {
 		t.Errorf("status bar = %q, want no indicator", got)
 	}
+
 	panel, _ := press(model, "!")
 	if content := uitest.Plain(panel.View().Content); !strings.Contains(content, "no checks have run yet") {
 		t.Errorf("panel should say nothing ran:\n%s", content)
@@ -121,15 +125,18 @@ func TestPanelSelectsWithArrowsAndStopsAtTheEnds(t *testing.T) {
 				return uitest.Plain(line)
 			}
 		}
+
 		return ""
 	}
 	if got := selected(model); !strings.Contains(got, "one") {
 		t.Errorf("first row should start selected, got %q", got)
 	}
+
 	model = pressKey(pressKey(model, tea.KeyDown), tea.KeyDown)
 	if got := selected(model); !strings.Contains(got, "two") {
 		t.Errorf("↓ twice should stop on the last row, got %q", got)
 	}
+
 	model = pressKey(pressKey(pressKey(model, tea.KeyUp), tea.KeyUp), tea.KeyUp)
 	if got := selected(model); !strings.Contains(got, "one") {
 		t.Errorf("↑ should stop on the first row, got %q", got)
@@ -153,6 +160,7 @@ func TestPanelScrollsToKeepTheSelectionVisible(t *testing.T) {
 			t.Fatalf("after %d ↓ the selected row is not visible:\n%s", i+1, uitest.Plain(model.View().Content))
 		}
 	}
+
 	if content := uitest.Plain(model.View().Content); !strings.Contains(content, "checkt") {
 		t.Errorf("the last issue should be visible after scrolling:\n%s", content)
 	}
@@ -259,6 +267,7 @@ func TestChecksPanelShowsTheFailureOfAReload(t *testing.T) {
 	if !strings.Contains(content, "✗ hledger: boom") || !strings.Contains(content, "second line") {
 		t.Errorf("the panel should show the reload failure:\n%s", content)
 	}
+
 	if !strings.Contains(content, "all ") {
 		t.Errorf("the stale check result stays beneath it:\n%s", content)
 	}

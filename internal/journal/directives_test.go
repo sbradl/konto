@@ -13,15 +13,18 @@ import (
 
 func journalWith(t *testing.T, text string) File {
 	t.Helper()
+
 	return writeJournal(t, t.TempDir(), "main.journal", text)
 }
 
 func writeJournal(t *testing.T, dir, name, text string) File {
 	t.Helper()
+
 	path := filepath.Join(dir, name)
 	if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
 		t.Fatal(err)
 	}
+
 	return NewFile(path, func() time.Time { return time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC) })
 }
 
@@ -73,6 +76,7 @@ func TestAccountDeclarationsFollowIncludes(t *testing.T) {
 	}
 	write("main.journal", "account assets:a  ; konto:source:manual\ninclude sub/*.journal\ninclude "+filepath.Join(dir, "abs.journal")+"\ninclude main.journal\ninclude nothing-here.journal\n")
 	write("abs.journal", "account assets:abs\n")
+
 	if err := os.Mkdir(filepath.Join(dir, "sub"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -88,6 +92,7 @@ func TestAccountDeclarationsFollowIncludes(t *testing.T) {
 	for _, declaration := range got {
 		names = append(names, declaration.Name)
 	}
+
 	if want := []string{"assets:a", "assets:one", "assets:two", "assets:abs"}; !reflect.DeepEqual(names, want) {
 		t.Errorf("names = %v, want %v", names, want)
 	}
@@ -104,6 +109,7 @@ func TestAccountDeclarationsReportsAnUnreadableInclude(t *testing.T) {
 	if err := os.Mkdir(filepath.Join(dir, "dir.journal"), 0o755); err != nil {
 		t.Fatal(err)
 	}
+
 	main := filepath.Join(dir, "main.journal")
 	if err := os.WriteFile(main, []byte("include dir.journal\n"), 0o644); err != nil {
 		t.Fatal(err)

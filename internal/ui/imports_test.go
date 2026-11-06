@@ -24,16 +24,19 @@ type fakeImporter struct {
 
 func (f *fakeImporter) Browse(dir string) ([]domain.FileEntry, error) {
 	f.browsed = append(f.browsed, dir)
+
 	return f.entries, f.listErr
 }
 
 func (f *fakeImporter) Open(_ context.Context, path string, _ domain.Ledger) (csvimport.Staged, error) {
 	f.opened = append(f.opened, path)
+
 	return f.staged, f.err
 }
 
 func pressCode(m Model, code rune) (Model, tea.Cmd) {
 	updated, cmd := m.Update(tea.KeyPressMsg{Code: code})
+
 	return updated.(Model), cmd
 }
 
@@ -46,6 +49,7 @@ func startedWithImporter(t *testing.T, importer *fakeImporter) Model {
 	updated, _ := model.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	updated, _ = updated.Update(model.load())
 	imports, _ := press(updated.(Model), "2")
+
 	return imports
 }
 
@@ -62,6 +66,7 @@ func TestImportStartsEmptyWithAHintAndNIsInTheHint(t *testing.T) {
 	if content := uitest.Plain(model.View().Content); !strings.Contains(content, "press n for a new file") {
 		t.Errorf("empty Import:\n%s", content)
 	}
+
 	if got := lastLine(model); !strings.Contains(got, "n new file") || regexpPosition.MatchString(got) {
 		t.Errorf("status bar = %q", got)
 	}
@@ -72,6 +77,7 @@ func TestNBrowsesTheDownloadDirectoryAndEnterOpensTheFile(t *testing.T) {
 	model := startedWithImporter(t, importer)
 
 	model, cmd := press(model, "n")
+
 	model = deliver(model, cmd)
 	if len(importer.browsed) != 1 || importer.browsed[0] != "/home/me/Downloads" || !strings.Contains(uitest.Plain(model.View().Content), "sept.csv") {
 		t.Fatalf("browsed %v; view:\n%s", importer.browsed, uitest.Plain(model.View().Content))
@@ -84,6 +90,7 @@ func TestNBrowsesTheDownloadDirectoryAndEnterOpensTheFile(t *testing.T) {
 	if len(importer.opened) != 1 || importer.opened[0] != "/home/me/Downloads/sept.csv" {
 		t.Errorf("opened %v, want the picked file", importer.opened)
 	}
+
 	if got := lastLine(model); !strings.Contains(got, "1/2") {
 		t.Errorf("status bar = %q, want the row position of the staged import", got)
 	}
@@ -142,6 +149,7 @@ func TestHledgerFailingOnTheConversionFlagsTheErrorAndFillsTheChecksPanel(t *tes
 	if !strings.Contains(content, "unreadable row or file") || !strings.Contains(lastLine(failed), "✗ error") {
 		t.Errorf("the failure shows as a message and an indicator:\n%s", content)
 	}
+
 	opened, _ := press(failed, "!")
 	if !strings.Contains(uitest.Plain(opened.View().Content), "hledger: boom") {
 		t.Errorf("the ! panel carries hledger's words")
@@ -167,6 +175,7 @@ func TestEscLeavesThePickerAndOtherViewsKeepTheirKeys(t *testing.T) {
 	if content := uitest.Plain(closed.View().Content); !strings.Contains(content, "press n for a new file") {
 		t.Errorf("Esc returns to the empty Import:\n%s", content)
 	}
+
 	dash, _ := press(closed, "1")
 	if got, cmd := press(dash, "n"); cmd != nil || strings.Contains(uitest.Plain(got.View().Content), "OPEN A CSV") {
 		t.Errorf("n belongs to Import only")
@@ -216,6 +225,7 @@ func categorisingModel(t *testing.T) Model {
 	updated, _ = model.Update(cmd())
 	model = updated.(Model)
 	model, _ = pressCode(model, tea.KeyEnter) // the categorise popup
+
 	return model
 }
 
@@ -226,11 +236,13 @@ func TestAnOpenDialogTakesEveryKeyAsTextSoViewKeysAndQuitDoNotLeakThrough(t *tes
 	}
 	for _, key := range []string{"q", "1", "r", "?", "!", " "} {
 		var cmd tea.Cmd
+
 		model, cmd = press(model, key)
 		if cmd != nil || model.active != importTab || model.popup != popupNone || model.busy() {
 			t.Fatalf("%q leaked out of the dialog: active %d popup %d", key, model.active, model.popup)
 		}
 	}
+
 	if got := uitest.Plain(model.View().Content); !strings.Contains(got, "─ categorise ") {
 		t.Errorf("the dialog closed:\n%s", got)
 	}
@@ -251,6 +263,7 @@ func TestEscClosesTheDialogAndViewKeysWorkAgain(t *testing.T) {
 	if model.capturing() {
 		t.Fatal("Esc left the dialog open")
 	}
+
 	if model, _ = press(model, "1"); model.active != 0 {
 		t.Errorf("active = %d, want the dashboard", model.active)
 	}
@@ -260,6 +273,7 @@ func TestSpaceIsNamedAsATextCharacter(t *testing.T) {
 	if got := keyName(tea.KeyPressMsg{Code: tea.KeySpace, Text: " "}); got != " " {
 		t.Errorf("keyName(space) = %q", got)
 	}
+
 	if got := keyName(tea.KeyPressMsg{Code: tea.KeyEnter}); got != "enter" {
 		t.Errorf("keyName(enter) = %q", got)
 	}

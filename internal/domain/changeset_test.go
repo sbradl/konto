@@ -15,10 +15,7 @@ func TestEditKindsAreEdits(*testing.T) {
 	}
 }
 
-func euros(mantissa int64) MultiAmount {
-	style := DefaultAmount("EUR").Style
-	return MultiAmount{{Commodity: "EUR", Mantissa: mantissa, Places: 2, Style: style}}
-}
+func euros(mantissa int64) MultiAmount { return MultiAmount{eur(mantissa)} }
 
 func TestTransactionLinesCarryCommentsAmountsAndAssertions(t *testing.T) {
 	transaction := NewTransaction{

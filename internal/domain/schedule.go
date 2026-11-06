@@ -32,6 +32,7 @@ func (s RuleSchedule) Next() (time.Time, bool) {
 	if len(s.Occurrences) == 0 {
 		return time.Time{}, false
 	}
+
 	return s.Occurrences[0].Date, true
 }
 
@@ -46,6 +47,7 @@ func (s RuleSchedule) Impact() MultiAmount {
 			}
 		}
 	}
+
 	return total
 }
 
@@ -54,16 +56,24 @@ func (s RuleSchedule) Impact() MultiAmount {
 func (l Ledger) Schedules() []RuleSchedule {
 	schedules := make([]RuleSchedule, len(l.Rules))
 	for i, rule := range l.Rules {
-		schedules[i].Rule = rule
-		for _, occurrence := range l.Upcoming {
-			if occurrence.Source == rule.Pos {
-				schedules[i].Occurrences = append(schedules[i].Occurrences, occurrence)
-			}
-		}
-		slices.SortStableFunc(schedules[i].Occurrences, func(a, b Transaction) int { return a.Date.Compare(b.Date) })
+		schedules[i] = RuleSchedule{Rule: rule, Occurrences: l.occurrencesOf(rule)}
 	}
 	slices.SortStableFunc(schedules, compareNext)
+
 	return schedules
+}
+
+// occurrencesOf is the rule's upcoming occurrences, soonest first.
+func (l Ledger) occurrencesOf(rule PeriodicRule) []Transaction {
+	var occurrences []Transaction
+	for _, occurrence := range l.Upcoming {
+		if occurrence.Source == rule.Pos {
+			occurrences = append(occurrences, occurrence)
+		}
+	}
+	slices.SortStableFunc(occurrences, func(a, b Transaction) int { return a.Date.Compare(b.Date) })
+
+	return occurrences
 }
 
 // AnnualImpact is the net change of net worth over the next twelve months from every rule.
@@ -72,6 +82,7 @@ func (l Ledger) AnnualImpact() MultiAmount {
 	for _, schedule := range l.Schedules() {
 		total = total.Plus(schedule.Impact())
 	}
+
 	return total
 }
 
@@ -96,5 +107,6 @@ func compareNext(a, b RuleSchedule) int {
 	case hasB:
 		return 1
 	}
+
 	return 0
 }

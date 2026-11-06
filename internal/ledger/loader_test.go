@@ -35,6 +35,7 @@ func (f fakeGateway) MonthlyActivity(context.Context, time.Time, time.Time) ([][
 	if f.months == nil && f.activityErr == nil {
 		return make([][]domain.Account, spendMonths+1), nil
 	}
+
 	return f.months, f.activityErr
 }
 
@@ -46,6 +47,7 @@ type periodRecorder struct {
 
 func (p *periodRecorder) MonthlyActivity(ctx context.Context, first, last time.Time) ([][]domain.Account, error) {
 	p.first, p.last = first, last
+
 	return p.fakeGateway.MonthlyActivity(ctx, first, last)
 }
 
@@ -86,6 +88,7 @@ func TestLoadReturnsSnapshotOfTheJournal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if got.TransactionCount() != 2 {
 		t.Errorf("TransactionCount = %d, want 2", got.TransactionCount())
 	}
@@ -95,9 +98,7 @@ func TestLoadReturnsSnapshotOfTheJournal(t *testing.T) {
 func TestLoadReportsGatewayFailure(t *testing.T) {
 	_, err := NewLoader(fakeGateway{err: errors.New("exit status 1")}, present, sept30).Load(context.Background())
 
-	if err == nil || !strings.Contains(err.Error(), "exit status 1") {
-		t.Errorf("expected an error carrying the cause, got: %v", err)
-	}
+	assertCarriesCause(t, err, "exit status 1")
 }
 
 // A journal that is not on disk is reported as missing, without asking hledger.
@@ -172,6 +173,7 @@ func TestLoadReportsBalanceAndDirectiveFailures(t *testing.T) {
 
 func eur(mantissa int64) domain.MultiAmount {
 	style := domain.DefaultAmount("EUR").Style
+
 	return domain.MultiAmount{{Commodity: "EUR", Mantissa: mantissa, Places: 2, Style: style}}
 }
 
@@ -194,6 +196,7 @@ func TestLoadSummarisesTheMonthToDate(t *testing.T) {
 	if want := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC); !gw.first.Equal(want) || gw.last.Day() != 30 {
 		t.Errorf("period = %v to %v, want 2026-03-01 through 2026-09-30", gw.first, gw.last)
 	}
+
 	month := got.Month
 	if month.Month != time.September || month.Income[0].Mantissa != 300000 || month.Expenses[0].Mantissa != 115000 {
 		t.Errorf("month = %+v, want September, 3.000,00 in and 1.150,00 out", month)
@@ -203,9 +206,7 @@ func TestLoadSummarisesTheMonthToDate(t *testing.T) {
 func TestLoadReportsAFailureToSummariseTheMonth(t *testing.T) {
 	_, err := NewLoader(fakeGateway{activityErr: errors.New("period failed")}, present, sept30).Load(context.Background())
 
-	if err == nil || !strings.Contains(err.Error(), "period failed") {
-		t.Errorf("expected an error carrying the cause, got: %v", err)
-	}
+	assertCarriesCause(t, err, "period failed")
 }
 
 // The upcoming occurrences are the next year of the periodic rules, from tomorrow: today's are not upcoming.
@@ -216,9 +217,11 @@ func TestLoadProjectsTheNextYearOfPeriodicRules(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if first, last := gw.first.Format(time.DateOnly), gw.last.Format(time.DateOnly); first != "2026-10-01" || last != "2027-09-30" {
 		t.Errorf("projected %s..%s, want 2026-10-01..2027-09-30", first, last)
 	}
+
 	if len(got.Upcoming) != 1 || got.Upcoming[0].Description != "Rent" {
 		t.Errorf("Upcoming = %+v, want the projected Rent", got.Upcoming)
 	}
@@ -227,9 +230,7 @@ func TestLoadProjectsTheNextYearOfPeriodicRules(t *testing.T) {
 func TestLoadReportsAFailureToProjectTheRules(t *testing.T) {
 	_, err := NewLoader(fakeGateway{upcomingErr: errors.New("forecast failed")}, present, sept30).Load(context.Background())
 
-	if err == nil || !strings.Contains(err.Error(), "forecast failed") {
-		t.Errorf("expected an error carrying the cause, got: %v", err)
-	}
+	assertCarriesCause(t, err, "forecast failed")
 }
 
 type upcomingRecorder struct {
@@ -239,6 +240,7 @@ type upcomingRecorder struct {
 
 func (u *upcomingRecorder) Upcoming(_ context.Context, first, last time.Time) ([]domain.Transaction, error) {
 	u.first, u.last = first, last
+
 	return u.upcoming, nil
 }
 
@@ -280,6 +282,7 @@ func TestLoadSpendCrossesTheYearBoundary(t *testing.T) {
 	if want := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC); !gw.first.Equal(want) {
 		t.Errorf("report starts %v, want %v", gw.first, want)
 	}
+
 	if got.Spend[0].Month.Month() != time.July || got.Spend[5].Month.Month() != time.December ||
 		got.Spend[5].Month.Year() != 2026 || got.Month.Month != time.January {
 		t.Errorf("Spend = %+v, month = %+v; want July to December 2026 and January", got.Spend, got.Month)
@@ -311,9 +314,7 @@ func TestLoadReportsAFailureToReadTheRules(t *testing.T) {
 
 	_, err := NewLoader(fakeGateway{}, file, sept30).Load(context.Background())
 
-	if err == nil || !strings.Contains(err.Error(), "rules failed") {
-		t.Errorf("expected an error carrying the cause, got: %v", err)
-	}
+	assertCarriesCause(t, err, "rules failed")
 }
 
 func TestLoadReadsTheDeclaredCommodities(t *testing.T) {
@@ -331,7 +332,14 @@ func TestLoadReportsAFailureToReadTheCommodities(t *testing.T) {
 
 	_, err := NewLoader(fakeGateway{}, file, sept30).Load(context.Background())
 
-	if err == nil || !strings.Contains(err.Error(), "commodities failed") {
-		t.Errorf("expected an error carrying the cause, got: %v", err)
+	assertCarriesCause(t, err, "commodities failed")
+}
+
+// assertCarriesCause fails the test unless err is an error whose message names the cause.
+func assertCarriesCause(t *testing.T, err error, cause string) {
+	t.Helper()
+
+	if err == nil || !strings.Contains(err.Error(), cause) {
+		t.Errorf("expected an error carrying %q, got: %v", cause, err)
 	}
 }

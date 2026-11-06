@@ -70,28 +70,41 @@ func (s *Service) Forecast(ctx context.Context, ledger domain.Ledger) (Forecast,
 	today := s.today()
 	forecast := Forecast{Today: today, Begin: addMonths(today, -monthsBack), End: addMonths(today, monthsAhead)}
 	accounts := forecastable(ledger)
+
+	projections, err := s.project(ctx, ledger, accounts, forecast)
+	if err != nil {
+		return Forecast{}, err
+	}
+
+	for rank := range accounts {
+		lines := linesOf(accountProjection{accounts[rank].Name, rank, projections[rank], ledger.Zero()}, today)
+		forecast.Charts = addLines(forecast.Charts, lines)
+	}
+
+	return forecast, nil
+}
+
+// project asks hledger for the projection of each account over the forecast's span, all at once.
+func (s *Service) project(
+	ctx context.Context, ledger domain.Ledger, accounts []domain.Account, forecast Forecast,
+) ([]domain.Projection, error) {
 	projections := make([]domain.Projection, len(accounts))
 	projects := make([]func() error, len(accounts))
 	for i, account := range accounts {
 		projects[i] = func() (err error) {
 			projections[i], err = s.gw.Projection(ctx, domain.ProjectionQuery{
 				Account: account.Name, Begin: forecast.Begin, ForecastTo: forecast.End,
-				ForecastFrom: start(account, ledger, today),
+				ForecastFrom: start(account, ledger, forecast.Today),
 			})
 			if err != nil {
 				return fmt.Errorf("projecting %s: %w", account.Name, err)
 			}
+
 			return nil
 		}
 	}
-	if err := parallel.RunAll(projects...); err != nil {
-		return Forecast{}, err //nolint:wrapcheck // each projection names its account
-	}
-	for rank := range accounts {
-		lines := linesOf(accountProjection{accounts[rank].Name, rank, projections[rank], ledger.Zero()}, today)
-		forecast.Charts = addLines(forecast.Charts, lines)
-	}
-	return forecast, nil
+
+	return projections, parallel.RunAll(projects...) //nolint:wrapcheck // each projection names its account
 }
 
 // forecastable are the open asset and liability accounts by name; the transfer clearing account is not forecast.
@@ -100,6 +113,7 @@ func forecastable(ledger domain.Ledger) []domain.Account {
 		return !account.IsClassifiable() || account.IsClosed() || account.Source == domain.SourceClearing
 	})
 	slices.SortFunc(accounts, func(a, b domain.Account) int { return strings.Compare(a.Name, b.Name) })
+
 	return accounts
 }
 
@@ -112,6 +126,7 @@ func start(account domain.Account, ledger domain.Ledger, today time.Time) time.T
 			return watermark.AddDate(0, 0, 1)
 		}
 	}
+
 	return today
 }
 
@@ -119,6 +134,7 @@ func start(account domain.Account, ledger domain.Ledger, today time.Time) time.T
 func addMonths(date time.Time, months int) time.Time {
 	first := time.Date(date.Year(), date.Month()+time.Month(months), 1, 0, 0, 0, 0, date.Location())
 	lastDay := first.AddDate(0, 1, -1).Day()
+
 	return time.Date(first.Year(), first.Month(), min(date.Day(), lastDay), 0, 0, 0, 0, date.Location())
 }
 
@@ -139,39 +155,59 @@ type accountProjection struct {
 // linesOf splits the projection by currency: one line for each currency the account ever holds. An account
 // that never held anything is a flat line in the ledger's own currency.
 func linesOf(held accountProjection, today time.Time) []namedLine {
-	projection := held.projection
-	commodities, zeros := commoditiesOf(projection)
-	if zero := held.ledgerZero; len(commodities) == 0 && len(zero) > 0 {
-		commodities, zeros = []string{zero[0].Commodity}, map[string]domain.Amount{zero[0].Commodity: zero[0]}
+	zeros := zerosHeld(held.projection)
+	if len(zeros) == 0 && len(held.ledgerZero) > 0 {
+		zeros = []domain.Amount{held.ledgerZero[0]}
 	}
-	lines := make([]namedLine, 0, len(commodities))
-	for _, commodity := range commodities {
-		line := Line{Account: held.account, Rank: held.rank, Points: make([]Point, len(projection.Ends))}
-		for i, end := range projection.Ends {
-			line.Points[i] = Point{End: end, Balance: balanceIn(projection.Balances[i], commodity, zeros[commodity])}
-		}
-		for _, months := range Milestones() {
-			milestone := addMonths(today, months)
-			line.Milestones = append(line.Milestones, balanceAt(line.Points, milestone, zeros[commodity]))
-		}
-		lines = append(lines, namedLine{commodity: commodity, line: line})
+	lines := make([]namedLine, 0, len(zeros))
+	for _, zero := range zeros {
+		lines = append(lines, namedLine{commodity: zero.Commodity, line: held.lineIn(zero, today)})
 	}
+
 	return lines
 }
 
-// commoditiesOf are the currencies the projection ever holds, in the order they first show up, each with a
-// zero in its style.
-func commoditiesOf(projection domain.Projection) (commodities []string, zeros map[string]domain.Amount) {
-	zeros = map[string]domain.Amount{}
+// lineIn is the account's line in the currency of zero, which stands for any month it holds none of it.
+func (held accountProjection) lineIn(zero domain.Amount, today time.Time) Line {
+	points := pointsIn(held.projection, zero)
+
+	return Line{Account: held.account, Rank: held.rank, Points: points, Milestones: milestonesOf(points, zero, today)}
+}
+
+// pointsIn is the balance in the currency of zero at the end of each month of the projection.
+func pointsIn(projection domain.Projection, zero domain.Amount) []Point {
+	points := make([]Point, len(projection.Ends))
+	for i, end := range projection.Ends {
+		points[i] = Point{End: end, Balance: balanceIn(projection.Balances[i], zero.Commodity, zero)}
+	}
+
+	return points
+}
+
+// milestonesOf is the balance at each of Milestones(), counted in months from today.
+func milestonesOf(points []Point, zero domain.Amount, today time.Time) []domain.Amount {
+	milestones := make([]domain.Amount, 0, len(Milestones()))
+	for _, months := range Milestones() {
+		milestones = append(milestones, balanceAt(points, addMonths(today, months), zero))
+	}
+
+	return milestones
+}
+
+// zerosHeld is a zero for each currency the projection ever holds, in its style, in the order they first show up.
+func zerosHeld(projection domain.Projection) []domain.Amount {
+	var zeros []domain.Amount
+	seen := map[string]bool{}
 	for _, balance := range projection.Balances {
 		for _, amount := range balance {
-			if _, seen := zeros[amount.Commodity]; !seen {
-				commodities = append(commodities, amount.Commodity)
-				zeros[amount.Commodity] = amount.Zero()
+			if !seen[amount.Commodity] {
+				seen[amount.Commodity] = true
+				zeros = append(zeros, amount.Zero())
 			}
 		}
 	}
-	return commodities, zeros
+
+	return zeros
 }
 
 // balanceIn is the part of the balance in the currency, or zero when it holds none.
@@ -181,6 +217,7 @@ func balanceIn(balance domain.MultiAmount, commodity string, zero domain.Amount)
 			return amount
 		}
 	}
+
 	return zero
 }
 
@@ -192,6 +229,7 @@ func balanceAt(points []Point, date time.Time, none domain.Amount) domain.Amount
 			balance = point.Balance
 		}
 	}
+
 	return balance
 }
 
@@ -205,5 +243,6 @@ func addLines(charts []Chart, lines []namedLine) []Chart {
 		}
 		charts[i].Lines = append(charts[i].Lines, named.line)
 	}
+
 	return charts
 }

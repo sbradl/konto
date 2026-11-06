@@ -32,6 +32,7 @@ func init() {
 	flag.StringVar(&opts.Tags, "godog.tags", opts.Tags, "godog tag expression")
 	flag.Func("godog.paths", "a feature file or folder to run instead of all features", func(path string) error {
 		opts.Paths = []string{path}
+
 		return nil
 	})
 	flag.StringVar(&opts.Format, "godog.format", opts.Format, "godog formatter: pretty, progress, junit:<file>, …")
@@ -48,6 +49,7 @@ func TestFeatures(t *testing.T) {
 
 	o := opts
 	o.TestingT = t
+
 	status := godog.TestSuite{
 		Name:                "konto",
 		ScenarioInitializer: func(sc *godog.ScenarioContext) { initScenario(sc, s) },
@@ -66,10 +68,12 @@ func initScenario(sc *godog.ScenarioContext, s *suite) {
 			return ctx, err
 		}
 		*w = *nw
+
 		return ctx, nil
 	})
 	sc.StepContext().Before(func(ctx context.Context, st *godog.Step) (context.Context, error) {
 		w.markBaseline(string(st.Type))
+
 		return ctx, nil
 	})
 	sc.After(func(ctx context.Context, scn *godog.Scenario, err error) (context.Context, error) {
@@ -77,6 +81,7 @@ func initScenario(sc *godog.ScenarioContext, s *suite) {
 			w.dump(scn.Name)
 		}
 		w.close()
+
 		return ctx, nil
 	})
 	registerSteps(sc, w)

@@ -23,6 +23,7 @@ func popupRows(p popup) []string {
 			rows = append(rows, row)
 		}
 	}
+
 	return rows
 }
 
@@ -38,6 +39,7 @@ func (w *world) checkCalls() ([][]string, error) {
 			checks = append(checks, call[i:])
 		}
 	}
+
 	return checks, nil
 }
 
@@ -47,18 +49,22 @@ func indexOf(list []string, want string) int {
 			return i
 		}
 	}
+
 	return -1
 }
 
 func (w *world) expectCheckInvocations(n int) error {
 	w.waitLoaded(w.s)
+
 	calls, err := w.checkCalls()
 	if err != nil {
 		return err
 	}
+
 	if len(calls) != n {
 		return fmt.Errorf("konto ran %d hledger check invocations, want %d: %v", len(calls), n, calls)
 	}
+
 	return nil
 }
 
@@ -72,6 +78,7 @@ func (w *world) expectOneCheckEach() error {
 			return fmt.Errorf("invocation %v does not name exactly one check", call)
 		}
 	}
+
 	return nil
 }
 
@@ -86,9 +93,11 @@ func (w *world) expectChecksRun(names []string) error {
 	}
 	// The checks run side by side, so only the set of them is observable.
 	slices.Sort(ran)
+
 	if want := slices.Sorted(slices.Values(names)); strings.Join(ran, " ") != strings.Join(want, " ") {
 		return fmt.Errorf("checks run: %v, want %v", ran, want)
 	}
+
 	return nil
 }
 
@@ -99,11 +108,14 @@ func (w *world) panelRow(text string) (string, error) {
 		for _, row := range p.rows {
 			if strings.Contains(row, text) {
 				found = row
+
 				return nil
 			}
 		}
+
 		return fmt.Errorf("the checks panel has no row for %q", text)
 	})
+
 	return found, err
 }
 
@@ -112,6 +124,7 @@ func (w *world) expectRowCount(n int) error {
 		if got := len(popupRows(p)); got != n {
 			return fmt.Errorf("the checks panel has %d rows, want %d: %q", got, n, p.rows)
 		}
+
 		return nil
 	})
 }
@@ -122,6 +135,7 @@ func (w *world) expectRowShows(severity, check, line string) error {
 		if !strings.Contains(row, severity) || !strings.Contains(row, check) || !strings.Contains(row, ".journal:"+line) {
 			return fmt.Errorf("row %q does not show %s, %s and a reference to line %s", row, severity, check, line)
 		}
+
 		return nil
 	})
 }
@@ -138,6 +152,7 @@ func (w *world) selectedPanelRow(p popup) (int, error) {
 			return i, nil
 		}
 	}
+
 	return 0, errors.New("no checks panel row is selected")
 }
 
@@ -147,10 +162,12 @@ func (w *world) expectPanelSelection(which string) error {
 		if err != nil {
 			return err
 		}
+
 		want := map[string]int{"first": 0, "second": 1, "last": len(popupRows(p)) - 1}[which]
 		if got != want {
 			return fmt.Errorf("row %d is selected, want the %s (row %d)", got, which, want)
 		}
+
 		return nil
 	})
 }
@@ -159,15 +176,19 @@ func (w *world) expectSelectedColours(which string, background, foreground int) 
 	if err := w.expectPanelSelection(which); err != nil {
 		return err
 	}
+
 	return w.withPopup(func(p popup) error {
 		i, _ := w.selectedPanelRow(p)
+
 		s, _ := w.session()
 		if got := s.cellColour(1, p.top+1+i); got != foreground {
 			return fmt.Errorf("the selected row has foreground %d, want %d", got, foreground)
 		}
+
 		if got := s.cellBackground(1, p.top+1+i); got != background {
 			return fmt.Errorf("the selected row has background %d, want %d", got, background)
 		}
+
 		return nil
 	})
 }
@@ -177,6 +198,7 @@ func (w *world) expectPanelHeightAtMost(lines int) error {
 		if height := len(p.rows) + 1; height > lines {
 			return fmt.Errorf("the panel is %d lines tall, want at most %d", height, lines)
 		}
+
 		return nil
 	})
 }
@@ -185,11 +207,16 @@ func (w *world) reachLastRow() error {
 	if err := w.press(repeat("↓", 30)...); err != nil {
 		return err
 	}
+
 	return w.expectPanelSelection("last")
 }
 
 func (w *world) expectSelectionVisible() error {
-	return w.withPopup(func(p popup) error { _, err := w.selectedPanelRow(p); return err })
+	return w.withPopup(func(p popup) error {
+		_, err := w.selectedPanelRow(p)
+
+		return err
+	})
 }
 
 func registerChecksPanelSteps(sc *godog.ScenarioContext, w *world) {
@@ -203,12 +230,14 @@ func registerChecksPanelSteps(sc *godog.ScenarioContext, w *world) {
 	step(sc, `^the checks panel has a row for check "([^"]*)"$`, func(check string) error {
 		row, err := w.panelRow(check)
 		w.focusedRow = row
+
 		return err
 	})
 	step(sc, `^its severity is "([^"]*)"$`, func(severity string) error {
 		if !strings.Contains(w.focusedRow, severity) {
 			return fmt.Errorf("row %q does not have severity %s", w.focusedRow, severity)
 		}
+
 		return nil
 	})
 	step(sc, `^the (first|second|last) row is selected$`, w.expectPanelSelection)
@@ -237,9 +266,11 @@ func (w *world) editLastPosting(account string, edit func(line string) string) e
 	for i := len(lines) - 1; i >= 0; i-- {
 		if strings.Contains(lines[i], account) && assertionSuffix.MatchString(lines[i]) {
 			lines[i] = edit(lines[i])
+
 			return os.WriteFile(w.journal, []byte(strings.Join(lines, "\n")), 0o644)
 		}
 	}
+
 	return fmt.Errorf("no posting with an assertion on %s", account)
 }
 
@@ -249,6 +280,7 @@ func (w *world) warnings(name string, n int) error {
 	for i := range lines {
 		lines[i] = fmt.Sprintf("account assets:unsorted-%02d", i+1)
 	}
+
 	return w.withDeclared(name, lines...)
 }
 
@@ -261,10 +293,12 @@ func (w *world) includeWithIssue(name, include string) error {
 	if err := w.useJournal(name, "\ninclude "+include+"\n"); err != nil {
 		return err
 	}
+
 	path := filepath.Join(filepath.Dir(w.journal), include)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
+
 	return os.WriteFile(path, []byte(extraIssue), 0o644)
 }
 
@@ -273,9 +307,11 @@ func (w *world) expectEditorOpenedIncluded(include string) error {
 	if err != nil {
 		return fmt.Errorf("the editor was never called: %w", err)
 	}
+
 	if want := filepath.Join(filepath.Dir(w.journal), include); !bytes.Contains(b, []byte(want)) {
 		return fmt.Errorf("editor calls:\n%s\nwant one naming %s", b, want)
 	}
+
 	return nil
 }
 
@@ -285,6 +321,7 @@ func registerWarningFixtureSteps(sc *godog.ScenarioContext, w *world) {
 		if n != "one" {
 			_, _ = fmt.Sscanf(n, "%d", &count)
 		}
+
 		return w.warnings(name, count)
 	})
 	step(sc, `^the journal "([^"]*)" with a wrong assertion "= ([^"]*)" on the last "([^"]*)" posting$`,
@@ -292,12 +329,14 @@ func registerWarningFixtureSteps(sc *godog.ScenarioContext, w *world) {
 			if err := w.useJournal(name, ""); err != nil {
 				return err
 			}
+
 			return w.editLastPosting(account, func(line string) string { return assertionSuffix.ReplaceAllString(line, " = "+wrong) })
 		})
 	step(sc, `^the journal "([^"]*)" without the assertion on the last "([^"]*)" transaction$`, func(name, account string) error {
 		if err := w.useJournal(name, ""); err != nil {
 			return err
 		}
+
 		return w.editLastPosting(account, func(line string) string { return assertionSuffix.ReplaceAllString(line, "") })
 	})
 }
@@ -311,29 +350,19 @@ func registerChecksFixtureSteps(sc *godog.ScenarioContext, w *world) {
 	step(sc, `^a journal containing an unbalanced transaction$`, func() error {
 		return w.useJournal("minimal", "\n2026-09-01 Broken\n    expenses:x  1,00 EUR\n    assets:transfers  -2,00 EUR\n")
 	})
-	step(sc, `^the checks panel lists (?:only )?the (first|second) undeclared account$`, func(which string) error {
-		want, other := "expenses:first", "expenses:second"
-		if which == "second" {
-			want, other = other, want
-		}
-		return w.withPopup(func(p popup) error {
-			text := strings.Join(p.rows, "\n")
-			if !strings.Contains(text, want) || strings.Contains(text, other) {
-				return fmt.Errorf("the panel should list %s and not %s:\n%s", want, other, text)
-			}
-			return nil
-		})
-	})
+	step(sc, `^the checks panel lists (?:only )?the (first|second) undeclared account$`, w.expectChecksPanelListsOnly)
 	step(sc, `^I fix that account externally and press "r"$`, func() error {
 		if err := w.declare("account expenses:first"); err != nil {
 			return err
 		}
+
 		return w.press("r")
 	})
 }
 
 func (w *world) expectFullRefresh() error {
 	w.waitLoaded(w.s)
+
 	calls, err := w.hledgerCalls()
 	if err != nil {
 		return err
@@ -344,9 +373,11 @@ func (w *world) expectFullRefresh() error {
 			loads++
 		}
 	}
+
 	if loads < 2 {
 		return fmt.Errorf("only %d loads of the journal, want a reload after the editor", loads)
 	}
+
 	return nil
 }
 
@@ -356,34 +387,43 @@ func (w *world) expectLeftAlternateScreen() error {
 		return err
 	}
 	out := string(s.rawOutput())
+
 	entered := strings.Index(out, "\x1b[?1049h")
 	if entered < 0 || !strings.Contains(out[entered:], "\x1b[?1049l") {
 		return errors.New("konto never left the alternate screen after entering it")
 	}
+
 	return nil
 }
 
 func (w *world) visualStub() error {
 	stub := filepath.Join(w.dir, "visual-stub")
+
 	body := "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"" + w.visualLog() + "\"\n"
 	if err := os.WriteFile(stub, []byte(body), 0o755); err != nil {
 		return err
 	}
 	w.env["VISUAL"] = stub
+
 	return nil
 }
 
+// expectVisualCalled polls: the editor runs through tea.Exec, which the idle signal does not track.
 func (w *world) expectVisualCalled() error {
-	if _, err := os.Stat(w.visualLog()); err != nil {
-		return fmt.Errorf("the VISUAL stub was never called: %w", err)
-	}
-	return nil
+	return w.eventually(func() error {
+		if _, err := os.Stat(w.visualLog()); err != nil {
+			return fmt.Errorf("the VISUAL stub was never called: %w", err)
+		}
+
+		return nil
+	})
 }
 
 func (w *world) expectEditorNotCalled() error {
 	if _, err := os.Stat(w.editorLog()); err == nil {
 		return errors.New("the EDITOR stub was called")
 	}
+
 	return nil
 }
 
@@ -407,3 +447,20 @@ func registerChecksSteps(sc *godog.ScenarioContext, w *world) {
 }
 
 func (w *world) visualLog() string { return filepath.Join(w.dir, "visual-calls.log") }
+
+// expectChecksPanelListsOnly checks the panel lists the first or second undeclared account, and not the other.
+func (w *world) expectChecksPanelListsOnly(which string) error {
+	want, other := "expenses:first", "expenses:second"
+	if which == "second" {
+		want, other = other, want
+	}
+
+	return w.withPopup(func(p popup) error {
+		text := strings.Join(p.rows, "\n")
+		if !strings.Contains(text, want) || strings.Contains(text, other) {
+			return fmt.Errorf("the panel should list %s and not %s:\n%s", want, other, text)
+		}
+
+		return nil
+	})
+}

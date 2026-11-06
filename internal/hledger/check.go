@@ -14,11 +14,14 @@ func (c *Client) Check(ctx context.Context, name string) (*domain.CheckIssue, er
 	if err == nil {
 		return nil, nil //nolint:nilnil // nil issue and nil error is the passing check
 	}
+
 	if failure, ok := errors.AsType[domain.JournalError](err); ok {
 		issue := failure.Issue
 		issue.Check, issue.Severity = name, domain.SeverityOf(name)
+
 		return &issue, nil
 	}
+
 	return nil, err
 }
 
@@ -29,5 +32,6 @@ func (c *Client) CheckText(ctx context.Context, text string, names []string) err
 	if failure, ok := errors.AsType[domain.JournalError](err); ok && failure.Issue.Message != "" {
 		return errors.New(failure.Issue.Message) // where in the text it failed means nothing to the user
 	}
+
 	return err
 }

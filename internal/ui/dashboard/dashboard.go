@@ -75,6 +75,7 @@ func (m Model) WithLedger(ledger domain.Ledger) Model {
 	next.recent = ledger.Recent()
 	next.upcoming = ledger.UpcomingEntries()
 	next.spend = ledger.Spend
+
 	return next.WithAccounts(ledger.Accounts)
 }
 
@@ -94,6 +95,7 @@ func (m Model) WithAccounts(accounts []domain.Account) Model {
 	slices.SortStableFunc(listed, compareAccounts)
 	next := m
 	next.accounts = listed
+
 	return next.moveTo(next.cursor.Row)
 }
 
@@ -105,6 +107,7 @@ func compareAccounts(a, b domain.Account) int {
 	case !a.IsClosed() && b.IsClosed():
 		return -1
 	}
+
 	return strings.Compare(a.Name, b.Name)
 }
 
@@ -112,6 +115,7 @@ func compareAccounts(a, b domain.Account) int {
 func (m Model) Resize(width, height int) Model {
 	next := m
 	next.width, next.height = width, height
+
 	return next.moveTo(next.cursor.Row)
 }
 
@@ -154,6 +158,7 @@ func (m Model) Key(key string) (Model, Action) {
 	case layout.KeyBackTab:
 		return m.cycle(-1), nil
 	}
+
 	return m.Move(key), nil
 }
 
@@ -163,19 +168,23 @@ func (m Model) cycle(step int) Model {
 	shown := m.shownPanels()
 	at := slices.Index(shown, m.focused())
 	next.focus = shown[(at+step+len(shown))%len(shown)]
+
 	return next
 }
 
 // shownPanels are the focusable panels the terminal has room for, in tab order.
 func (m Model) shownPanels() []panel {
 	fit := m.fit()
+
 	shown := []panel{accountsPanel}
 	if fit.upcoming {
 		shown = append(shown, upcomingPanel)
 	}
+
 	if fit.right {
 		shown = append(shown, recentPanel)
 	}
+
 	return shown
 }
 
@@ -184,6 +193,7 @@ func (m Model) focused() panel {
 	if slices.Contains(m.shownPanels(), m.focus) {
 		return m.focus
 	}
+
 	return accountsPanel
 }
 
@@ -191,13 +201,16 @@ func (m Model) focused() panel {
 // both ends, or scrolls the focused Upcoming or Recent panel until its last entry shows.
 func (m Model) Move(key string) Model {
 	next := m
+
 	focus := m.focused()
 	if focus == accountsPanel {
 		next.cursor = m.cursor.Move(key, len(m.accounts), m.pageSize())
+
 		return next
 	}
 	entries, capacity := m.entries(focus), m.capacity(focus)
 	next.scrolls[focus] = m.scrolls[focus].Scroll(key, lastOffset(len(entries), capacity), capacity)
+
 	return next
 }
 
@@ -206,6 +219,7 @@ func (m Model) entries(focus panel) []domain.RecentEntry {
 	if focus == upcomingPanel {
 		return m.upcoming
 	}
+
 	return m.recent
 }
 
@@ -220,9 +234,11 @@ func (m Model) panelHeight(focus panel) int {
 	if focus == upcomingPanel {
 		return m.height - m.accountsHeight()
 	}
+
 	if m.fit().chart {
 		return m.height - cardHeight - spendHeight
 	}
+
 	return m.height - cardHeight
 }
 
@@ -233,6 +249,7 @@ func lastOffset(count, capacity int) int { return max(0, count-capacity) }
 func (m Model) moveTo(i int) Model {
 	next := m
 	next.cursor = m.cursor.To(i, len(m.accounts), m.pageSize())
+
 	return next
 }
 
@@ -245,6 +262,7 @@ func (m Model) accountsHeight() int {
 	if !m.fit().upcoming {
 		return m.height
 	}
+
 	return min(len(m.accounts)+layout.PanelChrome, m.height-upcomingHeight)
 }
 
@@ -256,12 +274,15 @@ func (m Model) Position() (row, total int) {
 		if len(m.accounts) == 0 {
 			return 0, 0
 		}
+
 		return m.cursor.Row + 1, len(m.accounts)
 	}
+
 	entries := m.entries(focus)
 	if len(entries) == 0 {
 		return 0, 0
 	}
+
 	return m.offset(focus) + 1, len(entries)
 }
 
@@ -276,6 +297,7 @@ func (m Model) title(focus panel, title string) string {
 	if m.focused() == focus {
 		return title + " ◂"
 	}
+
 	return title
 }
 
@@ -284,6 +306,7 @@ func (m Model) Selected() (domain.Account, bool) {
 	if len(m.accounts) == 0 {
 		return domain.Account{}, false
 	}
+
 	return m.accounts[m.cursor.Row], true
 }
 
@@ -291,19 +314,23 @@ func (m Model) Selected() (domain.Account, bool) {
 // in the right.
 func (m Model) View() string {
 	fit := m.fit()
+
 	left := m.accountsPanel()
 	if fit.upcoming {
 		left += "\n" + m.entriesPanel(upcomingPanel, "UPCOMING", m.accountsWidth())
 	}
+
 	if !fit.right {
 		return left
 	}
 	right := m.width - m.accountsWidth()
 	column := lipgloss.JoinHorizontal(lipgloss.Top, m.cards(right)...)
+
 	column += "\n" + m.entriesPanel(recentPanel, "RECENT", right)
 	if fit.chart {
 		column += "\n" + spendPanel(m.spend, right, spendHeight)
 	}
+
 	return lipgloss.JoinHorizontal(lipgloss.Top, left, column)
 }
 
@@ -317,6 +344,7 @@ func (m Model) fit() fitting {
 	fit.upcoming = m.height >= minAccountsHeight+upcomingHeight
 	fit.right = m.width-m.accountsWidth() >= cardCount*minCardWidth
 	fit.chart = fit.right && m.height-cardHeight >= spendHeight+minRecentHeight
+
 	return fit
 }
 
@@ -324,15 +352,18 @@ func (m Model) fit() fitting {
 // right column, so it hides with it.
 func (m Model) HiddenPanels() int {
 	fit, hidden := m.fit(), 0
-	parts := []struct {
-		shown  bool
-		panels int
-	}{{fit.upcoming, 1}, {fit.right, cardCount + 1}, {fit.chart, 1}} // Upcoming, the cards and Recent, the chart
-	for _, part := range parts {
-		if !part.shown {
-			hidden += part.panels
-		}
+	if !fit.upcoming {
+		hidden++
 	}
+
+	if !fit.right {
+		hidden += cardCount + 1 // the cards and Recent
+	}
+
+	if !fit.chart {
+		hidden++
+	}
+
 	return hidden
 }
 
@@ -345,6 +376,7 @@ func (m Model) entriesPanel(focus panel, title string, width int) string {
 // all fit, the last row says how many more there are. Rows are not selectable.
 func entriesPanel(title string, entries []domain.RecentEntry, width, height int) string {
 	inner, capacity := max(0, width-layout.PanelChrome), max(0, height-layout.PanelChrome)
+
 	shown := entries
 	if len(shown) > capacity {
 		shown = shown[:max(0, capacity-1)]
@@ -354,9 +386,11 @@ func entriesPanel(title string, entries []domain.RecentEntry, width, height int)
 	for _, entry := range shown {
 		rows = append(rows, columns.line(entry))
 	}
+
 	if hidden := len(entries) - len(shown); hidden > 0 {
 		rows = append(rows, layout.More(hidden))
 	}
+
 	return layout.Panel(title, width, height, strings.Join(rows, "\n"))
 }
 
@@ -373,6 +407,7 @@ func recentColumns(entries []domain.RecentEntry, width int) columns {
 	}
 	spare := max(0, width-recentFixed-widest)
 	description := max(minDescriptionWidth, spare*descriptionShare/100)
+
 	return columns{
 		width: width, amount: widest, description: min(description, spare),
 		category: min(maxCategoryWidth, max(0, spare-description-recentGap)),
@@ -382,6 +417,7 @@ func recentColumns(entries []domain.RecentEntry, width int) columns {
 // line is one transaction: the amount at the right edge, red when negative and green when not.
 func (c columns) line(entry domain.RecentEntry) string {
 	amount := entry.Amount.Format()
+
 	style := theme.Ok
 	if entry.Amount.IsAllNegative() {
 		style = theme.Negative
@@ -389,25 +425,36 @@ func (c columns) line(entry domain.RecentEntry) string {
 	left := " " + entry.Date.Format(time.DateOnly) + "  " + layout.Fit(entry.Description, c.description)
 	left += "  " + layout.Fit(entry.Category, c.category)
 	gap := strings.Repeat(" ", max(1, c.width-lipgloss.Width(left)-lipgloss.Width(amount)-1))
+
 	return left + gap + style.Render(amount)
 }
 
 // cards are the two stat cards sharing width between them.
 func (m Model) cards(width int) []string {
 	half := width / cardCount
+
+	return []string{m.netWorthCard(half), m.netIncomeCard(width - half)}
+}
+
+// netWorthCard is the net worth, bold.
+func (m Model) netWorthCard(width int) string {
+	worth := theme.Bold.Render(m.figures.netWorth.Format())
+
+	return card("NET WORTH", width, worth, theme.Dim.Render("assets + liabilities"))
+}
+
+// netIncomeCard is the month's net income, red when negative and green when not, with its income and expenses.
+func (m Model) netIncomeCard(width int) string {
 	net := m.figures.net
+
 	style := theme.Ok
 	if len(net) > 0 && net[0].IsNegative() {
 		style = theme.Negative
 	}
-	worthValue := theme.Bold.Render(m.figures.netWorth.Format())
-	worthNote := theme.Dim.Render("assets + liabilities")
-	incomeNote := number(m.figures.income) + " in / " + number(m.figures.expenses) + " out"
-	incomeTitle := strings.ToUpper(m.figures.month.String()) + " NET INCOME"
-	return []string{
-		card("NET WORTH", half, worthValue, worthNote),
-		card(incomeTitle, width-half, style.Render(net.Format()), theme.Dim.Render(incomeNote)),
-	}
+	title := strings.ToUpper(m.figures.month.String()) + " NET INCOME"
+	note := number(m.figures.income) + " in / " + number(m.figures.expenses) + " out"
+
+	return card(title, width, style.Render(net.Format()), theme.Dim.Render(note))
 }
 
 // card is a bordered figure with a note under it.
@@ -420,8 +467,10 @@ func number(amounts domain.MultiAmount) string {
 	if len(amounts) == 1 {
 		plain := amounts[0]
 		plain.Commodity = ""
+
 		return plain.Format()
 	}
+
 	return amounts.Format()
 }
 
@@ -438,28 +487,38 @@ func (m Model) accountsPanel() string {
 	for i, account := range visible {
 		rows[i] = accountLine(account, inner, m.cursor.Offset+i == m.cursor.Row)
 	}
+
 	return layout.Panel(m.title(accountsPanel, "ACCOUNTS"), width, m.accountsHeight(), strings.Join(rows, "\n"))
 }
 
 // accountLine is one account: source glyph, name, right-aligned balance.
 func accountLine(account domain.Account, width int, selected bool) string {
 	glyph, glyphStyle := sourceMark(account.Source)
-	balance, balanceStyle := account.Balance.Format(), lipgloss.NewStyle()
-	if account.IsClosed() {
-		balance = "closed " + account.Closed.Format(time.DateOnly)
-	} else if account.Balance.IsAllNegative() {
-		balanceStyle = theme.Negative
-	}
+	balance, balanceStyle := balanceOf(account)
 	left := " " + glyph + " " + account.Name
 	gap := strings.Repeat(" ", max(1, width-lipgloss.Width(left)-lipgloss.Width(balance)-1))
 	switch {
 	case selected: // the glyph stays outside the highlight so its dim colour remains readable
 		rest := " " + account.Name + gap + balance + " "
+
 		return " " + glyphStyle.Render(glyph) + theme.Selected.Render(padTo(rest, width-lipgloss.Width(" "+glyph)))
 	case account.IsClosed():
 		return theme.Dim.Render(left + gap + balance)
 	}
+
 	return " " + glyphStyle.Render(glyph) + " " + account.Name + gap + balanceStyle.Render(balance)
+}
+
+// balanceOf is the account's balance and its style: red when negative, or the closing date instead.
+func balanceOf(account domain.Account) (string, lipgloss.Style) {
+	switch {
+	case account.IsClosed():
+		return "closed " + account.Closed.Format(time.DateOnly), lipgloss.NewStyle()
+	case account.Balance.IsAllNegative():
+		return account.Balance.Format(), theme.Negative
+	}
+
+	return account.Balance.Format(), lipgloss.NewStyle()
 }
 
 func padTo(text string, width int) string {
@@ -477,5 +536,6 @@ func sourceMark(source domain.Source) (string, lipgloss.Style) {
 		return "⇄", theme.Dim
 	case domain.SourceNone:
 	}
+
 	return "?", theme.Warn
 }

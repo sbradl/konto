@@ -21,6 +21,7 @@ type fakeReporter struct {
 
 func (f fakeReporter) Report(_ context.Context, period domain.ReportPeriod) (domain.Report, error) {
 	*f.periods = append(*f.periods, period)
+
 	return domain.Report{Period: period, IncomeStatement: []domain.ReportRow{
 		{Kind: domain.RowLeaf, Label: "for " + period.String()},
 	}}, f.err
@@ -40,6 +41,7 @@ func startedWithReports(t *testing.T, reporter fakeReporter) Model {
 	cmd := model.Init()
 	updated, _ := model.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	updated, next := updated.Update(cmd())
+
 	return deliver(updated.(Model), next)
 }
 
@@ -51,11 +53,13 @@ func deliver(m Model, cmd tea.Cmd) Model {
 			for _, c := range msg.(tea.BatchMsg) {
 				m = deliver(m, c)
 			}
+
 			return m
 		}
 		updated, next := m.Update(msg)
 		m, cmd = updated.(Model), next
 	}
+
 	return m
 }
 
@@ -68,6 +72,7 @@ func TestTheReportLoadsWithTheLedgerAndShowsOnTheReportsTab(t *testing.T) {
 	if content := uitest.Plain(reports.View().Content); !strings.Contains(content, "for month to date") || !strings.Contains(content, "BALANCE SHEET") {
 		t.Errorf("Reports tab:\n%s", content)
 	}
+
 	if len(periods) != 1 {
 		t.Errorf("the report was built %d times, want once", len(periods))
 	}

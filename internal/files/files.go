@@ -19,6 +19,7 @@ func (System) ReadFile(path string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("reading %s: %w", path, err)
 	}
+
 	return data, nil
 }
 
@@ -30,13 +31,22 @@ func (System) ReadDir(dir string) ([]domain.FileEntry, error) {
 	}
 	listed := make([]domain.FileEntry, len(entries))
 	for i, entry := range entries {
-		isDir := entry.IsDir()
-		if !isDir && entry.Type()&os.ModeSymlink != 0 {
-			if target, err := os.Stat(filepath.Join(dir, entry.Name())); err == nil {
-				isDir = target.IsDir()
-			}
-		}
-		listed[i] = domain.FileEntry{Name: entry.Name(), IsDir: isDir}
+		listed[i] = domain.FileEntry{Name: entry.Name(), IsDir: isFolder(dir, entry)}
 	}
+
 	return listed, nil
+}
+
+// isFolder reports a folder or a link that leads to one; a broken link is not a folder.
+func isFolder(dir string, entry os.DirEntry) bool {
+	if entry.IsDir() {
+		return true
+	}
+
+	if entry.Type()&os.ModeSymlink == 0 {
+		return false
+	}
+	target, err := os.Stat(filepath.Join(dir, entry.Name()))
+
+	return err == nil && target.IsDir()
 }

@@ -30,5 +30,6 @@ func (b Binding) Label() string {
 	if utf8.RuneCountInString(b.Key) < 2 {
 		return b.Key
 	}
+
 	return strings.ToUpper(b.Key[:1]) + b.Key[1:]
 }

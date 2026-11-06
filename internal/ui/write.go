@@ -40,16 +40,19 @@ func (m Model) onPromptKey(key string) (Model, tea.Cmd) {
 	switch key {
 	case "y":
 		pending := *m.prompt
+
 		m.prompt = nil
 		if pending.quit {
 			return m, tea.Quit
 		}
+
 		return m.write(pending.write)
 	case "n", layout.KeyEsc:
 		m.prompt = nil
 	default:
 		m.prompt = m.prompt.scrolled(key, m.lastPreviewTop(), m.previewCapacity())
 	}
+
 	return m, nil
 }
 
@@ -58,6 +61,7 @@ func (m Model) onPromptKey(key string) (Model, tea.Cmd) {
 func (p *prompt) scrolled(key string, last, page int) *prompt {
 	next := *p
 	next.scroll = p.scroll.Scroll(key, last, page)
+
 	return &next
 }
 
@@ -65,19 +69,26 @@ func (p *prompt) scrolled(key string, last, page int) *prompt {
 // reload after it lands.
 func (m Model) write(pending pendingWrite) (Model, tea.Cmd) {
 	m.writing = true
-	return m, func() tea.Msg {
-		ctx := context.Background()
-		changeset, err := m.writer.Prepare(ctx, pending.changeset) // checked and written as prepared, never redone
-		if err != nil {
+
+	return m, func() tea.Msg { return m.apply(pending) }
+}
+
+// apply prepares the changeset, verifies it when asked, and writes it as prepared.
+func (m Model) apply(pending pendingWrite) writtenMsg {
+	ctx := context.Background()
+
+	changeset, err := m.writer.Prepare(ctx, pending.changeset) // checked and written as prepared, never redone
+	if err != nil {
+		return writtenMsg{err: err}
+	}
+
+	if pending.verify && m.verifier != nil {
+		if err := m.verifier.Verify(ctx, changeset); err != nil {
 			return writtenMsg{err: err}
 		}
-		if pending.verify && m.verifier != nil {
-			if err := m.verifier.Verify(ctx, changeset); err != nil {
-				return writtenMsg{err: err}
-			}
-		}
-		return writtenMsg{err: m.writer.Apply(changeset), pending: pending}
 	}
+
+	return writtenMsg{err: m.writer.Apply(changeset), pending: pending}
 }
 
 // onWritten refreshes after a successful write, saying so and carrying out what follows it, and reports a
@@ -86,19 +97,24 @@ func (m Model) onWritten(written writtenMsg) (Model, tea.Cmd) {
 	m.writing = false
 	if written.err != nil {
 		m.notice = "write failed: " + written.err.Error()
+
 		return m, nil
 	}
+
 	if written.pending.notice != "" {
 		m.notice = written.pending.notice
 	}
+
 	if written.pending.written != nil {
 		m = written.pending.written(m)
 	}
+
 	return m.reload()
 }
 
 // clearImport empties the Import view of the import just written.
 func clearImport(m Model) Model {
 	m.imports = m.imports.Cleared()
+
 	return m
 }

@@ -21,6 +21,7 @@ func accountsLedger() domain.Ledger {
 
 func pressKey(m Model, code rune) Model {
 	updated, _ := m.Update(tea.KeyPressMsg{Code: code})
+
 	return updated.(Model)
 }
 
@@ -48,10 +49,12 @@ func TestStatusBarShowsTheCursorPositionOnTheDashboardOnly(t *testing.T) {
 	if got := lastLine(model); !strings.Contains(got, "1/3") {
 		t.Errorf("status bar = %q, want 1/3", got)
 	}
+
 	model = pressKey(model, tea.KeyDown)
 	if got := lastLine(model); !strings.Contains(got, "2/3") {
 		t.Errorf("status bar = %q, want 2/3 after ↓", got)
 	}
+
 	other, _ := press(model, "3")
 	if got := lastLine(other); strings.Contains(got, "/3") {
 		t.Errorf("status bar = %q, want no position outside the dashboard", got)
@@ -69,6 +72,7 @@ func TestEndAndHomeMoveTheCursor(t *testing.T) {
 	if got := lastLine(model); !strings.Contains(got, "3/3") {
 		t.Errorf("status bar = %q, want 3/3 after End", got)
 	}
+
 	if got := lastLine(pressKey(model, tea.KeyHome)); !strings.Contains(got, "1/3") {
 		t.Errorf("status bar = %q, want 1/3 after Home", got)
 	}
@@ -110,6 +114,7 @@ func TestChecksPanelListsEveryUnclassifiedAccount(t *testing.T) {
 	if !strings.Contains(content, "WARN  unclassified  assets:spare has no konto:source tag") {
 		t.Errorf("checks panel lacks the unclassified row:\n%s", content)
 	}
+
 	if strings.Contains(content, "no checks have run yet") {
 		t.Errorf("the placeholder must give way to the rows:\n%s", content)
 	}

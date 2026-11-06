@@ -14,6 +14,7 @@ func (m Model) pickerRows() []domain.FileEntry {
 	if filepath.Dir(m.dir) == m.dir {
 		return m.entries
 	}
+
 	return append([]domain.FileEntry{{Name: parentEntry, IsDir: true}}, m.entries...)
 }
 
@@ -31,6 +32,7 @@ func (m Model) pickerKey(key string) (Model, Action) {
 	default:
 		m.browse = m.browse.Move(key, len(rows), m.pickerPage())
 	}
+
 	return m, nil
 }
 
@@ -42,12 +44,14 @@ func (m Model) activate(entry domain.FileEntry) Action {
 	case entry.IsDir:
 		return Browse{Dir: filepath.Join(m.dir, entry.Name)}
 	}
+
 	return Open{Path: filepath.Join(m.dir, entry.Name)}
 }
 
 func (m Model) scrollPicker() Model {
 	next := m
 	next.browse = m.browse.Scrolled(m.pickerPage())
+
 	return next
 }
 
@@ -56,15 +60,22 @@ func (m Model) picker(height int) string {
 	lines := []string{" " + theme.Bold.Render(m.dir)}
 	if m.listErr != nil {
 		lines = append(lines, " "+theme.Negative.Render(m.listErr.Error()))
+
 		return layout.Panel(pickerTitle, m.width, height, strings.Join(lines, "\n"))
 	}
 	rows := m.pickerRows()
 	for i := m.browse.Offset; i < min(len(rows), m.browse.Offset+m.pickerPage()); i++ {
-		name := rows[i].Name
-		if rows[i].IsDir && name != parentEntry {
-			name += "/"
-		}
-		lines = append(lines, listLine(name, i, m.browse.Row, m.innerWidth()))
+		lines = append(lines, listLine(entryName(rows[i]), i, m.browse.Row, m.innerWidth()))
 	}
+
 	return layout.Panel(pickerTitle, m.width, height, strings.Join(lines, "\n"))
+}
+
+// entryName is the entry as the picker lists it: a folder ends in a slash, the parent entry stays as it is.
+func entryName(entry domain.FileEntry) string {
+	if entry.IsDir && entry.Name != parentEntry {
+		return entry.Name + "/"
+	}
+
+	return entry.Name
 }

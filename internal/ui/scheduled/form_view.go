@@ -22,10 +22,12 @@ func (m Model) withForm(base string) string {
 	if m.form == nil {
 		return base
 	}
+
 	title := "new periodic rule"
 	if m.form.editing != nil {
 		title = "edit periodic rule"
 	}
+
 	return layout.OverlayFlush(base, layout.Popup(title, m.form.lines(), m.width), m.height) // cut at the screen
 }
 
@@ -36,14 +38,17 @@ func (f *form) lines() []string {
 		if !f.shown(field) {
 			continue
 		}
+
 		lines = append(lines, f.line(field))
 		if field == f.focus && f.isAccount() {
 			lines = append(lines, f.pickerLines()...)
 		}
 	}
+
 	if f.message != "" {
 		lines = append(lines, " "+theme.Negative.Render(f.message))
 	}
+
 	return append(lines, " "+theme.Dim.Render(formHint))
 }
 
@@ -53,40 +58,66 @@ func (f *form) line(field int) string {
 	if field == f.focus {
 		mark = theme.Warn.Render(focusMark)
 	}
+
 	return mark + theme.Dim.Render(padRight(fields()[field].label, labelWidth)) + f.shownValue(field)
 }
 
 // shownValue is the field's value: a text with the caret when it has the focus, the choices of a dropdown with
 // the chosen one in brackets, an account, or the picker's filter while one is being typed.
 func (f *form) shownValue(field int) string {
-	focused := field == f.focus
 	switch field {
 	case fieldFrequency:
-		names := make([]string, 0, len(periodic.Frequencies()))
-		for _, frequency := range periodic.Frequencies() {
-			names = append(names, choice(frequency.String(), frequency == f.input.Frequency))
-		}
-		return strings.Join(names, "  ")
+		return f.frequencyChoices()
 	case fieldCurrency:
-		names := make([]string, 0, len(f.currencies))
-		for _, currency := range f.currencies {
-			names = append(names, choice(currency, currency == f.input.Currency))
-		}
-		return strings.Join(names, "  ")
+		return f.currencyChoices()
 	case fieldFrom, fieldTo:
-		text := f.text(field)
-		if focused && f.filter != "" {
-			return layout.WithCaret(f.filter, f.back)
-		}
-		if text == "" {
-			text = theme.Dim.Render(noValue)
-		}
-		return text + map[bool]string{true: layout.Caret, false: ""}[focused]
+		return f.accountValue(field)
 	}
+
 	text := f.text(field)
-	if focused {
+	if field == f.focus {
 		text = layout.WithCaret(text, f.back)
 	}
+
+	return text
+}
+
+// frequencyChoices are the frequencies to choose from, the held one in brackets.
+func (f *form) frequencyChoices() string {
+	names := make([]string, 0, len(periodic.Frequencies()))
+	for _, frequency := range periodic.Frequencies() {
+		names = append(names, choice(frequency.String(), frequency == f.input.Frequency))
+	}
+
+	return strings.Join(names, "  ")
+}
+
+// currencyChoices are the currencies to choose from, the held one in brackets.
+func (f *form) currencyChoices() string {
+	names := make([]string, 0, len(f.currencies))
+	for _, currency := range f.currencies {
+		names = append(names, choice(currency, currency == f.input.Currency))
+	}
+
+	return strings.Join(names, "  ")
+}
+
+// accountValue is the account the field holds, or the picker's filter while one is being typed.
+func (f *form) accountValue(field int) string {
+	focused := field == f.focus
+	if focused && f.filter != "" {
+		return layout.WithCaret(f.filter, f.back)
+	}
+
+	text := f.text(field)
+	if text == "" {
+		text = theme.Dim.Render(noValue)
+	}
+
+	if focused {
+		return text + layout.Caret
+	}
+
 	return text
 }
 
@@ -95,6 +126,7 @@ func choice(name string, held bool) string { //nolint:revive // the held mark is
 	if held {
 		return theme.Selected.Render("[" + name + "]")
 	}
+
 	return name
 }
 
@@ -112,6 +144,7 @@ func (f *form) pickerLines() []string {
 		}
 		lines = append(lines, text)
 	}
+
 	return lines
 }
 

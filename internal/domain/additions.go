@@ -29,6 +29,7 @@ func (t NewTransaction) Lines() []string {
 	for _, posting := range t.Postings {
 		lines = append(lines, posting.Line())
 	}
+
 	return lines
 }
 
@@ -41,13 +42,16 @@ func (p NewPosting) Line() string {
 	if len(p.Amount) > 0 {
 		after = append(after, p.Amount[0].Format())
 	}
+
 	if len(p.Assertion) > 0 {
 		after = append(after, "= "+p.Assertion[0].Format())
 	}
+
 	text := p.Account
 	if len(after) > 0 {
 		text += amountGap + strings.Join(after, " ")
 	}
+
 	return "    " + text + TrailingComment(p.Comment)
 }
 
@@ -57,6 +61,7 @@ func TrailingComment(comment string) string {
 	if comment == "" {
 		return ""
 	}
+
 	return "  ; " + comment
 }
 

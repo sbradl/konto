@@ -20,14 +20,17 @@ func (w *world) eventually(check func() error) error {
 	if err != nil {
 		return err
 	}
+
 	if err := w.awaitIdleIfRunning(); err != nil {
 		return err
 	}
 	var failure error
 	s.waitFor(w.suite.timeout, func(string) bool {
 		failure = check()
+
 		return failure == nil
 	})
+
 	return failure
 }
 
@@ -38,6 +41,7 @@ func allJournalText(files map[string][]byte) string {
 		all.Write(content)
 		all.WriteByte('\n')
 	}
+
 	return all.String()
 }
 
@@ -47,9 +51,11 @@ func expectFileBlock(path, want string) error {
 	if err != nil {
 		return err
 	}
+
 	if !containsBlock(string(b), want) {
 		return fmt.Errorf("%s does not contain\n%s\n--- actual ---\n%s", filepath.Base(path), want, b)
 	}
+
 	return nil
 }
 
@@ -62,6 +68,7 @@ func (w *world) expectJournalBlock(want string) error {
 		}
 		names = append(names, filepath.Base(path))
 	}
+
 	return fmt.Errorf("none of %v contains\n%s", names, want)
 }
 
@@ -71,6 +78,7 @@ func expectUnchanged(path string, before []byte) error {
 	if !bytes.Equal(now, before) {
 		return fmt.Errorf("%s changed:\n--- before ---\n%s\n--- after ---\n%s", filepath.Base(path), before, now)
 	}
+
 	return nil
 }
 
@@ -78,6 +86,7 @@ func expectAbsent(path string) error {
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		return fmt.Errorf("%s exists", path)
 	}
+
 	return nil
 }
 
@@ -93,9 +102,11 @@ func (w *world) expectJournalFilesUnchanged() error {
 			return err
 		}
 	}
+
 	if len(now) != len(w.filesAtStart) {
 		return errors.New("the set of journal files changed")
 	}
+
 	return nil
 }
 
@@ -104,6 +115,7 @@ func (w *world) expectRulesUnchanged() error {
 	if err := w.awaitIdleIfRunning(); err != nil {
 		return err
 	}
+
 	return expectUnchanged(w.rules, w.rulesAtStart)
 }
 
@@ -112,5 +124,6 @@ func (w *world) awaitIdleIfRunning() error {
 	if w.s == nil || w.s.exited() {
 		return nil
 	}
+
 	return w.awaitIdle()
 }

@@ -31,6 +31,7 @@ func appendBlock(file *source, block []string) {
 	for len(lines) > 0 && lines[len(lines)-1] == "" {
 		lines = lines[:len(lines)-1]
 	}
+
 	if len(lines) > 0 {
 		lines = append(lines, "")
 	}
@@ -61,6 +62,7 @@ func (w *workspace) addTransactions(edit domain.AddTransactions) error {
 		insertTransaction(target, transaction)
 		w.touched = append(w.touched, transaction.Date.Year())
 	}
+
 	return nil
 }
 
@@ -71,15 +73,18 @@ func (w *workspace) yearFile(year int) (*source, error) {
 		return nil, domain.RefusalError{Reason: fmt.Sprintf(
 			"a transaction dated %d is after this year, %d", year, w.thisYear)}
 	}
+
 	if found := w.findYear(year); found != nil {
 		return found, nil
 	}
+
 	if slices.Contains(w.onDisk, year) {
 		return w.readYear(year)
 	}
 	created := &source{path: w.yearPath(year), lines: []string{""}}
 	w.sources = append(w.sources, created)
 	w.created[year] = true
+
 	return created, nil
 }
 
@@ -93,6 +98,7 @@ func insertTransaction(file *source, transaction domain.NewTransaction) {
 	later := firstDatedAfter(file.lines, transaction.Date)
 	if later < 0 {
 		appendBlock(file, transaction.Lines())
+
 		return
 	}
 	block := append(transaction.Lines(), "")
@@ -108,33 +114,52 @@ func firstDatedAfter(lines []string, date time.Time) int {
 			for i > 0 && strings.HasPrefix(lines[i-1], ";") {
 				i--
 			}
+
 			return i
 		}
 	}
+
 	return -1
 }
 
 // setCategoryRule replaces the rule block with the id, or adds the block at the end of categories.rules.
 func (w *workspace) setCategoryRule(edit domain.SetCategoryRule) error {
-	if w.rules == nil {
-		text, err := os.ReadFile(w.rulesPath)
-		if err != nil && !os.IsNotExist(err) {
-			return fmt.Errorf("reading %s: %w", w.rulesPath, err)
-		}
-		w.rules = &source{path: w.rulesPath, lines: strings.Split(string(text), "\n")}
+	if err := w.loadRules(); err != nil {
+		return err
 	}
+
 	block := strings.Split(edit.Text, "\n")
+
 	first, end, found := rulesfile.Block(w.rules.lines, edit.ID)
 	if !found && edit.First {
 		w.rules.lines = slices.Concat(block, []string{""}, w.rules.lines)
 		w.rules.dirty = true
+
 		return nil
 	}
+
 	if !found {
 		appendBlock(w.rules, block)
+
 		return nil
 	}
 	w.rules.lines = slices.Replace(w.rules.lines, first, end, block...)
 	w.rules.dirty = true
+
+	return nil
+}
+
+// loadRules reads categories.rules once; a missing file is an empty one.
+func (w *workspace) loadRules() error {
+	if w.rules != nil {
+		return nil
+	}
+
+	text, err := os.ReadFile(w.rulesPath)
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("reading %s: %w", w.rulesPath, err)
+	}
+	w.rules = &source{path: w.rulesPath, lines: strings.Split(string(text), "\n")}
+
 	return nil
 }

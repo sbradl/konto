@@ -22,6 +22,7 @@ type fakeForecaster struct {
 
 func (f *fakeForecaster) Forecast(_ context.Context, snapshot domain.Ledger) (forecastsvc.Forecast, error) {
 	f.ledgers = append(f.ledgers, snapshot)
+
 	return f.forecast, f.err
 }
 
@@ -42,6 +43,7 @@ func oneChart(commodities ...string) forecastsvc.Forecast {
 		}
 		forecast.Charts = append(forecast.Charts, forecastsvc.Chart{Commodity: commodity, Lines: []forecastsvc.Line{line}})
 	}
+
 	return forecast
 }
 
@@ -53,6 +55,7 @@ func withForecaster(t *testing.T, forecaster *fakeForecaster) Model {
 	})
 	updated, _ := model.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	updated, cmd := updated.Update(model.load())
+
 	return deliver(updated.(Model), cmd)
 }
 
@@ -71,6 +74,7 @@ func TestTheLoadedJournalIsForecastAndTheForecastViewShowsIt(t *testing.T) {
 			t.Errorf("view lacks %q:\n%s", want, content)
 		}
 	}
+
 	if got := lastLine(model); !strings.HasPrefix(strings.TrimSpace(got), "forecast") || regexpPosition.MatchString(got) {
 		t.Errorf("status bar = %q, want the view's name and no position", got)
 	}

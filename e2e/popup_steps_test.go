@@ -37,6 +37,7 @@ func openPopup(lines []string) (popup, bool) {
 			return popup{title: match[1], top: y, edge: line, rows: lines[y+1 : len(lines)-1], lines: lines}, true
 		}
 	}
+
 	return popup{}, false
 }
 
@@ -53,8 +54,10 @@ func (w *world) expectPopup(title string, open bool) error {
 		default:
 			failure = nil
 		}
+
 		return failure
 	})
+
 	return err
 }
 
@@ -65,6 +68,7 @@ func (w *world) withPopup(check func(p popup) error) error {
 		if !found {
 			return errors.New("no popup is open")
 		}
+
 		return check(p)
 	})
 }
@@ -73,12 +77,14 @@ func (w *world) expectPopupContains(title string, texts []string) error {
 	if err := w.expectPopup(title, true); err != nil {
 		return err
 	}
+
 	return w.withPopup(func(p popup) error {
 		for _, text := range texts {
 			if !strings.Contains(strings.Join(p.rows, "\n"), text) {
 				return fmt.Errorf("the popup does not show %q", text)
 			}
 		}
+
 		return nil
 	})
 }
@@ -89,6 +95,7 @@ func quotedList(list string) []string {
 	for i, match := range matches {
 		texts[i] = match[1]
 	}
+
 	return texts
 }
 
@@ -100,6 +107,7 @@ func countKeyLabels(row string) int {
 			count++
 		}
 	}
+
 	return count
 }
 
@@ -123,6 +131,7 @@ func registerPopupVisibilitySteps(sc *godog.ScenarioContext, w *world) {
 			if first := p.lines[0]; !strings.Contains(first, "1 dash") {
 				return fmt.Errorf("the tab bar is covered: %q", first)
 			}
+
 			return nil
 		})
 	})
@@ -134,6 +143,7 @@ func registerPopupGeometrySteps(sc *godog.ScenarioContext, w *world) {
 			if got := ansi.StringWidth(p.edge); got != w.width {
 				return fmt.Errorf("the popup edge is %d cells wide, want %d", got, w.width)
 			}
+
 			return nil
 		})
 	})
@@ -142,6 +152,7 @@ func registerPopupGeometrySteps(sc *godog.ScenarioContext, w *world) {
 			if height := len(p.rows) + 1; height > w.height/2 {
 				return fmt.Errorf("the popup is %d rows tall, want at most %d", height, w.height/2)
 			}
+
 			return nil
 		})
 	})
@@ -150,6 +161,7 @@ func registerPopupGeometrySteps(sc *godog.ScenarioContext, w *world) {
 			if columns := countKeyLabels(p.rows[0]); columns > most {
 				return fmt.Errorf("the first popup row has %d columns, want at most %d: %q", columns, most, p.rows[0])
 			}
+
 			return nil
 		})
 	})

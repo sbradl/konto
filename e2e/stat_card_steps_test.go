@@ -28,9 +28,11 @@ func (w *world) statCards() ([]statCard, error) {
 	for y, line := range lines {
 		if strings.Contains(line, "╭─ ACCOUNTS ") {
 			top = y
+
 			break
 		}
 	}
+
 	if top < 0 {
 		return nil, errors.New("no dashboard on screen")
 	}
@@ -40,6 +42,7 @@ func (w *world) statCards() ([]statCard, error) {
 		if string(runes[x:x+3]) != "╭─ " {
 			continue
 		}
+
 		title, _, _ := strings.Cut(strings.TrimLeft(string(runes[x+3:]), " "), " ─")
 		if strings.TrimSuffix(title, " ◂") == "ACCOUNTS" { // the focus mark (ADR 0014)
 			continue
@@ -50,6 +53,7 @@ func (w *world) statCards() ([]statCard, error) {
 			note:  cardCell(lines[top+2], x),
 		})
 	}
+
 	return cards, nil
 }
 
@@ -60,12 +64,14 @@ func cardCell(row string, x int) string {
 		return ""
 	}
 	inside, _, _ := strings.Cut(string(runes[x+1:]), "│")
+
 	return strings.TrimSpace(inside)
 }
 
 // expectCard waits for the card with the title and remembers it for the steps that follow.
 func (w *world) expectCard(title string, check func(card statCard) error) error {
 	var failure error
+
 	s, err := w.session()
 	if err != nil {
 		return err
@@ -74,6 +80,7 @@ func (w *world) expectCard(title string, check func(card statCard) error) error 
 		cards, cerr := w.statCards()
 		if cerr != nil {
 			failure = cerr
+
 			return false
 		}
 		failure = fmt.Errorf("no %q card on screen", title)
@@ -83,11 +90,14 @@ func (w *world) expectCard(title string, check func(card statCard) error) error 
 				failure = check(card)
 			}
 		}
+
 		return failure == nil
 	})
+
 	if failure != nil {
 		return fmt.Errorf("%w\n%s", failure, s.screenText())
 	}
+
 	return nil
 }
 
@@ -102,6 +112,7 @@ func registerCardReadingSteps(sc *godog.ScenarioContext, w *world) {
 			if card.value != value {
 				return fmt.Errorf("the %q card shows %q, want %q", title, card.value, value)
 			}
+
 			return nil
 		})
 	})
@@ -109,6 +120,7 @@ func registerCardReadingSteps(sc *godog.ScenarioContext, w *world) {
 		if w.focusedCard.note != note {
 			return fmt.Errorf("the card note reads %q, want %q", w.focusedCard.note, note)
 		}
+
 		return nil
 	})
 	step(sc, `^I see exactly (\d+) stat cards$`, w.expectCardCount)
@@ -142,6 +154,7 @@ func registerCardFixtureSteps(sc *godog.ScenarioContext, w *world) {
 		if err := w.expectScreen(false, a); err != nil {
 			return err
 		}
+
 		return w.expectScreen(false, b)
 	})
 	step(sc, `^the "([^"]*)" row shows "([^"]*)" or "([^"]*)"$`, func(account, a, b string) error {
@@ -149,6 +162,7 @@ func registerCardFixtureSteps(sc *godog.ScenarioContext, w *world) {
 			if err := expectShows(account, a)(rows); err != nil {
 				return expectShows(account, b)(rows)
 			}
+
 			return nil
 		})
 	})
@@ -159,23 +173,28 @@ func (w *world) expectFigure(title, value string) error {
 		if card.value != value {
 			return fmt.Errorf("the %q card shows %q, want %q", title, card.value, value)
 		}
+
 		return nil
 	})
 }
 
 func (w *world) expectCardCount(n int) error {
 	var failure error
+
 	s, err := w.session()
 	if err != nil {
 		return err
 	}
 	s.waitFor(w.suite.timeout, func(string) bool {
 		cards, cerr := w.statCards()
+
 		failure = cerr
 		if cerr == nil && len(cards) != n {
 			failure = fmt.Errorf("%d stat cards on screen, want %d", len(cards), n)
 		}
+
 		return failure == nil
 	})
+
 	return failure
 }

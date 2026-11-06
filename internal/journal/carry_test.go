@@ -28,6 +28,7 @@ func inJanuary2027(t *testing.T, years map[int]string) File {
 			t.Fatal(err)
 		}
 	}
+
 	return file
 }
 
@@ -37,6 +38,7 @@ func balances(mantissa int64) []domain.Account {
 
 func euro(mantissa int64) domain.MultiAmount {
 	style := domain.DefaultAmount("EUR").Style
+
 	return domain.MultiAmount{{Commodity: "EUR", Mantissa: mantissa, Places: 2, Style: style}}
 }
 
@@ -49,6 +51,7 @@ func TestSetCarryClosesTheYearBeforeAndOpensTheYear(t *testing.T) {
 	if got := readFile(t, file.yearPath(2026)); got != wantPrior {
 		t.Errorf("2026 =\n%s\nwant\n%s", got, wantPrior)
 	}
+
 	wantYear := "2027-01-01 opening balance  ; konto:carry\n    assets:checking  9,00 EUR\n    equity:opening-balances\n\n" +
 		"2027-01-10 B\n    expenses:x  1,00 EUR\n    assets:checking\n"
 	if got := readFile(t, file.yearPath(2027)); got != wantYear {
@@ -78,6 +81,7 @@ func TestSetCarryReplacesTheCarryItWroteBeforeAndKeepsTheYearsOwnOpening(t *test
 	if got := readFile(t, file.yearPath(2026)); got != wantPrior {
 		t.Errorf("2026 =\n%s\nwant\n%s", got, wantPrior)
 	}
+
 	wantYear := "2027-01-01 opening balance  ; konto:carry\n    assets:checking  12,00 EUR\n    equity:opening-balances\n"
 	if got := readFile(t, file.yearPath(2027)); got != wantYear {
 		t.Errorf("2027 =\n%s\nwant\n%s", got, wantYear)
@@ -93,6 +97,7 @@ func TestSetCarryWithoutBalancesRemovesTheCarryAndOnlyIt(t *testing.T) {
 	if got := readFile(t, file.yearPath(2026)); got != carriedYear {
 		t.Errorf("2026 =\n%s\nwant\n%s", got, carriedYear)
 	}
+
 	if got, want := readFile(t, file.yearPath(2027)), "2027-01-10 B\n    expenses:x  1,00 EUR\n    assets:checking\n"; got != want {
 		t.Errorf("2027 =\n%s\nwant\n%s", got, want)
 	}

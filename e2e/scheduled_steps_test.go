@@ -28,6 +28,7 @@ func filledRows(rows []recentRow) []recentRow {
 			filled = append(filled, row)
 		}
 	}
+
 	return filled
 }
 
@@ -51,6 +52,7 @@ func (w *world) expectRuleOrder(table *godog.Table) error {
 				position += at + len(cell.Value)
 			}
 		}
+
 		return nil
 	})
 }
@@ -66,9 +68,11 @@ func (w *world) selectedRule(rows []recentRow) (int, error) {
 			if fg := s.cellColour(row.x+2, row.y); fg != 15 && fg != -1 {
 				return 0, fmt.Errorf("the selected rule has foreground %d, want 15", fg)
 			}
+
 			return i, nil
 		}
 	}
+
 	return 0, errors.New("no rule is selected")
 }
 
@@ -78,10 +82,12 @@ func (w *world) expectRuleSelected(which string) error {
 		if err != nil {
 			return err
 		}
+
 		want := map[string]int{"first": 0, "second": 1, "last": len(rows) - 1}[which]
 		if got != want {
 			return fmt.Errorf("rule %d is selected, want the %s (%d)", got, which, want)
 		}
+
 		return nil
 	})
 }
@@ -92,6 +98,7 @@ func (w *world) expectRuleStatus(description, status string) error {
 
 func (w *world) expectEntry(doc *godog.DocString) error {
 	want := strings.Split(strings.TrimSpace(doc.Content), "\n")
+
 	return w.expectPanel(entryTitle, func(rows []recentRow) error {
 		if len(rows) < len(want) {
 			return fmt.Errorf("the entry panel has %d lines, want %d", len(rows), len(want))
@@ -101,6 +108,7 @@ func (w *world) expectEntry(doc *godog.DocString) error {
 				return fmt.Errorf("entry line %d is %q, want %q", i+1, rows[i].text, line)
 			}
 		}
+
 		return nil
 	})
 }
@@ -119,6 +127,7 @@ func (w *world) expectOccurrences(table *godog.Table, exactly bool) error {
 				return fmt.Errorf("occurrence %d is not %s", i+1, want.Cells[0].Value)
 			}
 		}
+
 		return nil
 	})
 }
@@ -128,6 +137,7 @@ func (w *world) expectFirstOccurrence(date string) error {
 		if len(rows) == 0 || !strings.Contains(rows[0].text, date) {
 			return fmt.Errorf("the first occurrence is not %s", date)
 		}
+
 		return nil
 	})
 }
@@ -146,6 +156,7 @@ func (w *world) expectNoneOf3(a, b, c string) error {
 			return fmt.Errorf("the status bar %q lists %q", line, text)
 		}
 	}
+
 	return nil
 }
 
@@ -160,6 +171,7 @@ func (w *world) expectRuleListEmpty() error {
 				return fmt.Errorf("the list shows %q, want no rules", row.text)
 			}
 		}
+
 		return nil
 	})
 }
@@ -170,17 +182,21 @@ func (w *world) selectRule(description string) error {
 		return err
 	}
 	var target int
+
 	if err := w.expectPanel(rulesTitle, func(rows []recentRow) error {
 		for i, row := range rows {
 			if strings.Contains(row.text, description) {
 				target = i
+
 				return nil
 			}
 		}
+
 		return fmt.Errorf("no rule %q is listed", description)
 	}); err != nil {
 		return err
 	}
+
 	return w.press(append([]string{"Home"}, repeat("↓", target)...)...)
 }
 
@@ -190,6 +206,7 @@ func (w *world) useIncludedRule(name, file string) error {
 	if err := os.WriteFile(filepath.Join(filepath.Dir(w.journal), file), []byte(rule), 0o644); err != nil {
 		return err
 	}
+
 	return w.useJournal(name, "\ninclude "+file+"\n")
 }
 
@@ -234,6 +251,7 @@ func ruleBlocks(text string) []string {
 		}
 		blocks = append(blocks, strings.Join(block, "\n"))
 	}
+
 	return blocks
 }
 
@@ -242,6 +260,7 @@ func (w *world) expectRuleCount(n int) error {
 		if len(rows) != n {
 			return fmt.Errorf("the list has %d rules, want %d", len(rows), n)
 		}
+
 		return nil
 	})
 }
@@ -249,6 +268,7 @@ func (w *world) expectRuleCount(n int) error {
 func (w *world) expectAnyRuleSelected() error {
 	return w.expectPanel(rulesTitle, func(rows []recentRow) error {
 		_, err := w.selectedRule(rows)
+
 		return err
 	})
 }
@@ -262,6 +282,7 @@ func (w *world) expectNoRuleLine(text string) error {
 				return fmt.Errorf("the journal still has the rule %q", header)
 			}
 		}
+
 		return nil
 	})
 }
@@ -275,6 +296,7 @@ func (w *world) expectJournalLacks(texts ...string) error {
 				return fmt.Errorf("the journal still contains %q", text)
 			}
 		}
+
 		return nil
 	})
 }
@@ -289,9 +311,11 @@ func (w *world) expectOneBlockRemoved() error {
 				missing++
 			}
 		}
+
 		if missing != 1 {
 			return fmt.Errorf("%d rule blocks changed, want exactly one removed", missing)
 		}
+
 		return nil
 	})
 }
@@ -303,10 +327,12 @@ func (w *world) expectRuleIntact(description string) error {
 				if !strings.Contains(allJournalText(w.journalFiles()), block) {
 					return fmt.Errorf("the rule %q is not intact", description)
 				}
+
 				return nil
 			})
 		}
 	}
+
 	return fmt.Errorf("no rule %q at start", description)
 }
 
@@ -314,13 +340,16 @@ func (w *world) expectMainJournalUnchanged() error {
 	if err := w.awaitIdleIfRunning(); err != nil {
 		return err
 	}
+
 	now, err := os.ReadFile(w.journal)
 	if err != nil {
 		return err
 	}
+
 	if !bytes.Equal(now, w.filesAtStart[w.journal]) {
 		return errors.New("the main journal changed")
 	}
+
 	return nil
 }
 
@@ -330,9 +359,11 @@ func (w *world) expectFileLacksRule(name string) error {
 		if err != nil {
 			return err
 		}
+
 		if len(ruleBlocks(string(b))) != 0 {
 			return fmt.Errorf("%s still holds a rule", name)
 		}
+
 		return nil
 	})
 }
@@ -344,6 +375,7 @@ func (w *world) expectUpcomingLacks(description string) error {
 				return fmt.Errorf("Upcoming still lists %q", description)
 			}
 		}
+
 		return nil
 	})
 }
@@ -353,6 +385,7 @@ func (w *world) expectJournalStillHas(text string) error {
 		if !strings.Contains(allJournalText(w.journalFiles()), text) {
 			return fmt.Errorf("the journal no longer contains %q", text)
 		}
+
 		return nil
 	})
 }

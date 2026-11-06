@@ -59,6 +59,7 @@ func (m Model) onScheduledKey(key string) (Model, tea.Cmd) {
 	case scheduled.EditSelected, scheduled.DeleteSelected:
 		return m.onSelectedRule(action)
 	}
+
 	return m, nil
 }
 
@@ -67,17 +68,22 @@ func (m Model) onScheduledKey(key string) (Model, tea.Cmd) {
 func (m Model) onSelectedRule(action scheduled.Action) (Model, tea.Cmd) {
 	if m.busy() {
 		m.notice = reloadingNotice // the rule's place may have moved
+
 		return m, nil
 	}
+
 	rule, _ := m.scheduled.Selected() // edit and delete come only with a rule selected
 	if _, del := action.(scheduled.DeleteSelected); del {
 		question := `delete rule "` + rule.Description + `"?`
 		m.prompt = &prompt{question: question, write: pendingWrite{changeset: rule.Delete()}}
+
 		return m, nil
 	}
+
 	if m.rules == nil {
 		return m, nil
 	}
+
 	return m, m.readRule(rule)
 }
 
@@ -85,6 +91,7 @@ func (m Model) onSelectedRule(action scheduled.Action) (Model, tea.Cmd) {
 func (m Model) readRule(rule domain.PeriodicRule) tea.Cmd {
 	return func() tea.Msg {
 		input, err := m.rules.Form(context.Background(), rule, *m.ledger)
+
 		return formReadyMsg{load: m.loads, input: input, rule: rule, err: err}
 	}
 }
@@ -98,9 +105,11 @@ func (m Model) onFormReady(ready formReadyMsg) Model {
 		return m
 	case ready.err != nil:
 		m.notice = "cannot edit " + ready.rule.Description + ": " + ready.err.Error()
+
 		return m
 	}
 	m.scheduled = m.scheduled.OpenEdit(ready.input, ready.rule)
+
 	return m
 }
 
@@ -108,31 +117,42 @@ func (m Model) onFormReady(ready formReadyMsg) Model {
 // other save is in flight. Closing the form forgets the save being planned for it.
 func (m Model) onFormKey(key string) (Model, tea.Cmd) {
 	var action scheduled.Action
+
 	m.scheduled, action = m.scheduled.FormKey(key)
 	if !m.scheduled.Capturing() {
 		m.saving = nil
 	}
+
 	save, ok := action.(*scheduled.Save)
 	if !ok {
 		return m, nil
 	}
+
 	if m.busy() || m.saving != nil {
 		m.scheduled = m.scheduled.WithFormError(reloadingNotice)
+
 		return m, nil
 	}
 	m.saving = save
-	return m, func() tea.Msg {
-		var (
-			changeset domain.Changeset
-			err       error
-		)
-		if save.Editing != nil {
-			changeset, err = m.rules.Replace(context.Background(), save.Input, *save.Editing, *m.ledger)
-		} else {
-			changeset, err = m.rules.Add(context.Background(), save.Input, *m.ledger)
-		}
-		return ruleSavedMsg{save: save, load: m.loads, changeset: changeset, err: err}
+
+	return m, m.planRule(save)
+}
+
+// planRule plans the rule the form holds, replacing the rule being edited or adding a new one.
+func (m Model) planRule(save *scheduled.Save) tea.Cmd {
+	return func() tea.Msg { return m.planSave(context.Background(), save) }
+}
+
+// planSave plans the form's rule: a replacement when it edits a rule, else an addition.
+func (m Model) planSave(ctx context.Context, save *scheduled.Save) ruleSavedMsg {
+	saved := ruleSavedMsg{save: save, load: m.loads}
+	if save.Editing != nil {
+		saved.changeset, saved.err = m.rules.Replace(ctx, save.Input, *save.Editing, *m.ledger)
+	} else {
+		saved.changeset, saved.err = m.rules.Add(ctx, save.Input, *m.ledger)
 	}
+
+	return saved
 }
 
 // onRuleSaved writes the planned rule, closing the form once it is written, or keeps the form open with the
@@ -142,27 +162,40 @@ func (m Model) onRuleSaved(saved ruleSavedMsg) (Model, tea.Cmd) {
 	if saved.save != m.saving {
 		return m, nil
 	}
+
 	m.saving = nil
 	if !m.fresh(saved.load) {
 		m.scheduled = m.scheduled.WithFormError(reloadingNotice)
+
 		return m, nil
 	}
+
 	if saved.err != nil {
 		if _, refused := errors.AsType[domain.RefusalError](saved.err); !refused {
 			m.failure = saved.err
 		}
 		m.scheduled = m.scheduled.WithFormError(saved.err.Error())
+
 		return m, nil
 	}
-	notice := "rule added"
-	if saved.save.Editing != nil {
-		notice = "rule updated"
-	}
+
+	notice := savedNotice(saved.save)
+
 	return m.write(pendingWrite{changeset: saved.changeset, verify: true, notice: notice, written: closeForm})
+}
+
+// savedNotice is what the status bar says once the rule is written.
+func savedNotice(save *scheduled.Save) string {
+	if save.Editing != nil {
+		return "rule updated"
+	}
+
+	return "rule added"
 }
 
 // closeForm closes the Scheduled form on the rule just written.
 func closeForm(m Model) Model {
 	m.scheduled = m.scheduled.CloseForm()
+
 	return m
 }

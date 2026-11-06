@@ -24,6 +24,7 @@ func (m Model) onImportKey(key string) (Model, tea.Cmd) {
 	case imports.Browse:
 		return m, func() tea.Msg {
 			entries, err := m.importer.Browse(action.Dir)
+
 			return browsedMsg{dir: action.Dir, entries: entries, err: err}
 		}
 	case imports.Open:
@@ -31,6 +32,7 @@ func (m Model) onImportKey(key string) (Model, tea.Cmd) {
 	case imports.Write:
 		return m.planImport(), nil
 	}
+
 	return m, nil
 }
 
@@ -41,10 +43,13 @@ func (m Model) importDialogOpen() bool { return m.importer != nil && m.imports.C
 func (m Model) openExport(path string) (Model, tea.Cmd) {
 	if m.busy() {
 		m.imports = m.imports.WithMessage("still reloading the journal — open the file again in a moment")
+
 		return m, nil
 	}
+
 	return m, func() tea.Msg {
 		staged, err := m.importer.Open(context.Background(), path, *m.ledger)
+
 		return openedMsg{staged: staged, err: err, load: m.loads}
 	}
 }
@@ -54,12 +59,15 @@ func (m Model) openExport(path string) (Model, tea.Cmd) {
 func (m Model) planImport() Model {
 	if m.busy() {
 		m.imports = m.imports.WithMessage(reloadingNotice) // the staged rows are about to be read again
+
 		return m
 	}
 	staged, _ := m.imports.Staged() // the view asks to write only with an import staged
+
 	plan, err := staged.Plan()
 	if err != nil {
 		m.imports = m.imports.WithMessage(err.Error())
+
 		return m
 	}
 	transactions := layout.Plural(plan.Count, "transaction")
@@ -70,6 +78,7 @@ func (m Model) planImport() Model {
 			written: clearImport,
 		},
 	}
+
 	return m
 }
 
@@ -79,8 +88,10 @@ func (m Model) reopen(loaded ledgerLoadedMsg) tea.Cmd {
 	if !ok || m.importer == nil || loaded.err != nil || staged.Path == "" {
 		return nil
 	}
+
 	return func() tea.Msg {
 		fresh, err := m.importer.Open(context.Background(), staged.Path, loaded.ledger)
+
 		return openedMsg{staged: fresh, err: err, earlier: &staged, load: loaded.load}
 	}
 }
@@ -98,6 +109,7 @@ func (m Model) onReopened(opened openedMsg) Model {
 	default:
 		m.imports = m.imports.WithRefreshed(opened.staged.Restage(*opened.earlier))
 	}
+
 	return m
 }
 
@@ -108,6 +120,7 @@ func (m Model) onOpened(opened openedMsg) Model {
 	if !m.fresh(opened.load) {
 		return m
 	}
+
 	if opened.earlier != nil {
 		return m.onReopened(opened)
 	}
@@ -117,12 +130,19 @@ func (m Model) onOpened(opened openedMsg) Model {
 		m.imports = m.imports.WithStaged(opened.staged)
 	case errors.As(opened.err, &convertErr):
 		m.failure = convertErr
-		first, _, _ := strings.Cut(strings.TrimSpace(convertErr.Error()), "\n")
-		m.imports = m.imports.WithMessage("unreadable row or file: " + first)
+		m.imports = m.imports.WithMessage("unreadable row or file: " + firstLineOf(convertErr))
 	case errors.Is(opened.err, domain.ErrAccountClosed):
 		m.imports = m.imports.WithMessage(opened.err.Error() + " — reopen with o")
 	default:
 		m.imports = m.imports.WithMessage(opened.err.Error())
 	}
+
 	return m
+}
+
+// firstLineOf is the first line of what err says.
+func firstLineOf(err error) string {
+	first, _, _ := strings.Cut(strings.TrimSpace(err.Error()), "\n")
+
+	return first
 }

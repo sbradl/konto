@@ -22,11 +22,13 @@ type fakePlanner struct {
 
 func (f *fakePlanner) Close(account domain.Account) (domain.Changeset, error) {
 	f.closed = append(f.closed, account.Name)
+
 	return f.changeset, f.err
 }
 
 func (f *fakePlanner) Reopen(account domain.Account) (domain.Changeset, error) {
 	f.reopened = append(f.reopened, account.Name)
+
 	return f.changeset, f.err
 }
 
@@ -41,11 +43,13 @@ type fakeWriter struct {
 
 func (f *fakeWriter) Prepare(_ context.Context, changeset domain.Changeset) (domain.Changeset, error) {
 	f.prepared = append(f.prepared, changeset)
+
 	return domain.Changeset{Edits: append(slices.Clone(changeset.Edits), f.carry...)}, f.prepareErr
 }
 
 func (f *fakeWriter) Apply(changeset domain.Changeset) error {
 	f.applied = append(f.applied, changeset)
+
 	return f.err
 }
 
@@ -59,6 +63,7 @@ func withAccounts(t *testing.T, planner *fakePlanner, writer *fakeWriter) Model 
 	})
 	updated, _ := model.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	updated, _ = updated.Update(model.load())
+
 	return updated.(Model)
 }
 
@@ -69,6 +74,7 @@ func TestCAsksBeforeClosingTheSelectedAccount(t *testing.T) {
 	if got := lastLine(model); !strings.Contains(got, "close assets:checking? (y/n)") {
 		t.Errorf("status bar = %q, want the close question", got)
 	}
+
 	if len(writer.applied) != 0 {
 		t.Error("nothing is written before the answer")
 	}
@@ -98,9 +104,11 @@ func TestYAppliesThePlannedChangeAndRefreshes(t *testing.T) {
 		t.Fatalf("prompt = %v, cmd = %v; want the prompt closed and the write started", model.prompt, cmd)
 	}
 	written := cmd()
+
 	if len(writer.applied) != 1 || writer.applied[0].Edits[0] != closeSpare.Edits[0] {
 		t.Errorf("applied = %+v, want the planned changeset", writer.applied)
 	}
+
 	updated, reload := model.Update(written)
 	if !updated.(Model).busy() || reload == nil {
 		t.Error("a successful write should start a refresh")
@@ -126,6 +134,7 @@ func TestAFailedWriteIsReportedAndNotRefreshed(t *testing.T) {
 	if got := lastLine(updated.(Model)); !strings.Contains(got, "write failed: disk full") || cmd != nil {
 		t.Errorf("status bar = %q, cmd = %v; want the failure shown and no refresh", got, cmd)
 	}
+
 	if updated.(Model).busy() {
 		t.Error("the spinner should stop once the write has failed")
 	}
@@ -142,6 +151,7 @@ func TestNEscAndOtherKeysDoNotWrite(t *testing.T) {
 			t.Errorf("%q: prompt open = %v, cmd = %v, active = %d; want open = %v and nothing else", key, model.prompt != nil, cmd, model.active, wantOpen)
 		}
 	}
+
 	model, _ := press(withAccounts(t, &fakePlanner{changeset: closeSpare}, &fakeWriter{}), "c")
 	if model = pressEsc(model); model.prompt != nil {
 		t.Error("Esc should cancel the prompt")
@@ -163,6 +173,7 @@ func TestARefusalIsShownUntilTheNextKey(t *testing.T) {
 	if got := lastLine(model); !strings.Contains(got, "cannot close assets:checking: balance is 13.240,00 EUR") || model.prompt != nil {
 		t.Errorf("status bar = %q, prompt = %v; want the refusal and no prompt", got, model.prompt)
 	}
+
 	model, _ = press(model, "x")
 	if got := lastLine(model); strings.Contains(got, "cannot close") {
 		t.Errorf("status bar = %q, want the refusal gone after a key", got)
@@ -200,6 +211,7 @@ func TestAccountKeysDoNothingOutsideTheDashboardOrWithAPopupOpen(t *testing.T) {
 			}
 		}
 	}
+
 	if len(planner.closed)+len(planner.reopened) != 0 {
 		t.Error("the planner must not be asked")
 	}

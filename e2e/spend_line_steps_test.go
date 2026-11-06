@@ -47,10 +47,12 @@ func (w *world) spendGrid() (chartGrid, error) {
 		}
 		grid.rows = append(grid.rows, cells)
 	}
+
 	if len(grid.rows) == 0 {
 		return chartGrid{}, errors.New("the SPEND panel is too small to plot")
 	}
 	grid.left = strings.IndexRune(string(grid.rows[0]), '│')
+
 	return grid, nil
 }
 
@@ -70,6 +72,7 @@ func (g chartGrid) dotsAt(col int) []int {
 			}
 		}
 	}
+
 	return dots
 }
 
@@ -83,6 +86,7 @@ func (g chartGrid) plotted(months int, top float64) ([]float64, error) {
 		for reach := 0; len(dots) == 0 && reach < 2; reach++ {
 			dots = append(g.dotsAt(col-reach), g.dotsAt(col+reach)...)
 		}
+
 		if len(dots) == 0 {
 			return nil, fmt.Errorf("the line has no dot at column %d (month %d)", col, i+1)
 		}
@@ -92,6 +96,7 @@ func (g chartGrid) plotted(months int, top float64) ([]float64, error) {
 		}
 		values[i] = top * spendHeadroom * (span - float64(sum)/float64(len(dots))) / span
 	}
+
 	return values, nil
 }
 
@@ -103,6 +108,7 @@ func (w *world) expectPlottedTotals(want []float64) error {
 		if gerr != nil {
 			return gerr
 		}
+
 		got, perr := grid.plotted(len(want), top)
 		if perr != nil {
 			return perr
@@ -112,11 +118,14 @@ func (w *world) expectPlottedTotals(want []float64) error {
 			if math.Abs(got[i]-want[i]) > dotTolerance*step {
 				failure = fmt.Errorf("month %d is plotted at about %.0f, want %.0f (±%.0f)",
 					i+1, got[i], want[i], dotTolerance*step)
+
 				return failure
 			}
 		}
+
 		return nil
 	})
+
 	return err
 }
 
@@ -125,6 +134,7 @@ func slicesMax(values []float64) float64 {
 	for _, v := range values {
 		top = math.Max(top, v)
 	}
+
 	return top
 }
 
@@ -136,6 +146,7 @@ func (w *world) expectPlottedList(list string) error {
 	for i, n := range numbers {
 		want[i], _ = strconv.ParseFloat(n, 64)
 	}
+
 	return w.expectPlottedTotals(want)
 }
 
@@ -143,10 +154,12 @@ func (w *world) expectOneSeries() error {
 	if err := w.expectBrailleChart(); err != nil {
 		return err
 	}
+
 	s, err := w.session()
 	if err != nil {
 		return err
 	}
+
 	rows, err := w.spendPanel()
 	if err != nil {
 		return err
@@ -159,9 +172,11 @@ func (w *world) expectOneSeries() error {
 			}
 		}
 	}
+
 	if len(colours) != 1 {
 		return fmt.Errorf("the chart line uses %d colours, want one series in one colour", len(colours))
 	}
+
 	return nil
 }
 

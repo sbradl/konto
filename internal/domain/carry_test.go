@@ -26,9 +26,11 @@ func TestCarryClosesAndOpensTheBalancesOnTheGivenDays(t *testing.T) {
 		"    liabilities:card  -20,00 EUR",
 		"    equity:opening-balances",
 	}
+
 	if got := closing.Lines(); !slices.Equal(got, wantClosing) {
 		t.Errorf("closing =\n%q\nwant\n%q", got, wantClosing)
 	}
+
 	if got := opening.Lines(); !slices.Equal(got, wantOpening) {
 		t.Errorf("opening =\n%q\nwant\n%q", got, wantOpening)
 	}

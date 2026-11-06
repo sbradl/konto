@@ -20,7 +20,11 @@ var (
 	style   = domain.DefaultAmount("EUR").Style
 )
 
-func day(s string) time.Time { d, _ := time.Parse(time.DateOnly, s); return d }
+func day(s string) time.Time {
+	d, _ := time.Parse(time.DateOnly, s)
+
+	return d
+}
 
 func eur(mantissa int64) domain.Amount {
 	return domain.Amount{Commodity: "EUR", Mantissa: mantissa, Places: 2, Style: style}
@@ -29,6 +33,7 @@ func eur(mantissa int64) domain.Amount {
 // monthEnd is the 30th of the i-th month after March 2026, or the last day of a shorter month.
 func monthEnd(i int) time.Time {
 	first := time.Date(2026, time.April+time.Month(i), 1, 0, 0, 0, 0, time.UTC)
+
 	return time.Date(first.Year(), first.Month(), min(30, first.AddDate(0, 1, -1).Day()), 0, 0, 0, 0, time.UTC)
 }
 
@@ -39,6 +44,7 @@ func course(account string, rank int, start, step int64) forecastsvc.Line {
 		line.Points = append(line.Points, forecastsvc.Point{End: monthEnd(i), Balance: eur(start + int64(i)*step)})
 	}
 	line.Milestones = []domain.Amount{eur(start), eur(start + 3*step), eur(start + 6*step), eur(start + 12*step)}
+
 	return line
 }
 
@@ -78,6 +84,7 @@ func TestOneChartTitledByItsCurrencyDrawnWithBrailleOverAMilestoneTable(t *testi
 			t.Errorf("view has %q %d times, want once:\n%s", want, strings.Count(view, want), view)
 		}
 	}
+
 	if !braille.MatchString(view) {
 		t.Errorf("the chart is not drawn with braille characters:\n%s", view)
 	}
@@ -98,6 +105,7 @@ func TestTheXAxisRunsFromTheMonthSixMonthsBackToTheMonthTwelveAhead(t *testing.T
 	for row := range strings.SplitSeq(uitest.Plain(showing(180, 60).View()), "\n") {
 		if strings.Contains(row, "Mar") && strings.Contains(row, "Sep") {
 			labels = row
+
 			break
 		}
 	}
@@ -125,6 +133,7 @@ func TestTheMilestoneTableShowsEachAccountAcrossTheMonths(t *testing.T) {
 			t.Errorf("table lacks %q:\n%s", want, view)
 		}
 	}
+
 	if strings.Contains(strings.ToLower(view), "total") {
 		t.Errorf("a total appears:\n%s", view)
 	}
@@ -139,6 +148,7 @@ func TestNegativeBalancesInTheTableAreRed(t *testing.T) {
 			table = row
 		}
 	}
+
 	if !strings.Contains(table, theme.Negative.Render("    -140,00 EUR")) {
 		t.Errorf("row = %q, want the balances in red", table)
 	}
@@ -158,6 +168,7 @@ func TestSeveralCurrenciesStackAChartEachAndGroupTheTable(t *testing.T) {
 	if strings.Count(view, "╭─ EUR ") != 1 || strings.Count(view, "╭─ PLN ") != 1 || model.HiddenPanels() != 0 {
 		t.Errorf("view:\n%s", view)
 	}
+
 	if !strings.Contains(view, " EUR\n") && !regexp.MustCompile(`(?m)^│ EUR\s+│$`).MatchString(view) {
 		t.Errorf("the table has no EUR group:\n%s", view)
 	}
@@ -173,6 +184,7 @@ func TestChartsGiveWayBeforeTheTableWhenTheTerminalIsSmall(t *testing.T) {
 	if model.HiddenPanels() != 1 {
 		t.Errorf("hidden = %d, want the last chart", model.HiddenPanels())
 	}
+
 	view := uitest.Plain(model.View())
 	if strings.Count(view, "╭─ EUR ") != 1 || strings.Count(view, "╭─ PLN ") != 1 || strings.Contains(view, "╭─ CZK ") ||
 		!strings.Contains(view, "╭─ MILESTONES ") {
@@ -198,6 +210,7 @@ func TestTheViewFillsTheTerminalExactly(t *testing.T) {
 		for _, line := range lines {
 			if lipgloss.Width(line) > size[0] {
 				t.Errorf("%dx%d: a line is %d cells wide: %q", size[0], size[1], lipgloss.Width(line), uitest.Plain(line))
+
 				break
 			}
 		}
@@ -247,6 +260,7 @@ func TestALongLegendWrapsOntoMoreRowsAndNamesEveryAccount(t *testing.T) {
 			rows++
 		}
 	}
+
 	if rows < 2 || strings.Count(view, "●") != len(lines) || !strings.Contains(view, "assets:extra-08") {
 		t.Errorf("%d legend rows, %d entries of %d:\n%s", rows, strings.Count(view, "●"), len(lines), view)
 	}

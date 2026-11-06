@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"os"
 	"regexp"
 	"slices"
 	"strconv"
@@ -37,17 +36,23 @@ func (w *world) panelsOnScreen() ([]screenPanel, error) {
 	var panels []screenPanel
 	for y, line := range lines {
 		match := panelTop.FindStringSubmatch(strings.TrimSpace(line))
-		if match == nil || !strings.HasPrefix(line, "╭") {
-			continue
+		if match != nil && strings.HasPrefix(line, "╭") {
+			panels = append(panels, panelFrom(lines, y, strings.TrimSpace(match[1])))
 		}
-		panel := screenPanel{title: strings.TrimSpace(match[1]), top: y, right: len([]rune(line)) - 1}
-		for yy := y + 1; yy < len(lines) && !strings.HasPrefix(lines[yy], "╰"); yy++ {
-			panel.rows = append(panel.rows, []rune(lines[yy]))
-			panel.bottom = yy + 1
-		}
-		panels = append(panels, panel)
 	}
+
 	return panels, nil
+}
+
+// panelFrom reads the panel whose top border is screen row top, down to its bottom border.
+func panelFrom(lines []string, top int, title string) screenPanel {
+	panel := screenPanel{title: title, top: top, right: len([]rune(lines[top])) - 1}
+	for y := top + 1; y < len(lines) && !strings.HasPrefix(lines[y], "╰"); y++ {
+		panel.rows = append(panel.rows, []rune(lines[y]))
+		panel.bottom = y + 1
+	}
+
+	return panel
 }
 
 // onForecast waits for the panels of the screen to satisfy check.
@@ -57,6 +62,7 @@ func (w *world) onForecast(check func(panels []screenPanel) error) error {
 		if err != nil {
 			return err
 		}
+
 		return check(panels)
 	})
 }
@@ -68,6 +74,7 @@ func (w *world) onChart(title string, check func(chart screenPanel) error) error
 		if err != nil {
 			return err
 		}
+
 		return check(chart)
 	})
 }
@@ -80,6 +87,7 @@ func chartTitled(panels []screenPanel, title string) (screenPanel, error) {
 			return panel, nil
 		}
 	}
+
 	return screenPanel{}, fmt.Errorf("no chart titled %q", title)
 }
 
@@ -88,6 +96,7 @@ func (p screenPanel) text() string {
 	for i, row := range p.rows {
 		lines[i] = string(row)
 	}
+
 	return strings.Join(lines, "\n")
 }
 
@@ -109,6 +118,7 @@ func (p screenPanel) legend() []legendEntry {
 			})
 		}
 	}
+
 	return entries
 }
 
@@ -118,6 +128,7 @@ func (p screenPanel) accounts() []string {
 	for i, entry := range entries {
 		names[i] = entry.account
 	}
+
 	return names
 }
 
@@ -128,6 +139,7 @@ func (w *world) colourOf(chart screenPanel, account string) (int, error) {
 			return w.s.cellColour(entry.x, entry.y), nil
 		}
 	}
+
 	return 0, fmt.Errorf("no legend entry %q", account)
 }
 
@@ -139,6 +151,7 @@ func (w *world) expectChartTitles(count int, titles string) error {
 				charts = append(charts, panel.title)
 			}
 		}
+
 		if len(charts) != count {
 			return fmt.Errorf("the charts are %v, want %d", charts, count)
 		}
@@ -147,6 +160,7 @@ func (w *world) expectChartTitles(count int, titles string) error {
 				return fmt.Errorf("the charts are %v, want one titled %q", charts, title)
 			}
 		}
+
 		return nil
 	})
 }
@@ -160,6 +174,7 @@ func quotedTexts(list string) []string {
 	for i, match := range matches {
 		texts[i] = match[1]
 	}
+
 	return texts
 }
 
@@ -171,9 +186,11 @@ func (w *world) expectChartLines(title string, want []string, exact bool) error 
 				return fmt.Errorf("the %s chart has lines %v, lacks %s", title, have, account)
 			}
 		}
+
 		if exact && len(have) != len(want) {
 			return fmt.Errorf("the %s chart has %d lines %v, want %d", title, len(have), have, len(want))
 		}
+
 		return nil
 	})
 }
@@ -183,6 +200,7 @@ func (w *world) expectChartLacksLine(title, account string) error {
 		if slices.Contains(chart.accounts(), account) {
 			return fmt.Errorf("the %s chart has a line for %s", title, account)
 		}
+
 		return nil
 	})
 }
@@ -193,6 +211,7 @@ func (w *world) expectLegendColour(account string, colour int) error {
 		if err == nil && got != colour {
 			err = fmt.Errorf("the legend entry %q is coloured %d, want %d", account, got, colour)
 		}
+
 		return err
 	})
 }
@@ -207,9 +226,11 @@ func (w *world) expectLegendColourOrder(order []int) error {
 		for i := range order {
 			colours[i] = w.s.cellColour(entries[i].x, entries[i].y)
 		}
+
 		if !slices.Equal(colours, order) {
 			return fmt.Errorf("the legend colours are %v, want %v", colours, order)
 		}
+
 		return nil
 	})
 }
@@ -232,19 +253,24 @@ func plotOf(panel screenPanel) (plotArea, error) {
 		y, line := panel.top+1+i, string(row)
 		if corner, _, found := strings.Cut(line, "└"); found {
 			area.axisRow, area.axisCol, area.lastRow, area.labelRow = y, len([]rune(corner)), y-1, y+1
+
 			break
 		}
+
 		if value, ok := labelValue(line); ok {
 			area.yLabels[y] = value
 		}
+
 		if area.firstRow < 0 {
 			area.firstRow = y
 		}
 	}
+
 	if area.axisRow == 0 || len(area.yLabels) < 2 {
 		return plotArea{}, errors.New("the chart has no plot area:\n" + panel.text())
 	}
 	area.firstCol = area.axisCol + 1
+
 	return area, nil
 }
 
@@ -255,6 +281,7 @@ func labelValue(line string) (float64, bool) {
 		return 0, false
 	}
 	value, _ := strconv.ParseFloat(match[1], 64)
+
 	return value * 1000, true
 }
 
@@ -269,6 +296,7 @@ func (a plotArea) valueAt(row, dot int) float64 {
 	}
 	top, bottom := slices.Min(rows), slices.Max(rows)
 	perDot := (a.yLabels[top] - a.yLabels[bottom]) / float64((bottom-top)*4)
+
 	return a.yLabels[top] - float64((row-top)*4+dot-2)*perDot
 }
 
@@ -280,10 +308,12 @@ func brailleDots(r rune) (left, right []int) {
 		if bits&(1<<leftBits[dot]) != 0 {
 			left = append(left, dot)
 		}
+
 		if bits&(1<<rightBits[dot]) != 0 {
 			right = append(right, dot)
 		}
 	}
+
 	return left, right
 }
 
@@ -302,6 +332,7 @@ func (w *world) lineCells(area plotArea, colour int) map[int][]float64 {
 			}
 		}
 	}
+
 	return cells
 }
 
@@ -310,6 +341,7 @@ func average(values []float64) float64 {
 	for _, value := range values {
 		sum += value
 	}
+
 	return sum / float64(len(values))
 }
 
@@ -321,9 +353,11 @@ func (w *world) todayColumn(area plotArea) (int, error) {
 			best, most = x, len(values)
 		}
 	}
+
 	if best < 0 {
 		return 0, errors.New("no dim marker line in the chart:\n" + area.panel.text())
 	}
+
 	return best, nil
 }
 
@@ -333,6 +367,7 @@ func (w *world) expectTodayLine(date string) error {
 		if err != nil {
 			return err
 		}
+
 		column, err := w.todayColumn(area)
 		if err != nil {
 			return err
@@ -341,10 +376,12 @@ func (w *world) expectTodayLine(date string) error {
 		begin, end := today.AddDate(0, -6, 0), today.AddDate(1, 0, 0)
 		span := end.Sub(begin).Hours() / 24 * 1.06
 		width := float64(area.lastCol - area.firstCol)
+
 		want := area.firstCol + int(math.Round(today.Sub(begin).Hours()/24/span*width))
 		if column < want-2 || column > want+2 {
 			return fmt.Errorf("the dim line is at column %d, want about %d for %s", column, want, date)
 		}
+
 		return nil
 	})
 }
@@ -355,14 +392,17 @@ func (w *world) accountLine(chart screenPanel, account string) (plotArea, map[in
 	if err != nil {
 		return plotArea{}, nil, err
 	}
+
 	colour, err := w.colourOf(chart, account)
 	if err != nil {
 		return plotArea{}, nil, err
 	}
+
 	cells := w.lineCells(area, colour)
 	if len(cells) == 0 {
 		return plotArea{}, nil, fmt.Errorf("no line for %s", account)
 	}
+
 	return area, cells, nil
 }
 
@@ -371,15 +411,18 @@ func (w *world) expectLineValue(account, month, want string) error {
 	if err != nil {
 		return err
 	}
+
 	return w.onChart("EUR", func(chart screenPanel) error {
 		area, cells, err := w.accountLine(chart, account)
 		if err != nil {
 			return err
 		}
+
 		got := valueAtColumn(cells, w.lineColumn(area, cells, month))
 		if math.Abs(got-value) > 1500 {
 			return fmt.Errorf("the %s line at %s is about %.0f, want %.0f", account, month, got, value)
 		}
+
 		return nil
 	})
 }
@@ -396,6 +439,7 @@ func (w *world) lineColumn(area plotArea, cells map[int][]float64, month string)
 	for x := range cells {
 		columns = append(columns, x)
 	}
+
 	return slices.Min(columns)
 }
 
@@ -410,6 +454,7 @@ func valueAtColumn(cells map[int][]float64, column int) float64 {
 		if x < column && x > before {
 			before = x
 		}
+
 		if x > column && (after < 0 || x < after) {
 			after = x
 		}
@@ -421,12 +466,14 @@ func valueAtColumn(cells map[int][]float64, column int) float64 {
 		return average(cells[before])
 	}
 	share := float64(column-before) / float64(after-before)
+
 	return average(cells[before]) + share*(average(cells[after])-average(cells[before]))
 }
 
 func parseEuros(text string) (float64, error) {
 	number := strings.TrimSuffix(strings.TrimSpace(text), " EUR")
 	number = strings.ReplaceAll(strings.ReplaceAll(number, ".", ""), ",", ".")
+
 	return strconv.ParseFloat(number, 64)
 }
 
@@ -449,9 +496,11 @@ func (w *world) expectLineFlat(account string) error {
 				far++
 			}
 		}
+
 		if far*20 > len(all) {
 			return fmt.Errorf("the %s line is not flat: %d of %d dots are far from %.0f", account, far, len(all), median)
 		}
+
 		return nil
 	})
 }
@@ -462,15 +511,18 @@ func monthName(date time.Time) string { return date.Format("Jan") }
 func (w *world) expectXRange() error {
 	today, _ := time.Parse(time.DateOnly, w.env["KONTO_TODAY"])
 	first, last := monthName(today.AddDate(0, -6, 0)), monthName(today.AddDate(1, 0, 0))
+
 	return w.onChart("EUR", func(chart screenPanel) error {
 		area, err := plotOf(chart)
 		if err != nil {
 			return err
 		}
+
 		labels := strings.Fields(strings.Trim(string(chart.rows[area.labelRow-chart.top-1]), "│"))
 		if len(labels) < 2 || labels[0] != first || labels[len(labels)-1] != last {
 			return fmt.Errorf("the x labels are %v, want %s … %s", labels, first, last)
 		}
+
 		return nil
 	})
 }
@@ -481,6 +533,7 @@ func (w *world) expectYLabelsInThousands() error {
 		if err == nil && len(area.yLabels) < 2 {
 			err = errors.New("no y labels in thousands")
 		}
+
 		return err
 	})
 }
@@ -499,6 +552,7 @@ func milestoneRow(panels []screenPanel, account string) (text string, y int, err
 			}
 		}
 	}
+
 	return "", 0, fmt.Errorf("no milestone row for %s", account)
 }
 
@@ -508,6 +562,7 @@ func (w *world) onMilestoneRow(account string, check func(text string, y int) er
 		if err != nil {
 			return err
 		}
+
 		return check(text, y)
 	})
 }
@@ -518,6 +573,7 @@ func (w *world) expectMilestones(account string, figures []string) error {
 		if len(have) < len(figures) || !slices.Equal(have[:len(figures)], figures) {
 			return fmt.Errorf("the milestone row of %s shows %v, want %v", account, have, figures)
 		}
+
 		return nil
 	})
 }
@@ -527,6 +583,7 @@ func (w *world) expectMilestoneToday(account, want string, same bool) error {
 		if today := milestoneFigure.FindString(text); (today == want) != same {
 			return fmt.Errorf("the today figure of %s is %s, want it equal to %s: %v", account, today, want, same)
 		}
+
 		return nil
 	})
 }
@@ -537,9 +594,11 @@ func (w *world) expectMilestoneColour(figure, account string, colour int) error 
 		if at < 0 {
 			return fmt.Errorf("the row %q lacks %q", text, figure)
 		}
+
 		if got := w.s.cellColour(len([]rune(text[:at]))+1, y); got != colour {
 			return fmt.Errorf("%q is coloured %d, want %d", figure, got, colour)
 		}
+
 		return nil
 	})
 }
@@ -552,6 +611,7 @@ func (w *world) onMilestones(check func(table screenPanel) error) error {
 				return check(panel)
 			}
 		}
+
 		return errors.New("no milestone table")
 	})
 }
@@ -561,6 +621,7 @@ func (w *world) expectMilestoneText(want bool, text string) error {
 		if strings.Contains(table.text(), text) != want {
 			return fmt.Errorf("the milestone table contains %q is %v, want %v", text, !want, want)
 		}
+
 		return nil
 	})
 }
@@ -575,6 +636,7 @@ func (w *world) expectMilestoneHeader(columns []string) error {
 			}
 			at += found + len(column)
 		}
+
 		return nil
 	})
 }
@@ -587,9 +649,11 @@ func (w *world) expectGroups(groups []string) error {
 				have = append(have, text)
 			}
 		}
+
 		if len(have) != len(groups) {
 			return fmt.Errorf("the table groups are %v, want %v", have, groups)
 		}
+
 		return nil
 	})
 }
@@ -601,11 +665,13 @@ func (w *world) expectStacked() error {
 			if !isChart(panel) {
 				continue
 			}
+
 			if panel.top <= last {
 				return errors.New("the charts are not stacked vertically")
 			}
 			last = panel.top
 		}
+
 		return nil
 	})
 }
@@ -616,30 +682,23 @@ func (w *world) expectFullyVisible() error {
 			if !isChart(panel) {
 				continue
 			}
+
 			area, err := plotOf(panel)
 			if err != nil || area.lastRow-area.firstRow < 1 || len(panel.legend()) == 0 {
 				return fmt.Errorf("the %s chart is cut off (%w):\n%s", panel.title, err, panel.text())
 			}
 		}
+
 		return nil
 	})
 }
 
-func (w *world) appendRule(rule string) error {
-	file, err := os.OpenFile(w.journal, os.O_APPEND|os.O_WRONLY, 0o644)
-	if err != nil {
-		return err
-	}
-	if _, err := file.WriteString("\n" + rule + "\n"); err != nil {
-		_ = file.Close()
-		return err
-	}
-	return file.Close()
-}
+func (w *world) appendRule(rule string) error { return w.appendToJournal("\n" + rule + "\n") }
 
 func (w *world) useManualAccount(name, account, amount, date, rule string) error {
 	text := fmt.Sprintf("\naccount %s  ; konto:source:manual\n\n%s opening balance\n    %s  %s\n    equity:opening-balances\n\n%s",
 		account, date, account, amount, unescape(rule))
+
 	return w.useJournal(name, text)
 }
 
@@ -652,6 +711,7 @@ func (w *world) expectNoRecentAfter(date string) error {
 				return fmt.Errorf("a Recent row is dated %s: %q", found, row.text)
 			}
 		}
+
 		return nil
 	})
 }
@@ -666,6 +726,7 @@ func (w *world) expectViewLacks(texts ...string) error {
 				return fmt.Errorf("the view shows %q:\n%s", text, view)
 			}
 		}
+
 		return nil
 	})
 }
@@ -684,6 +745,7 @@ func registerForecastChartSteps(sc *godog.ScenarioContext, w *world) {
 			if strings.IndexFunc(w.s.screenText(), isBraille) < 0 {
 				return errors.New("no braille on screen")
 			}
+
 			return nil
 		})
 	})
@@ -692,6 +754,7 @@ func registerForecastChartSteps(sc *godog.ScenarioContext, w *world) {
 		for i, row := range table.Rows {
 			accounts[i] = strings.TrimSpace(row.Cells[0].Value)
 		}
+
 		return w.expectChartLines("EUR", accounts, false)
 	})
 	step(sc, `^the EUR chart has exactly (\d+) lines$`, func(n int) error {
@@ -699,6 +762,7 @@ func registerForecastChartSteps(sc *godog.ScenarioContext, w *world) {
 			if got := len(chart.legend()); got != n {
 				return fmt.Errorf("the EUR chart has %d lines, want %d", got, n)
 			}
+
 			return nil
 		})
 	})
@@ -718,6 +782,7 @@ func registerForecastLineSteps(sc *godog.ScenarioContext, w *world) {
 		for i, field := range fields {
 			colours[i], _ = strconv.Atoi(strings.TrimSpace(field))
 		}
+
 		return w.expectLegendColourOrder(colours)
 	})
 	step(sc, `^I see a legend below the "([^"]*)" chart listing every line's account name$`, func(title string) error {
@@ -765,6 +830,7 @@ func registerForecastStateSteps(sc *godog.ScenarioContext, w *world) {
 					return errors.New("a chart has a total line")
 				}
 			}
+
 			return nil
 		})
 	})

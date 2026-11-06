@@ -16,6 +16,7 @@ const blanks = " \t"
 func directiveArgs(line, keyword string) (string, bool) {
 	rest, found := strings.CutPrefix(line, keyword)
 	args := strings.TrimLeft(rest, blanks)
+
 	return args, found && len(args) < len(rest) // a blank must end the keyword: `includes` is no include
 }
 
@@ -29,6 +30,7 @@ func indented(line string) bool { return strings.TrimLeft(line, blanks) != line 
 // reads them (2026-09-30, 2026/9/30, 2026.09.30), for a file edited by hand.
 func headerDate(line string) (time.Time, bool) {
 	date, err := time.Parse("2006-1-2", strings.NewReplacer("/", "-", ".", "-").Replace(leadingDate.FindString(line)))
+
 	return date, err == nil
 }
 
@@ -40,6 +42,7 @@ func postingAccount(line string) string {
 	if strings.HasPrefix(text, ";") {
 		return ""
 	}
+
 	return strings.Trim(accountField(strings.TrimLeft(text, "!*"+blanks)), "()[]")
 }
 
@@ -47,5 +50,6 @@ func postingAccount(line string) string {
 func accountField(text string) string {
 	name, _, _ := strings.Cut(text, "\t")
 	name, _, _ = strings.Cut(name, "  ")
+
 	return name
 }

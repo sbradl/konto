@@ -44,29 +44,47 @@ func newSuite() (*suite, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	realHledger, err := exec.LookPath("hledger")
 	if err != nil {
 		return nil, fmt.Errorf("the e2e suite needs the real hledger on PATH: %w", err)
 	}
+
 	bin, err := os.MkdirTemp("", "konto-e2e-bin-")
 	if err != nil {
 		return nil, err
 	}
+
 	shim := filepath.Join(bin, "hledgershim")
 	if out, err := goBuild(root, shim, "./e2e/hledgershim"); err != nil {
 		return nil, fmt.Errorf("building hledgershim: %w\n%s", err, out)
 	}
-	timeout := 5 * time.Second
-	if v := os.Getenv("KONTO_E2E_TIMEOUT"); v != "" {
-		if timeout, err = time.ParseDuration(v); err != nil {
-			return nil, fmt.Errorf("KONTO_E2E_TIMEOUT: %w", err)
-		}
+
+	timeout, err := stepTimeout()
+	if err != nil {
+		return nil, err
 	}
+
 	return &suite{
 		root: root, realHledger: realHledger, shim: shim, timeout: timeout,
 		artifacts: os.Getenv("KONTO_E2E_ARTIFACTS"),
 		konto:     filepath.Join(bin, "konto"),
 	}, nil
+}
+
+// stepTimeout is how long a step waits for konto: 5s, or what $KONTO_E2E_TIMEOUT says.
+func stepTimeout() (time.Duration, error) {
+	value := os.Getenv("KONTO_E2E_TIMEOUT")
+	if value == "" {
+		return 5 * time.Second, nil
+	}
+
+	timeout, err := time.ParseDuration(value)
+	if err != nil {
+		return 0, fmt.Errorf("KONTO_E2E_TIMEOUT: %w", err)
+	}
+
+	return timeout, nil
 }
 
 // kontoBinary builds cmd/konto on first use, so the harness self-tests need not build it.
@@ -76,12 +94,14 @@ func (s *suite) kontoBinary() (string, error) {
 			s.buildErr = fmt.Errorf("building konto: %w\n%s", err, out)
 		}
 	})
+
 	return s.konto, s.buildErr
 }
 
 func goBuild(root, out, pkg string) ([]byte, error) {
 	cmd := exec.CommandContext(context.Background(), "go", "build", "-tags", "e2e", "-o", out, pkg)
 	cmd.Dir = root
+
 	return cmd.CombinedOutput()
 }
 
@@ -94,6 +114,7 @@ func repoRoot() (string, error) {
 		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
 			return dir, nil
 		}
+
 		parent := filepath.Dir(dir)
 		if parent == dir {
 			return "", errors.New("go.mod not found")
@@ -160,10 +181,22 @@ func newWorld(s *suite) (*world, error) {
 			return nil, err
 		}
 	}
+
 	if err := os.Symlink(s.shim, filepath.Join(w.binDir, "hledger")); err != nil {
 		return nil, err
 	}
-	w.env = map[string]string{
+
+	w.env = w.sandboxEnv()
+	if err := w.writeShim(); err != nil {
+		return nil, err
+	}
+
+	return w, nil
+}
+
+// sandboxEnv is the environment konto runs in: everything points into the scenario's sandbox.
+func (w *world) sandboxEnv() map[string]string {
+	return map[string]string{
 		"HOME":                   w.home,
 		"PATH":                   w.binDir + string(os.PathListSeparator) + os.Getenv("PATH"),
 		"TERM":                   "xterm-256color",
@@ -178,24 +211,22 @@ func newWorld(s *suite) (*world, error) {
 		"XDG_DOWNLOAD_DIR":       w.downloads,
 		"KONTO_E2E_SHIM_CONFIG":  w.shimConf,
 		"KONTO_E2E_SHIM_LOG":     w.shimLog,
-		"KONTO_E2E_REAL_HLEDGER": s.realHledger,
+		"KONTO_E2E_REAL_HLEDGER": w.suite.realHledger,
 		"EDITOR":                 "/bin/false",
 		"VISUAL":                 "",
 	}
-	if err := w.writeShim(); err != nil {
-		return nil, err
-	}
-	return w, nil
 }
 
 func (w *world) writeShim() error {
 	if w.s != nil { // a running konto finishes its first load before hledger starts misbehaving
 		w.waitLoaded(w.s)
 	}
+
 	b, err := json.Marshal(w.shim)
 	if err != nil {
 		return err
 	}
+
 	return os.WriteFile(w.shimConf, b, 0o644)
 }
 
@@ -206,6 +237,7 @@ func (w *world) environ() []string {
 			env = append(env, k+"="+v)
 		}
 	}
+
 	return env
 }
 
@@ -226,6 +258,7 @@ func (w *world) fixture(name string) string {
 // beside the shared categories.rules.
 func (w *world) useLedger(name string) error {
 	dir := filepath.Join(w.suite.root, "testdata", "ledgers", name)
+
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return fmt.Errorf("fixture ledger %q: %w", name, err)
@@ -235,14 +268,17 @@ func (w *world) useLedger(name string) error {
 		if err != nil {
 			return err
 		}
+
 		if err := os.WriteFile(filepath.Join(filepath.Dir(w.journal), entry.Name()), b, 0o644); err != nil {
 			return err
 		}
 	}
+
 	rules, err := os.ReadFile(w.fixture("categories.rules"))
 	if err != nil {
 		return err
 	}
+
 	return os.WriteFile(w.rules, rules, 0o644)
 }
 
@@ -254,18 +290,22 @@ func (w *world) useJournal(name, appended string) error {
 	if err != nil {
 		return fmt.Errorf("fixture journal %q: %w", name, err)
 	}
+
 	if err := os.WriteFile(w.journal, append(b, []byte(appended)...), 0o644); err != nil {
 		return err
 	}
+
 	if err := w.copyIncludes(b); err != nil {
 		return err
 	}
+
 	rules := []byte{}
 	if name != "minimal" {
 		if rules, err = os.ReadFile(w.fixture("categories.rules")); err != nil {
 			return err
 		}
 	}
+
 	return os.WriteFile(w.rules, rules, 0o644)
 }
 
@@ -273,29 +313,38 @@ func (w *world) start(args ...string) error {
 	if w.s != nil {
 		return errors.New("konto is already started in this scenario")
 	}
+
 	bin, err := w.suite.kontoBinary()
 	if err != nil {
 		return err
 	}
-	w.journalAtStart, _ = os.ReadFile(w.journal)
-	w.filesAtStart = w.journalFiles()
-	w.rulesAtStart, _ = os.ReadFile(w.rules)
+	w.recordFilesAtStart()
 	for i, a := range args {
 		args[i] = w.expand(a)
 	}
+
 	s, err := startSession(bin, args, w.environ(), w.dir, w.width, w.height)
 	if err != nil {
 		return err
 	}
 	w.s = s
 	w.settle(s)
+
 	return nil
+}
+
+// recordFilesAtStart keeps the journal and rules as konto found them, for steps that check what it changed.
+func (w *world) recordFilesAtStart() {
+	w.journalAtStart, _ = os.ReadFile(w.journal)
+	w.filesAtStart = w.journalFiles()
+	w.rulesAtStart, _ = os.ReadFile(w.rules)
 }
 
 func (w *world) session() (*session, error) {
 	if w.s == nil {
 		return nil, errors.New("konto has not been started in this scenario")
 	}
+
 	return w.s, nil
 }
 
@@ -308,6 +357,7 @@ func (w *world) waitLoaded(s *session) { s.settle(w.suite.timeout) }
 func (w *world) settle(s *session) {
 	if w.shim.DelayMs > 0 {
 		s.handled(w.suite.timeout)
+
 		return
 	}
 	s.settle(w.suite.timeout)
@@ -319,9 +369,11 @@ func (w *world) awaitIdle() error {
 	if err != nil {
 		return err
 	}
+
 	if !s.settle(w.suite.timeout) {
 		return fmt.Errorf("konto still busy after %s:\n%s", w.suite.timeout, s.screenText())
 	}
+
 	return nil
 }
 
@@ -337,11 +389,13 @@ func (w *world) press(keys ...string) error {
 			return err
 		}
 		w.waitLoaded(s)
+
 		if err := s.send(b); err != nil {
 			return err
 		}
 		w.settle(s)
 	}
+
 	return nil
 }
 
@@ -353,25 +407,26 @@ func (w *world) dump(name string) {
 	if w.suite.artifacts == "" || w.s == nil {
 		return
 	}
-	safe := strings.Map(func(r rune) rune {
-		if r == '/' || r == ' ' || r == '"' {
-			return '_'
-		}
-		return r
-	}, name)
 	calls, _ := os.ReadFile(w.shimLog)
 	report := fmt.Sprintf("== screen ==\n%s\n\n== stderr ==\n%s\n\n== hledger calls ==\n%s", w.s.screenText(), w.s.stderr.String(), calls)
 	_ = os.MkdirAll(w.suite.artifacts, 0o755)
-	_ = os.WriteFile(filepath.Join(w.suite.artifacts, safe+".txt"), []byte(report), 0o644)
+	_ = os.WriteFile(filepath.Join(w.suite.artifacts, artifactName(name)), []byte(report), 0o644)
+}
+
+// artifactName is the scenario's name made safe as a file name.
+func artifactName(scenario string) string {
+	return strings.NewReplacer("/", "_", " ", "_", `"`, "_").Replace(scenario) + ".txt"
 }
 
 func (w *world) close() {
 	for _, earlier := range w.earlier {
 		earlier.stop()
 	}
+
 	if w.s != nil {
 		w.s.stop()
 	}
+
 	if os.Getenv("KONTO_E2E_KEEP") == "" {
 		_ = os.RemoveAll(w.dir)
 	}
@@ -385,15 +440,29 @@ func (w *world) copyIncludes(journal []byte) error {
 			continue
 		}
 		name = strings.TrimSpace(name)
+
 		b, err := os.ReadFile(w.fixture(name))
 		if err != nil {
 			return fmt.Errorf("fixture include %q: %w", name, err)
 		}
+
 		if err := os.WriteFile(filepath.Join(filepath.Dir(w.journal), name), b, 0o644); err != nil {
 			return err
 		}
 	}
+
 	return nil
+}
+
+// appendToJournal adds text to the end of the main journal, as a hand edit or another program would.
+func (w *world) appendToJournal(text string) error {
+	f, err := os.OpenFile(w.journal, os.O_APPEND|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	_, werr := f.WriteString(text)
+
+	return errors.Join(werr, f.Close())
 }
 
 // journalFiles reads every journal file of the sandbox: the main journal and the files beside it.
@@ -405,5 +474,6 @@ func (w *world) journalFiles() map[string][]byte {
 			files[path], _ = os.ReadFile(path)
 		}
 	}
+
 	return files
 }

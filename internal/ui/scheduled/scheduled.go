@@ -45,6 +45,7 @@ func (m Model) WithLedger(ledger domain.Ledger) Model {
 	next.ledger = ledger
 	next.schedules = ledger.Schedules()
 	next.total = ledger.AnnualImpact()
+
 	return next.moveTo(next.cursor.Row)
 }
 
@@ -52,6 +53,7 @@ func (m Model) WithLedger(ledger domain.Ledger) Model {
 func (m Model) Resize(width, height int) Model {
 	next := m
 	next.width, next.height = width, height
+
 	return next.moveTo(next.cursor.Row)
 }
 
@@ -60,6 +62,7 @@ func (m Model) Position() (row, total int) {
 	if len(m.schedules) == 0 {
 		return 0, 0
 	}
+
 	return m.cursor.Row + 1, len(m.schedules)
 }
 
@@ -108,9 +111,11 @@ func (m Model) Key(key string) (Model, Action) {
 	if key == keyNew {
 		return m, NewRule{}
 	}
+
 	if key == keyCopy {
 		return m, CopyTransaction{}
 	}
+
 	if _, selected := m.Selected(); !selected {
 		return m.Move(key), nil
 	}
@@ -120,6 +125,7 @@ func (m Model) Key(key string) (Model, Action) {
 	case keyDelete:
 		return m, DeleteSelected{}
 	}
+
 	return m.Move(key), nil
 }
 
@@ -127,12 +133,14 @@ func (m Model) Key(key string) (Model, Action) {
 func (m Model) Move(key string) Model {
 	next := m
 	next.cursor = m.cursor.Move(key, len(m.schedules), m.pageSize())
+
 	return next
 }
 
 func (m Model) moveTo(row int) Model {
 	next := m
 	next.cursor = m.cursor.To(row, len(m.schedules), m.pageSize())
+
 	return next
 }
 
@@ -149,14 +157,20 @@ func (m Model) View() string {
 	listHeight := m.listHeight()
 	bottom := max(0, m.height-listHeight)
 	entryWidth := m.width / 2
-	right := m.width - entryWidth
-	occurrencesHeight := min(occurrenceBox, bottom/2)
-	impactHeight := bottom - occurrencesHeight
-	column := layout.Panel("OCCURRENCES", right, occurrencesHeight, m.occurrences()) + "\n" +
-		layout.Panel("ANNUAL IMPACT", right, impactHeight,
-			m.impact(right-layout.PanelChrome, impactHeight-layout.PanelChrome))
-	lower := lipgloss.JoinHorizontal(lipgloss.Top, layout.Panel("ENTRY", entryWidth, bottom, m.entry()), column)
+	lower := lipgloss.JoinHorizontal(lipgloss.Top,
+		layout.Panel("ENTRY", entryWidth, bottom, m.entry()), m.sideColumn(m.width-entryWidth, bottom))
+
 	return m.withCopy(m.withForm(m.list(listHeight) + "\n" + lower))
+}
+
+// sideColumn is the occurrences over the annual impact, which takes the room the occurrences leave.
+func (m Model) sideColumn(width, height int) string {
+	occurrencesHeight := min(occurrenceBox, height/2)
+	impactHeight := height - occurrencesHeight
+	impact := m.impact(width-layout.PanelChrome, impactHeight-layout.PanelChrome)
+
+	return layout.Panel("OCCURRENCES", width, occurrencesHeight, m.occurrences()) + "\n" +
+		layout.Panel("ANNUAL IMPACT", width, impactHeight, impact)
 }
 
 // list is the RULES panel: next date, description, raw cadence and status of each rule.
@@ -175,6 +189,7 @@ func (m Model) list(height int) string {
 			rows = append(rows, line.styled())
 		}
 	}
+
 	return layout.Panel("RULES", m.width, height, strings.Join(rows, "\n"))
 }
 
@@ -192,6 +207,7 @@ func (r listRow) styled() string {
 func ruleLine(schedule domain.RuleSchedule, width int) listRow {
 	spare := max(0, width-1-nextWidth-3*columnGap-statusWidth)
 	description := spare * descShare / 100
+
 	next, status, style := "", noneUpcoming, theme.Dim
 	if date, ok := schedule.Next(); ok {
 		next, status, style = date.Format(time.DateOnly), "upcoming", theme.Ok
@@ -199,12 +215,14 @@ func ruleLine(schedule domain.RuleSchedule, width int) listRow {
 	gap := strings.Repeat(" ", columnGap)
 	prefix := " " + layout.Fit(next, nextWidth) + gap + layout.Fit(schedule.Rule.Description, description) + gap +
 		layout.Fit(schedule.Rule.Period, spare-description) + gap
+
 	return listRow{prefix: prefix, status: status, statusStyle: style}
 }
 
 // Selected is the rule under the cursor; false when there are none.
 func (m Model) Selected() (domain.PeriodicRule, bool) {
 	schedule, ok := m.current()
+
 	return schedule.Rule, ok
 }
 
@@ -213,6 +231,7 @@ func (m Model) current() (domain.RuleSchedule, bool) {
 	if len(m.schedules) == 0 {
 		return domain.RuleSchedule{}, false
 	}
+
 	return m.schedules[m.cursor.Row], true
 }
 
@@ -226,6 +245,7 @@ func (m Model) entry() string {
 	for i, line := range schedule.Rule.Lines {
 		lines[i] = " " + styleEntryLine(line)
 	}
+
 	return strings.Join(lines, "\n")
 }
 
@@ -240,6 +260,7 @@ func styleEntryLine(line string) string {
 	case strings.HasPrefix(strings.TrimSpace(line), ";"):
 		return theme.Dim.Render(line)
 	}
+
 	return line
 }
 
@@ -249,6 +270,7 @@ func (m Model) occurrences() string {
 	if !ok {
 		return ""
 	}
+
 	if len(schedule.Occurrences) == 0 {
 		return theme.Dim.Render(" " + noneUpcoming)
 	}
@@ -256,6 +278,7 @@ func (m Model) occurrences() string {
 	for _, occurrence := range schedule.Occurrences[:min(occurrenceRows, len(schedule.Occurrences))] {
 		rows = append(rows, " "+occurrence.Date.Format(time.DateOnly))
 	}
+
 	return strings.Join(rows, "\n")
 }
 
@@ -265,13 +288,16 @@ func (m Model) impact(width, capacity int) string {
 	for _, schedule := range m.schedules {
 		rows = append(rows, impactLine(schedule.Rule.Description, schedule.Impact(), width, lipgloss.NewStyle()))
 	}
+
 	if len(m.schedules) > 0 {
 		rows = append(rows, impactLine("Total", m.total, width, theme.Bold))
 	}
+
 	if len(rows) > capacity && capacity > 0 {
 		hidden := len(rows) - (capacity - 1)
 		rows = append(rows[:capacity-1], layout.More(hidden))
 	}
+
 	return strings.Join(rows, "\n")
 }
 
@@ -286,5 +312,6 @@ func impactLine(label string, amount domain.MultiAmount, width int, labelStyle l
 		style = theme.Negative
 	}
 	room := max(0, width-lipgloss.Width(text)-columnGap-1)
+
 	return " " + labelStyle.Render(layout.Fit(label, room)) + strings.Repeat(" ", columnGap) + style.Render(text)
 }

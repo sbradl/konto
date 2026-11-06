@@ -8,12 +8,14 @@ import (
 
 func occurrence(rule SourcePos, date string, postings ...Posting) Transaction {
 	parsed, _ := time.Parse(time.DateOnly, date)
+
 	return Transaction{Date: parsed, Source: rule, Postings: postings}
 }
 
 func scheduleLedger() Ledger {
 	rent, salary := SourcePos{"j", 10}, SourcePos{"j", 14}
 	transfer, never := SourcePos{"j", 18}, SourcePos{"j", 22}
+
 	return Ledger{
 		Rules: []PeriodicRule{
 			{Description: "Never", Pos: never},
@@ -53,6 +55,7 @@ func TestEachScheduleHoldsItsOwnOccurrencesSoonestFirst(t *testing.T) {
 	if len(rent.Occurrences) != 2 || !ok || next.Format(time.DateOnly) != "2026-10-01" {
 		t.Errorf("rent = %+v, want two occurrences from 2026-10-01", rent)
 	}
+
 	if _, ok := ledger.Schedules()[3].Next(); ok {
 		t.Errorf("a rule without occurrences has no next date")
 	}

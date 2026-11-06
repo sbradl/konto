@@ -9,13 +9,20 @@ import (
 func TestRunAllRunsEveryTaskAndReturnsTheFirstFailureInTaskOrder(t *testing.T) {
 	second, third := errors.New("second"), errors.New("third")
 	var ran atomic.Int32
-	task := func(err error) func() error { return func() error { ran.Add(1); return err } }
+	task := func(err error) func() error {
+		return func() error {
+			ran.Add(1)
+
+			return err
+		}
+	}
 
 	err := RunAll(task(nil), task(second), task(third))
 
 	if !errors.Is(err, second) || errors.Is(err, third) || ran.Load() != 3 {
 		t.Errorf("RunAll = %v after %d tasks; want the second task's failure after all three", err, ran.Load())
 	}
+
 	if err := RunAll(task(nil), task(nil)); err != nil {
 		t.Errorf("RunAll = %v, want nil when every task succeeds", err)
 	}
@@ -31,6 +38,7 @@ func TestRunAllRunsNoMoreThanTheLimitAtOnce(t *testing.T) {
 				break
 			}
 		}
+
 		return nil
 	}
 

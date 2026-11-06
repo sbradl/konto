@@ -43,6 +43,7 @@ func (s *Service) Add(ctx context.Context, input Input, ledger domain.Ledger) (d
 	if err != nil {
 		return domain.Changeset{}, err
 	}
+
 	return domain.Changeset{Edits: []domain.Edit{domain.AddRule{Lines: lines}}}, nil
 }
 
@@ -54,6 +55,7 @@ func (s *Service) Replace(
 	if err != nil {
 		return domain.Changeset{}, err
 	}
+
 	return domain.Changeset{Edits: []domain.Edit{domain.ReplaceRule{Pos: rule.Pos, Lines: lines}}}, nil
 }
 
@@ -64,19 +66,43 @@ func (s *Service) Form(ctx context.Context, rule domain.PeriodicRule, ledger dom
 	if !ok {
 		return Input{}, ErrNotEditable
 	}
-	for _, schedule := range ledger.Schedules() {
-		if next, found := schedule.Next(); found && schedule.Rule.Pos == rule.Pos {
-			read.input.Date = next.Format(time.DateOnly)
-		}
+
+	if next, found := nextDue(ledger, rule.Pos); found {
+		read.input.Date = next.Format(time.DateOnly)
 	}
-	if !read.until.IsZero() {
-		dates, err := s.gw.Occurrences(ctx, rule.Entry()+"\n", s.today(), read.until)
-		if err != nil {
-			return Input{}, err //nolint:wrapcheck // the gateway's error names what failed
-		}
-		read.input.Remaining = strconv.Itoa(len(dates))
+
+	if read.until.IsZero() {
+		return read.input, nil
 	}
+
+	remaining, err := s.remainingUntil(ctx, rule, read.until)
+	if err != nil {
+		return Input{}, err
+	}
+	read.input.Remaining = strconv.Itoa(remaining)
+
 	return read.input, nil
+}
+
+// nextDue is the next occurrence hledger projects for the rule at pos, false when none is upcoming.
+func nextDue(ledger domain.Ledger, pos domain.SourcePos) (time.Time, bool) {
+	for _, schedule := range ledger.Schedules() {
+		if next, found := schedule.Next(); found && schedule.Rule.Pos == pos {
+			return next, true
+		}
+	}
+
+	return time.Time{}, false
+}
+
+// remainingUntil is how many payments the rule still makes from today until its exclusive end.
+func (s *Service) remainingUntil(ctx context.Context, rule domain.PeriodicRule, until time.Time) (int, error) {
+	dates, err := s.gw.Occurrences(ctx, rule.Entry()+"\n", s.today(), until)
+	if err != nil {
+		return 0, err //nolint:wrapcheck // the gateway's error names what failed
+	}
+
+	return len(dates), nil
 }
 
 // entered is the input once it has been checked and read.
@@ -100,6 +126,7 @@ func (in Input) missingField() string {
 			return field.name
 		}
 	}
+
 	return ""
 }
 
@@ -109,21 +136,26 @@ func (in Input) check(ledger domain.Ledger) (entered, error) {
 	if field := in.missingField(); field != "" {
 		return read, domain.RefusalError{Reason: field + " is required"}
 	}
+
 	if in.From == in.To {
 		return read, domain.RefusalError{Reason: "from account and to account must differ"}
 	}
+
 	var err error
 	if read.date, err = time.Parse(time.DateOnly, in.Date); err != nil {
 		return read, domain.RefusalError{Reason: "next due date must be a date like 2026-10-15"}
 	}
+
 	if read.amount, err = parseAmount(ledger.AmountLike(in.Currency), in.Amount); err != nil {
 		return read, err
 	}
+
 	if in.Frequency != Once && in.Remaining != "" {
 		if read.remaining, err = strconv.Atoi(in.Remaining); err != nil || read.remaining < 1 {
 			return read, domain.RefusalError{Reason: "remaining payments must be a positive whole number"}
 		}
 	}
+
 	return read, nil
 }
 
@@ -134,6 +166,7 @@ func parseAmount(like domain.Amount, text string) (domain.Amount, error) {
 		return domain.Amount{}, domain.RefusalError{Reason: "amount must be a positive number"}
 	}
 	like.Mantissa = mantissa
+
 	return like, nil
 }
 
@@ -149,6 +182,7 @@ func (s *Service) block(ctx context.Context, input Input, ledger domain.Ledger) 
 		domain.NewPosting{Account: input.To, Amount: domain.MultiAmount{read.amount}}.Line(),
 		domain.NewPosting{Account: input.From}.Line(),
 	}
+
 	header := input.header(read.date, time.Time{})
 	if read.remaining > 0 {
 		until, err := s.endAfter(ctx, append([]string{header}, postings...), read)
@@ -157,6 +191,7 @@ func (s *Service) block(ctx context.Context, input Input, ledger domain.Ledger) 
 		}
 		header = input.header(read.date, until)
 	}
+
 	return append([]string{header}, postings...), nil
 }
 
@@ -165,10 +200,12 @@ func (in Input) header(date, until time.Time) string {
 	if in.Frequency == Once {
 		return "~ " + date.Format(time.DateOnly) + "  " + in.Description
 	}
+
 	line := "~ " + in.Frequency.expression() + " from " + date.Format(time.DateOnly)
 	if !until.IsZero() {
 		line += " to " + until.Format(time.DateOnly)
 	}
+
 	return line + "  " + in.Description
 }
 
@@ -177,13 +214,16 @@ func (in Input) header(date, until time.Time) string {
 func (s *Service) endAfter(ctx context.Context, rule []string, read entered) (time.Time, error) {
 	// yearly, the sparsest frequency, needs a year per payment; one more keeps the last inside the exclusive end
 	horizon := read.date.AddDate(read.remaining+1, 0, 0)
+
 	dates, err := s.gw.Occurrences(ctx, strings.Join(rule, "\n")+"\n", read.date, horizon)
 	if err != nil {
 		return time.Time{}, err //nolint:wrapcheck // the gateway's error names what failed
 	}
+
 	if len(dates) < read.remaining {
 		return time.Time{}, domain.RefusalError{Reason: "the rule does not have that many payments"}
 	}
+
 	return dates[read.remaining-1].AddDate(0, 0, 1), nil
 }
 
@@ -199,16 +239,20 @@ func InputFrom(transaction domain.Transaction) Input {
 		if len(posting.Amounts) == 0 {
 			continue
 		}
+
 		amount := posting.Amounts[0]
 		if amount.IsNegative() {
 			input.From = cmp.Or(input.From, posting.Account)
+
 			continue
 		}
+
 		if input.To == "" {
 			input.To, input.Currency = posting.Account, amount.Commodity
 			amount.Commodity = ""
 			input.Amount = amount.Format()
 		}
 	}
+
 	return input
 }

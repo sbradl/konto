@@ -32,8 +32,10 @@ func findDialog(lines []string) (dialog, bool) {
 				d.rows = append(d.rows, text)
 			}
 		}
+
 		return d, true
 	}
+
 	return dialog{}, false
 }
 
@@ -44,6 +46,7 @@ func (w *world) withDialog(check func(d dialog) error) error {
 		if !found {
 			return errors.New("no dialog is open")
 		}
+
 		return check(d)
 	})
 }
@@ -56,10 +59,12 @@ func (w *world) dialogNow() (dialog, error) {
 	}
 	w.waitLoaded(s)
 	s.settle(w.suite.timeout)
+
 	d, found := findDialog(s.screenLines())
 	if !found {
 		return dialog{}, errors.New("no dialog is open")
 	}
+
 	return d, nil
 }
 
@@ -68,6 +73,7 @@ func (w *world) expectDialogTitle(title string) error {
 		if d.title != title {
 			return fmt.Errorf("the %q dialog is open, want %q", d.title, title)
 		}
+
 		return nil
 	})
 }
@@ -77,6 +83,7 @@ func (w *world) expectNoDialog() error {
 		if d, found := findDialog(lines); found {
 			return fmt.Errorf("the %q dialog is open", d.title)
 		}
+
 		return nil
 	})
 }
@@ -88,6 +95,7 @@ func (d dialog) listRows() []string {
 	if len(d.rows) == 0 {
 		return nil
 	}
+
 	return d.rows[1:]
 }
 
@@ -98,13 +106,16 @@ func (w *world) selectRow(description, date string) error {
 		return err
 	}
 	var index int
+
 	if err := w.expectPanel(rowsTitle, func(rows []recentRow) error {
 		found, err := importRowIndex(rows, description, date)
 		index = found
+
 		return err
 	}); err != nil {
 		return err
 	}
+
 	return w.press(repeat("↓", index)...)
 }
 
@@ -118,6 +129,7 @@ func importRowIndex(rows []recentRow, description, date string) (int, error) {
 			}
 		}
 	}
+
 	return 0, fmt.Errorf("no row %q (%s)", description, date)
 }
 
@@ -128,9 +140,11 @@ func (w *world) chooseOption(option string) error {
 		if _, err := w.dialogNow(); err != nil {
 			return err
 		}
+
 		return w.press("End", "Enter")
 	}
 	index := 0
+
 	err := w.withDialog(func(d dialog) error {
 		rows := d.rows
 		if d.title != "categorise" {
@@ -139,14 +153,17 @@ func (w *world) chooseOption(option string) error {
 		for i, row := range rows {
 			if strings.Contains(row, option) {
 				index = i
+
 				return nil
 			}
 		}
+
 		return fmt.Errorf("the dialog does not offer %q", option)
 	})
 	if err != nil {
 		return err
 	}
+
 	return w.press(append(repeat("↓", index), "Enter")...)
 }
 
@@ -157,19 +174,24 @@ func (w *world) pickCategory(name string) error {
 		if err != nil {
 			return err
 		}
+
 		if d.title == "category" {
 			break
 		}
+
 		if err := w.press("Tab"); err != nil {
 			return err
 		}
 	}
+
 	if err := w.expectDialogTitle("category"); err != nil {
 		return err
 	}
+
 	if err := w.typeText(name); err != nil {
 		return err
 	}
+
 	return w.press("Enter")
 }
 
@@ -185,6 +207,7 @@ func (w *world) startNewRule(description, category string, onTheFly bool) error 
 			return err
 		}
 	}
+
 	if !onTheFly {
 		return w.pickCategory(category)
 	}
@@ -192,13 +215,16 @@ func (w *world) startNewRule(description, category string, onTheFly bool) error 
 		if d, err := w.dialogNow(); err != nil || d.title == "category" {
 			break
 		}
+
 		if err := w.press("Tab"); err != nil {
 			return err
 		}
 	}
+
 	if err := w.typeText(category); err != nil {
 		return err
 	}
+
 	return w.press("End", "Enter")
 }
 
@@ -206,6 +232,7 @@ func (w *world) typeAfterClearing(text string) error {
 	if err := w.press("Ctrl+U"); err != nil {
 		return err
 	}
+
 	return w.typeText(text)
 }
 
@@ -216,6 +243,7 @@ func (w *world) expectDialogRow(label, text string) error {
 				return nil
 			}
 		}
+
 		return fmt.Errorf("no %q row holds %q: %q", label, text, d.rows)
 	})
 }
@@ -227,11 +255,13 @@ func previewOf(d dialog) []string {
 			return d.rows[i:]
 		}
 	}
+
 	return nil
 }
 
 func (w *world) expectPreview(doc *godog.DocString) error {
 	want := strings.Split(strings.TrimSpace(doc.Content), "\n")
+
 	return w.withDialog(func(d dialog) error {
 		got := previewOf(d)
 		for i, line := range want {
@@ -239,6 +269,7 @@ func (w *world) expectPreview(doc *godog.DocString) error {
 				return fmt.Errorf("the rule preview is %q, want %q", got, want)
 			}
 		}
+
 		return nil
 	})
 }
@@ -248,6 +279,7 @@ func (w *world) expectPreviewLine(check func(lines []string) bool, text string) 
 		if !check(previewOf(d)) {
 			return fmt.Errorf("the rule preview %q does not match %q", previewOf(d), text)
 		}
+
 		return nil
 	})
 }
@@ -262,6 +294,7 @@ func groupOf(row string) string {
 	case strings.HasPrefix(row, "income:"):
 		return "income:*"
 	}
+
 	return "other"
 }
 
@@ -273,9 +306,11 @@ func (w *world) expectGroup(position int, want string) error {
 				groups = append(groups, group)
 			}
 		}
+
 		if position >= len(groups) || groups[position] != want {
 			return fmt.Errorf("the picker's groups are %v, want %q at %d", groups, want, position)
 		}
+
 		return nil
 	})
 }
@@ -288,9 +323,11 @@ func (w *world) expectStaged(want bool, text string) error {
 				if strings.Contains(row.text, text) != want {
 					return fmt.Errorf("the staged line %q: contains %q is %v, want %v", row.text, text, !want, want)
 				}
+
 				return nil
 			}
 		}
+
 		return errors.New("no staged line")
 	})
 }
@@ -299,14 +336,17 @@ func (w *world) expectRefusal(want bool) error {
 	if want {
 		return w.expectScreen(true, "refused:")
 	}
+
 	return w.eventually(func() error {
 		s, err := w.session()
 		if err != nil {
 			return err
 		}
+
 		if strings.Contains(s.screenText(), "refused:") {
 			return errors.New("a refusal is shown")
 		}
+
 		return nil
 	})
 }
@@ -328,6 +368,7 @@ func registerDialogSteps(sc *godog.ScenarioContext, w *world) {
 			if d.title != "categorise" || strings.Join(d.rows, "|") != strings.Join(want, "|") {
 				return fmt.Errorf("the %q dialog offers %q, want %q", d.title, d.rows, want)
 			}
+
 			return nil
 		})
 	})
@@ -370,6 +411,7 @@ func registerCategoriseRowSteps(sc *godog.ScenarioContext, w *world) {
 					return nil
 				}
 			}
+
 			return fmt.Errorf("no info row reads %q", text)
 		})
 	})
@@ -391,12 +433,14 @@ func (w *world) expectReportsUnchangedFor(account string) error {
 	if err := w.press("5"); err != nil {
 		return err
 	}
+
 	return w.expectScreenLines(func(lines []string) error {
 		for _, line := range lines {
 			if strings.Contains(line, account) && strings.Contains(line, " 2,00 EUR") {
 				return fmt.Errorf("the reports show the staged amount: %q", line)
 			}
 		}
+
 		return nil
 	})
 }
@@ -413,9 +457,11 @@ func registerPickerListSteps(sc *godog.ScenarioContext, w *world) {
 			for _, row := range d.listRows() {
 				listed = listed || strings.HasPrefix(row, name) && strings.Contains(row, suffix)
 			}
+
 			if listed != want {
 				return fmt.Errorf("the picker lists %q is %v, want %v: %q", name, listed, want, d.rows)
 			}
+
 			return nil
 		})
 	}
@@ -439,6 +485,7 @@ func registerPickerGroupSteps(sc *godog.ScenarioContext, w *world) {
 			if !d.holds("+ create " + name) {
 				return fmt.Errorf("the picker does not suggest %q: %q", name, d.rows)
 			}
+
 			return nil
 		})
 	})
@@ -448,6 +495,7 @@ func registerPickerGroupSteps(sc *godog.ScenarioContext, w *world) {
 			if !d.holds("refused:") || (!d.holds(a) && !d.holds(b) && !d.holds(c)) {
 				return fmt.Errorf("no refusal mentions %q, %q or %q: %q", a, b, c, d.rows)
 			}
+
 			return nil
 		})
 	})
@@ -487,6 +535,7 @@ func (w *world) pickRule(id string) error {
 			return w.press(append(repeat("↓", i), "Enter")...)
 		}
 	}
+
 	return fmt.Errorf("the rule list has no rule %s: %q", id, d.rows)
 }
 
@@ -497,6 +546,7 @@ func registerRulePreviewSteps(sc *godog.ScenarioContext, w *world) {
 			if !strings.Contains(strings.Join(previewOf(d), "\n"), text) {
 				return fmt.Errorf("the rule preview %q lacks %q", previewOf(d), text)
 			}
+
 			return nil
 		})
 	})
@@ -511,6 +561,7 @@ func registerRuleRefusalSteps(sc *godog.ScenarioContext, w *world) {
 		if err := w.expectRefusal(true); err != nil {
 			return err
 		}
+
 		return w.expectScreen(true, name)
 	})
 	step(sc, `^I see no refusal$`, func() error { return w.expectRefusal(false) })
@@ -519,6 +570,7 @@ func registerRuleRefusalSteps(sc *godog.ScenarioContext, w *world) {
 		if err := w.expectScreen(true, a); err != nil {
 			return err
 		}
+
 		return w.expectScreen(true, b)
 	})
 }
@@ -533,6 +585,7 @@ func (w *world) expectRuleListShows(text string) error {
 				return fmt.Errorf("the rule list shows %q", row)
 			}
 		}
+
 		return nil
 	})
 }
@@ -541,5 +594,6 @@ func (w *world) addPurposeCondition(text string) error {
 	if err := w.press("Tab"); err != nil {
 		return err
 	}
+
 	return w.typeText(text)
 }

@@ -30,6 +30,7 @@ func TestDownloadDirIsTheXDGOneElseDownloadsInHome(t *testing.T) {
 			if key == "XDG_DOWNLOAD_DIR" {
 				return value
 			}
+
 			return ""
 		}
 	}

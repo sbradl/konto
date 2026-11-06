@@ -34,43 +34,82 @@ type capture struct {
 
 // tabs are the five v1 views, in tab order; number key i+1 selects tab i.
 func tabs() [tabCount]tab {
-	return [tabCount]tab{
-		{
-			name: "dash", keys: dashboard.Bindings(),
-			resize:   func(m Model, w, h int) Model { m.dash = m.dash.Resize(w, h); return m },
-			view:     func(m Model) string { return m.dash.View() },
-			key:      Model.onDashboardKey,
-			position: func(m Model) (row, total int) { return m.dash.Position() },
-			hidden:   func(m Model) int { return m.dash.HiddenPanels() },
+	return [tabCount]tab{dashboardTab(), importingTab(), schedulingTab(), forecastTab(), reportsTab()}
+}
+
+// dashboardTab is the Dashboard: Tab moves its panel focus, the focused panel scrolls.
+func dashboardTab() tab {
+	return tab{
+		name: "dash", keys: dashboard.Bindings(),
+		resize: func(m Model, w, h int) Model {
+			m.dash = m.dash.Resize(w, h)
+
+			return m
 		},
-		{
-			name: "import", keys: imports.Bindings(),
-			resize:   func(m Model, w, h int) Model { m.imports = m.imports.Resize(w, h); return m },
-			view:     func(m Model) string { return m.imports.View() },
-			key:      Model.onImportKey,
-			position: func(m Model) (row, total int) { return m.imports.Position() },
-			capture:  &capture{active: Model.importDialogOpen, key: Model.onImportKey},
+		view:     func(m Model) string { return m.dash.View() },
+		key:      Model.onDashboardKey,
+		position: func(m Model) (row, total int) { return m.dash.Position() },
+		hidden:   func(m Model) int { return m.dash.HiddenPanels() },
+	}
+}
+
+// importingTab is the CSV import, whose dialogs take the keyboard.
+func importingTab() tab {
+	return tab{
+		name: "import", keys: imports.Bindings(),
+		resize: func(m Model, w, h int) Model {
+			m.imports = m.imports.Resize(w, h)
+
+			return m
 		},
-		{
-			name: "sched", keys: scheduled.Bindings(),
-			resize:   func(m Model, w, h int) Model { m.scheduled = m.scheduled.Resize(w, h); return m },
-			view:     func(m Model) string { return m.scheduled.View() },
-			key:      Model.onScheduledKey,
-			position: func(m Model) (row, total int) { return m.scheduled.Position() },
-			capture:  &capture{active: func(m Model) bool { return m.scheduled.Capturing() }, key: Model.onFormKey},
+		view:     func(m Model) string { return m.imports.View() },
+		key:      Model.onImportKey,
+		position: func(m Model) (row, total int) { return m.imports.Position() },
+		capture:  &capture{active: Model.importDialogOpen, key: Model.onImportKey},
+	}
+}
+
+// schedulingTab is the Scheduled view, whose rule form takes the keyboard.
+func schedulingTab() tab {
+	return tab{
+		name: "sched", keys: scheduled.Bindings(),
+		resize: func(m Model, w, h int) Model {
+			m.scheduled = m.scheduled.Resize(w, h)
+
+			return m
 		},
-		{
-			name:   "forecast",
-			resize: func(m Model, w, h int) Model { m.forecasts = m.forecasts.Resize(w, h); return m },
-			view:   func(m Model) string { return m.forecasts.View() },
-			hidden: func(m Model) int { return m.forecasts.HiddenPanels() },
+		view:     func(m Model) string { return m.scheduled.View() },
+		key:      Model.onScheduledKey,
+		position: func(m Model) (row, total int) { return m.scheduled.Position() },
+		capture:  &capture{active: func(m Model) bool { return m.scheduled.Capturing() }, key: Model.onFormKey},
+	}
+}
+
+// forecastTab is the Forecast, which takes no keys of its own.
+func forecastTab() tab {
+	return tab{
+		name: "forecast",
+		resize: func(m Model, w, h int) Model {
+			m.forecasts = m.forecasts.Resize(w, h)
+
+			return m
 		},
-		{
-			name: "reports", keys: reports.Bindings(),
-			resize: func(m Model, w, h int) Model { m.reports = m.reports.Resize(w, h); return m },
-			view:   func(m Model) string { return m.reports.View() },
-			key:    Model.onReportsKey,
+		view:   func(m Model) string { return m.forecasts.View() },
+		hidden: func(m Model) int { return m.forecasts.HiddenPanels() },
+	}
+}
+
+// reportsTab is the Reports view.
+func reportsTab() tab {
+	return tab{
+		name: "reports", keys: reports.Bindings(),
+		resize: func(m Model, w, h int) Model {
+			m.reports = m.reports.Resize(w, h)
+
+			return m
 		},
+		view: func(m Model) string { return m.reports.View() },
+		key:  Model.onReportsKey,
 	}
 }
 
@@ -82,6 +121,7 @@ func (m Model) onActiveViewKey(key string) (Model, tea.Cmd) {
 	if handle := m.activeTab().key; handle != nil {
 		return handle(m, key)
 	}
+
 	return m, nil
 }
 
@@ -93,6 +133,7 @@ func (m Model) position() (row, total int) {
 	if position := m.activeTab().position; position != nil {
 		return position(m)
 	}
+
 	return 0, 0
 }
 
@@ -101,5 +142,6 @@ func (m Model) hiddenPanels() int {
 	if hidden := m.activeTab().hidden; hidden != nil {
 		return hidden(m)
 	}
+
 	return 0
 }

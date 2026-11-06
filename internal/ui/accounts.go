@@ -20,6 +20,7 @@ func (m Model) onDashboardKey(key string) (Model, tea.Cmd) {
 	case dashboard.ReopenSelected:
 		return m.planAccountChange(m.accounts.Reopen, "reopen"), nil
 	}
+
 	return m, nil
 }
 
@@ -31,18 +32,24 @@ func (m Model) planAccountChange(plan func(domain.Account) (domain.Changeset, er
 	if !ok {
 		return m
 	}
+
 	if m.busy() {
 		m.notice = reloadingNotice // the account may have just been closed or reopened
+
 		return m
 	}
+
 	changeset, err := plan(account)
 	if errors.Is(err, domain.ErrAlreadyClosed) || errors.Is(err, domain.ErrNotClosed) {
 		return m
 	}
+
 	if err != nil {
 		m.notice = "cannot " + verb + " " + account.Name + ": " + err.Error()
+
 		return m
 	}
 	m.prompt = &prompt{question: verb + " " + account.Name + "?", write: pendingWrite{changeset: changeset}}
+
 	return m
 }

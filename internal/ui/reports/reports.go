@@ -55,6 +55,7 @@ func (m Model) Key(key string) (Model, Action) {
 	if key == keyPeriod {
 		return m.NextPeriod(), LoadReport{}
 	}
+
 	return m.Move(key), nil
 }
 
@@ -63,6 +64,7 @@ func (m Model) Key(key string) (Model, Action) {
 func (m Model) NextPeriod() Model {
 	m.period = m.period.Next()
 	m.report, m.loaded, m.failure, m.scroll = domain.Report{}, false, nil, layout.Cursor{}
+
 	return m
 }
 
@@ -70,6 +72,7 @@ func (m Model) NextPeriod() Model {
 func (m Model) WithReport(report domain.Report) Model {
 	m.report, m.loaded, m.failure = report, true, nil
 	m.scroll.Offset = min(m.scroll.Offset, m.maxOffset())
+
 	return m
 }
 
@@ -77,6 +80,7 @@ func (m Model) WithReport(report domain.Report) Model {
 // status bar flags the failure.
 func (m Model) WithFailure(err error) Model {
 	m.failure = err
+
 	return m
 }
 
@@ -84,6 +88,7 @@ func (m Model) WithFailure(err error) Model {
 func (m Model) Resize(width, height int) Model {
 	m.width, m.height = width, height
 	m.scroll.Offset = min(m.scroll.Offset, m.maxOffset())
+
 	return m
 }
 
@@ -95,6 +100,7 @@ func (m Model) room(rows []domain.ReportRow) int {
 	if columnsOf(rows).delta > 0 {
 		return max(1, m.capacity()-1)
 	}
+
 	return m.capacity()
 }
 
@@ -107,6 +113,7 @@ func (m Model) maxOffset() int {
 // Move scrolls both tables together: up, down, pgup, pgdown, home or end.
 func (m Model) Move(key string) Model {
 	m.scroll = m.scroll.Scroll(key, m.maxOffset(), m.capacity())
+
 	return m
 }
 
@@ -114,13 +121,15 @@ func (m Model) Move(key string) Model {
 func (m Model) View() string {
 	bar := " " + theme.Dim.Render("period") + "  " + theme.Bold.Render(m.period.String()) + m.state()
 	sheetWidth := m.width / panelCount
-	height := m.height - periodRows
-	sheet := layout.Panel("BALANCE SHEET", sheetWidth, height,
-		m.table(m.report.BalanceSheet, sheetWidth-layout.PanelChrome))
-	statementWidth := m.width - sheetWidth
-	statement := layout.Panel("INCOME STATEMENT", statementWidth, height,
-		m.table(m.report.IncomeStatement, statementWidth-layout.PanelChrome))
+	sheet := m.panel("BALANCE SHEET", m.report.BalanceSheet, sheetWidth)
+	statement := m.panel("INCOME STATEMENT", m.report.IncomeStatement, m.width-sheetWidth)
+
 	return bar + "\n" + lipgloss.JoinHorizontal(lipgloss.Top, sheet, statement)
+}
+
+// panel draws one table in a panel width cells wide, below the period bar.
+func (m Model) panel(title string, rows []domain.ReportRow, width int) string {
+	return layout.Panel(title, width, m.height-periodRows, m.table(rows, width-layout.PanelChrome))
 }
 
 // state is what the period bar says after the period until its report is on screen: that it is being built,
@@ -129,9 +138,11 @@ func (m Model) state() string {
 	if m.loaded {
 		return ""
 	}
+
 	if m.failure != nil {
 		return "  " + theme.Negative.Render("cannot build the reports: "+m.failure.Error())
 	}
+
 	return "  " + theme.Dim.Render("loading the reports…")
 }
 
@@ -140,22 +151,34 @@ func (m Model) state() string {
 func (m Model) table(rows []domain.ReportRow, width int) string {
 	columns := columnsOf(rows)
 	capacity := m.room(rows)
+
 	lines := make([]string, 0, capacity)
 	if columns.delta > 0 {
 		lines = append(lines, columns.titleRow(width))
 	}
+	shown, hidden := m.shownRows(rows, capacity)
+	for _, row := range shown {
+		lines = append(lines, columns.line(row, width))
+	}
+
+	if hidden > 0 {
+		lines = append(lines, layout.More(hidden))
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+// shownRows are the rows that fit in capacity from the scroll offset on, and how many after them are hidden;
+// a row gives way to the "… N more" line when any are.
+func (m Model) shownRows(rows []domain.ReportRow, capacity int) (shown []domain.ReportRow, hidden int) {
 	first := min(m.scroll.Offset, max(0, len(rows)-capacity))
+
 	last := min(len(rows), first+capacity)
 	if last < len(rows) {
 		last--
 	}
-	for _, row := range rows[first:last] {
-		lines = append(lines, columns.line(row, width))
-	}
-	if hidden := len(rows) - last; hidden > 0 {
-		lines = append(lines, layout.More(hidden))
-	}
-	return strings.Join(lines, "\n")
+
+	return rows[first:last], len(rows) - last
 }
 
 // columns are the widths of a table's amount columns; delta is 0 when the table has none.
@@ -167,10 +190,12 @@ func columnsOf(rows []domain.ReportRow) columns {
 		if row.Kind != domain.RowHeader {
 			widths.amount = max(widths.amount, lipgloss.Width(row.Amount.Format()))
 		}
+
 		if row.Delta != nil {
 			widths.delta = max(widths.delta, lipgloss.Width(row.Delta.Format()), lipgloss.Width(deltaTitle))
 		}
 	}
+
 	return widths
 }
 
@@ -183,24 +208,34 @@ func (c columns) line(row domain.ReportRow, width int) string {
 	if row.Kind == domain.RowHeader {
 		return " " + theme.PanelTitle.Bold(true).Render(row.Label)
 	}
-	amount, change := row.Amount.Format(), ""
+
+	change := ""
 	if c.delta > 0 {
-		change = strings.Repeat(" ", columnGap+c.delta)
-		if row.Delta != nil {
-			delta := deltaStyle(*row.Delta).Render(row.Delta.Format())
-			change = strings.Repeat(" ", columnGap) + layout.AlignRight(delta, c.delta)
-		}
+		change = c.change(row)
 	}
 	room := max(0, width-c.amount-columnGap-lipgloss.Width(change)-columnGap)
 	label := " " + indent(row) + rowStyle(row).Render(layout.Fit(row.Label, room-lipgloss.Width(indent(row))))
-	figure := layout.AlignRight(amountStyle(row).Render(amount), c.amount)
+	figure := layout.AlignRight(amountStyle(row).Render(row.Amount.Format()), c.amount)
+
 	return label + strings.Repeat(" ", columnGap-1) + figure + change + " "
+}
+
+// change is the row's cell of the change column, right-aligned after a gap; blank for a row without a change.
+func (c columns) change(row domain.ReportRow) string {
+	change := strings.Repeat(" ", columnGap+c.delta)
+	if row.Delta != nil {
+		delta := deltaStyle(*row.Delta).Render(row.Delta.Format())
+		change = strings.Repeat(" ", columnGap) + layout.AlignRight(delta, c.delta)
+	}
+
+	return change
 }
 
 func indent(row domain.ReportRow) string {
 	if row.Kind == domain.RowLeaf {
 		return " "
 	}
+
 	return ""
 }
 
@@ -208,6 +243,7 @@ func rowStyle(row domain.ReportRow) lipgloss.Style {
 	if row.Kind == domain.RowGrandTotal {
 		return theme.Emphasis
 	}
+
 	return lipgloss.NewStyle()
 }
 
@@ -218,6 +254,7 @@ func amountStyle(row domain.ReportRow) lipgloss.Style {
 	case row.Amount.IsAllNegative():
 		return theme.Negative
 	}
+
 	return lipgloss.NewStyle()
 }
 
@@ -228,5 +265,6 @@ func deltaStyle(delta domain.MultiAmount) lipgloss.Style {
 	case delta.IsAllNegative():
 		return theme.Negative
 	}
+
 	return theme.Ok
 }

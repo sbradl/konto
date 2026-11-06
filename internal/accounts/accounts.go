@@ -31,6 +31,7 @@ func (s *Service) Close(account domain.Account) (domain.Changeset, error) {
 	if err != nil {
 		return domain.Changeset{}, fmt.Errorf("closing %s: %w", account.Name, err)
 	}
+
 	return account.Close(s.today(), rules) //nolint:wrapcheck // the aggregate's refusal is already user-facing
 }
 

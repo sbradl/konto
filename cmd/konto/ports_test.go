@@ -27,6 +27,7 @@ func TestBuildPortsVerifiesTheJournalTheWriterWrites(t *testing.T) {
 	if written.Type() != reflect.TypeFor[*carry.Writer]() {
 		t.Fatalf("the UI writes through %s, want the carry writer", written.Type())
 	}
+
 	file := written.Elem().FieldByName("file").Elem() // the file the carry writer writes to
 	if render.Type() != reflect.TypeFor[journal.File]() || file.Type() != render.Type() ||
 		render.FieldByName("path").String() != file.FieldByName("path").String() {
@@ -41,6 +42,7 @@ func TestBuildPortsTakeTheEditorAndDownloadsFromTheEnvironment(t *testing.T) {
 	if got := built.Editor("/data/2026.journal", 3).Args; !slices.Equal(got, []string{"nano", "+3", "/data/2026.journal"}) {
 		t.Errorf("editor args = %v", got)
 	}
+
 	if built.DownloadDir != "/home/me/Downloads" {
 		t.Errorf("download dir = %q", built.DownloadDir)
 	}

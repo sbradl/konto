@@ -36,11 +36,13 @@ func (f *fakeFile) Render(changeset domain.Changeset) (string, error) {
 			lines = append(lines, "rows")
 		}
 	}
+
 	return strings.Join(lines, ", "), f.renderErr
 }
 
 func (f *fakeFile) Apply(changeset domain.Changeset) error {
 	f.applied = append(f.applied, changeset)
+
 	return f.applyErr
 }
 
@@ -52,12 +54,14 @@ type fakeBalances struct {
 
 func (f *fakeBalances) TextBalances(_ context.Context, text string, before time.Time) ([]domain.Account, error) {
 	f.before = append(f.before, before)
+
 	return f.byText[text], f.err
 }
 
 func checking(mantissa int64) []domain.Account {
 	style := domain.DefaultAmount("EUR").Style
 	amount := domain.Amount{Commodity: "EUR", Mantissa: mantissa, Places: 2, Style: style}
+
 	return []domain.Account{{Name: "assets:checking", Balance: domain.MultiAmount{amount}}}
 }
 
@@ -69,6 +73,7 @@ func carries(years ...domain.SetCarry) domain.Changeset {
 	for _, year := range years {
 		edits = append(edits, year)
 	}
+
 	return domain.Changeset{Edits: append(edits,
 		domain.Declare{Directive: "account", Name: domain.OpeningBalanceAccount},
 		domain.Declare{Directive: "payee", Name: domain.OpeningDescription},
@@ -91,6 +96,7 @@ func unordered(changeset domain.Changeset) domain.Changeset {
 	slices.SortFunc(edits[first:], func(a, b domain.Edit) int {
 		return strings.Compare(a.(domain.Declare).Line(), b.(domain.Declare).Line())
 	})
+
 	return domain.Changeset{Edits: edits}
 }
 
@@ -107,6 +113,7 @@ func TestPrepareAddsTheCarryOfEveryStaleYearOldestFirst(t *testing.T) {
 	if err != nil || !reflect.DeepEqual(unordered(got), unordered(want)) || file.applied != nil {
 		t.Errorf("err = %v, prepared = %+v, want %+v; applied %+v", err, got, want, file.applied)
 	}
+
 	wantDays := []time.Time{time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)}
 	if !reflect.DeepEqual(gw.before, wantDays) {
 		t.Errorf("balances asked before %v, want %v", gw.before, wantDays)

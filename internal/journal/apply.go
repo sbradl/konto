@@ -35,6 +35,7 @@ func (f File) plan(changeset domain.Changeset) (*workspace, error) {
 			return nil, err
 		}
 	}
+
 	return work, nil
 }
 
@@ -46,6 +47,7 @@ func (w *workspace) dirty() []*source {
 	if w.rules != nil && w.rules.dirty {
 		changed = slices.Insert(changed, 0, w.rules)
 	}
+
 	return changed
 }
 
@@ -56,6 +58,7 @@ func (f File) Apply(changeset domain.Changeset) error {
 	if err != nil {
 		return err
 	}
+
 	return commitAll(work.dirty())
 }
 
@@ -68,25 +71,37 @@ func (f File) Render(changeset domain.Changeset) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	byPath := make(map[string]*source, len(work.sources))
-	for _, file := range work.sources {
-		byPath[file.path] = file
-	}
-	var text strings.Builder
-	writeFile := func(content string) {
-		text.WriteString(content)
-		if !strings.HasSuffix(content, "\n") { // a file without its final newline would run into the next
-			text.WriteString("\n")
-		}
-	}
+	byPath := sourcesByPath(work.sources)
 	spliced := map[string]bool{}
-	writeFile(flatten(byPath, work.sources[0], spliced))
+
+	var text strings.Builder
+	appendFileText(&text, flatten(byPath, work.sources[0], spliced))
 	for _, year := range work.years() {
 		if file := work.findYear(year); file != nil && !spliced[file.path] {
-			writeFile(strings.Join(file.lines, "\n"))
+			appendFileText(&text, strings.Join(file.lines, "\n"))
 		}
 	}
+
 	return text.String(), nil
+}
+
+func sourcesByPath(sources []*source) map[string]*source {
+	byPath := make(map[string]*source, len(sources))
+	for _, file := range sources {
+		byPath[file.path] = file
+	}
+
+	return byPath
+}
+
+// appendFileText adds a file's content to text, ending it with a newline: a file without its final newline
+// would run into the next.
+func appendFileText(text *strings.Builder, content string) {
+	text.WriteString(content)
+
+	if !strings.HasSuffix(content, "\n") {
+		text.WriteString("\n")
+	}
 }
 
 // flatten is the file's text with each `include` line replaced by the text of the files it names. Every
@@ -97,6 +112,7 @@ func flatten(byPath map[string]*source, file *source, seen map[string]bool) stri
 	for _, line := range file.lines {
 		if _, ok := directiveArgs(line, "include"); !ok {
 			lines = append(lines, line)
+
 			continue
 		}
 		matches, _ := includedFiles(file.path, line) // the files were read before, so the pattern is good
@@ -106,6 +122,7 @@ func flatten(byPath map[string]*source, file *source, seen map[string]bool) stri
 			}
 		}
 	}
+
 	return strings.Join(lines, "\n")
 }
 
@@ -113,19 +130,11 @@ func flatten(byPath map[string]*source, file *source, seen map[string]bool) stri
 // domain.Edit has its case (TestApplyHandlesEveryKindOfEdit): only a type that embeds the interface falls
 // through.
 func (w *workspace) apply(edit domain.Edit) error {
+	if applyInfallible(w.sources, edit) {
+		return nil
+	}
+
 	switch change := edit.(type) {
-	case domain.SetAccountTag:
-		setTag(w.sources, change)
-		return nil
-	case domain.RemoveAccountTag:
-		editDirective(w.sources, change.Account, func(tags []string) []string { return withoutTag(tags, change.Key) })
-		return nil
-	case domain.Declare:
-		declare(w.sources, change)
-		return nil
-	case domain.AddRule:
-		addRule(w.sources, change)
-		return nil
 	case domain.AddTransactions:
 		return w.addTransactions(change)
 	case domain.SetCategoryRule:
@@ -137,7 +146,26 @@ func (w *workspace) apply(edit domain.Edit) error {
 	case domain.ReplaceRule:
 		return replaceRule(w.sources, change)
 	}
+
 	return fmt.Errorf("unsupported edit %T", edit)
+}
+
+// applyInfallible makes the edits that cannot fail, and says whether edit was one of them.
+func applyInfallible(sources []*source, edit domain.Edit) bool {
+	switch change := edit.(type) {
+	case domain.SetAccountTag:
+		setTag(sources, change)
+	case domain.RemoveAccountTag:
+		editDirective(sources, change.Account, func(tags []string) []string { return withoutTag(tags, change.Key) })
+	case domain.Declare:
+		declare(sources, change)
+	case domain.AddRule:
+		addRule(sources, change)
+	default:
+		return false
+	}
+
+	return true
 }
 
 // ruleAt is the file and the first line index of the `~` block that starts at pos. The line there must be a
@@ -147,12 +175,15 @@ func ruleAt(sources []*source, pos domain.SourcePos) (file *source, first int, e
 		if source.path != pos.File {
 			continue
 		}
+
 		first = pos.Line - 1
 		if first < 0 || first >= len(source.lines) || !isRuleHeader(source.lines[first]) {
 			return nil, 0, fmt.Errorf("%s:%d is no longer a periodic rule: reload and try again", pos.File, pos.Line)
 		}
+
 		return source, first, nil
 	}
+
 	return nil, 0, fmt.Errorf("%s is not part of the journal", pos.File)
 }
 
@@ -165,6 +196,7 @@ func deleteRule(sources []*source, pos domain.SourcePos) error {
 	file.lines = slices.Delete(file.lines, first, blockEnd(file.lines, first))
 	file.lines = withoutDoubleBlank(file.lines, first)
 	file.dirty = true
+
 	return nil
 }
 
@@ -176,6 +208,7 @@ func replaceRule(sources []*source, edit domain.ReplaceRule) error {
 	}
 	file.lines = slices.Replace(file.lines, first, blockEnd(file.lines, first), edit.Lines...)
 	file.dirty = true
+
 	return nil
 }
 
@@ -185,6 +218,7 @@ func blockEnd(lines []string, first int) int {
 	for end < len(lines) && indented(lines[end]) {
 		end++
 	}
+
 	return end
 }
 
@@ -194,12 +228,14 @@ func withoutDoubleBlank(lines []string, at int) []string {
 	if at == 0 || at >= len(lines) || lines[at-1] != "" || lines[at] != "" {
 		return lines
 	}
+
 	return slices.Delete(lines, at, at+1)
 }
 
 // setTag puts the tag on the account's directive, or declares the account in the main journal.
 func setTag(sources []*source, edit domain.SetAccountTag) {
 	tag := edit.Key + ":" + edit.Value
+
 	update := func(tags []string) []string { return append(withoutTag(tags, edit.Key), tag) }
 	if editDirective(sources, edit.Account, update) {
 		return
@@ -218,9 +254,11 @@ func editDirective(sources []*source, account string, update func(tags []string)
 			tags := update(splitTags(directive.comment))
 			source.lines[i] = domain.DirectiveAccount + " " + directive.head + joinTags(tags)
 			source.dirty = true
+
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -231,6 +269,7 @@ func splitTags(comment string) []string {
 			tags = append(tags, tag)
 		}
 	}
+
 	return tags
 }
 

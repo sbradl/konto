@@ -86,27 +86,39 @@ func (m Model) OpenEdit(input periodic.Input, rule domain.PeriodicRule) Model {
 }
 
 func (m Model) open(input periodic.Input, editing *domain.PeriodicRule) Model {
-	opened := &form{editing: editing, input: input, currencies: m.ledger.Commodities, held: map[string]string{}}
-	for _, account := range m.ledger.Accounts {
-		if account.IsClosed() {
-			continue
-		}
-		opened.accounts = append(opened.accounts, account.Name)
-		if len(account.Balance) > 0 {
-			opened.held[account.Name] = account.Balance[0].Commodity
-		}
-	}
-	slices.Sort(opened.accounts)
+	accounts, held := openAccounts(m.ledger.Accounts)
+
+	opened := &form{editing: editing, input: input, currencies: m.ledger.Commodities, accounts: accounts, held: held}
 	if opened.input.Currency == "" && len(opened.currencies) > 0 {
 		opened.input.Currency = opened.currencies[0]
 	}
 	m.form = opened
+
 	return m
+}
+
+// openAccounts are the names of the accounts still open, by name, and the first currency each of them holds.
+func openAccounts(accounts []domain.Account) (names []string, held map[string]string) {
+	held = map[string]string{}
+	for _, account := range accounts {
+		if account.IsClosed() {
+			continue
+		}
+
+		names = append(names, account.Name)
+		if len(account.Balance) > 0 {
+			held[account.Name] = account.Balance[0].Commodity
+		}
+	}
+	slices.Sort(names)
+
+	return names, held
 }
 
 // CloseForm drops the form, whatever it holds.
 func (m Model) CloseForm() Model {
 	m.form = nil
+
 	return m
 }
 
@@ -117,6 +129,7 @@ func (m Model) WithFormError(text string) Model {
 		next.message = text
 		m.form = &next
 	}
+
 	return m
 }
 
@@ -127,36 +140,45 @@ func (m Model) FormKey(key string) (Model, Action) {
 	if m.copying != nil {
 		return m.copyKey(key), nil
 	}
+
+	if key == layout.KeyEsc {
+		return m.CloseForm(), nil
+	}
+
 	next := *m.form
 	next.message = ""
-	switch key {
-	case layout.KeyEsc:
-		return m.CloseForm(), nil
-	case keySave:
+
+	if key == keySave || key == layout.KeyEnter && !next.picks() {
 		return m.formSave(&next)
+	}
+	next.key(key)
+	m.form = &next
+
+	return m, nil
+}
+
+// key moves the focus, picks the account under the picker's cursor or edits the field with the focus.
+func (f *form) key(key string) {
+	switch key {
 	case layout.KeyTab, layout.KeyBackTab:
-		next.move(key)
+		f.move(key)
 	case layout.KeyUp, layout.KeyDown:
-		if next.isAccount() {
-			next.edit(key)
+		if f.isAccount() {
+			f.edit(key)
 		} else {
-			next.move(key)
+			f.move(key)
 		}
 	case layout.KeyEnter:
-		if !next.picks() {
-			return m.formSave(&next)
-		}
-		next.pick()
+		f.pick()
 	default:
-		next.edit(key)
+		f.edit(key)
 	}
-	m.form = &next
-	return m, nil
 }
 
 // formSave asks the root to plan the rule the form holds.
 func (m Model) formSave(f *form) (Model, Action) {
 	m.form = f
+
 	return m, &Save{Input: f.input, Editing: f.editing}
 }
 
@@ -186,6 +208,7 @@ func (f *form) isAccount() bool { return f.focus == fieldFrom || f.focus == fiel
 // matches are the accounts whose name holds what is typed, case aside.
 func (f *form) matches() []string {
 	needle := strings.ToLower(f.filter)
+
 	return slices.DeleteFunc(slices.Clone(f.accounts), func(name string) bool {
 		return !strings.Contains(strings.ToLower(name), needle)
 	})
@@ -197,6 +220,7 @@ func (f *form) picks() bool {
 	if !f.isAccount() {
 		return false
 	}
+
 	return f.filter != "" || f.browsing || f.text(f.focus) == ""
 }
 
@@ -205,9 +229,11 @@ func (f *form) pick() {
 	matches := f.matches()
 	if len(matches) == 0 {
 		f.message = "no account matches " + f.filter
+
 		return
 	}
 	chosen := matches[f.cursor.Row] // the cursor never leaves the matches
+
 	*fields()[f.focus].text(&f.input) = chosen
 	if f.focus == fieldFrom {
 		f.input.Currency = f.currencyHeldBy(chosen)
@@ -220,9 +246,11 @@ func (f *form) currencyHeldBy(account string) string {
 	if held := f.held[account]; slices.Contains(f.currencies, held) {
 		return held
 	}
+
 	if len(f.currencies) > 0 {
 		return f.currencies[0]
 	}
+
 	return f.input.Currency
 }
 
@@ -244,8 +272,10 @@ func (f *form) edit(key string) {
 func (f *form) editPicker(key string) {
 	if layout.Moves(key) {
 		f.cursor, f.browsing = f.cursor.Move(key, len(f.matches()), pickerRows), true
+
 		return
 	}
+
 	text, back, _ := layout.Edit(f.filter, f.back, key)
 	if text != f.filter {
 		f.cursor, f.browsing = layout.Cursor{}, false
@@ -264,8 +294,10 @@ func cycle[T comparable](choices []T, current T, key string) T {
 	default:
 		return current
 	}
+
 	if len(choices) == 0 {
 		return current
 	}
+
 	return choices[max(0, min(index, len(choices)-1))]
 }

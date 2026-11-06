@@ -24,6 +24,7 @@ func TestJournalErrorCarriesItsIssue(t *testing.T) {
 	if !errors.As(err, &got) || got.Issue != issue {
 		t.Errorf("errors.As gave %+v, want the issue back", got)
 	}
+
 	if !strings.Contains(err.Error(), "j:1:1") || !strings.Contains(err.Error(), "unexpected 't'") {
 		t.Errorf("Error() = %q, want location and message", err.Error())
 	}
@@ -57,9 +58,11 @@ func TestCheckRunCountsIssuesBySeverity(t *testing.T) {
 	if run.Count(SeverityErr) != 1 || run.Count(SeverityWarn) != 2 {
 		t.Errorf("counts = %d err, %d warn, want 1 and 2", run.Count(SeverityErr), run.Count(SeverityWarn))
 	}
+
 	if run.IsClean() {
 		t.Error("a run with issues is not clean")
 	}
+
 	if !(CheckRun{Total: 12}).IsClean() {
 		t.Error("a run without issues is clean")
 	}

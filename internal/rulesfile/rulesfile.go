@@ -26,6 +26,7 @@ func Block(lines []string, id string) (first, end int, found bool) {
 	for end < len(lines) && !IsBlank(lines[end]) {
 		end++
 	}
+
 	return first, end, true
 }
 

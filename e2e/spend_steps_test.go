@@ -29,11 +29,14 @@ func (w *world) spendPanel() ([][]spendCell, error) {
 		runes := []rune(line)
 		if before, _, found := strings.Cut(line, "╭─ SPEND "); found {
 			left, inside = len([]rune(before)), true
+
 			continue
 		}
+
 		if !inside {
 			continue
 		}
+
 		if left < len(runes) && runes[left] == '╰' {
 			return rows, nil
 		}
@@ -43,6 +46,7 @@ func (w *world) spendPanel() ([][]spendCell, error) {
 		}
 		rows = append(rows, row)
 	}
+
 	return nil, errors.New("no SPEND panel on screen:\n" + s.screenText())
 }
 
@@ -58,6 +62,7 @@ func (w *world) spendText() (string, error) {
 			lines[i] += string(c.r)
 		}
 	}
+
 	return strings.Join(lines, "\n"), nil
 }
 
@@ -74,14 +79,18 @@ func (w *world) expectSpend(check func(text string) error) error {
 		text, perr := w.spendText()
 		if perr != nil {
 			failure = perr
+
 			return false
 		}
 		failure = check(text)
+
 		return failure == nil
 	})
+
 	if failure != nil {
 		return fmt.Errorf("%w\n%s", failure, s.screenText())
 	}
+
 	return nil
 }
 
@@ -90,6 +99,7 @@ func (w *world) expectBrailleChart() error {
 		if !strings.ContainsFunc(text, isBraille) {
 			return errors.New("the SPEND panel draws no braille line")
 		}
+
 		return nil
 	})
 }
@@ -107,6 +117,7 @@ func (w *world) expectXAxisLabels(list string) error {
 			}
 			position += at + len(match[1])
 		}
+
 		return nil
 	})
 }
@@ -116,6 +127,7 @@ func (w *world) expectYAxisInThousands() error {
 		if !regexp.MustCompile(`\d\.\dk│`).MatchString(text) {
 			return errors.New("y axis labels are not formatted like 1.2k")
 		}
+
 		return nil
 	})
 }
@@ -124,10 +136,12 @@ func (w *world) expectChartColoursBelow16() error {
 	if err := w.expectBrailleChart(); err != nil {
 		return err
 	}
+
 	s, err := w.session()
 	if err != nil {
 		return err
 	}
+
 	rows, err := w.spendPanel()
 	if err != nil {
 		return err
@@ -139,6 +153,7 @@ func (w *world) expectChartColoursBelow16() error {
 			}
 		}
 	}
+
 	return nil
 }
 
@@ -151,6 +166,7 @@ func registerSpendSteps(sc *godog.ScenarioContext, w *world) {
 			if strings.Contains(text, label) {
 				return fmt.Errorf("the SPEND panel shows %q", label)
 			}
+
 			return nil
 		})
 	})

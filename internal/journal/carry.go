@@ -16,13 +16,22 @@ func (f File) CarryYears(changeset domain.Changeset) ([]int, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	if len(work.touched) == 0 {
 		return nil, nil
 	}
 	earliest := slices.Min(work.touched)
-	return slices.DeleteFunc(work.years(), func(year int) bool {
-		return year < earliest || work.priorYear(year) == 0 || (year == earliest && !work.created[year])
-	}), nil
+
+	return slices.DeleteFunc(work.years(), func(year int) bool { return !work.carryStale(year, earliest) }), nil
+}
+
+// carryStale reports whether the carry into year goes stale when earliest is the earliest year written to:
+// the year comes after it, or the changeset starts the year's file, and an earlier year file is there to
+// carry from.
+func (w *workspace) carryStale(year, earliest int) bool {
+	startedOrLater := year > earliest || (year == earliest && w.created[year])
+
+	return startedOrLater && w.priorYear(year) != 0
 }
 
 // years are the years that have a file, on disk or started by the edits, oldest first.
@@ -32,6 +41,7 @@ func (w *workspace) years() []int {
 		years = append(years, year)
 	}
 	slices.Sort(years)
+
 	return slices.Compact(years)
 }
 
@@ -42,6 +52,7 @@ func (w *workspace) findYear(year int) *source {
 			return s
 		}
 	}
+
 	return nil
 }
 
@@ -51,9 +62,11 @@ func (w *workspace) readYear(year int) (*source, error) {
 	for _, s := range w.sources {
 		seen[s.path] = true
 	}
+
 	if err := readSource(w.yearPath(year), seen, &w.sources); err != nil {
 		return nil, err
 	}
+
 	return w.findYear(year), nil
 }
 
@@ -63,6 +76,7 @@ func (w *workspace) priorYear(year int) int {
 	if len(earlier) == 0 {
 		return 0
 	}
+
 	return earlier[len(earlier)-1]
 }
 
@@ -72,41 +86,59 @@ func (w *workspace) setCarry(edit domain.SetCarry) error {
 	if err != nil {
 		return err
 	}
-	removeCarry(opening, time.Date(edit.Year, time.January, 1, 0, 0, 0, 0, time.UTC))
+	removeCarry(opening, firstDayOf(edit.Year))
+
 	prior := w.priorYear(edit.Year)
 	if prior == 0 {
 		return nil
 	}
+
 	closing, err := w.yearFile(prior)
 	if err != nil {
 		return err
 	}
 	removeCarry(closing, lastDayOf(prior))
+
 	if len(edit.Balances) == 0 {
 		return nil
 	}
 	appendBlock(closing, edit.Closing(lastDayOf(prior)).Lines())
-	prependBlock(opening, edit.Opening(time.Date(edit.Year, time.January, 1, 0, 0, 0, 0, time.UTC)).Lines())
+	prependBlock(opening, edit.Opening(firstDayOf(edit.Year)).Lines())
+
 	return nil
 }
+
+func firstDayOf(year int) time.Time { return time.Date(year, time.January, 1, 0, 0, 0, 0, time.UTC) }
 
 func lastDayOf(year int) time.Time { return time.Date(year, time.December, 31, 0, 0, 0, 0, time.UTC) }
 
 // removeCarry drops the managed carry transaction dated date from the file.
 func removeCarry(file *source, date time.Time) {
 	for i := 0; i < len(file.lines); i++ {
-		when, ok := headerDate(file.lines[i])
-		if !ok || !when.Equal(date) || !strings.Contains(file.lines[i], domain.CarryTag) {
-			continue
+		if isCarryHeader(file.lines[i], date) {
+			removeBlockAt(file, i)
+			i-- // the line after the removed block is now at i
 		}
-		file.lines = slices.Delete(file.lines, i, blockEnd(file.lines, i))
-		file.lines = withoutDoubleBlank(file.lines, i)
-		if i == 0 && len(file.lines) > 0 && file.lines[0] == "" {
-			file.lines = file.lines[1:]
-		}
-		file.dirty = true
-		i--
 	}
+}
+
+// isCarryHeader reports whether the line opens the managed carry transaction dated date.
+func isCarryHeader(line string, date time.Time) bool {
+	when, ok := headerDate(line)
+
+	return ok && when.Equal(date) && strings.Contains(line, domain.CarryTag)
+}
+
+// removeBlockAt removes the transaction that starts at index first, and the blank line it leaves doubled
+// or, at the top of the file, leading.
+func removeBlockAt(file *source, first int) {
+	file.lines = slices.Delete(file.lines, first, blockEnd(file.lines, first))
+
+	file.lines = withoutDoubleBlank(file.lines, first)
+	if first == 0 && len(file.lines) > 0 && file.lines[0] == "" {
+		file.lines = file.lines[1:]
+	}
+	file.dirty = true
 }
 
 // prependBlock puts lines at the very start of the file, before any transaction of the same day.

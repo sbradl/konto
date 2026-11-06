@@ -14,6 +14,7 @@ func (m Model) withPreview(base string) string {
 	for _, line := range lines {
 		body = append(body, " "+line)
 	}
+
 	return layout.Overlay(base, layout.Popup("write", body, m.width), m.height)
 }
 

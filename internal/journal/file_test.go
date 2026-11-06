@@ -66,6 +66,7 @@ func TestCreateWritesSkeletonAndEmptyRules(t *testing.T) {
 	if err != nil || string(got) != wantSkeleton {
 		t.Errorf("journal = %q, %v; want the skeleton", got, err)
 	}
+
 	rules, err := os.ReadFile(filepath.Join(dir, "categories.rules"))
 	if err != nil || len(rules) != 0 {
 		t.Errorf("categories.rules = %q, %v; want an empty file", rules, err)
@@ -91,6 +92,7 @@ func TestCreateRefusesToOverwriteExistingJournal(t *testing.T) {
 // An existing categories.rules beside the new journal is kept.
 func TestCreateKeepsExistingRules(t *testing.T) {
 	dir := t.TempDir()
+
 	rulesPath := filepath.Join(dir, "categories.rules")
 	if err := os.WriteFile(rulesPath, []byte("if x\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -137,6 +139,7 @@ func windowDir(t *testing.T, names ...string) string {
 			t.Fatal(err)
 		}
 	}
+
 	return dir
 }
 
@@ -154,6 +157,7 @@ func TestWindowIsTheMainJournalAndTheLastTwoYears(t *testing.T) {
 	for i := range want {
 		want[i] = filepath.Join(dir, want[i])
 	}
+
 	if !slices.Equal(got, want) {
 		t.Errorf("Window = %v, want %v", got, want)
 	}
@@ -167,6 +171,7 @@ func TestWindowSkipsMissingYearFiles(t *testing.T) {
 	if got, want := NewFile(main, septemberOf(2026)).Window(), []string{main, filepath.Join(dir, "2026.journal")}; !slices.Equal(got, want) {
 		t.Errorf("Window = %v, want %v", got, want)
 	}
+
 	if got := NewFile(main, septemberOf(2030)).Window(); !slices.Equal(got, []string{main}) {
 		t.Errorf("Window in a year without files = %v, want only the main journal", got)
 	}

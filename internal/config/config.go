@@ -30,19 +30,28 @@ type Environment struct {
 func Resolve(args []string, env Environment) (Config, error) {
 	flags := flag.NewFlagSet("konto", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
+
 	file := flags.String("file", "", "journal file")
 	if err := flags.Parse(args); err != nil {
 		return Config{}, fmt.Errorf("invalid arguments: %w", err)
 	}
+
 	if flags.NArg() > 0 {
 		return Config{}, errors.New("invalid arguments: unexpected " + flags.Arg(0))
 	}
-	for _, path := range []string{*file, env.Getenv("LEDGER_FILE")} {
+
+	return Config{JournalPath: journalPath(*file, env), Home: env.Home}, nil
+}
+
+// journalPath is --file, else $LEDGER_FILE, else ~/.hledger.journal, always absolute.
+func journalPath(flagged string, env Environment) string {
+	for _, path := range []string{flagged, env.Getenv("LEDGER_FILE")} {
 		if path != "" {
-			return Config{JournalPath: absolute(env.Cwd, expandHome(env.Home, path)), Home: env.Home}, nil
+			return absolute(env.Cwd, expandHome(env.Home, path))
 		}
 	}
-	return Config{JournalPath: filepath.Join(env.Home, ".hledger.journal"), Home: env.Home}, nil
+
+	return filepath.Join(env.Home, ".hledger.journal")
 }
 
 // expandHome puts the home directory in place of a leading ~ or ~/, as the shell would; ~user is left alone.
@@ -50,6 +59,7 @@ func expandHome(home, path string) string {
 	if path == "~" || strings.HasPrefix(path, "~/") {
 		return home + path[1:]
 	}
+
 	return path
 }
 
@@ -57,5 +67,6 @@ func absolute(cwd, path string) string {
 	if filepath.IsAbs(path) {
 		return path
 	}
+
 	return filepath.Join(cwd, path)
 }

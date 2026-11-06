@@ -39,5 +39,6 @@ func frequencyOf(expression string) (Frequency, bool) {
 			return frequency, true
 		}
 	}
+
 	return Once, false
 }

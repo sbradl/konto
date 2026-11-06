@@ -14,6 +14,7 @@ func screen(_, height int) string {
 	for i := range rows {
 		rows[i] = row
 	}
+
 	return strings.Join(rows, "\n")
 }
 

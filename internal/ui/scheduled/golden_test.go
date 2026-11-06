@@ -20,6 +20,7 @@ func manyRules(count int) domain.Ledger {
 		ledger.Rules = append(ledger.Rules, rule(100+i, "monthly from 2026-10-05", fmt.Sprintf("Rule %02d", i),
 			"    expenses:x  1,00 EUR", "    assets:checking"))
 	}
+
 	return ledger
 }
 

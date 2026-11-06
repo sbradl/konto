@@ -61,10 +61,12 @@ func postbank() bankFormat {
 // formatNamed is the bank format of the name, as Staged.Format and an account's konto:format tag name it.
 func formatNamed(name string) (bankFormat, bool) {
 	formats := []bankFormat{postbank()}
+
 	at := slices.IndexFunc(formats, func(format bankFormat) bool { return format.name == name })
 	if at < 0 {
 		return bankFormat{}, false
 	}
+
 	return formats[at], true
 }
 
@@ -74,6 +76,7 @@ func (b bankFormat) rules() string {
 	fields := make([]string, b.amountColumn+1)
 	fields[b.dateColumn], fields[b.typeColumn], fields[b.payeeColumn] = "date", fieldType, fieldPayee
 	fields[b.purposeColumn], fields[b.amountColumn] = fieldPurpose, fieldAmount
+
 	return strings.Join([]string{
 		"skip " + strconv.Itoa(b.skip), "separator " + separator, "decimal-mark " + b.decimalMark,
 		"date-format " + b.dateFormat, "newest-first", "fields " + strings.Join(fields, ", "),
@@ -90,6 +93,7 @@ func (b bankFormat) amount(like domain.Amount, text string) (domain.Amount, erro
 		return domain.Amount{}, err //nolint:wrapcheck // the number's own words are the answer
 	}
 	like.Mantissa = mantissa
+
 	return like, nil
 }
 
@@ -103,25 +107,48 @@ type preamble struct {
 
 // readPreamble recognises an export of the format and reads its IBAN and the trailer's closing balance.
 func (b bankFormat) readPreamble(data []byte) (preamble, error) {
-	text := strings.TrimPrefix(string(bytes.ReplaceAll(data, []byte("\r\n"), []byte("\n"))), "\xef\xbb\xbf")
-	lines := strings.Split(text, "\n")
-	if !slices.ContainsFunc(lines, func(line string) bool { return strings.HasPrefix(line, b.header) }) {
+	lines := exportLines(data)
+	if !slices.ContainsFunc(lines, b.isHeader) {
 		return preamble{}, ErrNotAnExport
 	}
-	var found preamble
-	if b.ibanLine < len(lines) {
-		found.iban = domain.NormalizeIBAN(column(strings.Split(lines[b.ibanLine], separator), b.ibanColumn))
-	}
-	if found.iban == "" {
+
+	iban := b.ibanOf(lines)
+	if iban == "" {
 		return preamble{}, ErrNoIBAN
 	}
+
+	return preamble{iban: iban, closing: b.closingOf(lines), records: b.recordsOf(lines)}, nil
+}
+
+// exportLines are the export's lines, without a byte order mark and Windows line ends.
+func exportLines(data []byte) []string {
+	text := strings.TrimPrefix(string(bytes.ReplaceAll(data, []byte("\r\n"), []byte("\n"))), "\xef\xbb\xbf")
+
+	return strings.Split(text, "\n")
+}
+
+// isHeader reports the line the bookings follow.
+func (b bankFormat) isHeader(line string) bool { return strings.HasPrefix(line, b.header) }
+
+// ibanOf is the IBAN the preamble names; empty when it names none.
+func (b bankFormat) ibanOf(lines []string) string {
+	if b.ibanLine >= len(lines) {
+		return ""
+	}
+
+	return domain.NormalizeIBAN(column(strings.Split(lines[b.ibanLine], separator), b.ibanColumn))
+}
+
+// closingOf is the closing balance the trailer prints, as printed.
+func (b bankFormat) closingOf(lines []string) string {
+	var closing string
 	for _, line := range lines {
 		if fields := strings.Split(line, separator); fields[0] == b.trailer && len(fields) > b.balanceColumn {
-			found.closing = fields[b.balanceColumn]
+			closing = fields[b.balanceColumn]
 		}
 	}
-	found.records = b.recordsOf(lines)
-	return found, nil
+
+	return closing
 }
 
 // record is what one line of the export says in the columns konto matches rules against, and what tells it
@@ -136,23 +163,36 @@ func (b bankFormat) recordsOf(lines []string) []record {
 	var records []record
 	inBody := false
 	for _, line := range lines {
-		if strings.HasPrefix(line, b.header) {
+		if b.isHeader(line) {
 			inBody = true
+
 			continue
 		}
+
 		fields := strings.Split(line, separator)
 		if !inBody || fields[0] == b.trailer {
 			continue
 		}
-		date, err := time.Parse(b.dateLayout, column(fields, b.dateColumn))
-		if err != nil {
-			continue
+
+		if rec, ok := b.recordOf(fields); ok {
+			records = append(records, rec)
 		}
-		kind, payee := column(fields, b.typeColumn), column(fields, b.payeeColumn)
-		seen := booking{date.Format(time.DateOnly), b.value(column(fields, b.amountColumn)), descriptionOf(kind, payee)}
-		records = append(records, record{key: rowKey{seen, column(fields, b.purposeColumn)}, kind: kind, payee: payee})
 	}
+
 	return records
+}
+
+// recordOf reads the fields of one booking line; false when its date does not read, as on a line that is no
+// booking.
+func (b bankFormat) recordOf(fields []string) (record, bool) {
+	date, err := time.Parse(b.dateLayout, column(fields, b.dateColumn))
+	if err != nil {
+		return record{}, false
+	}
+	kind, payee := column(fields, b.typeColumn), column(fields, b.payeeColumn)
+	seen := booking{date.Format(time.DateOnly), b.value(column(fields, b.amountColumn)), descriptionOf(kind, payee)}
+
+	return record{key: rowKey{seen, column(fields, b.purposeColumn)}, kind: kind, payee: payee}, true
 }
 
 // value is the amount column as MultiAmount.Value has it, to compare with a converted row; empty when it is
@@ -162,6 +202,7 @@ func (b bankFormat) value(text string) string {
 	if err != nil {
 		return ""
 	}
+
 	return domain.MultiAmount{amount}.Value()
 }
 
@@ -170,6 +211,7 @@ func descriptionOf(kind, payee string) string {
 	if payee == "" {
 		return kind
 	}
+
 	return payee
 }
 
@@ -186,6 +228,7 @@ func withRawFields(rows []Row, records []record) ([]Row, error) {
 	}
 	for i := range rows {
 		row := &rows[i]
+
 		found := unused[row.key()]
 		if len(found) == 0 {
 			return nil, fmt.Errorf("%w: %s %s", errUnmatchedRow, row.Date.Format(time.DateOnly), row.Description)
@@ -193,6 +236,7 @@ func withRawFields(rows []Row, records []record) ([]Row, error) {
 		row.Type, row.Payee = found[0].kind, found[0].payee
 		unused[row.key()] = found[1:]
 	}
+
 	return rows, nil
 }
 
@@ -201,5 +245,6 @@ func column(fields []string, index int) string {
 	if index >= len(fields) {
 		return ""
 	}
+
 	return strings.TrimSpace(fields[index])
 }

@@ -51,10 +51,12 @@ func (b binary) run(ctx context.Context, stdin io.Reader, args ...string) (stdou
 	// path is the hledger binary konto was configured with; args are built by Client, never by the user.
 	cmd := exec.CommandContext(ctx, b.path, args...) //nolint:gosec // see above
 	cmd.Stdin, cmd.Stderr = stdin, &captured
+
 	stdout, err = cmd.Output()
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		err = fmt.Errorf("hledger did not answer within %s: %w", b.timeout, ctx.Err())
 	}
+
 	return stdout, captured.String(), err
 }
 
@@ -64,6 +66,7 @@ func (c *Client) query(ctx context.Context, args ...string) ([]byte, error) {
 	if err != nil {
 		return nil, failure(stderr, err, messageOf(args[0]), "hledger "+args[0])
 	}
+
 	return out, nil
 }
 
@@ -73,6 +76,7 @@ func (c *Client) queryText(ctx context.Context, text string, args ...string) ([]
 	if err != nil {
 		return nil, failure(stderr, err, messageOf(args[0]), "hledger "+args[0])
 	}
+
 	return out, nil
 }
 
@@ -82,6 +86,7 @@ func messageOf(command string) func(text string) string {
 	if command == "check" {
 		return firstParagraph
 	}
+
 	return firstMessageLine
 }
 
@@ -91,6 +96,7 @@ func failure(stderr string, err error, messageOf func(string) string, what strin
 	if issue, ok := parseIssue(stderr, messageOf); ok {
 		return domain.JournalError{Issue: issue}
 	}
+
 	return fmt.Errorf("%s: %w: %s", what, err, strings.TrimSpace(stderr))
 }
 
@@ -102,11 +108,18 @@ func (c *Client) runJournal(ctx context.Context, args []string) (stdout []byte, 
 	if len(files) == 1 {
 		return c.run(ctx, nil, append([]string{"-f", files[0]}, args...)...)
 	}
+
+	return c.run(ctx, strings.NewReader(includingAll(files)), append([]string{"-f", "-"}, args...)...)
+}
+
+// includingAll is a journal that includes each of the files, in order.
+func includingAll(files []string) string {
 	var journal strings.Builder
 	for _, file := range files {
 		journal.WriteString("include " + file + "\n")
 	}
-	return c.run(ctx, strings.NewReader(journal.String()), append([]string{"-f", "-"}, args...)...)
+
+	return journal.String()
 }
 
 // jsonTransaction is the part of `hledger print -O json` konto reads.
@@ -152,6 +165,7 @@ func (c *Client) transactions(
 	if err != nil {
 		return nil, err
 	}
+
 	return readTransactions(out, keep)
 }
 
@@ -166,24 +180,38 @@ func readTransactions(out []byte, keep func(jsonTransaction) bool) ([]domain.Tra
 		if keep != nil && !keep(entry) {
 			continue
 		}
-		date, err := time.Parse(time.DateOnly, entry.Date)
+
+		transaction, err := entry.transaction()
 		if err != nil {
 			return nil, fmt.Errorf("reading hledger print output: %w", err)
-		}
-		postings, err := entry.postings()
-		if err != nil {
-			return nil, fmt.Errorf("reading hledger print output: %w", err)
-		}
-		transaction := domain.Transaction{
-			Date: date, Description: entry.Description, Comment: strings.TrimSpace(entry.Comment),
-			Tags: tagMap(entry.Tags), Postings: postings,
-		}
-		if len(entry.SourcePos) > 0 {
-			transaction.Source = domain.SourcePos{File: entry.SourcePos[0].Name, Line: entry.SourcePos[0].Line}
 		}
 		transactions = append(transactions, transaction)
 	}
+
 	return transactions, nil
+}
+
+// transaction is the entry as konto's transaction, its source the first position hledger names.
+func (raw jsonTransaction) transaction() (domain.Transaction, error) {
+	date, err := time.Parse(time.DateOnly, raw.Date)
+	if err != nil {
+		return domain.Transaction{}, err //nolint:wrapcheck // readTransactions wraps it
+	}
+
+	postings, err := raw.postings()
+	if err != nil {
+		return domain.Transaction{}, err
+	}
+
+	transaction := domain.Transaction{
+		Date: date, Description: raw.Description, Comment: strings.TrimSpace(raw.Comment),
+		Tags: tagMap(raw.Tags), Postings: postings,
+	}
+	if len(raw.SourcePos) > 0 {
+		transaction.Source = domain.SourcePos{File: raw.SourcePos[0].Name, Line: raw.SourcePos[0].Line}
+	}
+
+	return transaction, nil
 }
 
 // ConvertCSV converts the bank export at csvPath to transactions with the given CSV rules, as hledger
@@ -195,13 +223,16 @@ func (c *Client) ConvertCSV(ctx context.Context, csvPath, rules string) ([]domai
 		_, err = file.WriteString(rules)
 		err = errors.Join(err, file.Close())
 	}
+
 	if err != nil {
 		return nil, fmt.Errorf("writing CSV rules: %w", err)
 	}
+
 	out, stderr, err := c.run(ctx, nil, "print", "-f", csvPath, "--rules-file", file.Name(), "-O", "json")
 	if err != nil {
 		return nil, failure(stderr, err, firstMessageLine, "hledger converting "+csvPath)
 	}
+
 	return readTransactions(out, nil)
 }
 
@@ -215,6 +246,7 @@ func (raw jsonTransaction) postings() ([]domain.Posting, error) {
 		}
 		postings[i] = domain.Posting{Account: posting.Account, Amounts: amounts, Tags: tagMap(posting.Tags)}
 	}
+
 	return postings, nil
 }
 
@@ -225,11 +257,13 @@ func tagMap(tags [][]string) map[string]string {
 		if len(tag) != tagCells {
 			continue
 		}
+
 		if named == nil {
 			named = map[string]string{}
 		}
 		named[tag[0]] = tag[1]
 	}
+
 	return named
 }
 

@@ -26,7 +26,11 @@ func TestPeriodNames(t *testing.T) {
 }
 
 func TestPeriodStart(t *testing.T) {
-	date := func(s string) time.Time { d, _ := time.Parse(time.DateOnly, s); return d }
+	date := func(s string) time.Time {
+		d, _ := time.Parse(time.DateOnly, s)
+
+		return d
+	}
 	for _, tc := range []struct {
 		period ReportPeriod
 		today  string

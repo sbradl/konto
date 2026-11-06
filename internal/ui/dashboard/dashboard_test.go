@@ -42,6 +42,7 @@ func loaded(height int) Model {
 // opening is the escape sequence the style starts its text with.
 func opening(style lipgloss.Style) string {
 	before, _, _ := strings.Cut(style.Render("x"), "x")
+
 	return before
 }
 
@@ -56,6 +57,7 @@ func TestAccountsListsAssetsAndLiabilitiesOpenFirstThenClosedEachByName(t *testi
 			t.Errorf("row %d = %q, want it to hold %q", i, got[i+1], name)
 		}
 	}
+
 	if joined := strings.Join(got, "\n"); strings.Contains(joined, "expenses:rent") || strings.Contains(joined, "equity:") {
 		t.Errorf("categories and equity must not be listed:\n%s", joined)
 	}
@@ -102,10 +104,12 @@ func TestBalancesAreRightAligned(t *testing.T) {
 			t.Errorf("row %q does not end in a balance", row)
 		}
 	}
+
 	checking := got[2]
 	if !strings.Contains(checking, "13.240,00 EUR") || lipgloss.Width(checking) != 60 {
 		t.Errorf("checking row = %q", checking)
 	}
+
 	if !strings.HasSuffix(checking, "13.240,00 EUR │") {
 		t.Errorf("balance should end one cell before the border: %q", checking)
 	}
@@ -133,12 +137,15 @@ func TestStylesCarryTheAnsiColours(t *testing.T) {
 	if !strings.Contains(raw[6], opening(theme.Negative)) { // creditcard is negative: ANSI red
 		t.Errorf("negative balance is not red: %q", raw[6])
 	}
+
 	if strings.Contains(raw[3], opening(theme.Negative)) { // checking is positive
 		t.Errorf("positive balance must not be red: %q", raw[3])
 	}
+
 	if !strings.Contains(raw[7], opening(theme.Dim)) { // closed rows are dim (ANSI 8 = bright black)
 		t.Errorf("closed row is not dim: %q", raw[7])
 	}
+
 	if !strings.Contains(raw[1], opening(theme.Selected)) { // the first row is selected: ANSI 8 background
 		t.Errorf("selected row has no selection background: %q", raw[1])
 	}
@@ -148,6 +155,7 @@ func TestPositionStartsOnTheFirstRow(t *testing.T) {
 	if row, total := loaded(20).Position(); row != 1 || total != 7 {
 		t.Errorf("Position() = %d/%d, want 1/7", row, total)
 	}
+
 	if row, total := New().Position(); row != 0 || total != 0 {
 		t.Errorf("empty Position() = %d/%d, want 0/0", row, total)
 	}
@@ -171,6 +179,7 @@ func TestMoveKeys(t *testing.T) {
 		for _, key := range tc.keys {
 			m = m.Move(key)
 		}
+
 		if row, _ := m.Position(); row != tc.want {
 			t.Errorf("%s: row = %d, want %d", name, row, tc.want)
 		}
@@ -183,6 +192,7 @@ func TestPagingMovesByThePanelsBodyHeight(t *testing.T) {
 	if row, _ := m.Position(); row != 4 {
 		t.Errorf("row = %d, want 4", row)
 	}
+
 	if row, _ := m.Move("pgup").Position(); row != 1 {
 		t.Errorf("row after pgup = %d, want 1", row)
 	}
@@ -199,9 +209,11 @@ func TestTheCursorRowStaysVisibleWhenTheListScrolls(t *testing.T) {
 	if !strings.Contains(got[1], "assets:savings") || !strings.Contains(got[3], "liabilities:creditcard") {
 		t.Errorf("scrolled panel:\n%s", strings.Join(got, "\n"))
 	}
+
 	if raw := strings.Split(m.accountsPanel(), "\n"); !strings.Contains(raw[3], opening(theme.Selected)) {
 		t.Errorf("the cursor row should be highlighted after scrolling: %q", raw[3])
 	}
+
 	if m = m.Move("home"); !strings.Contains(lines(m)[1], "assets:cash") {
 		t.Errorf("home should scroll back to the top:\n%s", strings.Join(lines(m), "\n"))
 	}
@@ -221,6 +233,7 @@ func TestRefreshKeepsTheCursorRowNumberAndClampsIt(t *testing.T) {
 	if row, _ := m.WithAccounts(accounts()).Position(); row != 7 {
 		t.Errorf("row after refresh = %d, want 7", row)
 	}
+
 	if row, total := m.WithAccounts(accounts()[:3]).Position(); total != 2 || row != 2 {
 		t.Errorf("after the list shrank: %d/%d, want 2/2", row, total)
 	}
@@ -254,9 +267,11 @@ func TestEveryLineFillsThePanelInside(t *testing.T) {
 	if got := lipgloss.Width(selected); got != inside {
 		t.Errorf("selected line is %d wide, want %d", got, inside)
 	}
+
 	if got := lipgloss.Width(open); got != inside-1 {
 		t.Errorf("open line is %d wide, want %d", got, inside-1)
 	}
+
 	if got := lipgloss.Width(closed); got != inside-1 {
 		t.Errorf("closed line is %d wide, want %d", got, inside-1)
 	}
@@ -268,9 +283,11 @@ func TestSelectedIsTheAccountUnderTheCursor(t *testing.T) {
 	if account, ok := m.Selected(); !ok || account.Name != "assets:cash" {
 		t.Errorf("Selected() = %q, %v; want assets:cash", account.Name, ok)
 	}
+
 	if account, _ := m.Move("end").Selected(); account.Name != "assets:old-account" {
 		t.Errorf("after End: Selected() = %q, want assets:old-account", account.Name)
 	}
+
 	if _, ok := New().Selected(); ok {
 		t.Error("an empty panel selects nothing")
 	}
@@ -311,6 +328,7 @@ func TestCardsSitRightOfTheAccountsPanelAndTheViewFillsTheHeight(t *testing.T) {
 	if len(got) != 20 {
 		t.Errorf("view has %d rows, want 20", len(got))
 	}
+
 	if !strings.HasPrefix(got[0], "╭─ ACCOUNTS ") || !strings.Contains(got[0], "╮╭─ NET WORTH ") {
 		t.Errorf("first row = %q, want the Accounts panel then the cards", got[0])
 	}
@@ -319,9 +337,11 @@ func TestCardsSitRightOfTheAccountsPanelAndTheViewFillsTheHeight(t *testing.T) {
 			t.Errorf("line is %d wide, want at most 180: %q", w, line)
 		}
 	}
+
 	if !strings.HasPrefix(got[cardHeight], "│ ") || !strings.Contains(got[cardHeight], "╭─ RECENT ") {
 		t.Errorf("row under the cards = %q, want the Accounts panel continuing beside the Recent panel", got[cardHeight])
 	}
+
 	below := len(listed()) + layout.PanelChrome
 	if !strings.HasPrefix(got[below], "╭─ UPCOMING ") {
 		t.Errorf("row under Accounts = %q, want Upcoming", got[below])
@@ -337,6 +357,7 @@ func TestNetIncomeIsGreenOrRedBySign(t *testing.T) {
 	if !strings.Contains(positive, opening(theme.Ok)+"1.815,00 EUR") {
 		t.Errorf("positive net income should be green: %q", strings.Split(positive, "\n")[1])
 	}
+
 	if !strings.Contains(negative, opening(theme.Negative)+"-1.185,00 EUR") {
 		t.Errorf("negative net income should be red: %q", strings.Split(negative, "\n")[1])
 	}
@@ -401,6 +422,7 @@ func withTransactions(n int) domain.Ledger {
 			},
 		})
 	}
+
 	return ledger
 }
 
@@ -423,6 +445,7 @@ func panelRows(m Model, title string, column func([]rune) []rune) []string {
 			rows = append(rows, line)
 		}
 	}
+
 	return rows
 }
 
@@ -441,6 +464,7 @@ func TestRecentListsNewestFirstWithDescriptionCategoryAndAmount(t *testing.T) {
 	if !strings.Contains(rows[0], "2026-09-25  Acme GmbH") || !strings.Contains(rows[0], "income:salary") || !strings.Contains(rows[0], "3.000,00 EUR") {
 		t.Errorf("first row = %q, want the salary", rows[0])
 	}
+
 	if !strings.Contains(rows[1], "2026-09-10  REWE") || !strings.Contains(rows[1], "expenses:groceries") || !strings.Contains(rows[1], "-250,00 EUR") {
 		t.Errorf("second row = %q, want the groceries", rows[1])
 	}
@@ -467,6 +491,7 @@ func TestRecentSaysHowManyRowsDontFit(t *testing.T) {
 	if len(rows) != 8 {
 		t.Fatalf("panel has %d rows, want 8", len(rows))
 	}
+
 	if !strings.Contains(rows[7], "… 193 more") || strings.Contains(rows[6], "more") {
 		t.Errorf("last rows = %q / %q, want 7 transactions then … 193 more", rows[6], rows[7])
 	}
@@ -515,6 +540,7 @@ func TestRecentIsNotSelectable(t *testing.T) {
 		if _, right, found := strings.Cut(line, "│╭"); found && strings.Contains(right, "100m") {
 			t.Errorf("a right-column row is highlighted: %q", line)
 		}
+
 		if _, right, found := strings.Cut(line, "││"); found && strings.Contains(right, "100m") {
 			t.Errorf("a Recent row is highlighted: %q", line)
 		}
@@ -536,6 +562,7 @@ func withUpcoming(descriptions ...string) domain.Ledger {
 			},
 		})
 	}
+
 	return ledger
 }
 
@@ -545,6 +572,7 @@ func TestUpcomingListsTheNextOccurrencesSoonestFirstUnderAccounts(t *testing.T) 
 	if !strings.Contains(rows[0], "2026-10-01  Vermieter Mueller") || !strings.Contains(rows[1], "2026-10-02  Streaming") {
 		t.Errorf("rows = %q, want the occurrences in date order", rows)
 	}
+
 	if !strings.Contains(rows[0], "-900,00 EUR") {
 		t.Errorf("first row = %q, want the amount seen from the account", rows[0])
 	}
@@ -598,6 +626,7 @@ func spendHistory(totals ...int64) []domain.MonthSpend {
 	for i, total := range totals {
 		history[i] = domain.MonthSpend{Month: time.Date(2026, time.Month(3+i), 1, 0, 0, 0, 0, time.UTC), Total: eur(total)}
 	}
+
 	return history
 }
 
@@ -612,6 +641,7 @@ func TestSpendChartLabelsTheSixMonthsOnTheXAxis(t *testing.T) {
 			t.Errorf("x axis lacks %s:\n%s", month, chart)
 		}
 	}
+
 	if strings.Contains(chart, "Sep") {
 		t.Errorf("the current month is not complete and must not be plotted")
 	}
@@ -626,6 +656,7 @@ func TestSpendChartYAxisCountsThousandsAndTheLineIsBraille(t *testing.T) {
 	if !strings.Contains(view, "1.3k") || !strings.Contains(view, "0.0k") {
 		t.Errorf("y axis should read in thousands:\n%s", view)
 	}
+
 	if !strings.ContainsAny(view, "⠁⠂⠄⡀⢀⠈⠐⠠⣀⠤⠉") {
 		t.Errorf("expected a braille line:\n%s", view)
 	}
@@ -651,6 +682,12 @@ func TestSpendChartPlotsTheCommodityOfTheFirstMonthWithSpend(t *testing.T) {
 
 	if values[0] != 0 || values[1] != 100 || values[2] != 0 || top != 100 {
 		t.Errorf("values = %v top = %v, want only PLN plotted", values, top)
+	}
+}
+
+func TestSpendCommodityIsNoneWhenNoMonthSpentAnything(t *testing.T) {
+	if got := spendCommodity([]domain.MonthSpend{{}, {}}); got != "" {
+		t.Errorf("commodity = %q, want none", got)
 	}
 }
 
@@ -732,6 +769,7 @@ func TestKeyAsksToCloseOrReopenAndMovesOnCursorKeys(t *testing.T) {
 			t.Errorf("%s: action = %v, want %v", key, got, want)
 		}
 	}
+
 	if moved, action := m.Key("down"); action != nil || moved.cursor.Row != 1 {
 		t.Errorf("down: action = %v, row = %d; want the cursor moved", action, moved.cursor.Row)
 	}
@@ -741,6 +779,7 @@ func TestBalancesWrittenWithoutAllTheirDecimalsStillShowTwo(t *testing.T) {
 	style := domain.DefaultAmount("EUR").Style
 	whole := domain.Account{Name: "assets:whole", Balance: domain.MultiAmount{{Commodity: "EUR", Mantissa: -6, Style: style}}}
 	half := domain.Account{Name: "assets:half", Balance: domain.MultiAmount{{Commodity: "EUR", Mantissa: 65, Places: 1, Style: style}}}
+
 	view := strings.Join(lines(New().Resize(120, 30).WithAccounts([]domain.Account{whole, half})), "\n")
 	if !strings.Contains(view, "-6,00 EUR") || !strings.Contains(view, "6,50 EUR") {
 		t.Errorf("the accounts panel:\n%s", view)
@@ -751,6 +790,7 @@ func press(m Model, keys ...string) Model {
 	for _, key := range keys {
 		m, _ = m.Key(key)
 	}
+
 	return m
 }
 
@@ -764,6 +804,7 @@ func focusedTitles(m Model) []string {
 			}
 		}
 	}
+
 	return titles
 }
 
@@ -775,6 +816,7 @@ func TestTabMovesTheFocusThroughThePanelsAndBack(t *testing.T) {
 			t.Errorf("after %d tabs the focus is on %v, want %s", i, got, want)
 		}
 	}
+
 	if got := focusedTitles(press(m, "shift+tab")); !slices.Equal(got, []string{"RECENT"}) {
 		t.Errorf("shift+tab from Accounts focuses %v, want Recent", got)
 	}
@@ -787,6 +829,7 @@ func TestTabSkipsPanelsTheTerminalHasNoRoomFor(t *testing.T) {
 	if got := focusedTitles(press(short, "tab")); !slices.Equal(got, []string{"RECENT"}) {
 		t.Errorf("without Upcoming, tab focuses %v, want Recent", got)
 	}
+
 	if got := focusedTitles(press(narrow, "tab", "tab")); !slices.Equal(got, []string{"ACCOUNTS"}) {
 		t.Errorf("without the right column, tab twice focuses %v, want Accounts", got)
 	}
@@ -798,6 +841,7 @@ func TestTheFocusFallsBackToAccountsWhenItsPanelNoLongerFits(t *testing.T) {
 	if got := focusedTitles(m); !slices.Equal(got, []string{"ACCOUNTS"}) {
 		t.Errorf("focus on %v, want Accounts", got)
 	}
+
 	if row, _ := press(m, "down").Position(); row != 2 {
 		t.Errorf("the arrows should drive Accounts again, row %d", row)
 	}
@@ -808,6 +852,7 @@ func letters(n int) []string {
 	for i := range names {
 		names[i] = fmt.Sprintf("entry %02d", i)
 	}
+
 	return names
 }
 
@@ -818,12 +863,15 @@ func TestTheArrowsScrollTheFocusedUpcomingPanel(t *testing.T) {
 	if rows := upcomingRows(down); !strings.Contains(rows[0], "entry 01") || !strings.Contains(rows[8], "… 3 more") {
 		t.Errorf("one down shows from the second entry:\n%s", strings.Join(rows, "\n"))
 	}
+
 	if row, total := down.Position(); row != 2 || total != 12 {
 		t.Errorf("position = %d/%d, want 2/12", row, total)
 	}
+
 	if account, _ := down.Selected(); account.Name != "assets:cash" {
 		t.Errorf("scrolling Upcoming moved the Accounts cursor to %s", account.Name)
 	}
+
 	end := press(m, "end", "down")
 	if rows := upcomingRows(end); !strings.Contains(rows[0], "entry 03") || !strings.Contains(rows[8], "entry 11") {
 		t.Errorf("end shows the last page without a more row:\n%s", strings.Join(rows, "\n"))
@@ -850,6 +898,7 @@ func TestAScrolledPanelStaysOnItsLastPageWhenTheLedgerShrinks(t *testing.T) {
 	if rows := upcomingRows(m); !strings.Contains(rows[0], "entry 01") || !strings.Contains(rows[8], "entry 09") {
 		t.Errorf("rows:\n%s", strings.Join(rows, "\n"))
 	}
+
 	if row, _ := m.Position(); row != 2 {
 		t.Errorf("position row = %d, want 2", row)
 	}

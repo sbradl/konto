@@ -60,17 +60,21 @@ func (e postbankExport) render() ([]byte, error) {
 			r.Amount, "", "", "", soll, haben, "EUR",
 		}, ";"))
 	}
+
 	if e.BrokenRow != "" {
 		lines = append(lines, e.BrokenRow)
 	}
+
 	lines = append(lines, "Kontostand;"+to+";;;"+e.ClosingBalance+";EUR")
 	if e.TrailingBlank {
 		lines = append(lines, "")
 	}
+
 	eol := "\n"
 	if e.CRLF {
 		eol = "\r\n"
 	}
+
 	return []byte("\xef\xbb\xbf" + strings.Join(lines, eol) + eol), nil
 }
 
@@ -85,12 +89,15 @@ func (e postbankExport) period() (from, to string, err error) {
 		if err != nil {
 			return "", "", fmt.Errorf("row %d: date %q is not d.m.yyyy", i+1, r.Date)
 		}
+
 		if i == 0 || d.Before(oldest) {
 			oldest = d
 		}
+
 		if i == 0 || d.After(newest) {
 			newest = d
 		}
 	}
+
 	return oldest.Format("2.1.2006"), newest.Format("2.1.2006"), nil
 }

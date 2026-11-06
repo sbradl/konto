@@ -88,6 +88,7 @@ type ledgerLoadedMsg struct {
 
 func (msg journalCreateFailedMsg) takeIn(m Model) (Model, tea.Cmd) {
 	m.createErr = msg.err
+
 	return m, nil
 }
 
@@ -144,6 +145,7 @@ type browsedMsg struct {
 
 func (msg browsedMsg) takeIn(m Model) (Model, tea.Cmd) {
 	m.imports = m.imports.WithListing(msg.dir, msg.entries, msg.err)
+
 	return m, nil
 }
 
@@ -212,12 +214,23 @@ type Ports struct {
 // New returns the root model for the journal at journalPath, driving the given ports.
 func New(journalPath string, ports Ports) Model {
 	return Model{
-		journalPath: journalPath, loader: ports.Loader, checker: ports.Checker, creator: ports.Creator,
-		editor: ports.Editor, accounts: ports.Accounts, writer: ports.Writer, verifier: ports.Verifier,
-		dash:     dashboard.New(),
-		reporter: ports.Reports, reports: reports.New(), scheduled: scheduled.New(),
-		forecaster: ports.Forecast, forecasts: forecastview.New(), rules: ports.Rules,
-		importer: ports.Importer, imports: imports.New(ports.DownloadDir),
+		journalPath: journalPath,
+		loader:      ports.Loader,
+		checker:     ports.Checker,
+		creator:     ports.Creator,
+		accounts:    ports.Accounts,
+		writer:      ports.Writer,
+		verifier:    ports.Verifier,
+		reporter:    ports.Reports,
+		forecaster:  ports.Forecast,
+		rules:       ports.Rules,
+		importer:    ports.Importer,
+		editor:      ports.Editor,
+		dash:        dashboard.New(),
+		imports:     imports.New(ports.DownloadDir),
+		scheduled:   scheduled.New(),
+		forecasts:   forecastview.New(),
+		reports:     reports.New(),
 	}
 }
 
@@ -228,11 +241,13 @@ func (m Model) Init() tea.Cmd { return m.load }
 // always shows a snapshot together with its own check status.
 func (m Model) load() tea.Msg {
 	ctx := context.Background()
+
 	snapshot, err := m.loader.Load(ctx)
 	if err != nil {
 		return ledgerLoadedMsg{load: m.loads, ledger: snapshot, err: err}
 	}
 	run, err := m.checker.Run(ctx, snapshot)
+
 	return ledgerLoadedMsg{load: m.loads, ledger: snapshot, run: run, err: err}
 }
 
@@ -241,6 +256,7 @@ func (m Model) load() tea.Msg {
 func (m Model) reload() (Model, tea.Cmd) {
 	m.loads++
 	m.reloading = true
+
 	return m, m.load
 }
 
@@ -252,6 +268,7 @@ func (m Model) create() tea.Msg {
 	if err := m.creator.Create(); err != nil {
 		return journalCreateFailedMsg{err: err}
 	}
+
 	return m.load()
 }
 
@@ -284,6 +301,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case result:
 		return msg.takeIn(m)
 	}
+
 	return m, nil
 }
 
@@ -295,6 +313,7 @@ func (m Model) resize(size tea.WindowSizeMsg) Model {
 		m = tab.resize(m, m.width, content)
 	}
 	m.checks = m.checks.scrolled(m.height)
+
 	return m
 }
 
@@ -305,6 +324,7 @@ func (m Model) onLedgerLoaded(loaded ledgerLoadedMsg) (Model, tea.Cmd) {
 		return m, nil
 	}
 	m = m.onLoaded(loaded)
+
 	return m, tea.Batch(m.loadReport(loaded.err), m.reopen(loaded), m.loadForecast(loaded))
 }
 
@@ -318,12 +338,14 @@ func (m Model) onLoaded(loaded ledgerLoadedMsg) Model {
 		} else {
 			m.loadErr = loaded.err
 		}
+
 		return m
 	}
 	m.ledger, m.loadErr, m.failure = &loaded.ledger, nil, nil
 	m.dash = m.dash.WithLedger(loaded.ledger)
 	m.scheduled = m.scheduled.WithLedger(loaded.ledger)
 	m.checks = m.checks.withRun(loaded.run, m.height)
+
 	return m
 }
 
@@ -339,8 +361,10 @@ func (m Model) loadReport(loadErr error) tea.Cmd {
 		return nil
 	}
 	period := m.reports.Period()
+
 	return func() tea.Msg {
 		report, err := m.reporter.Report(context.Background(), period)
+
 		return reportLoadedMsg{load: m.loads, period: period, report: report, err: err}
 	}
 }
@@ -357,6 +381,7 @@ func (m Model) onReport(loaded reportLoadedMsg) Model {
 	default:
 		m.reports = m.reports.WithReport(loaded.report)
 	}
+
 	return m
 }
 
@@ -365,8 +390,10 @@ func (m Model) loadForecast(loaded ledgerLoadedMsg) tea.Cmd {
 	if m.forecaster == nil || loaded.err != nil {
 		return nil
 	}
+
 	return func() tea.Msg {
 		built, err := m.forecaster.Forecast(context.Background(), loaded.ledger)
+
 		return forecastLoadedMsg{load: loaded.load, forecast: built, err: err}
 	}
 }
@@ -377,11 +404,14 @@ func (m Model) onForecast(built forecastLoadedMsg) Model {
 	if !m.fresh(built.load) {
 		return m
 	}
+
 	if built.err != nil {
 		m.failure = built.err
+
 		return m
 	}
 	m.forecasts = m.forecasts.WithForecast(built.forecast)
+
 	return m
 }
 
@@ -406,6 +436,7 @@ func (m Model) onKey(key tea.KeyPressMsg) (Model, tea.Cmd) {
 		return m.onViewKey(name)
 	case screenTooSmall, screenLoading:
 	}
+
 	return m, nil
 }
 
@@ -414,8 +445,10 @@ func (m Model) onKey(key tea.KeyPressMsg) (Model, tea.Cmd) {
 func (m Model) quit() (Model, tea.Cmd) {
 	if _, staged := m.imports.Staged(); staged && !m.tooSmall() && (m.prompt == nil || !m.prompt.quit) {
 		m.prompt = &prompt{question: "discard the staged import?", quit: true}
+
 		return m, nil
 	}
+
 	return m, tea.Quit
 }
 
@@ -424,6 +457,7 @@ func keyName(key tea.KeyPressMsg) string {
 	if name := key.String(); name != "space" {
 		return name
 	}
+
 	return " "
 }
 
@@ -434,6 +468,7 @@ func (m Model) capturing() bool {
 		return false
 	}
 	capture := m.activeTab().capture
+
 	return capture != nil && capture.active(m)
 }
 
@@ -444,6 +479,7 @@ func (m Model) onFirstRunKey(key string) tea.Cmd {
 	case "n":
 		return tea.Quit
 	}
+
 	return nil
 }
 
@@ -451,6 +487,7 @@ func (m Model) onParseErrorKey(key string) tea.Cmd {
 	if key == layout.KeyEnter {
 		return m.openEditor(*m.parseIssue())
 	}
+
 	return nil
 }
 
@@ -460,17 +497,21 @@ func (m Model) onViewKey(key string) (Model, tea.Cmd) {
 	if m.prompt != nil {
 		return m.onPromptKey(key)
 	}
+
 	m.notice = ""
 	if m.popup != popupNone {
 		return m.onPopupKey(key)
 	}
+
 	if updated, cmd, global := m.onGlobalKey(key); global {
 		return updated, cmd
 	}
+
 	if m.screen() == screenLoadFailed {
 		return m, nil // no journal to act on
 	}
 	m, cmd := m.onActiveViewKey(key)
+
 	return m, cmd
 }
 
@@ -481,28 +522,42 @@ func (m Model) onGlobalKey(key string) (updated Model, cmd tea.Cmd, global bool)
 	switch key {
 	case "r":
 		updated, cmd = m.reload()
+
 		return updated, cmd, true
 	case "?":
 		m.popup = popupKeys
 	case "!":
 		m.popup = popupChecks
 	default:
-		number, err := strconv.Atoi(key)
-		if err != nil || number < 1 || number > tabCount {
+		index, isTab := tabIndex(key)
+		if !isTab {
 			return m, nil, false
 		}
-		m.active = number - 1
+		m.active = index
 	}
+
 	return m, nil, true
+}
+
+// tabIndex is the tab a number key selects: 1 the first.
+func tabIndex(key string) (int, bool) {
+	number, err := strconv.Atoi(key)
+	if err != nil || number < 1 || number > tabCount {
+		return 0, false
+	}
+
+	return number - 1, true
 }
 
 // onReportsKey hands a key to the Reports view and builds the report it asks for.
 func (m Model) onReportsKey(key string) (Model, tea.Cmd) {
 	var action reports.Action
+
 	m.reports, action = m.reports.Key(key)
 	if _, load := action.(reports.LoadReport); load {
 		return m, m.loadReport(nil)
 	}
+
 	return m, nil
 }
 

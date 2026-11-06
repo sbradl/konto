@@ -6,7 +6,12 @@ import (
 	"time"
 )
 
-func day(d int) time.Time { return time.Date(2026, 9, d, 0, 0, 0, 0, time.UTC) }
+// day is a day of September 2026.
+func day(d int) time.Time { return date(2026, 9, d) }
+
+func date(year, month, d int) time.Time {
+	return time.Date(year, time.Month(month), d, 0, 0, 0, 0, time.UTC)
+}
 
 func posting(account string, mantissa int64) Posting {
 	return Posting{Account: account, Amounts: MultiAmount{eur(mantissa)}}
@@ -28,13 +33,21 @@ func recentLedger() Ledger {
 	}
 }
 
+// summaries reads each entry as "MM-DD description category".
+func summaries(entries []RecentEntry) []string {
+	lines := make([]string, len(entries))
+	for i, entry := range entries {
+		lines[i] = entry.Date.Format("01-02") + " " + entry.Description + " " + entry.Category
+	}
+
+	return lines
+}
+
 func TestRecentListsNewestFirstAndLaterTransactionsFirstWithinADay(t *testing.T) {
 	got := recentLedger().Recent()
 
-	order := make([]string, len(got))
-	for i, entry := range got {
-		order[i] = entry.Date.Format("01-02") + " " + entry.Description + " " + entry.Category
-	}
+	order := summaries(got)
+
 	want := []string{
 		"09-26 Sparen assets:transfers", "09-26 Sparen assets:transfers",
 		"09-25 Acme income:salary", "09-10 REWE expenses:groceries",
@@ -51,6 +64,7 @@ func TestRecentSeesATransactionFromItsOwnAccount(t *testing.T) {
 	if got[0].Amount[0].Mantissa != 50000 || got[1].Amount[0].Mantissa != -50000 {
 		t.Errorf("transfer legs = %+v, %+v; want +500,00 then -500,00", got[0].Amount, got[1].Amount)
 	}
+
 	if got[2].Amount[0].Mantissa != 300000 || got[3].Amount[0].Mantissa != -25000 {
 		t.Errorf("income and expense = %+v, %+v", got[2].Amount, got[3].Amount)
 	}
@@ -94,10 +108,8 @@ func TestUpcomingListsTheProjectedOccurrencesSoonestFirstSeenFromTheirOwnAccount
 
 	got := ledger.UpcomingEntries()
 
-	order := make([]string, len(got))
-	for i, entry := range got {
-		order[i] = entry.Date.Format("01-02") + " " + entry.Description + " " + entry.Category
-	}
+	order := summaries(got)
+
 	want := []string{"09-25 Acme income:salary", "09-26 Sparen assets:checking"}
 	if !reflect.DeepEqual(order, want) {
 		t.Errorf("upcoming = %v, want %v", order, want)

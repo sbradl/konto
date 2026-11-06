@@ -33,19 +33,24 @@ func (w *world) listPanel(title string) ([]recentRow, error) {
 		runes := []rune(line)
 		if before, _, found := strings.Cut(line, "╭─ "+title+" "); found {
 			left, inside = len([]rune(before)), true
+
 			continue
 		}
+
 		if !inside {
 			continue
 		}
+
 		if left < len(runes) && runes[left] == '╰' {
 			return rows, nil
 		}
+
 		if left < len(runes) {
 			text, _, _ := strings.Cut(string(runes[left+1:]), "│")
 			rows = append(rows, recentRow{y: y, x: left, text: text})
 		}
 	}
+
 	return nil, errors.New("no " + title + " panel on screen:\n" + s.screenText())
 }
 
@@ -60,6 +65,7 @@ func (w *world) expectRecent(check func(rows []recentRow) error) error {
 		rows, perr := w.recentPanel()
 		if perr != nil {
 			failure = perr
+
 			return false
 		}
 		var filled []recentRow
@@ -69,11 +75,14 @@ func (w *world) expectRecent(check func(rows []recentRow) error) error {
 			}
 		}
 		failure = check(filled)
+
 		return failure == nil
 	})
+
 	if failure != nil {
 		return fmt.Errorf("%w\n%s", failure, s.screenText())
 	}
+
 	return nil
 }
 
@@ -84,6 +93,7 @@ func recentFor(rows []recentRow, description, date string) (recentRow, error) {
 			return row, nil
 		}
 	}
+
 	return recentRow{}, fmt.Errorf("no Recent row for %q on %q", description, date)
 }
 
@@ -94,6 +104,7 @@ func (w *world) expectRecentOrder(count int, date, description string) error {
 				return fmt.Errorf("row %d is not dated %s and %s", i+1, date, description)
 			}
 		}
+
 		return nil
 	})
 }
@@ -106,9 +117,11 @@ func (w *world) expectRecentDatesDescend() error {
 				dates = append(dates, fields[0])
 			}
 		}
+
 		if !slices.IsSortedFunc(dates, func(a, b string) int { return strings.Compare(b, a) }) {
 			return fmt.Errorf("dates are not in non-increasing order: %v", dates)
 		}
+
 		return nil
 	})
 }
@@ -119,10 +132,12 @@ func (w *world) expectRecentCategory(description, date, category string) error {
 		if err != nil {
 			return err
 		}
+
 		w.focusedRecent = row
 		if !strings.Contains(row.text, category) {
 			return fmt.Errorf("row %q does not show category %q", row.text, category)
 		}
+
 		return nil
 	})
 }
@@ -133,14 +148,17 @@ func (w *world) expectRecentAmountColour(text string, want int, negate bool) err
 		return err
 	}
 	row := w.focusedRecent
+
 	before, _, found := strings.Cut(row.text, text)
 	if !found {
 		return fmt.Errorf("row %q does not show %q", row.text, text)
 	}
+
 	got := s.cellColour(row.x+1+len([]rune(before)), row.y)
 	if (got == want) == negate {
 		return fmt.Errorf("%q is coloured %d, negated=%v want %d", text, got, negate, want)
 	}
+
 	return nil
 }
 
@@ -150,20 +168,24 @@ func (w *world) expectEveryRecentRowShows(description, text string) error {
 		for _, row := range rows {
 			if strings.Contains(row.text, description) {
 				seen++
+
 				if !strings.Contains(row.text, text) {
 					return fmt.Errorf("row %q does not show %q", row.text, text)
 				}
 			}
 		}
+
 		if seen == 0 {
 			return fmt.Errorf("no Recent row for %q", description)
 		}
+
 		return nil
 	})
 }
 
 func (w *world) expectNoRecentHighlight() error {
 	w.s.settle(w.suite.timeout)
+
 	rows, err := w.recentPanel()
 	if err != nil {
 		return err
@@ -175,6 +197,7 @@ func (w *world) expectNoRecentHighlight() error {
 			}
 		}
 	}
+
 	return nil
 }
 
@@ -185,6 +208,7 @@ func (w *world) expectNoQuestionMarkInRecent() error {
 				return fmt.Errorf("Recent row %q has a ?", row.text)
 			}
 		}
+
 		return nil
 	})
 }
@@ -192,10 +216,12 @@ func (w *world) expectNoQuestionMarkInRecent() error {
 func (w *world) expectRecentOverflow() error {
 	return w.expectRecent(func(rows []recentRow) error {
 		last := strings.TrimSpace(rows[len(rows)-1].text)
+
 		var hidden int
 		if _, err := fmt.Sscanf(last, "… %d more", &hidden); err != nil || hidden <= 0 {
 			return fmt.Errorf("the last Recent row is %q, want … N more with N > 0", last)
 		}
+
 		return nil
 	})
 }
@@ -206,6 +232,7 @@ func registerRecentSteps(sc *godog.ScenarioContext, w *world) {
 			if len(rows) == 0 || !strings.Contains(rows[0].text, date) {
 				return fmt.Errorf("the first Recent row is not dated %s", date)
 			}
+
 			return nil
 		})
 	})
@@ -217,6 +244,7 @@ func registerRecentSteps(sc *godog.ScenarioContext, w *world) {
 			if len(rows) < 3 || !strings.Contains(rows[2].text, date) || !strings.Contains(rows[2].text, description) {
 				return fmt.Errorf("the third row is not dated %s and %s", date, description)
 			}
+
 			return nil
 		})
 	})
@@ -227,6 +255,7 @@ func registerRecentSteps(sc *godog.ScenarioContext, w *world) {
 	})
 	step(sc, `^its amount is not coloured (\d+)$`, func(colour int) error {
 		fields := strings.Fields(w.focusedRecent.text)
+
 		return w.expectRecentAmountColour(strings.Join(fields[len(fields)-2:], " "), colour, true)
 	})
 	step(sc, `^the Recent rows for "([^"]*)" show "([^"]*)"$`, w.expectEveryRecentRowShows)
@@ -238,6 +267,7 @@ func registerRecentSteps(sc *godog.ScenarioContext, w *world) {
 		for i := range n {
 			fmt.Fprintf(&b, "\n2026-09-%02d Bulk %03d\n    expenses:groceries  1,00 EUR\n    equity:opening-balances\n", 1+i%28, i)
 		}
+
 		return w.useJournal(name, b.String())
 	})
 }
@@ -253,6 +283,7 @@ func (w *world) expectUpcoming(check func(rows []recentRow) error) error {
 		rows, perr := w.listPanel("UPCOMING")
 		if perr != nil {
 			failure = perr
+
 			return false
 		}
 		var filled []recentRow
@@ -262,11 +293,14 @@ func (w *world) expectUpcoming(check func(rows []recentRow) error) error {
 			}
 		}
 		failure = check(filled)
+
 		return failure == nil
 	})
+
 	if failure != nil {
 		return fmt.Errorf("%w\n%s", failure, s.screenText())
 	}
+
 	return nil
 }
 
@@ -282,6 +316,7 @@ func (w *world) expectUpcomingOrder(table *godog.Table) error {
 				}
 			}
 		}
+
 		return nil
 	})
 }
@@ -291,12 +326,14 @@ func (w *world) expectUpcomingEmpty() error {
 		if len(rows) != 0 {
 			return fmt.Errorf("Upcoming has %d rows, want none", len(rows))
 		}
+
 		return nil
 	})
 }
 
 func (w *world) expectNoUpcomingHighlight() error {
 	w.s.settle(w.suite.timeout)
+
 	rows, err := w.listPanel("UPCOMING")
 	if err != nil {
 		return err
@@ -308,6 +345,7 @@ func (w *world) expectNoUpcomingHighlight() error {
 			}
 		}
 	}
+
 	return nil
 }
 

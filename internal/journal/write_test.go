@@ -23,15 +23,18 @@ func spend(date time.Time, description string) domain.NewTransaction {
 // withYear is a ledger whose 2026 file holds text; the main journal holds only a directive.
 func withYear(t *testing.T, text string) File {
 	t.Helper()
+
 	file := journalWith(t, "decimal-mark ,\n")
 	if err := os.WriteFile(file.yearPath(2026), []byte(text), 0o644); err != nil {
 		t.Fatal(err)
 	}
+
 	return file
 }
 
 func apply(t *testing.T, file File, edits ...domain.Edit) {
 	t.Helper()
+
 	if err := file.Apply(domain.Changeset{Edits: edits}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -120,6 +123,7 @@ func TestAddTransactionsAppendsWhatIsNotBeforeAnyOther(t *testing.T) {
 	if want := "    assets:checking\n\n2026-09-29 D\n    expenses:x\n    assets:checking\n\n2026-09-30 E\n"; !strings.Contains(got, want) {
 		t.Errorf("journal =\n%s\nwant it to contain\n%s", got, want)
 	}
+
 	if !strings.HasSuffix(got, "    assets:checking\n") || strings.HasSuffix(got, "\n\n") {
 		t.Errorf("journal ends %q, want one final newline", got[len(got)-20:])
 	}
@@ -143,6 +147,7 @@ func TestAddTransactionsStartTheYearFileWhenItIsNotThereYet(t *testing.T) {
 	if got, want := readFile(t, file.yearPath(2026)), "2026-09-28 B\n    expenses:x\n    assets:checking\n"; got != want {
 		t.Errorf("2026.journal = %q, want %q", got, want)
 	}
+
 	if got := readFile(t, file.path); got != "decimal-mark ,\n" {
 		t.Errorf("main journal = %q, want it untouched", got)
 	}
@@ -159,6 +164,7 @@ func TestAddTransactionsGoToTheYearFileOfTheirDate(t *testing.T) {
 	if got := readFile(t, file.yearPath(2025)); !strings.HasPrefix(got, "2025-12-30 Late\n") || strings.Contains(got, "B") {
 		t.Errorf("2025.journal = %q, want only the December transaction", got)
 	}
+
 	if got := readFile(t, file.yearPath(2026)); !strings.HasPrefix(got, "2026-09-28 B\n") || strings.Contains(got, "Late") {
 		t.Errorf("2026.journal = %q, want only the September transaction", got)
 	}
@@ -202,6 +208,7 @@ func TestAddTransactionsRefuseNextYear(t *testing.T) {
 	if !errors.As(err, &refusal) || !strings.Contains(refusal.Reason, "2027") || !strings.Contains(refusal.Reason, "2026") {
 		t.Errorf("error = %v, want a refusal naming 2027 and this year", err)
 	}
+
 	if isFile(file.yearPath(2027)) {
 		t.Error("a file for 2027 was written")
 	}
@@ -209,6 +216,7 @@ func TestAddTransactionsRefuseNextYear(t *testing.T) {
 
 func TestSetCategoryRuleAppendsABlockAfterABlankLine(t *testing.T) {
 	file := journalWith(t, "x\n")
+
 	rules := filepath.Join(filepath.Dir(file.path), "categories.rules")
 	if err := os.WriteFile(rules, []byte("if %payee A\n    account2 a\n    comment2 konto-rule:1\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -224,6 +232,7 @@ func TestSetCategoryRuleAppendsABlockAfterABlankLine(t *testing.T) {
 
 func TestAFirstRuleGoesAboveTheOthersSoThatTheyWinInHledger(t *testing.T) {
 	file := journalWith(t, "x\n")
+
 	rules := filepath.Join(filepath.Dir(file.path), "categories.rules")
 	if err := os.WriteFile(rules, []byte("if %payee A\n    account2 a\n    comment2 konto-rule:1\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -258,6 +267,7 @@ func TestSetCategoryRuleCreatesTheFileWhenThereIsNone(t *testing.T) {
 func TestSetCategoryRuleReplacesTheBlockWithTheSameId(t *testing.T) {
 	file := journalWith(t, "x\n")
 	rules := filepath.Join(filepath.Dir(file.path), "categories.rules")
+
 	before := "if %payee A\n    account2 a\n    comment2 konto-rule:1\n\nif %payee B\n    comment2 konto-rule:2\n    account2 b\n\nif %payee C\n    account2 c\n    comment2 konto-rule:3\n"
 	if err := os.WriteFile(rules, []byte(before), 0o644); err != nil {
 		t.Fatal(err)
@@ -273,6 +283,7 @@ func TestSetCategoryRuleReplacesTheBlockWithTheSameId(t *testing.T) {
 
 func TestSetCategoryRuleReportsAnUnreadableRulesFile(t *testing.T) {
 	file := journalWith(t, "x\n")
+
 	rules := filepath.Join(filepath.Dir(file.path), "categories.rules")
 	if err := os.Mkdir(rules, 0o755); err != nil { // a directory cannot be read as a file
 		t.Fatal(err)
@@ -287,6 +298,7 @@ func TestSetCategoryRuleReportsAnUnreadableRulesFile(t *testing.T) {
 
 func TestRenderSplicesIncludedFilesInAndWritesNothing(t *testing.T) {
 	dir := t.TempDir()
+
 	sub := filepath.Join(dir, "sub.journal")
 	if err := os.WriteFile(sub, []byte("sub 1\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -321,6 +333,7 @@ func TestRenderAppendsTheYearFilesAndWritesNothing(t *testing.T) {
 	if got != want {
 		t.Errorf("rendered =\n%q\nwant\n%q", got, want)
 	}
+
 	if readFile(t, file.yearPath(2026)) != "2026-09-10 A\n" {
 		t.Error("Render wrote to the year file")
 	}
@@ -408,6 +421,7 @@ func TestSetCategoryRuleReplacesABlockThatIsTheWholeFile(t *testing.T) {
 		"without":              "if %payee A\n    account2 a\n    comment2 konto-rule:1",
 	} {
 		file := journalWith(t, "x\n")
+
 		rules := filepath.Join(filepath.Dir(file.path), "categories.rules")
 		if err := os.WriteFile(rules, []byte(before), 0o644); err != nil {
 			t.Fatal(err)
@@ -425,6 +439,7 @@ func TestSetCategoryRuleReplacesABlockThatIsTheWholeFile(t *testing.T) {
 func TestSetCategoryRuleReplacesTheFirstAndTheLastBlockOfSeveral(t *testing.T) {
 	file := journalWith(t, "x\n")
 	rules := filepath.Join(filepath.Dir(file.path), "categories.rules")
+
 	before := "if %payee A\n    comment2 konto-rule:1\n\nif %payee B\n    comment2 konto-rule:2"
 	if err := os.WriteFile(rules, []byte(before), 0o644); err != nil {
 		t.Fatal(err)
@@ -454,6 +469,7 @@ func TestAddRuleAppendsTheBlockAtTheEndOfTheMainJournal(t *testing.T) {
 
 func TestSetCategoryRuleReplacesABlockWhoseMarkerIsTheFirstLine(t *testing.T) {
 	file := journalWith(t, "x\n")
+
 	rules := filepath.Join(filepath.Dir(file.path), "categories.rules")
 	if err := os.WriteFile(rules, []byte("comment2 konto-rule:1\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -511,6 +527,7 @@ func TestRenderIncludesTheOlderYearFileTheEditsTouch(t *testing.T) {
 	if err := os.WriteFile(file.yearPath(2020), []byte("2020-01-01 Far\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+
 	if err := os.WriteFile(file.yearPath(2021), []byte("2021-01-01 Untouched\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -544,9 +561,11 @@ func TestApplyChangesNoFileWhenOneOfThemCannotBeWritten(t *testing.T) {
 	if err == nil {
 		t.Skip("running as a user that ignores file permissions")
 	}
+
 	if got := readFile(t, file.path); got != "decimal-mark ,\n" {
 		t.Errorf("main journal = %q, want it untouched", got)
 	}
+
 	if entries, _ := os.ReadDir(filepath.Dir(file.path)); len(entries) != 2 {
 		t.Errorf("directory holds %d files, want the two journal files alone (no temp file left)", len(entries))
 	}

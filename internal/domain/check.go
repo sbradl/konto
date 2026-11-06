@@ -15,6 +15,7 @@ func (s Severity) String() string {
 	if s == SeverityErr {
 		return "ERR"
 	}
+
 	return "WARN"
 }
 
@@ -85,6 +86,7 @@ func SeverityOf(check string) Severity {
 			return known.Severity
 		}
 	}
+
 	return SeverityWarn
 }
 
@@ -102,6 +104,7 @@ func (r CheckRun) Count(severity Severity) int {
 			n++
 		}
 	}
+
 	return n
 }
 

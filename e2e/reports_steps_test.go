@@ -20,6 +20,7 @@ func (w *world) tableRows(title string) ([]recentRow, error) {
 	for len(rows) > 0 && strings.TrimSpace(rows[len(rows)-1].text) == "" {
 		rows = rows[:len(rows)-1]
 	}
+
 	return rows, nil
 }
 
@@ -34,14 +35,18 @@ func (w *world) expectTable(title string, check func(rows []recentRow) error) er
 		rows, perr := w.tableRows(title)
 		if perr != nil {
 			failure = perr
+
 			return false
 		}
 		failure = check(rows)
+
 		return failure == nil
 	})
+
 	if failure != nil {
 		return fmt.Errorf("%w\n%s", failure, s.screenText())
 	}
+
 	return nil
 }
 
@@ -56,6 +61,7 @@ func rowFor(rows []recentRow, label string) (recentRow, error) {
 			return row, nil
 		}
 	}
+
 	return recentRow{}, fmt.Errorf("no row for %q", label)
 }
 
@@ -73,6 +79,7 @@ func (w *world) expectTableShows(title string, table *godog.Table) error {
 				}
 			}
 		}
+
 		return nil
 	})
 }
@@ -88,6 +95,7 @@ func (w *world) expectRowHolds(title, label string, figures ...string) error {
 				return fmt.Errorf("row %q lacks %q", row.text, figure)
 			}
 		}
+
 		return nil
 	})
 }
@@ -98,6 +106,7 @@ func (w *world) expectNotListed(title string, labels ...string) error {
 		return err
 	}
 	s.settle(w.suite.timeout)
+
 	rows, err := w.tableRows(title)
 	if err != nil {
 		return err
@@ -107,6 +116,7 @@ func (w *world) expectNotListed(title string, labels ...string) error {
 			return fmt.Errorf("%s lists %q", title, label)
 		}
 	}
+
 	return nil
 }
 
@@ -115,19 +125,23 @@ func (w *world) expectFigureColour(title, label, figure string, want int) error 
 	if err := w.expectRowHolds(title, label, figure); err != nil {
 		return err
 	}
+
 	rows, err := w.tableRows(title)
 	if err != nil {
 		return err
 	}
 	row, _ := rowFor(rows, label)
 	before := row.text[:strings.LastIndex(row.text, figure)]
+
 	s, err := w.session()
 	if err != nil {
 		return err
 	}
+
 	if got := s.cellColour(row.x+1+len([]rune(before)), row.y); got != want {
 		return fmt.Errorf("%q in row %q is coloured %d, want %d", figure, row.text, got, want)
 	}
+
 	return nil
 }
 
@@ -138,10 +152,12 @@ func (w *world) expectHeaderStyle(label string, colour int) error {
 	rows, _ := w.tableRows(sheetTitle)
 	row, _ := rowFor(rows, label)
 	before, _, _ := strings.Cut(row.text, label)
+
 	x := row.x + 1 + len([]rune(before))
 	if got := w.s.cellColour(x, row.y); got != colour || !w.s.cellBold(x, row.y) {
 		return fmt.Errorf("header %q is coloured %d (bold %v), want %d and bold", label, got, w.s.cellBold(x, row.y), colour)
 	}
+
 	return nil
 }
 
@@ -150,13 +166,16 @@ func (w *world) expectIncomeNet(want string) error {
 		if len(rows) == 0 && want == "0,00 EUR" {
 			return nil // a period without activity has an empty statement, which nets to nothing
 		}
+
 		row, err := rowFor(rows, "Net")
 		if err != nil {
 			return err
 		}
+
 		if !strings.Contains(row.text, want) {
 			return fmt.Errorf("net row %q lacks %q", row.text, want)
 		}
+
 		return nil
 	})
 }
@@ -168,6 +187,7 @@ func (w *world) expectBothTablesScrolled() error {
 		if len(rows) == 0 || strings.Contains(rows[0].text, "Income") {
 			return errors.New("the income statement has not scrolled")
 		}
+
 		return nil
 	})
 }
@@ -177,6 +197,7 @@ func (w *world) expectFirstRowsVisible() error {
 		if _, err := rowFor(rows, "Assets"); err != nil {
 			return err
 		}
+
 		return nil
 	})
 }
@@ -184,12 +205,15 @@ func (w *world) expectFirstRowsVisible() error {
 func (w *world) expectLastRowsVisible() error {
 	if err := w.expectTable(statementTitle, func(rows []recentRow) error {
 		_, err := rowFor(rows, "Net")
+
 		return err
 	}); err != nil {
 		return err
 	}
+
 	return w.expectTable(sheetTitle, func(rows []recentRow) error {
 		_, err := rowFor(rows, "Net worth")
+
 		return err
 	})
 }
@@ -200,10 +224,12 @@ func (w *world) expectTablesOverflow() error {
 			return errors.New("the statement has no rows yet")
 		}
 		last := strings.TrimSpace(rows[len(rows)-1].text)
+
 		var hidden int
 		if _, err := fmt.Sscanf(last, "… %d more", &hidden); err != nil || hidden <= 0 {
 			return fmt.Errorf("the last statement row is %q, want … N more with N > 0", last)
 		}
+
 		return nil
 	})
 }
@@ -222,6 +248,7 @@ func (w *world) expectNoHighlightInBody() error {
 			}
 		}
 	}
+
 	return nil
 }
 
@@ -238,6 +265,7 @@ func (w *world) expectNoDateAfter(limit string) error {
 			return fmt.Errorf("the screen shows %s, after %s", date, limit)
 		}
 	}
+
 	return nil
 }
 
@@ -246,16 +274,19 @@ func (w *world) expectSameRow(a, b string) error {
 	if err != nil {
 		return err
 	}
+
 	if !s.waitFor(w.suite.timeout, func(string) bool {
 		for _, line := range s.screenLines() {
 			if strings.Contains(line, a) && strings.Contains(line, b) {
 				return true
 			}
 		}
+
 		return false
 	}) {
 		return fmt.Errorf("%q and %q are not on one row:\n%s", a, b, s.screenText())
 	}
+
 	return nil
 }
 
@@ -270,6 +301,7 @@ func (w *world) sheetColumnAbsent(title string) error {
 				return fmt.Errorf("the balance sheet has a %q column", title)
 			}
 		}
+
 		return nil
 	})
 }
@@ -281,6 +313,7 @@ func (w *world) statementRowsLack(chars string) error {
 				return fmt.Errorf("row %q shows one of %q", row.text, chars)
 			}
 		}
+
 		return nil
 	})
 }
@@ -290,6 +323,7 @@ func (w *world) statementIsEmpty() error {
 		if len(rows) != 0 {
 			return fmt.Errorf("the income statement has %d rows", len(rows))
 		}
+
 		return nil
 	})
 }
@@ -300,10 +334,12 @@ func (w *world) expectWalletCurrencies(label, text string) error {
 		if err != nil {
 			return err
 		}
+
 		allCurrencies := strings.Contains(row.text, "PLN") && strings.Contains(row.text, "CZK")
 		if !strings.Contains(row.text, text) && !allCurrencies {
 			return fmt.Errorf("row %q shows neither %q nor every currency", row.text, text)
 		}
+
 		return nil
 	})
 }
@@ -316,6 +352,7 @@ func (w *world) useManyCategories(name string, n int) error {
 	for i := range n {
 		fmt.Fprintf(&b, "\n2026-09-%02d Shop %02d\n    expenses:cat%02d  1,00 EUR\n    equity:opening-balances\n", 1+i%28, i, i)
 	}
+
 	return w.useJournal(name, b.String())
 }
 

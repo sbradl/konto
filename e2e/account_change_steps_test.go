@@ -20,14 +20,17 @@ func (w *world) accountOffset(name string) (int, error) {
 		if err != nil {
 			return err
 		}
+
 		target, err := indexOfRow(rows, func(row accountRow) bool { return row.name() == name })
 		if err != nil {
 			return fmt.Errorf("no Accounts row for %q", name)
 		}
 		current, _ := indexOfRow(rows, func(row accountRow) bool { return row.y == selected.y })
 		offset = target - current
+
 		return nil
 	})
+
 	return offset, err
 }
 
@@ -37,6 +40,7 @@ func indexOfRow(rows []accountRow, match func(accountRow) bool) (int, error) {
 			return i, nil
 		}
 	}
+
 	return -1, errors.New("no such row")
 }
 
@@ -45,13 +49,16 @@ func (w *world) selectAccount(name string) error {
 	if err := w.awaitIdle(); err != nil { // a refresh after a write must land before rows are read
 		return err
 	}
+
 	offset, err := w.accountOffset(name)
 	if err != nil || offset == 0 {
 		return err
 	}
+
 	if offset < 0 {
 		return w.press(repeat("↑", -offset)...)
 	}
+
 	return w.press(repeat("↓", offset)...)
 }
 
@@ -64,6 +71,7 @@ func (w *world) directiveLine(account string) (string, error) {
 			}
 		}
 	}
+
 	return "", fmt.Errorf("no account directive for %s", account)
 }
 
@@ -78,17 +86,24 @@ func (w *world) expectDirective(account string, contains bool, texts []string) e
 		}
 	}
 	w.focusedRow = account
+
 	return nil
 }
 
 func (w *world) statusLine() (string, error) {
 	var line string
-	err := w.expectLine(-1, "status bar", "", func(l, _ string) bool { line = l; return true })
+	err := w.expectLine(-1, "status bar", "", func(l, _ string) bool {
+		line = l
+
+		return true
+	})
+
 	return line, err
 }
 
 func (w *world) expectStatusHas(all bool, texts []string) error {
 	var failure error
+
 	err := w.expectLine(-1, "status bar", "", func(line, _ string) bool {
 		matched := 0
 		for _, text := range texts {
@@ -96,27 +111,33 @@ func (w *world) expectStatusHas(all bool, texts []string) error {
 				matched++
 			}
 		}
+
 		failure = nil
 		if (all && matched != len(texts)) || (!all && matched == 0) {
 			failure = fmt.Errorf("status bar %q does not show %v", line, texts)
 		}
+
 		return failure == nil
 	})
 	if err != nil {
 		return failure
 	}
+
 	return nil
 }
 
 func (w *world) expectNoPrompt() error {
 	w.s.settle(w.suite.timeout)
+
 	line, err := w.statusLine()
 	if err != nil {
 		return err
 	}
+
 	if strings.Contains(line, "(y/n)") {
 		return fmt.Errorf("a y/n prompt is open: %q", line)
 	}
+
 	return nil
 }
 
@@ -128,6 +149,7 @@ func firstRowWhere(rows []accountRow, closed bool) int {
 	if err != nil {
 		return -1
 	}
+
 	return i
 }
 
@@ -138,6 +160,7 @@ func (w *world) expectRowPlace(account string, closed bool) error {
 		if err != nil {
 			return fmt.Errorf("no Accounts row for %q", account)
 		}
+
 		if rowIsClosed(rows[at]) != closed {
 			return fmt.Errorf("row %q: closed = %v, want %v", rows[at].text, rowIsClosed(rows[at]), closed)
 		}
@@ -146,9 +169,11 @@ func (w *world) expectRowPlace(account string, closed bool) error {
 		if closed && firstRowWhere(rows[at+1:], false) >= 0 {
 			return fmt.Errorf("an open account is listed below %s", account)
 		}
+
 		if !closed && firstRowWhere(rows[:at], true) >= 0 {
 			return fmt.Errorf("a closed account is listed above %s", account)
 		}
+
 		return nil
 	})
 }
@@ -160,6 +185,7 @@ func (w *world) expectLinesChanged(n int) error {
 		if err != nil {
 			return err
 		}
+
 		beforeLines, nowLines := strings.Split(string(before), "\n"), strings.Split(string(now), "\n")
 		if len(beforeLines) != len(nowLines) {
 			return fmt.Errorf("%s changed its line count", path)
@@ -170,9 +196,11 @@ func (w *world) expectLinesChanged(n int) error {
 			}
 		}
 	}
+
 	if changed != n {
 		return fmt.Errorf("%d journal lines changed, want %d", changed, n)
 	}
+
 	return nil
 }
 
@@ -183,6 +211,7 @@ func (w *world) expectByteIdentical() error {
 			return fmt.Errorf("%s differs from the start:\n%s", path, now[path])
 		}
 	}
+
 	return nil
 }
 
@@ -192,14 +221,17 @@ func (w *world) expectFocusedShows(text string, uncoloured int) error {
 		if err != nil {
 			return err
 		}
+
 		if !strings.Contains(row.text, text) {
 			return fmt.Errorf("row %q does not show %q", row.text, text)
 		}
+
 		if uncoloured >= 0 {
 			if got, _ := w.rowColour(w.focusedRow, w.focusedRow); got == uncoloured {
 				return fmt.Errorf("row %s is coloured %d", w.focusedRow, got)
 			}
 		}
+
 		return nil
 	})
 }
@@ -212,12 +244,14 @@ func registerAccountSelectionSteps(sc *godog.ScenarioContext, w *world) {
 		if err := w.selectAccount(account); err != nil {
 			return err
 		}
+
 		return w.press(key)
 	})
 	step(sc, `^I select "([^"]*)" and press "([^"]*)" and "([^"]*)"$`, func(account, first, second string) error {
 		if err := w.selectAccount(account); err != nil {
 			return err
 		}
+
 		return w.press(first, second)
 	})
 }
@@ -269,6 +303,7 @@ func registerAccountRowSteps(sc *godog.ScenarioContext, w *world) {
 			rule := func(description string) string {
 				return "\n~ monthly from 2026-11-01  " + description + "\n    " + account + "  10,00 EUR\n    assets:checking\n"
 			}
+
 			return w.useJournal(name, rule(first)+rule(second))
 		})
 }

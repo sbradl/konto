@@ -46,17 +46,24 @@ func startWith(
 		preflight: preflight,
 		lock: func(path string) (func() error, error) {
 			got.events = append(got.events, "lock "+path)
-			return func() error { got.events = append(got.events, "release"); return nil }, lockErr
+
+			return func() error {
+				got.events = append(got.events, "release")
+
+				return nil
+			}, lockErr
 		},
 		program: func(cfg config.Config) error {
 			got.ran = true
 			got.cfg = cfg
 			got.events = append(got.events, "run")
+
 			return program
 		},
 		exit: func(code int) { got.exit = code },
 	}
 	a.run()
+
 	return got
 }
 
@@ -71,6 +78,7 @@ func TestRunReportsPreflightFailureAndExitsOne(t *testing.T) {
 	if got.exit != 1 {
 		t.Errorf("exit code = %d, want 1", got.exit)
 	}
+
 	if got.ran {
 		t.Error("the UI must not start after a failed preflight")
 	}
@@ -88,6 +96,7 @@ func TestRunStartsUIAfterPreflight(t *testing.T) {
 	if !got.ran {
 		t.Error("the UI should start after a passing preflight")
 	}
+
 	if got.exit != -1 || got.stderr.Len() != 0 {
 		t.Errorf("got exit %d and stderr %q, want neither", got.exit, got.stderr.String())
 	}
@@ -100,6 +109,7 @@ func TestRunReportsUIFailureAndExitsOne(t *testing.T) {
 	if got.exit != 1 {
 		t.Errorf("exit code = %d, want 1", got.exit)
 	}
+
 	if !strings.Contains(got.stderr.String(), "no tty") {
 		t.Errorf("stderr should carry the cause, got: %q", got.stderr.String())
 	}
@@ -119,6 +129,7 @@ func TestRunReportsConfigFailureAndExitsOne(t *testing.T) {
 	failing := func() (config.Config, error) { return config.Config{}, errors.New("invalid arguments: --nope") }
 	preflight := func() (domain.HledgerVersion, error) {
 		t.Error("preflight must not run after a config failure")
+
 		return domain.HledgerVersion{}, nil
 	}
 
@@ -127,6 +138,7 @@ func TestRunReportsConfigFailureAndExitsOne(t *testing.T) {
 	if got.exit != 1 || got.ran {
 		t.Errorf("got exit %d, ui ran %v; want exit 1 and no UI", got.exit, got.ran)
 	}
+
 	if !strings.Contains(got.stderr.String(), "--nope") {
 		t.Errorf("stderr should carry the cause, got: %q", got.stderr.String())
 	}
@@ -146,6 +158,7 @@ func TestResolveConfigUsesHomeDirectory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if want := "/home/alex/.hledger.journal"; cfg.JournalPath != want {
 		t.Errorf("JournalPath = %q, want %q", cfg.JournalPath, want)
 	}
@@ -157,6 +170,7 @@ func TestResolveConfigUsesWorkingDirectory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if want := "/work/j.journal"; cfg.JournalPath != want {
 		t.Errorf("JournalPath = %q, want %q", cfg.JournalPath, want)
 	}
@@ -204,6 +218,7 @@ func TestRunRefusesWhenJournalIsLocked(t *testing.T) {
 	if got.exit != 1 || got.ran {
 		t.Errorf("got exit %d, ui ran %v; want exit 1 and no UI", got.exit, got.ran)
 	}
+
 	if !strings.Contains(got.stderr.String(), "already running") {
 		t.Errorf("stderr should say konto is already running, got: %q", got.stderr.String())
 	}
@@ -221,6 +236,7 @@ func TestRunReleasesLockWhenUIFails(t *testing.T) {
 // lockJournal holds the journal until the returned release is called.
 func TestLockJournalHoldsUntilReleased(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "main.journal")
+
 	release, err := lockJournal(path)
 	if err != nil {
 		t.Fatalf("first lock failed: %v", err)
@@ -233,6 +249,7 @@ func TestLockJournalHoldsUntilReleased(t *testing.T) {
 	if err := release(); err != nil {
 		t.Fatalf("release failed: %v", err)
 	}
+
 	again, err := lockJournal(path)
 	if err != nil {
 		t.Fatalf("lock after release failed: %v", err)

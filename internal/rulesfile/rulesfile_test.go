@@ -34,6 +34,7 @@ func TestBlockEndsAtALineOfSpaces(t *testing.T) {
 	if first, end, found := Block(lines, "2"); !found || first != 3 || end != 5 {
 		t.Errorf("Block = %d, %d, %v; want 3, 5", first, end, found)
 	}
+
 	if !IsBlank(" \t") || IsBlank(" x") {
 		t.Error("only a line of spaces is blank")
 	}

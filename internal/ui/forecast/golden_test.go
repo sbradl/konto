@@ -22,6 +22,7 @@ func twoCurrencies() forecastsvc.Forecast {
 		pln.Points[i].Balance.Commodity = "PLN"
 	}
 	forecast.Charts = append(forecast.Charts, forecastsvc.Chart{Commodity: "PLN", Lines: []forecastsvc.Line{pln}})
+
 	return forecast
 }
 
@@ -31,6 +32,7 @@ func manyLines() forecastsvc.Forecast {
 		forecast.Charts[0].Lines = append(forecast.Charts[0].Lines,
 			course(fmt.Sprintf("assets:extra-%02d", i+1), 3+i, 100000, 0))
 	}
+
 	return forecast
 }
 
@@ -67,6 +69,7 @@ func TestOneRowLessThanTheSmallestChartShowsNoChart(t *testing.T) {
 	if got := smallest.Resize(60, height).HiddenPanels(); got != 0 {
 		t.Errorf("hidden at the smallest height = %d", got)
 	}
+
 	if got := smallest.Resize(60, height-1).HiddenPanels(); got != 1 {
 		t.Errorf("hidden one row below = %d", got)
 	}

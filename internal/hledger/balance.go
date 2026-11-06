@@ -48,6 +48,7 @@ func (a jsonAmount) amount() (domain.Amount, error) {
 		}
 		style.GroupMark, style.GroupSize = mark, size
 	}
+
 	return domain.Amount{
 		Commodity: a.Commodity, Mantissa: a.Quantity.Mantissa, Places: a.Quantity.Places, Style: style,
 	}, nil
@@ -56,15 +57,19 @@ func (a jsonAmount) amount() (domain.Amount, error) {
 // digitGroups reads hledger's [separator, [group sizes]].
 func digitGroups(cells []json.RawMessage) (mark string, size int, err error) {
 	var sizes []int
+
 	if err := json.Unmarshal(cells[0], &mark); err != nil {
 		return "", 0, fmt.Errorf("reading digit groups: %w", err)
 	}
+
 	if err := json.Unmarshal(cells[1], &sizes); err != nil {
 		return "", 0, fmt.Errorf("reading digit group sizes: %w", err)
 	}
+
 	if len(sizes) == 0 {
 		return "", 0, errors.New("digit groups without a size")
 	}
+
 	return mark, sizes[0], nil
 }
 
@@ -79,15 +84,19 @@ func (r *balanceRow) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &cells); err != nil {
 		return fmt.Errorf("reading balance row: %w", err)
 	}
+
 	if len(cells) != balanceRowCells {
 		return fmt.Errorf("balance row has %d cells, want %d", len(cells), balanceRowCells)
 	}
+
 	if err := json.Unmarshal(cells[0], &r.name); err != nil {
 		return fmt.Errorf("reading balance row name: %w", err)
 	}
+
 	if err := json.Unmarshal(cells[balanceRowCells-1], &r.amounts); err != nil {
 		return fmt.Errorf("reading balance row amounts: %w", err)
 	}
+
 	return nil
 }
 
@@ -99,15 +108,19 @@ func (c *Client) Balances(ctx context.Context) ([]domain.Account, error) {
 // MonthlyActivity returns the change in each income and expense account, month by month, from the month
 // of first through last (inclusive): one entry per calendar month, accounts without activity left out.
 func (c *Client) MonthlyActivity(ctx context.Context, first, last time.Time) ([][]domain.Account, error) {
-	out, err := c.query(ctx, flatReport(slices.Concat([]string{"-M"}, through(first, last).flags(),
-		under(domain.ExpensesPrefix, domain.IncomePrefix))...)...)
+	incomeAndExpenses := under(domain.ExpensesPrefix, domain.IncomePrefix)
+	monthly := slices.Concat([]string{"-M"}, through(first, last).flags(), incomeAndExpenses)
+
+	out, err := c.query(ctx, flatReport(monthly...)...)
 	if err != nil {
 		return nil, err
 	}
+
 	var report multiPeriodReport
 	if err := json.Unmarshal(out, &report); err != nil {
 		return nil, fmt.Errorf("reading hledger bal output: %w", err)
 	}
+
 	return report.months()
 }
 
@@ -133,6 +146,7 @@ func (r multiPeriodReport) months() ([][]domain.Account, error) {
 			if len(cell) == 0 {
 				continue
 			}
+
 			balance, err := amounts(cell)
 			if err != nil {
 				return nil, fmt.Errorf("reading hledger bal output: %w", err)
@@ -140,6 +154,7 @@ func (r multiPeriodReport) months() ([][]domain.Account, error) {
 			months[month] = append(months[month], domain.Account{Name: row.Name, Balance: balance})
 		}
 	}
+
 	return months, nil
 }
 
@@ -152,6 +167,7 @@ func amounts(cell []jsonAmount) (domain.MultiAmount, error) {
 			return nil, err
 		}
 	}
+
 	return balance, nil
 }
 
@@ -164,7 +180,7 @@ func (c *Client) Activity(ctx context.Context, first, last time.Time, prefixes .
 // BalancesUntil returns the balances of the accounts under the prefixes, counting everything
 // dated up to and including last; zero balances are left out.
 func (c *Client) BalancesUntil(ctx context.Context, last time.Time, prefixes ...string) ([]domain.Account, error) {
-	return c.flatBalances(ctx, append([]string{"-e", day(dayAfter(last))}, under(prefixes...)...)...)
+	return c.flatBalances(ctx, slices.Concat(endingBefore(dayAfter(last)), under(prefixes...))...)
 }
 
 // under is the hledger query for the accounts under each of the name prefixes.
@@ -173,6 +189,7 @@ func under(prefixes ...string) []string {
 	for i, prefix := range prefixes {
 		queries[i] = "^" + regexp.QuoteMeta(prefix)
 	}
+
 	return queries
 }
 
@@ -185,17 +202,20 @@ func (c *Client) flatBalances(ctx context.Context, extra ...string) ([]domain.Ac
 	if err != nil {
 		return nil, err
 	}
+
 	return readFlatBalances(out)
 }
 
 // TextBalances returns the asset and liability balances of journal text given on standard input, counting
 // every transaction dated before the day; zero balances are left out. Nothing on disk is read.
 func (c *Client) TextBalances(ctx context.Context, text string, before time.Time) ([]domain.Account, error) {
-	out, err := c.queryText(ctx, text,
-		flatReport(append([]string{"-e", day(before)}, under(domain.AssetsPrefix, domain.LiabilitiesPrefix)...)...)...)
+	report := flatReport(slices.Concat(endingBefore(before), under(domain.AssetsPrefix, domain.LiabilitiesPrefix))...)
+
+	out, err := c.queryText(ctx, text, report...)
 	if err != nil {
 		return nil, err
 	}
+
 	return readFlatBalances(out)
 }
 
@@ -209,13 +229,21 @@ func readFlatBalances(out []byte) ([]domain.Account, error) {
 	if err := json.Unmarshal(out, &report); err != nil {
 		return nil, fmt.Errorf("reading hledger bal output: %w", err)
 	}
+
 	if len(report) == 0 {
 		return nil, errors.New("reading hledger bal output: the report is empty")
 	}
+
 	var rows []balanceRow
 	if err := json.Unmarshal(report[0], &rows); err != nil {
 		return nil, fmt.Errorf("reading hledger bal output: %w", err)
 	}
+
+	return accountsOf(rows)
+}
+
+// accountsOf is each balance row as an account with its balance.
+func accountsOf(rows []balanceRow) ([]domain.Account, error) {
 	accounts := make([]domain.Account, len(rows))
 	for i, row := range rows {
 		balance, err := amounts(row.amounts)
@@ -224,6 +252,7 @@ func readFlatBalances(out []byte) ([]domain.Account, error) {
 		}
 		accounts[i] = domain.Account{Name: row.name, Balance: balance}
 	}
+
 	return accounts, nil
 }
 
@@ -233,6 +262,9 @@ type span struct{ begin, end time.Time }
 
 // through is the span from first through last, both included.
 func through(first, last time.Time) span { return span{first, dayAfter(last)} }
+
+// endingBefore is the hledger flag that counts only what is dated before date.
+func endingBefore(date time.Time) []string { return []string{"-e", day(date)} }
 
 func (s span) flags() []string { return []string{"-b", day(s.begin), "-e", day(s.end)} }
 

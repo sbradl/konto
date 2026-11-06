@@ -57,6 +57,8 @@ linters:
     - exhaustive  # switches over enums cover every case
     # --- Formatting (vertical and horizontal) --------------------------------
     - lll         # short lines
+    - nlreturn    # blank line before a return, unless it opens its block
+    - wsl_v5      # blank line before an if, unless it opens its block or checks the line above
     - whitespace  # no blank line hugging a block's braces
     # --- Tests (F.I.R.S.T., test code is production code) --------------------
     - thelper
@@ -80,7 +82,7 @@ linters:
 
   settings:
     funlen:
-      lines: 40
+      lines: 25 # blank lines count; ~20 lines of code
       statements: 25
       ignore-comments: true
     gocyclo:
@@ -117,6 +119,9 @@ linters:
         - wg sync.WaitGroup
         - mu sync.Mutex
       ignore-names: [err, ok, id, tt, tc]
+    wsl_v5:
+      default: none
+      enable: [if]
     godox:
       keywords: [TODO, FIXME, HACK, XXX, BUG]
     interfacebloat:

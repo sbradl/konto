@@ -25,6 +25,7 @@ func (c Cursor) Move(key string, count, page int) Cursor {
 	case KeyPgDown:
 		return c.To(c.Row+page, count, page)
 	}
+
 	return c
 }
 
@@ -50,11 +51,13 @@ func (c Cursor) Scrolled(page int) Cursor {
 	if c.Row >= offset+page {
 		offset = c.Row - page + 1
 	}
+
 	return Cursor{Row: c.Row, Offset: offset}
 }
 
 // Visible is the page of items the cursor's window shows, from its first row shown on.
 func Visible[T any](c Cursor, items []T, page int) []T {
 	first := min(c.Offset, len(items))
+
 	return items[first:min(len(items), first+page)]
 }

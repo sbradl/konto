@@ -13,6 +13,7 @@ import (
 
 func pressEsc(m Model) Model {
 	updated, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+
 	return updated.(Model)
 }
 
@@ -98,9 +99,11 @@ func TestPopupOverlaysTheViewAboveTheStatusBar(t *testing.T) {
 	if len(lines) != 40 {
 		t.Fatalf("screen has %d rows, want 40", len(lines))
 	}
+
 	if !strings.Contains(lines[0], "1 dash") {
 		t.Errorf("tab bar is gone: %q", lines[0])
 	}
+
 	if !strings.Contains(lines[len(lines)-1], "? keys") {
 		t.Errorf("status bar is covered: %q", lines[len(lines)-1])
 	}
@@ -117,12 +120,15 @@ func TestPopupEdgeSpansTheFullWidthAndPopupIsAtMostHalfTheScreen(t *testing.T) {
 				title = i
 			}
 		}
+
 		if title < 0 {
 			t.Fatalf("%s: no popup title row:\n%s", open, strings.Join(lines, "\n"))
 		}
+
 		if rows := len(lines) - 1 - title; rows > 15 {
 			t.Errorf("%s: popup is %d rows, want at most 15", open, rows)
 		}
+
 		if got := lipgloss.Width(lines[title]); got != 100 {
 			t.Errorf("%s: popup edge is %d cells wide, want 100", open, got)
 		}
@@ -133,6 +139,7 @@ func TestKeysPopupReflowsToOneColumnOnAVeryNarrowScreen(t *testing.T) {
 	if got := keysColumns(30); got != 1 {
 		t.Errorf("keysColumns(30) = %d, want 1", got)
 	}
+
 	if got := keysColumns(200); got != 4 {
 		t.Errorf("keysColumns(200) = %d, want 4", got)
 	}
@@ -161,6 +168,7 @@ func trimRows(rows []string) []string {
 	for i, row := range rows {
 		trimmed[i] = strings.TrimRight(row, " ")
 	}
+
 	return trimmed
 }
 

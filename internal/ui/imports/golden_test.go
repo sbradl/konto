@@ -24,6 +24,7 @@ func bigImport(rows, skipped int) csvimport.Staged {
 	for i := range skipped {
 		big.Skipped = append(big.Skipped, csvimport.Row{Date: day("2026-09-01"), Description: fmt.Sprintf("Old %02d", i), Amount: eur(-100)})
 	}
+
 	return big
 }
 

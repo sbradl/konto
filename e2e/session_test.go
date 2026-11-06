@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"image/color"
 	"io"
 	"os"
 	"os/exec"
@@ -46,12 +47,14 @@ type lockedBuffer struct {
 func (b *lockedBuffer) Write(p []byte) (int, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+
 	return b.buf.Write(p)
 }
 
 func (b *lockedBuffer) String() string {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+
 	return b.buf.String()
 }
 
@@ -64,6 +67,7 @@ func startSession(bin string, args, env []string, dir string, w, h int) (*sessio
 	s := &session{cmd: cmd, term: vt.NewEmulator(w, h), done: make(chan struct{})}
 	s.term.SetCallbacks(vt.Callbacks{Title: func(title string) { s.title = title }}) // called under s.mu, by pump
 	cmd.Stderr = &s.stderr
+
 	f, err := pty.StartWithSize(cmd, &pty.Winsize{Cols: uint16(w), Rows: uint16(h)})
 	if err != nil {
 		return nil, err
@@ -72,6 +76,7 @@ func startSession(bin string, args, env []string, dir string, w, h int) (*sessio
 	go s.pump()
 	go s.answer()
 	go s.wait()
+
 	return s, nil
 }
 
@@ -86,6 +91,7 @@ func (s *session) pump() {
 			_, _ = s.term.Write(buf[:n])
 			s.mu.Unlock()
 		}
+
 		if err != nil {
 			return
 		}
@@ -120,6 +126,7 @@ func (s *session) send(b string) error {
 	}
 	s.expectInputs(keys)
 	_, err := s.pty.WriteString(b)
+
 	return err
 }
 
@@ -129,10 +136,12 @@ func (s *session) resize(w, h int) error {
 	same := s.term.Width() == w && s.term.Height() == h
 	s.term.Resize(w, h)
 	s.mu.Unlock()
+
 	if same {
 		return nil
 	}
 	s.expectInputs(1)
+
 	return pty.Setsize(s.pty, &pty.Winsize{Cols: uint16(w), Rows: uint16(h)})
 }
 
@@ -170,6 +179,7 @@ func (s *session) signal() (idle bool, inputs int) {
 	if _, err := fmt.Sscanf(s.title, "konto %s %d", &state, &inputs); err != nil {
 		return false, -1
 	}
+
 	return state == "idle", inputs
 }
 
@@ -183,24 +193,36 @@ func (s *session) handled(timeout time.Duration) bool { return s.awaitSignal(tim
 func (s *session) awaitSignal(timeout time.Duration, idle bool) bool {
 	deadline := time.Now().Add(timeout)
 	for !s.exited() {
-		s.mu.Lock()
-		quiet, inputs := s.signal()
-		done := inputs >= s.expect && (quiet || !idle)
-		late := !done && time.Now().After(deadline)
-		if late { // said, and the count taken as it is, so one lost input does not stall every later wait
-			fmt.Fprintf(os.Stderr, "e2e: no idle signal for %d inputs after %s, title %q\n", s.expect, timeout, s.title)
-			s.expect = min(s.expect, max(inputs, 0))
-		}
-		s.mu.Unlock()
+		done, late := s.checkSignal(idle, deadline, timeout)
 		if done {
 			return true
 		}
+
 		if late {
 			return false
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
+
 	return true
+}
+
+// checkSignal reads the idle signal once: done when every input is taken in (and, if idle is asked for,
+// konto is idle), late when not done by the deadline.
+func (s *session) checkSignal(idle bool, deadline time.Time, timeout time.Duration) (done, late bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	quiet, inputs := s.signal()
+	done = inputs >= s.expect && (quiet || !idle)
+
+	late = !done && time.Now().After(deadline)
+	if late { // said, and the count taken as it is, so one lost input does not stall every later wait
+		fmt.Fprintf(os.Stderr, "e2e: no idle signal for %d inputs after %s, title %q\n", s.expect, timeout, s.title)
+		s.expect = min(s.expect, max(inputs, 0))
+	}
+
+	return done, late
 }
 
 // waitFor polls the screen until cond holds.
@@ -210,6 +232,7 @@ func (s *session) waitFor(timeout time.Duration, cond func(screen string) bool) 
 		if cond(s.screenText()) {
 			return true
 		}
+
 		if time.Now().After(deadline) {
 			return false
 		}
@@ -222,24 +245,37 @@ func (s *session) waitFor(timeout time.Duration, cond func(screen string) bool) 
 func (s *session) screenLines() []string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	w, h := s.term.Width(), s.term.Height()
-	lines := make([]string, h)
-	for y := range h {
-		var b strings.Builder
-		for x := range w {
-			c := s.term.CellAt(x, y)
-			switch {
-			case c == nil || c.Content == "" && c.Width == 0:
-				// continuation of a wide character
-			case c.Content == "":
-				b.WriteByte(' ')
-			default:
-				b.WriteString(c.Content)
-			}
-		}
-		lines[y] = strings.TrimRight(b.String(), " ")
+	lines := make([]string, s.term.Height())
+	for y := range lines {
+		lines[y] = strings.TrimRight(s.rowText(y), " ")
 	}
+
 	return lines
+}
+
+// rowText is row y's text. Callers hold s.mu.
+func (s *session) rowText(y int) string {
+	var b strings.Builder
+	for x := range s.term.Width() {
+		b.WriteString(s.cellText(x, y))
+	}
+
+	return b.String()
+}
+
+// cellText is what the cell at x, y prints: nothing for the trailing half of a wide character, a space for
+// an empty cell.
+func (s *session) cellText(x, y int) string {
+	c := s.term.CellAt(x, y)
+	if c == nil || c.Content == "" && c.Width == 0 {
+		return ""
+	}
+
+	if c.Content == "" {
+		return " "
+	}
+
+	return c.Content
 }
 
 func (s *session) screenText() string {
@@ -251,13 +287,21 @@ func (s *session) screenText() string {
 func (s *session) cellColour(x, y int) int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
 	c := s.term.CellAt(x, y)
 	if c == nil {
 		return -1
 	}
-	if bc, ok := c.Style.Fg.(ansi.BasicColor); ok {
-		return int(bc)
+
+	return ansi16(c.Style.Fg)
+}
+
+// ansi16 is the colour as an ANSI-16 index, or -1 when it is none (default or any other kind of colour).
+func ansi16(colour color.Color) int {
+	if basic, ok := colour.(ansi.BasicColor); ok {
+		return int(basic)
 	}
+
 	return -1
 }
 
@@ -266,14 +310,13 @@ func (s *session) cellColour(x, y int) int {
 func (s *session) cellBackground(x, y int) int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
 	c := s.term.CellAt(x, y)
 	if c == nil {
 		return -1
 	}
-	if bc, ok := c.Style.Bg.(ansi.BasicColor); ok {
-		return int(bc)
-	}
-	return -1
+
+	return ansi16(c.Style.Bg)
 }
 
 // attrBold is the bold bit of a cell style (ultraviolet's AttrBold, which this harness need not import).
@@ -284,6 +327,7 @@ func (s *session) cellBold(x, y int) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	c := s.term.CellAt(x, y)
+
 	return c != nil && c.Style.Attrs&attrBold != 0
 }
 
@@ -296,16 +340,12 @@ func (s *session) backgrounds() map[int]bool {
 	for y := range s.term.Height() {
 		for x := range s.term.Width() {
 			c := s.term.CellAt(x, y)
-			if c == nil || c.Style.Bg == nil {
-				continue
-			}
-			if bc, ok := c.Style.Bg.(ansi.BasicColor); ok {
-				seen[int(bc)] = true
-			} else {
-				seen[-1] = true
+			if c != nil && c.Style.Bg != nil {
+				seen[ansi16(c.Style.Bg)] = true
 			}
 		}
 	}
+
 	return seen
 }
 
@@ -313,17 +353,25 @@ func (s *session) backgrounds() map[int]bool {
 func (s *session) colours(text string) []int {
 	var seen []int
 	for y, line := range s.screenLines() {
-		for offset := 0; ; {
-			before, _, found := strings.Cut(line[offset:], text)
-			if !found {
-				break
-			}
-			x := ansi.StringWidth(line[:offset+len(before)])
+		for _, x := range columnsOf(line, text) {
 			seen = append(seen, s.cellColour(x, y))
-			offset += len(before) + len(text)
 		}
 	}
+
 	return seen
+}
+
+// columnsOf is the cell column of every occurrence of text in line.
+func columnsOf(line, text string) []int {
+	var columns []int
+	for offset := 0; ; {
+		before, _, found := strings.Cut(line[offset:], text)
+		if !found {
+			return columns
+		}
+		columns = append(columns, ansi.StringWidth(line[:offset+len(before)]))
+		offset += len(before) + len(text)
+	}
 }
 
 // find returns the cell position of the first occurrence of text on screen.
@@ -333,12 +381,14 @@ func (s *session) find(text string) (x, y int, ok bool) {
 			return ansi.StringWidth(before), y, true
 		}
 	}
+
 	return 0, 0, false
 }
 
 func (s *session) rawOutput() []byte {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
 	return bytes.Clone(s.raw.Bytes())
 }
 

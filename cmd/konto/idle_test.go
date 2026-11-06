@@ -19,6 +19,7 @@ func (f fakeUI) Init() tea.Cmd { return f.init }
 
 func (f fakeUI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	*f.got = append(*f.got, msg)
+
 	return f, f.next
 }
 
@@ -30,15 +31,12 @@ func loaded() tea.Msg { return loadedMsg{} }
 
 func signalled(t *testing.T, ui fakeUI) *idleSignal {
 	t.Helper()
-	model, opts := withIdleSignal(ui, func(key string) string {
-		if key == "KONTO_E2E" {
-			return "1"
-		}
-		return ""
-	}, os.Stdout)
+
+	model, opts := withIdleSignal(ui, envOf(map[string]string{"KONTO_E2E": "1"}), os.Stdout)
 	if len(opts) != 1 {
 		t.Fatalf("want the output option, got %d options", len(opts))
 	}
+
 	return model.(*idleSignal)
 }
 
@@ -46,6 +44,7 @@ func title(m tea.Model) string { return m.View().WindowTitle }
 
 func TestWithoutKontoE2ETheUIRunsUnwrapped(t *testing.T) {
 	ui := fakeUI{got: new([]tea.Msg)}
+
 	model, opts := withIdleSignal(ui, func(string) string { return "" }, os.Stdout)
 	if _, ok := model.(fakeUI); !ok || opts != nil {
 		t.Errorf("got %T with %d options, want the UI itself and none", model, len(opts))
@@ -65,9 +64,11 @@ func TestTheSignalIsBusyUntilTheCommandsLand(t *testing.T) {
 	if title(m) != "konto idle 0" || follow != nil {
 		t.Errorf("title once it landed = %q, follow-up %v", title(m), follow)
 	}
+
 	if len(*got) != 1 || (*got)[0] != (loadedMsg{}) {
 		t.Errorf("the UI took in %v, want the load's result", *got)
 	}
+
 	if view := m.View(); view.Content != "ui" {
 		t.Errorf("view content = %q, want the UI's", view.Content)
 	}
@@ -105,15 +106,18 @@ func TestABatchIsTrackedCommandByCommand(t *testing.T) {
 	if title(m) != "konto busy 0" {
 		t.Errorf("title with the batch's commands in flight = %q", title(m))
 	}
+
 	cmds, ok := batch().(tea.BatchMsg)
 	if !ok || len(cmds) != 2 {
 		t.Fatalf("batch = %v, want its two commands", cmds)
 	}
 	m.Update(cmds[0]())
+
 	if title(m) != "konto busy 0" {
 		t.Errorf("title with one command left = %q", title(m))
 	}
 	m.Update(cmds[1]())
+
 	if title(m) != "konto idle 0" || len(*got) != 2 {
 		t.Errorf("title = %q, UI took in %v; want idle after both", title(m), *got)
 	}
@@ -128,6 +132,7 @@ func TestTheRuntimesOwnMessagesGoBackToIt(t *testing.T) {
 	if relay == nil || relay() != (tea.QuitMsg{}) || len(*got) != 0 {
 		t.Errorf("quit went to the UI (%v) instead of back to the runtime", *got)
 	}
+
 	if title(m) != "konto idle 0" {
 		t.Errorf("title = %q, want idle", title(m))
 	}
@@ -147,19 +152,23 @@ func TestTheUIsFollowUpCommandsAreTracked(t *testing.T) {
 func written(t *testing.T, frame string) (out string, n int) {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "out")
+
 	f, err := os.Create(path)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	n, err = titleLast{f}.WriteString(frame)
 	if err != nil {
 		t.Fatal(err)
 	}
 	_ = f.Close()
+
 	b, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	return string(b), n
 }
 
@@ -181,6 +190,7 @@ func TestAFailedFrameWriteIsReported(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	_ = f.Close()
 	if n, err := (titleLast{f}).WriteString("frame"); err == nil || n != 0 {
 		t.Errorf("Write on a closed file = %d, %v; want 0 and the error", n, err)

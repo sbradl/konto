@@ -33,6 +33,7 @@ func overlayAbove(base, popup string, height, gap int) string {
 		lipgloss.NewLayer(popup).X(0).Y(top).Z(popupZ),
 	)
 	rendered := compositor.Render()
+
 	return strings.Join(strings.Split(rendered, "\n")[:height], "\n")
 }
 
@@ -55,6 +56,7 @@ func Popup(title string, body []string, width int) string {
 	for _, line := range body {
 		rows = append(rows, Fit(line, width))
 	}
+
 	return strings.Join(rows, "\n")
 }
 
@@ -70,17 +72,32 @@ const PanelChrome = 2
 // Body lines wider than the inside are cut off; missing lines are blank.
 func Panel(title string, w, h int, body string) string {
 	inner := max(0, w-PanelChrome)
-	rows := strings.Split(body, "\n")
 	lines := make([]string, 0, h)
-	top := "╭─ " + theme.PanelTitle.Render(title) + " "
-	lines = append(lines, top+strings.Repeat("─", max(0, w-lipgloss.Width(top)-1))+"╮")
-	for i := range max(0, h-PanelChrome) {
-		row := ""
-		if i < len(rows) {
-			row = rows[i]
-		}
-		lines = append(lines, "│"+Fit(row, inner)+"│")
-	}
+	lines = append(lines, panelTop(title, w))
+	lines = append(lines, panelRows(body, inner, h-PanelChrome)...)
 	lines = append(lines, "╰"+strings.Repeat("─", inner)+"╯")
+
 	return strings.Join(lines, "\n")
+}
+
+// panelTop is a panel's top border w cells wide, the title inset two cells.
+func panelTop(title string, w int) string {
+	top := "╭─ " + theme.PanelTitle.Render(title) + " "
+
+	return top + strings.Repeat("─", max(0, w-lipgloss.Width(top)-1)) + "╮"
+}
+
+// panelRows are count rows of body between the side borders, each fitted to inner cells; missing ones are blank.
+func panelRows(body string, inner, count int) []string {
+	lines := strings.Split(body, "\n")
+	rows := make([]string, 0, max(0, count))
+	for i := range max(0, count) {
+		line := ""
+		if i < len(lines) {
+			line = lines[i]
+		}
+		rows = append(rows, "│"+Fit(line, inner)+"│")
+	}
+
+	return rows
 }

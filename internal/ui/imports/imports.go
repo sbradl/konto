@@ -3,7 +3,6 @@
 package imports
 
 import (
-	"fmt"
 	"strings"
 	"time"
 
@@ -99,6 +98,7 @@ func New(downloadDir string) Model { return Model{downloadDir: downloadDir} }
 func (m Model) Resize(width, height int) Model {
 	next := m
 	next.width, next.height = width, height
+
 	return next.scrollRows().scrollPicker()
 }
 
@@ -106,10 +106,12 @@ func (m Model) Resize(width, height int) Model {
 func (m Model) WithStaged(staged csvimport.Staged) Model {
 	next := m
 	next.staged, next.message = &staged, ""
+
 	next.table = layout.Cursor{}
 	if staged.NewAccount && staged.Named == "" {
 		return next.show(modeAccount, dialog{name: csvimport.SuggestAccountName(staged.IBAN)})
 	}
+
 	return next.show(modeRows, dialog{})
 }
 
@@ -117,10 +119,12 @@ func (m Model) WithStaged(staged csvimport.Staged) Model {
 // cursor stays where it was, as near as the new rows allow; a dialog that points at a row is closed.
 func (m Model) WithRefreshed(staged csvimport.Staged) Model {
 	next := m
+
 	next.staged = &staged
 	if next.mode != modeAccount {
 		next = next.closeDialog()
 	}
+
 	return next.rowsTo(m.table.Row)
 }
 
@@ -129,6 +133,7 @@ func (m Model) Staged() (csvimport.Staged, bool) {
 	if m.staged == nil {
 		return csvimport.Staged{}, false
 	}
+
 	return *m.staged, true
 }
 
@@ -136,16 +141,19 @@ func (m Model) Staged() (csvimport.Staged, bool) {
 func (m Model) Cleared() Model {
 	next := m
 	next.staged, next.table = nil, layout.Cursor{}
+
 	return next.closeDialog()
 }
 
 // WithMessage tells the user why nothing happened and closes the picker; the next key clears it.
 func (m Model) WithMessage(text string) Model {
 	next := m
+
 	next.message = text
 	if next.mode == modeFiles {
 		return next.show(modeRows, dialog{})
 	}
+
 	return next
 }
 
@@ -154,6 +162,7 @@ func (m Model) WithListing(dir string, entries []domain.FileEntry, err error) Mo
 	next := m
 	next.dir, next.entries, next.listErr = dir, entries, err
 	next.browse = layout.Cursor{}
+
 	return next
 }
 
@@ -162,37 +171,53 @@ func (m Model) Position() (row, total int) {
 	if m.mode == modeFiles || m.staged == nil || len(m.staged.Rows) == 0 {
 		return 0, 0
 	}
+
 	return m.table.Row + 1, len(m.staged.Rows)
 }
 
 // Key applies a key to the view; n, the cursor keys, Enter in the picker and Esc are its own.
 func (m Model) Key(key string) (Model, Action) {
 	next := m
+
 	next.message = ""
 	if next.mode.dialog() {
 		return next.dialogKey(key), nil
 	}
+
 	if next.mode == modeFiles {
 		return next.pickerKey(key)
 	}
+
+	return next.tableKey(key)
+}
+
+// tableKey applies a key to the staged rows: n opens the file picker, Enter the categorise popup, w writes.
+func (m Model) tableKey(key string) (Model, Action) {
 	switch key {
 	case keyNewFile:
-		next = next.show(modeFiles, dialog{})
-		next.dir, next.entries, next.listErr = m.downloadDir, nil, nil
-		next.browse = layout.Cursor{}
-		return next, Browse{Dir: m.downloadDir}
+		return m.openPicker()
 	case layout.KeyEnter:
-		return next.openChoice(), nil
+		return m.openChoice(), nil
 	case keyWrite:
-		if next.staged == nil {
-			return next, nil
+		if m.staged == nil {
+			return m, nil
 		}
-		return next, Write{}
+
+		return m, Write{}
 	case keyNext:
-		return next.jumpToCategorise(), nil
+		return m.jumpToCategorise(), nil
 	default:
-		return next.moveRows(key), nil
+		return m.moveRows(key), nil
 	}
+}
+
+// openPicker opens the file picker on the download directory and asks for its listing.
+func (m Model) openPicker() (Model, Action) {
+	next := m.show(modeFiles, dialog{})
+	next.dir, next.entries, next.listErr = m.downloadDir, nil, nil
+	next.browse = layout.Cursor{}
+
+	return next, Browse{Dir: m.downloadDir}
 }
 
 // openChoice opens the categorise popup on the row under the cursor.
@@ -200,6 +225,7 @@ func (m Model) openChoice() Model {
 	if m.rowCount() > 0 {
 		return m.show(modeChoice, dialog{})
 	}
+
 	return m
 }
 
@@ -208,12 +234,14 @@ func (m Model) rowCount() int {
 	if m.staged == nil {
 		return 0
 	}
+
 	return len(m.staged.Rows)
 }
 
 func (m Model) moveRows(key string) Model {
 	next := m
 	next.table = m.table.Move(key, m.rowCount(), m.rowPage())
+
 	return next
 }
 
@@ -223,6 +251,7 @@ func (m Model) jumpToCategorise() Model {
 	if next.staged != nil && next.staged.NeedCategory() == 0 {
 		next.message = "no row needs a category"
 	}
+
 	return next
 }
 
@@ -235,18 +264,21 @@ func (m Model) nextToCategorise() int {
 			return at
 		}
 	}
+
 	return m.table.Row
 }
 
 func (m Model) rowsTo(row int) Model {
 	next := m
 	next.table = m.table.To(row, m.rowCount(), m.rowPage())
+
 	return next
 }
 
 func (m Model) scrollRows() Model {
 	next := m
 	next.table = m.table.Scrolled(m.rowPage())
+
 	return next
 }
 
@@ -255,19 +287,25 @@ func (m Model) scrollRows() Model {
 func (m Model) layoutHeights() (rows, skipped int) {
 	room := m.height - infoHeight - m.bannerRows() - m.detailRows()
 	rows = max(minPanel, room*rowsShare/100)
+
 	return rows, max(0, room-rows)
 }
 
 // innerWidth is the width of a panel's body.
 func (m Model) innerWidth() int { return m.width - layout.PanelChrome }
 
-func (m Model) rowPage() int { rows, _ := m.layoutHeights(); return max(1, rows-layout.PanelChrome) }
+func (m Model) rowPage() int {
+	rows, _ := m.layoutHeights()
+
+	return max(1, rows-layout.PanelChrome)
+}
 
 // detailRows is the height of the row panel on this screen.
 func (m Model) detailRows() int {
 	if m.height-m.bannerRows() < detailMinHeight {
 		return 0
 	}
+
 	return detailHeight
 }
 
@@ -275,6 +313,7 @@ func (m Model) bannerRows() int {
 	if m.message == "" {
 		return 0
 	}
+
 	return 1
 }
 
@@ -284,6 +323,7 @@ func (m Model) View() string {
 	if m.message == "" {
 		return body
 	}
+
 	return " " + theme.Warn.Render(m.message) + "\n" + body
 }
 
@@ -292,9 +332,11 @@ func (m Model) body() string {
 	if m.mode == modeFiles { // ifs, not a switch: mutation testing sees no coverage on switch cases
 		return m.picker(height)
 	}
+
 	if m.staged == nil {
 		return layout.Panel("IMPORT", m.width, height, theme.Dim.Render(" "+emptyHint))
 	}
+
 	return m.overlay(m.stagedView())
 }
 
@@ -303,41 +345,13 @@ func (m Model) stagedView() string {
 	rowsHeight, skippedHeight := m.layoutHeights()
 	rowsPanel := layout.Panel("ROWS", m.width, rowsHeight, m.rowLines())
 	skipped := layout.Panel("SKIPPED", m.width, skippedHeight, m.skippedLines(max(0, skippedHeight-layout.PanelChrome)))
+
 	panels := []string{m.info(), rowsPanel, skipped}
 	if m.detailRows() > 0 { // above the rows, where the bottom-anchored dialogs leave it readable
 		panels = []string{m.info(), layout.Panel("ROW", m.width, detailHeight, m.rowDetail()), rowsPanel, skipped}
 	}
+
 	return strings.Join(panels, "\n")
-}
-
-// info is the file, the account it goes to, the bank format, the watermark and what is left to do.
-func (m Model) info() string {
-	staged := m.staged
-	account := staged.Account.Name
-	if staged.NewAccount {
-		account = theme.Warn.Render(createHint) + theme.Dim.Render(" for "+staged.IBAN)
-		if staged.Named != "" {
-			account = staged.Named + theme.Dim.Render(" (new)")
-		}
-	}
-	watermark := noWatermark
-	if !staged.Watermark.IsZero() {
-		watermark = staged.Watermark.Format(time.DateOnly)
-	}
-	summary := nothingNew
-	if len(staged.Rows) > 0 {
-		summary = fmt.Sprintf("%d need a category", staged.NeedCategory())
-	}
-	lines := []string{
-		label("file", staged.File), label("account", account), label("format", staged.Format),
-		label("watermark", watermark), label("staged", m.stagedSummary()), label("", theme.Bold.Render(summary)),
-	}
-	return layout.Panel("IMPORT", m.width, infoHeight, strings.Join(lines, "\n"))
-}
-
-// label is a line of a panel: a dim name, then its value.
-func label(name, value string) string {
-	return " " + theme.Dim.Render(fmt.Sprintf("%-*s", labelWidth, name)) + value
 }
 
 // rowDetail is what a rule can match on the row under the cursor; the table has room for its description only.
@@ -346,15 +360,24 @@ func (m Model) rowDetail() string {
 		return ""
 	}
 	row := m.staged.Rows[m.table.Row]
-	lines := []string{label("type", row.Type), label("payee", row.Payee)}
-	for i, line := range wrapped(row.Purpose, max(1, m.innerWidth()-labelWidth-1), purposeLines) {
+	lines := append([]string{label("type", row.Type), label("payee", row.Payee)}, m.purposeLines(row.Purpose)...)
+
+	return strings.Join(lines, "\n")
+}
+
+// purposeLines are the purpose wrapped to the panel, labelled on its first line only.
+func (m Model) purposeLines(purpose string) []string {
+	wrappedLines := wrapped(purpose, max(1, m.innerWidth()-labelWidth-1), purposeLines)
+	lines := make([]string, 0, len(wrappedLines))
+	for i, line := range wrappedLines {
 		name := ""
 		if i == 0 {
 			name = "purpose"
 		}
 		lines = append(lines, label(name, line))
 	}
-	return strings.Join(lines, "\n")
+
+	return lines
 }
 
 // wrapped is text broken to width, at most limit lines, the last marked when more was cut.
@@ -367,28 +390,8 @@ func wrapped(text string, width, limit int) []string {
 	lines = lines[:limit]
 	last := strings.TrimRight(layout.Fit(lines[limit-1], max(1, width-1)), " ")
 	lines[limit-1] = last + cutMark
-	return lines
-}
 
-// stagedSummary lists what the import would add to the journal besides the transactions: the rules and the
-// new accounts, and what the categories do to net income.
-func (m Model) stagedSummary() string {
-	rules := m.staged.StagedRules()
-	items := make([]string, 0, len(rules))
-	if m.staged.Named != "" {
-		items = append(items, "account "+m.staged.Named)
-	}
-	for _, rule := range rules {
-		items = append(items, "rule "+rule.ID)
-	}
-	for _, name := range m.staged.NewAccounts {
-		items = append(items, "account "+name)
-	}
-	list := noItems
-	if len(items) > 0 {
-		list = strings.Join(items, ", ")
-	}
-	return list + theme.Dim.Render(" · net income ") + m.staged.NetIncomeChange().Format()
+	return lines
 }
 
 // rowLines are the visible rows of the table, the one under the cursor highlighted.
@@ -404,6 +407,7 @@ func (m Model) rowLines() string {
 			lines = append(lines, cells.styled())
 		}
 	}
+
 	return strings.Join(lines, "\n")
 }
 
@@ -423,15 +427,24 @@ func cellsOf(row csvimport.Row, width int) rowCells {
 		if row.IsTransfer() {
 			cells.target += transferMark
 		}
+
 		if row.RuleID != "" {
 			cells.rule = "#" + row.RuleID
 		}
 	}
 	cells.rule = layout.Fit(cells.rule, ruleIDWidth)
 	cells.target = layout.Fit(cells.target, targetWidth)
-	room := width - 3 - ruleIDWidth - dateWidth - columnGap - columnGap - targetWidth - amountWidth
-	cells.description = layout.Fit(row.Description, max(0, room))
+	cells.description = layout.Fit(row.Description, descriptionWidth(width))
+
 	return cells
+}
+
+// descriptionWidth is what a row of the given width leaves the description beside the other columns.
+func descriptionWidth(width int) int {
+	const markAndSpaces = 3
+	room := width - markAndSpaces - ruleIDWidth - dateWidth - columnGap - columnGap - targetWidth - amountWidth
+
+	return max(0, room)
 }
 
 // highlighted is the row for the cursor: the match mark keeps its colour outside the highlight, as the
@@ -441,6 +454,7 @@ func (c rowCells) highlighted(width int) string {
 	if c.needsCategory {
 		markStyle = theme.Warn
 	}
+
 	return " " + markStyle.Render(c.mark) + theme.Selected.Render(layout.Fit(c.rest(), max(0, width-2)))
 }
 
@@ -456,6 +470,7 @@ func (c rowCells) styled() string {
 	if c.needsCategory {
 		markStyle, targetStyle = theme.Warn, theme.Warn
 	}
+
 	return " " + markStyle.Render(c.mark) + " " + c.rule + c.date + strings.Repeat(" ", columnGap) + c.description +
 		strings.Repeat(" ", columnGap) + targetStyle.Render(c.target) + c.amount
 }
@@ -463,6 +478,7 @@ func (c rowCells) styled() string {
 // skippedLines list the rows the journal already has, dim; when they do not fit the last row counts the rest.
 func (m Model) skippedLines(capacity int) string {
 	skipped := m.staged.Skipped
+
 	shown := skipped
 	if len(shown) > capacity {
 		shown = shown[:max(0, capacity-1)]
@@ -471,9 +487,11 @@ func (m Model) skippedLines(capacity int) string {
 	for i := range shown {
 		lines = append(lines, skippedLine(&shown[i], m.innerWidth()))
 	}
+
 	if hidden := len(skipped) - len(shown); hidden > 0 {
 		lines = append(lines, layout.More(hidden))
 	}
+
 	return strings.Join(lines, "\n")
 }
 
@@ -482,5 +500,6 @@ func skippedLine(row *csvimport.Row, width int) string {
 	description := layout.Fit(row.Description, width-1-dateWidth-columnGap-amountWidth-1)
 	amount := layout.AlignRight(row.Amount.Format(), amountWidth)
 	line := " " + row.Date.Format(time.DateOnly) + "  " + description + amount
+
 	return theme.Dim.Render(layout.Fit(line, width))
 }

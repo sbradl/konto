@@ -52,24 +52,34 @@ func keyBytes(name string) (string, error) {
 	if b, ok := namedKeys[name]; ok {
 		return b, nil
 	}
+
 	if len([]rune(name)) == 1 {
 		return name, nil
 	}
-	mod, key, ok := strings.Cut(name, "+")
+
+	modifier, key, ok := strings.Cut(name, "+")
 	if !ok || len([]rune(key)) != 1 {
 		return "", fmt.Errorf("unknown key %q", name)
 	}
-	switch mod {
+
+	return chordBytes(modifier, key, name)
+}
+
+// chordBytes encodes modifier+key, a single-character key; name is the chord as the feature wrote it.
+func chordBytes(modifier, key, name string) (string, error) {
+	switch modifier {
 	case "Ctrl":
 		c := strings.ToLower(key)[0]
 		if c < 'a' || c > 'z' {
 			return "", fmt.Errorf("unsupported Ctrl chord %q", name)
 		}
+
 		return string(rune(c & 0x1f)), nil
 	case "Alt":
 		return "\x1b" + key, nil
 	case "Shift":
 		return strings.ToUpper(key), nil
 	}
+
 	return "", fmt.Errorf("unknown modifier in %q", name)
 }

@@ -16,6 +16,7 @@ import (
 func stagedAt() csvimport.Staged {
 	staged := writable()
 	staged.Path = "/dl/sept.csv"
+
 	return staged
 }
 
@@ -24,6 +25,7 @@ func reread() csvimport.Staged {
 	staged := stagedAt()
 	staged.Rows = []csvimport.Row{staged.Rows[0], staged.Rows[1]}
 	staged.Rows[1].Target, staged.Rows[1].Once = "", false
+
 	return staged
 }
 
@@ -36,10 +38,12 @@ type rereadingImporter struct {
 
 func (r *rereadingImporter) Open(_ context.Context, path string, ledger domain.Ledger) (csvimport.Staged, error) {
 	r.opened = append(r.opened, path)
+
 	r.ledgers = append(r.ledgers, ledger)
 	if len(r.opened) == 1 {
 		return stagedAt(), nil
 	}
+
 	return r.reread, r.err
 }
 
@@ -47,6 +51,7 @@ func (r *rereadingImporter) Open(_ context.Context, path string, ledger domain.L
 func listing() *rereadingImporter {
 	importer := &rereadingImporter{}
 	importer.entries = []domain.FileEntry{{Name: "sept.csv"}}
+
 	return importer
 }
 
@@ -63,6 +68,7 @@ func stagedModel(t *testing.T, importer csvImporter) Model {
 	opened = deliver(opened, cmd)
 	opened, _ = pressCode(opened, tea.KeyDown)
 	opened, cmd = pressCode(opened, tea.KeyEnter)
+
 	return deliver(opened, cmd)
 }
 
@@ -77,10 +83,12 @@ func TestRefreshReadsTheStagedExportAgainAndKeepsWhatWasChosen(t *testing.T) {
 	if len(importer.opened) != 2 || importer.opened[1] != "/dl/sept.csv" {
 		t.Fatalf("opened %v, want the staged export read again", importer.opened)
 	}
+
 	staged, _ := model.imports.Staged()
 	if row := staged.Rows[1]; row.Target != "expenses:books" || !row.Once {
 		t.Errorf("row = %+v, want the choice kept", row)
 	}
+
 	if got := lastLine(model); !strings.Contains(got, "1/2") {
 		t.Errorf("status bar = %q, want the cursor kept", got)
 	}
@@ -140,9 +148,11 @@ func TestAnExportReadAgainAfterTheImportWasWrittenIsDropped(t *testing.T) {
 
 func quitCommand(t *testing.T, cmd tea.Cmd) {
 	t.Helper()
+
 	if cmd == nil {
 		t.Fatal("no command")
 	}
+
 	if _, ok := cmd().(tea.QuitMsg); !ok {
 		t.Errorf("command returned %T, want a quit", cmd())
 	}
@@ -150,6 +160,7 @@ func quitCommand(t *testing.T, cmd tea.Cmd) {
 
 func askedToDiscard(t *testing.T, model Model) {
 	t.Helper()
+
 	if got := lastLine(model); !strings.Contains(got, "discard the staged import? (y/n)") {
 		t.Errorf("status bar = %q, want the discard question", got)
 	}
@@ -167,7 +178,11 @@ func TestQAsksBeforeDiscardingAStagedImport(t *testing.T) {
 func TestNAndEscKeepTheStagedImport(t *testing.T) {
 	asked, _ := press(stagedModel(t, listing()), "q")
 	for name, answer := range map[string]func(Model) Model{
-		"n":   func(m Model) Model { m, _ = press(m, "n"); return m },
+		"n": func(m Model) Model {
+			m, _ = press(m, "n")
+
+			return m
+		},
 		"esc": pressEsc,
 	} {
 		kept := answer(asked)

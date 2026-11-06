@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/cucumber/godog"
 )
@@ -34,44 +35,19 @@ func registerSteps(sc *godog.ScenarioContext, w *world) {
 func registerGivenSteps(sc *godog.ScenarioContext, w *world) {
 	step(sc, `^the journal "([^"]*)"$`, func(name string) error { return w.useJournal(name, "") })
 	step(sc, `^the ledger "([^"]*)"$`, w.useLedger)
-	step(sc, `^the journal "([^"]*)" with (?:appended text|a rule) "((?s:.*))"$`, func(name, text string) error {
-		// Gherkin turns \n in a table cell into a real newline, hence (?s). Appended text starts
-		// on its own line unless it says otherwise: a leading newline is its first (blank) line.
-		text = unescape(text)
-		if !strings.HasPrefix(text, "\n") {
-			text = "\n" + text
-		}
-		return w.useJournal(name, text)
-	})
+	// Gherkin turns \n in a table cell into a real newline, hence (?s).
+	step(sc, `^the journal "([^"]*)" with (?:appended text|a rule) "((?s:.*))"$`, w.useJournalWithText)
 	step(sc, `^a journal containing "((?s:.*))"$`, func(text string) error {
 		return os.WriteFile(w.journal, []byte(unescape(text)+"\n"), 0o644)
 	})
-	step(sc, `^no journal exists at the resolved path$`, func() error {
-		if w.lastStepType == outcomeStep {
-			return expectAbsent(w.journal)
-		}
-		return removeIfExists(w.journal)
-	})
+	step(sc, `^no journal exists at the resolved path$`, w.noJournalAtResolvedPath)
 	step(sc, `^today is (\d{4}-\d{2}-\d{2})$`, func(day string) { w.env["KONTO_TODAY"] = day })
 	step(sc, `^the terminal is (\d+)×(\d+)$`, w.setTerminalSize)
 	step(sc, `^XDG_DOWNLOAD_DIR is not configured$`, func() { w.unset["XDG_DOWNLOAD_DIR"] = true })
 	step(sc, `^a Postbank CSV "([^"]*)" for IBAN "([^"]*)" with closing balance ([\d.,-]+) EUR( and CRLF line endings| and a trailing blank line)?:$`,
-		func(file, iban, balance, variant string, table *godog.Table) error {
-			rows, err := postbankRows(table)
-			if err != nil {
-				return err
-			}
-			export := postbankExport{
-				IBAN: iban, ClosingBalance: balance, Rows: rows,
-				CRLF: strings.Contains(variant, "CRLF"), TrailingBlank: strings.Contains(variant, "blank"),
-			}
-			return w.writeExport(file, export)
-		})
+		w.writePostbankCSV)
 	step(sc, `^a Postbank CSV "([^"]*)" for IBAN "([^"]*)" with closing balance ([\d.,-]+) EUR and a broken row "(.*)"$`,
-		func(file, iban, balance, broken string) error {
-			row := postbankRow{Date: "29.9.2026", Type: "Kartenzahlung", Payee: "Kiosk", Purpose: "x", Amount: "-1,00"}
-			return w.writeExport(file, postbankExport{IBAN: iban, ClosingBalance: balance, Rows: []postbankRow{row}, BrokenRow: broken})
-		})
+		w.writePostbankCSVWithBrokenRow)
 	step(sc, `^the download directory contains "([^"]*)" with these exact bytes \(UTF-8 BOM first, LF line ends\):$`,
 		func(file string, doc *godog.DocString) error {
 			return os.WriteFile(filepath.Join(w.downloads, file), []byte("\xef\xbb\xbf"+doc.Content+"\n"), 0o644)
@@ -83,27 +59,74 @@ func registerGivenSteps(sc *godog.ScenarioContext, w *world) {
 	registerEditorSteps(sc, w)
 }
 
+// useJournalWithText installs the fixture journal with text appended. The text starts on its own line unless
+// it says otherwise: a leading newline is its first (blank) line.
+func (w *world) useJournalWithText(name, text string) error {
+	text = unescape(text)
+	if !strings.HasPrefix(text, "\n") {
+		text = "\n" + text
+	}
+
+	return w.useJournal(name, text)
+}
+
+// noJournalAtResolvedPath removes the journal as a precondition, and checks it is absent as an outcome.
+func (w *world) noJournalAtResolvedPath() error {
+	if w.lastStepType == outcomeStep {
+		return expectAbsent(w.journal)
+	}
+
+	return removeIfExists(w.journal)
+}
+
+func (w *world) writePostbankCSV(file, iban, balance, variant string, table *godog.Table) error {
+	rows, err := postbankRows(table)
+	if err != nil {
+		return err
+	}
+	export := postbankExport{
+		IBAN: iban, ClosingBalance: balance, Rows: rows,
+		CRLF: strings.Contains(variant, "CRLF"), TrailingBlank: strings.Contains(variant, "blank"),
+	}
+
+	return w.writeExport(file, export)
+}
+
+func (w *world) writePostbankCSVWithBrokenRow(file, iban, balance, broken string) error {
+	row := postbankRow{Date: "29.9.2026", Type: "Kartenzahlung", Payee: "Kiosk", Purpose: "x", Amount: "-1,00"}
+
+	return w.writeExport(file, postbankExport{IBAN: iban, ClosingBalance: balance, Rows: []postbankRow{row}, BrokenRow: broken})
+}
+
 func registerHledgerShimSteps(sc *godog.ScenarioContext, w *world) {
 	step(sc, `^hledger is not on PATH$`, func() { w.env["PATH"] = filepath.Join(w.dir, "empty-path") })
 	step(sc, `^hledger reports version "([^"]*)"$`, func(v string) error {
 		w.shim.Version = v
+
 		return w.writeShim()
 	})
-	step(sc, `^hledger is slowed by (\d+)(ms|s)$`, func(n int, unit string) error {
-		w.shim.DelayMs = n
-		if unit == "s" {
-			w.shim.DelayMs = n * 1000
-		}
-		return w.writeShim()
-	})
+	step(sc, `^hledger is slowed by (\d+(?:ms|s))$`, w.slowHledger)
 	step(sc, `^hledger starts failing(?: with "([^"]*)")?$`, func(msg string) error {
 		w.shim.Fail = "hledger: simulated failure " + msg
+
 		return w.writeShim()
 	})
 	step(sc, `^hledger returns garbage for "([^"]*)"$`, func(command string) error {
 		w.shim.GarbageFor = append(w.shim.GarbageFor, command)
+
 		return w.writeShim()
 	})
+}
+
+func (w *world) slowHledger(delay string) error {
+	duration, err := time.ParseDuration(delay)
+	if err != nil {
+		return err
+	}
+
+	w.shim.DelayMs = int(duration.Milliseconds())
+
+	return w.writeShim()
 }
 
 func registerEditorSteps(sc *godog.ScenarioContext, w *world) {
@@ -117,29 +140,37 @@ func registerEditorSteps(sc *godog.ScenarioContext, w *world) {
 }
 
 func registerWhenSteps(sc *godog.ScenarioContext, w *world) {
-	step(sc, `^I start konto$`, func() error {
-		if w.s != nil { // a scenario that changes the journal after its Background restarts konto
-			w.s.stop()
-			w.s = nil
-		}
-		return w.start()
-	})
+	step(sc, `^I start konto$`, w.restart)
 	step(sc, `^I start konto with "([^"]*)"$`, func(args string) error { return w.start(strings.Fields(args)...) })
 	step(sc, `^I press "([^"]*)"$`, func(key string) error { return w.press(key) })
 	step(sc, `^I press "([^"]*)" twice$`, func(key string) error { return w.press(key, key) })
 	step(sc, `^I press "([^"]*)" (\d+) times$`, func(key string, n int) error { return w.press(repeat(key, n)...) })
 	step(sc, `^I type "([^"]*)"$`, func(text string) error { return w.typeText(text) })
-	step(sc, `^I resize the terminal to (\d+)×(\d+)$`, func(width, height int) error {
-		s, err := w.session()
-		if err != nil {
-			return err
-		}
-		if err := s.resize(width, height); err != nil {
-			return err
-		}
-		s.settle(w.suite.timeout)
-		return nil
-	})
+	step(sc, `^I resize the terminal to (\d+)×(\d+)$`, w.resize)
+}
+
+// restart starts konto, stopping it first: a scenario that changes the journal after its Background restarts.
+func (w *world) restart() error {
+	if w.s != nil {
+		w.s.stop()
+		w.s = nil
+	}
+
+	return w.start()
+}
+
+func (w *world) resize(width, height int) error {
+	s, err := w.session()
+	if err != nil {
+		return err
+	}
+
+	if err := s.resize(width, height); err != nil {
+		return err
+	}
+	s.settle(w.suite.timeout)
+
+	return nil
 }
 
 func registerScreenSteps(sc *godog.ScenarioContext, w *world) {
@@ -158,27 +189,35 @@ func registerScreenSteps(sc *godog.ScenarioContext, w *world) {
 		return w.expectLine(-1, "status bar", text, func(line, t string) bool { return !strings.Contains(line, t) })
 	})
 	step(sc, `^"([^"]*)" is coloured (\d+)$`, func(text string, colour int) error { return w.expectColour(text, colour) })
-	step(sc, `^the screen is unchanged$`, func() error {
-		s, err := w.session()
-		if err != nil {
-			return err
-		}
-		s.settle(w.suite.timeout)
-		if now := s.screenText(); now != w.baseline {
-			return fmt.Errorf("screen changed:\n--- before ---\n%s\n--- after ---\n%s", w.baseline, now)
-		}
-		return nil
-	})
-	step(sc, `^the screen contains no 24-bit or 256-colour escape sequences$`, func() error {
-		s, err := w.session()
-		if err != nil {
-			return err
-		}
-		if m := extendedColour.Find(s.rawOutput()); m != nil {
-			return fmt.Errorf("found extended colour sequence %q", m)
-		}
-		return nil
-	})
+	step(sc, `^the screen is unchanged$`, w.expectScreenUnchanged)
+	step(sc, `^the screen contains no 24-bit or 256-colour escape sequences$`, w.expectOnlyANSI16Colours)
+}
+
+func (w *world) expectScreenUnchanged() error {
+	s, err := w.session()
+	if err != nil {
+		return err
+	}
+	s.settle(w.suite.timeout)
+
+	if now := s.screenText(); now != w.baseline {
+		return fmt.Errorf("screen changed:\n--- before ---\n%s\n--- after ---\n%s", w.baseline, now)
+	}
+
+	return nil
+}
+
+func (w *world) expectOnlyANSI16Colours() error {
+	s, err := w.session()
+	if err != nil {
+		return err
+	}
+
+	if m := extendedColour.Find(s.rawOutput()); m != nil {
+		return fmt.Errorf("found extended colour sequence %q", m)
+	}
+
+	return nil
 }
 
 func registerProcessSteps(sc *godog.ScenarioContext, w *world) {
@@ -197,13 +236,16 @@ func (w *world) expectExitCode(want int) error {
 	if err != nil {
 		return err
 	}
+
 	got, err := s.waitExit(w.suite.timeout)
 	if err != nil {
 		return err
 	}
+
 	if got != want {
 		return fmt.Errorf("exit code %d, want %d; stderr:\n%s", got, want, s.stderr.String())
 	}
+
 	return nil
 }
 
@@ -213,9 +255,11 @@ func (w *world) expectRunning() error {
 		return err
 	}
 	s.settle(w.suite.timeout)
+
 	if s.exited() {
 		return fmt.Errorf("konto exited with code %d; stderr:\n%s", s.exitCode, s.stderr.String())
 	}
+
 	return nil
 }
 
@@ -228,13 +272,16 @@ func (w *world) editorCalled(want string) error {
 	if included, ok := strings.CutPrefix(want, "+<line> <absolute path of "); ok {
 		return w.expectEditorOpenedIncluded(strings.TrimSuffix(included, ">"))
 	}
+
 	b, err := os.ReadFile(w.editorLog())
 	if err != nil {
 		return fmt.Errorf("the editor was never called: %w", err)
 	}
+
 	if !containsBlock(string(b), w.expand(want)) {
 		return fmt.Errorf("editor calls:\n%s\nwant %q", b, w.expand(want))
 	}
+
 	return nil
 }
 
@@ -265,6 +312,7 @@ func (w *world) expectNoneOf(texts ...string) error {
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -273,16 +321,20 @@ func (w *world) expectScreen(present bool, text string) error {
 	if err != nil {
 		return err
 	}
+
 	if present {
 		if s.waitFor(w.suite.timeout, func(screen string) bool { return strings.Contains(screen, text) }) {
 			return nil
 		}
+
 		return fmt.Errorf("did not see %q on screen:\n%s", text, s.screenText())
 	}
 	s.settle(w.suite.timeout)
+
 	if screen := s.screenText(); strings.Contains(screen, text) {
 		return fmt.Errorf("unexpectedly saw %q on screen:\n%s", text, screen)
 	}
+
 	return nil
 }
 
@@ -293,17 +345,20 @@ func (w *world) expectLine(row int, what, text string, ok func(line, text string
 		return err
 	}
 	var line string
+
 	match := s.waitFor(w.suite.timeout, func(string) bool {
 		lines := s.screenLines()
 		if row < 0 {
 			row = len(lines) + row
 		}
 		line = lines[row]
+
 		return ok(line, text)
 	})
 	if !match {
 		return fmt.Errorf("%s %q does not satisfy %q", what, line, text)
 	}
+
 	return nil
 }
 
@@ -312,16 +367,20 @@ func (w *world) expectColour(text string, want int) error {
 	if err != nil {
 		return err
 	}
+
 	if !s.waitFor(w.suite.timeout, func(screen string) bool { return strings.Contains(screen, text) }) {
 		return fmt.Errorf("%q is not on screen:\n%s", text, s.screenText())
 	}
+
 	seen := s.colours(text)
 	if len(seen) == 0 {
 		return fmt.Errorf("%q left the screen before its colour was read", text)
 	}
+
 	if !slices.Contains(seen, want) {
 		return fmt.Errorf("%q is coloured %v, want %d", text, seen, want)
 	}
+
 	return nil
 }
 
@@ -330,6 +389,7 @@ func (w *world) expectStderr(parts ...string) error {
 	if err != nil {
 		return err
 	}
+
 	if _, err := s.waitExit(w.suite.timeout); err != nil {
 		return err
 	}
@@ -338,6 +398,7 @@ func (w *world) expectStderr(parts ...string) error {
 			return fmt.Errorf("stderr does not mention %q:\n%s", p, s.stderr.String())
 		}
 	}
+
 	return nil
 }
 
@@ -353,14 +414,22 @@ func (w *world) expectEveryCallNamesTheJournal() error {
 // expectEveryCallIncludes checks that each hledger call reads, on stdin, a journal including the main journal
 // and the year files of the years listed, in that order and nothing else.
 func (w *world) expectEveryCallIncludes(years string) error {
-	var want strings.Builder
-	want.WriteString("include " + w.journal + "\n")
-	for year := range strings.SplitSeq(years, ",") {
-		want.WriteString("include " + filepath.Join(filepath.Dir(w.journal), strings.TrimSpace(year)+".journal") + "\n")
-	}
+	want := w.includesOf(years)
+
 	return w.expectEveryInvocation(func(call shimInvocation) bool {
-		return containsSeq(call.Args, []string{"-f", "-"}) && call.Stdin == want.String()
+		return containsSeq(call.Args, []string{"-f", "-"}) && call.Stdin == want
 	})
+}
+
+// includesOf is the stdin journal konto feeds hledger: the main journal, then the listed years' files.
+func (w *world) includesOf(years string) string {
+	var includes strings.Builder
+	includes.WriteString("include " + w.journal + "\n")
+	for year := range strings.SplitSeq(years, ",") {
+		includes.WriteString("include " + filepath.Join(filepath.Dir(w.journal), strings.TrimSpace(year)+".journal") + "\n")
+	}
+
+	return includes.String()
 }
 
 func (w *world) expectEveryInvocation(ok func(shimInvocation) bool) error {
@@ -368,6 +437,7 @@ func (w *world) expectEveryInvocation(ok func(shimInvocation) bool) error {
 	if err != nil {
 		return err
 	}
+
 	if len(calls) == 0 {
 		return errors.New("konto made no hledger calls")
 	}
@@ -376,6 +446,7 @@ func (w *world) expectEveryInvocation(ok func(shimInvocation) bool) error {
 			return fmt.Errorf("hledger call %q (stdin %q) does not name the journal %s as expected", call.Args, call.Stdin, w.journal)
 		}
 	}
+
 	return nil
 }
 
@@ -385,6 +456,11 @@ type shimInvocation struct {
 	Stdin string   `json:"stdin"`
 }
 
+// isVersionProbe reports konto's preflight call, `hledger --version`.
+func (call shimInvocation) isVersionProbe() bool {
+	return len(call.Args) == 1 && call.Args[0] == "--version"
+}
+
 // hledgerCalls are the arguments of the logged calls, the version preflight left out.
 func (w *world) hledgerCalls() ([][]string, error) {
 	invocations, err := w.hledgerInvocations()
@@ -392,6 +468,7 @@ func (w *world) hledgerCalls() ([][]string, error) {
 	for i, call := range invocations {
 		calls[i] = call.Args
 	}
+
 	return calls, err
 }
 
@@ -407,10 +484,12 @@ func (w *world) hledgerInvocations() ([]shimInvocation, error) {
 		if err := json.Unmarshal([]byte(line), &call); err != nil {
 			return nil, fmt.Errorf("hledger call log line %q: %w", line, err)
 		}
-		if len(call.Args) != 1 || call.Args[0] != "--version" {
+
+		if !call.isVersionProbe() {
 			calls = append(calls, call)
 		}
 	}
+
 	return calls, nil
 }
 
@@ -420,10 +499,12 @@ func (w *world) typeText(text string) error {
 		return err
 	}
 	w.waitLoaded(s)
+
 	if err := s.send(text); err != nil {
 		return err
 	}
 	s.settle(w.suite.timeout)
+
 	return nil
 }
 
@@ -432,6 +513,7 @@ func (w *world) writeExport(file string, e postbankExport) error {
 	if err != nil {
 		return err
 	}
+
 	return os.WriteFile(filepath.Join(w.downloads, file), b, 0o644)
 }
 
@@ -443,6 +525,7 @@ func (w *world) editorStub(body string) error {
 		return err
 	}
 	w.env["EDITOR"], w.env["VISUAL"] = stub, ""
+
 	return nil
 }
 
@@ -458,9 +541,10 @@ func postbankRows(t *godog.Table) ([]postbankRow, error) {
 	}
 	var rows []postbankRow
 	for _, r := range t.Rows[1:] {
-		v := func(i int) string { return r.Cells[i].Value }
-		rows = append(rows, postbankRow{Date: v(0), Type: v(1), Payee: v(2), Purpose: v(3), Amount: strings.TrimSpace(v(4))})
+		c := r.Cells
+		rows = append(rows, postbankRow{Date: c[0].Value, Type: c[1].Value, Payee: c[2].Value, Purpose: c[3].Value, Amount: strings.TrimSpace(c[4].Value)})
 	}
+
 	return rows, nil
 }
 
@@ -470,6 +554,7 @@ func containsSeq(have, want []string) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -478,18 +563,13 @@ func unescape(s string) string {
 	return strings.ReplaceAll(s, `\n`, "\n")
 }
 
-func repeat(key string, n int) []string {
-	keys := make([]string, n)
-	for i := range keys {
-		keys[i] = key
-	}
-	return keys
-}
+func repeat(key string, n int) []string { return slices.Repeat([]string{key}, n) }
 
 func removeIfExists(path string) error {
 	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 		return err
 	}
+
 	return nil
 }
 

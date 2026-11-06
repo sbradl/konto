@@ -31,10 +31,9 @@ func TestCheckRunsOneNamedCheck(t *testing.T) {
 	if issue != nil || err != nil {
 		t.Errorf("Check = %+v, %v; want a pass", issue, err)
 	}
+
 	want := []string{"-f", "/data/main.journal", "check", "payees"}
-	if len(calls) != 1 || !reflect.DeepEqual(calls[0].args, want) {
-		t.Errorf("calls = %+v, want one call with %v", calls, want)
-	}
+	assertOneCall(t, calls, want)
 }
 
 func TestCheckReturnsTheFirstFailureNamedAndRanked(t *testing.T) {
@@ -92,6 +91,7 @@ func TestCheckTextPipesTheTextToTheNamedChecks(t *testing.T) {
 	var gotArgs []string
 	client := &Client{run: func(_ context.Context, stdin io.Reader, args ...string) ([]byte, string, error) {
 		gotInput, gotArgs = readAll(stdin), args
+
 		return nil, "", nil
 	}}
 
@@ -100,15 +100,14 @@ func TestCheckTextPipesTheTextToTheNamedChecks(t *testing.T) {
 	if err != nil || gotInput != "journal text" {
 		t.Errorf("err = %v, input = %q", err, gotInput)
 	}
+
 	if want := []string{"-f", "-", "check", "balanced", "assertions"}; !reflect.DeepEqual(gotArgs, want) {
 		t.Errorf("args = %v, want %v", gotArgs, want)
 	}
 }
 
 func TestCheckTextReportsTheFirstFailureInHledgersWords(t *testing.T) {
-	client := &Client{run: func(context.Context, io.Reader, ...string) ([]byte, string, error) {
-		return nil, "hledger: Error: -:5:\n5 | x\n\nbalance assertion: assets:checking\nthe asserted balance is 1\n", errors.New("exit 1")
-	}}
+	client := hledgerOnText("", "hledger: Error: -:5:\n5 | x\n\nbalance assertion: assets:checking\nthe asserted balance is 1\n", errors.New("exit 1"))
 
 	err := client.CheckText(context.Background(), "", nil)
 
@@ -120,6 +119,7 @@ func TestCheckTextReportsTheFirstFailureInHledgersWords(t *testing.T) {
 func TestNewChecksTextThroughTheBinary(t *testing.T) {
 	dir := t.TempDir()
 	seen := filepath.Join(dir, "stdin")
+
 	script := "#!/bin/sh\n/bin/cat > " + seen + "\necho 'where' >&2\necho 'broken' >&2\nexit 1\n"
 	if err := os.WriteFile(filepath.Join(dir, "hledger"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
@@ -131,15 +131,14 @@ func TestNewChecksTextThroughTheBinary(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "where\nbroken") {
 		t.Errorf("error = %v, want hledger's stderr", err)
 	}
+
 	if got, _ := os.ReadFile(seen); string(got) != "the text" {
 		t.Errorf("hledger read %q from stdin", got)
 	}
 }
 
 func TestCheckTextSaysWhyWhenHledgerGivesNoMessage(t *testing.T) {
-	client := &Client{run: func(context.Context, io.Reader, ...string) ([]byte, string, error) {
-		return nil, "", errors.New("hledger did not answer within 2m0s")
-	}}
+	client := hledgerOnText("", "", errors.New("hledger did not answer within 2m0s"))
 
 	err := client.CheckText(context.Background(), "", nil)
 
@@ -149,9 +148,7 @@ func TestCheckTextSaysWhyWhenHledgerGivesNoMessage(t *testing.T) {
 }
 
 func TestCheckTextKeepsTheLocationWhenHledgerSaysNothingElse(t *testing.T) {
-	client := &Client{run: func(context.Context, io.Reader, ...string) ([]byte, string, error) {
-		return nil, "hledger: Error: -:5:\n", errors.New("exit 1")
-	}}
+	client := hledgerOnText("", "hledger: Error: -:5:\n", errors.New("exit 1"))
 
 	err := client.CheckText(context.Background(), "", nil)
 

@@ -46,19 +46,25 @@ func (a app) run() {
 	cfg, err := a.resolve()
 	if err != nil {
 		a.fail(err)
+
 		return
 	}
+
 	if _, err := a.preflight(); err != nil {
 		a.fail(err)
+
 		return
 	}
+
 	release, err := a.lock(cfg.JournalPath)
 	if err != nil {
 		a.fail(err)
+
 		return
 	}
 	err = a.program(cfg)
 	_ = release()
+
 	if err != nil {
 		a.fail(err)
 	}
@@ -82,14 +88,17 @@ func resolveConfig(args []string, sys sysEnv) (config.Config, error) {
 	if err != nil {
 		return config.Config{}, fmt.Errorf("finding home directory: %w", err)
 	}
+
 	cwd, err := sys.getwd()
 	if err != nil {
 		return config.Config{}, fmt.Errorf("finding working directory: %w", err)
 	}
+
 	cfg, err := config.Resolve(args, config.Environment{Getenv: sys.getenv, Home: home, Cwd: cwd})
 	if err != nil {
 		return config.Config{}, fmt.Errorf("resolving configuration: %w", err)
 	}
+
 	return cfg, nil
 }
 
@@ -100,6 +109,7 @@ func lockJournal(journalPath string) (func() error, error) {
 	if err != nil {
 		return nil, fmt.Errorf("locking journal: %w", err)
 	}
+
 	return lock.Release, nil
 }
 
@@ -108,14 +118,19 @@ func lockJournal(journalPath string) (func() error, error) {
 func buildPorts(cfg config.Config, getenv func(string) string, today func() time.Time) ui.Ports {
 	file := journal.NewFile(cfg.JournalPath, today)
 	client := hledger.New(hledger.Binary, file.Window)
+
 	return ui.Ports{
-		Loader: ledger.NewLoader(client, file, today), Checker: checks.NewRunner(client), Creator: file,
+		Loader:   ledger.NewLoader(client, file, today),
+		Checker:  checks.NewRunner(client),
+		Creator:  file,
 		Editor:   func(path string, line int) *exec.Cmd { return editorCommand(getenv, path, line) },
-		Accounts: accounts.NewService(file, today), Writer: carry.NewWriter(file, client),
+		Accounts: accounts.NewService(file, today),
+		Writer:   carry.NewWriter(file, client),
 		// The UI hands the Verifier the changeset the carry writer prepared, so it renders it through the very
 		// file that writer writes to (TestBuildPortsVerifiesTheJournalTheWriterWrites).
-		Verifier: checks.NewVerifier(file, client),
-		Reports:  report.NewService(client, today), Forecast: forecast.NewService(client, today),
+		Verifier:    checks.NewVerifier(file, client),
+		Reports:     report.NewService(client, today),
+		Forecast:    forecast.NewService(client, today),
 		Rules:       periodic.NewService(client, today),
 		Importer:    csvimport.NewService(files.System{}, client, file.RulesPath()),
 		DownloadDir: downloadDir(getenv, cfg.Home),
@@ -141,6 +156,7 @@ func todayFunc(getenv func(string) string, now func() time.Time) func() time.Tim
 			return day
 		}
 		year, month, day := now().Date()
+
 		return time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
 	}
 }
@@ -150,5 +166,6 @@ func downloadDir(getenv func(string) string, home string) string {
 	if dir := strings.TrimSpace(getenv("XDG_DOWNLOAD_DIR")); dir != "" {
 		return dir
 	}
+
 	return filepath.Join(home, "Downloads")
 }

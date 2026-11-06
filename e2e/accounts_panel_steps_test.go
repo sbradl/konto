@@ -23,6 +23,7 @@ func (r accountRow) name() string {
 	if fields := strings.Fields(r.text); len(fields) > 1 {
 		return fields[1]
 	}
+
 	return ""
 }
 
@@ -46,12 +47,14 @@ func (w *world) accountsPanel() ([]accountRow, error) {
 			}
 		}
 	}
+
 	return nil, errors.New("no Accounts panel on screen:\n" + s.screenText())
 }
 
 // expectAccounts waits until check accepts the panel's non-empty rows.
 func (w *world) expectAccounts(check func(rows []accountRow) error) error {
 	var failure error
+
 	s, err := w.session()
 	if err != nil {
 		return err
@@ -60,6 +63,7 @@ func (w *world) expectAccounts(check func(rows []accountRow) error) error {
 		rows, perr := w.accountsPanel()
 		if perr != nil {
 			failure = perr
+
 			return false
 		}
 		var filled []accountRow
@@ -69,11 +73,14 @@ func (w *world) expectAccounts(check func(rows []accountRow) error) error {
 			}
 		}
 		failure = check(filled)
+
 		return failure == nil
 	})
+
 	if failure != nil {
 		return fmt.Errorf("%w\n%s", failure, s.screenText())
 	}
+
 	return nil
 }
 
@@ -84,6 +91,7 @@ func accountNamed(rows []accountRow, name string) (accountRow, error) {
 			return row, nil
 		}
 	}
+
 	return accountRow{}, fmt.Errorf("no Accounts row for %q", name)
 }
 
@@ -93,6 +101,7 @@ func cellOf(row accountRow, text string) (int, error) {
 	if !found {
 		return 0, fmt.Errorf("row %q does not show %q", row.text, text)
 	}
+
 	return 1 + utf8.RuneCountInString(before), nil
 }
 
@@ -104,14 +113,17 @@ func (w *world) rowColour(account, text string) (int, error) {
 		if err != nil {
 			return err
 		}
+
 		x, err := cellOf(row, text)
 		if err != nil {
 			return err
 		}
 		s, _ := w.session()
 		colour = s.cellColour(x, row.y)
+
 		return nil
 	})
+
 	return colour, err
 }
 
@@ -120,9 +132,11 @@ func (w *world) expectRowColour(account, text string, want int, negate bool) err
 	if err != nil {
 		return err
 	}
+
 	if (got == want) == negate {
 		return fmt.Errorf("%q on %s is coloured %d, negated=%v want %d", text, account, got, negate, want)
 	}
+
 	return nil
 }
 
@@ -133,15 +147,18 @@ func (w *world) expectSelected(account string, background, foreground int) error
 			return err
 		}
 		s, _ := w.session()
+
 		x, _ := cellOf(row, account)
 		if got := s.cellBackground(x, row.y); got != background {
 			return fmt.Errorf("row %s has background %d, want %d", account, got, background)
 		}
+
 		if foreground >= 0 {
 			if got := s.cellColour(x, row.y); got != foreground {
 				return fmt.Errorf("row %s has foreground %d, want %d", account, got, foreground)
 			}
 		}
+
 		return nil
 	})
 }
@@ -157,6 +174,7 @@ func (w *world) selectedRow(rows []accountRow) (accountRow, error) {
 			return row, nil
 		}
 	}
+
 	return accountRow{}, errors.New("no Accounts row is selected")
 }
 
@@ -172,6 +190,7 @@ func expectOrder(table *godog.Table) func(rows []accountRow) error {
 				return fmt.Errorf("row %d is not %q", i+1, tr.Cells[0].Value)
 			}
 		}
+
 		return nil
 	}
 }
@@ -182,6 +201,7 @@ func checkNotIndented(rows []accountRow) error {
 			return fmt.Errorf("row %q is indented", row.text)
 		}
 	}
+
 	return nil
 }
 
@@ -191,6 +211,7 @@ func checkAllHaveBalances(rows []accountRow) error {
 			return fmt.Errorf("row %q has no balance", row.text)
 		}
 	}
+
 	return nil
 }
 
@@ -202,6 +223,7 @@ func checkNoParents(rows []accountRow) error {
 			}
 		}
 	}
+
 	return nil
 }
 
@@ -212,6 +234,7 @@ func checkSameEndColumn(rows []accountRow) error {
 			return fmt.Errorf("row %q ends at %d, the first row at %d", row.text, width(row), width(rows[0]))
 		}
 	}
+
 	return nil
 }
 
@@ -221,6 +244,7 @@ func expectShows(account, balance string) func(rows []accountRow) error {
 		if err == nil && !strings.Contains(row.text, balance) {
 			err = fmt.Errorf("row %q does not show %q", row.text, balance)
 		}
+
 		return err
 	}
 }
@@ -253,6 +277,7 @@ func registerAccountsStyleSteps(sc *godog.ScenarioContext, w *world) {
 			if got := rows[len(rows)-1].name(); got != account {
 				return fmt.Errorf("the last row is %q", got)
 			}
+
 			return nil
 		})
 	})
@@ -261,12 +286,14 @@ func registerAccountsStyleSteps(sc *godog.ScenarioContext, w *world) {
 			if last := rows[len(rows)-1]; !strings.HasSuffix(strings.TrimSpace(last.text), text) {
 				return fmt.Errorf("the last row %q does not end in %q", last.text, text)
 			}
+
 			return nil
 		})
 	})
 	step(sc, `^the row is coloured (\d+)$`, func(want int) error {
 		return w.expectAccounts(func(rows []accountRow) error {
 			last := rows[len(rows)-1]
+
 			return w.expectRowColour(last.name(), last.name(), want, false)
 		})
 	})
@@ -281,11 +308,16 @@ func registerAccountsPagingSteps(sc *godog.ScenarioContext, w *world) {
 			if err == nil && selected.y-rows[0].y <= 1 {
 				err = fmt.Errorf("the selected row %q is not below the second row", selected.text)
 			}
+
 			return err
 		})
 	})
 	step(sc, `^the selected row is visible$`, func() error {
-		return w.expectAccounts(func(rows []accountRow) error { _, err := w.selectedRow(rows); return err })
+		return w.expectAccounts(func(rows []accountRow) error {
+			_, err := w.selectedRow(rows)
+
+			return err
+		})
 	})
 	step(sc, `^the last account is selected and visible$`, func() error {
 		return w.expectAccounts(func(rows []accountRow) error {
@@ -293,6 +325,7 @@ func registerAccountsPagingSteps(sc *godog.ScenarioContext, w *world) {
 			if err == nil && selected.y != rows[len(rows)-1].y {
 				err = fmt.Errorf("the selected row %q is not the last one shown", selected.text)
 			}
+
 			return err
 		})
 	})
@@ -300,12 +333,7 @@ func registerAccountsPagingSteps(sc *godog.ScenarioContext, w *world) {
 
 // declare appends account directives to the journal, as a hand edit would.
 func (w *world) declare(lines ...string) error {
-	f, err := os.OpenFile(w.journal, os.O_APPEND|os.O_WRONLY, 0o644)
-	if err != nil {
-		return err
-	}
-	_, werr := f.WriteString("\n" + strings.Join(lines, "\n") + "\n")
-	return errors.Join(werr, f.Close())
+	return w.appendToJournal("\n" + strings.Join(lines, "\n") + "\n")
 }
 
 // removeTags strips the tag comment off the named accounts' directives.
@@ -323,6 +351,7 @@ func (w *world) removeTags(accounts ...string) error {
 			}
 		}
 	}
+
 	return os.WriteFile(w.journal, []byte(strings.Join(lines, "\n")), 0o644)
 }
 
@@ -333,6 +362,7 @@ func (w *world) expectPopupRow(severity, account string) error {
 				return nil
 			}
 		}
+
 		return fmt.Errorf("no %s row names %s", severity, account)
 	})
 }
@@ -346,10 +376,12 @@ func (w *world) expectNotInPopup(text string) error {
 	}
 	w.waitLoaded(s)
 	s.settle(w.suite.timeout)
+
 	return w.withPopup(func(p popup) error {
 		if strings.Contains(strings.Join(p.rows, "\n"), text) {
 			return fmt.Errorf("the checks panel shows %q", text)
 		}
+
 		return nil
 	})
 }
@@ -358,6 +390,7 @@ func (w *world) withDeclared(name string, lines ...string) error {
 	if err := w.useJournal(name, ""); err != nil {
 		return err
 	}
+
 	return w.declare(lines...)
 }
 
@@ -370,12 +403,14 @@ func registerAccountsFixtureSteps(sc *godog.ScenarioContext, w *world) {
 		for i := range lines {
 			lines[i] = fmt.Sprintf("account assets:extra-%02d  ; konto:source:import, konto:iban:DE00%016d", i+1, i+1)
 		}
+
 		return w.withDeclared(name, lines...)
 	})
 	step(sc, `^the journal "([^"]*)" with the tags? removed from "([^"]*)"(?: and "([^"]*)")?$`, func(name, first, second string) error {
 		if err := w.useJournal(name, ""); err != nil {
 			return err
 		}
+
 		return w.removeTags(first, second)
 	})
 	step(sc, `^I see a "(WARN|ERR)" row naming "([^"]*)"$`, w.expectPopupRow)

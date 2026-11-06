@@ -48,6 +48,7 @@ func TestRulesReferencingReadsPostingsSeparatedByTabs(t *testing.T) {
 // A year file the main journal includes itself is read once: hledger must not see it twice.
 func TestWindowLeavesOutAYearFileTheMainJournalIncludes(t *testing.T) {
 	dir := windowDir(t, "2025.journal", "2026.journal")
+
 	main := filepath.Join(dir, "main.journal")
 	if err := os.WriteFile(main, []byte("include 2026.journal\n"), 0o644); err != nil {
 		t.Fatal(err)

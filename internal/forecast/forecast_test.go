@@ -15,7 +15,11 @@ import (
 
 var euroStyle = domain.DefaultAmount("EUR").Style
 
-func day(s string) time.Time { d, _ := time.Parse(time.DateOnly, s); return d }
+func day(s string) time.Time {
+	d, _ := time.Parse(time.DateOnly, s)
+
+	return d
+}
 
 func amount(commodity string, mantissa int64) domain.Amount {
 	return domain.Amount{Commodity: commodity, Mantissa: mantissa, Places: 2, Style: euroStyle}
@@ -32,6 +36,7 @@ func (f *fakeGateway) Projection(_ context.Context, query domain.ProjectionQuery
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.queries = append(f.queries, query)
+
 	return f.projections[query.Account], f.err
 }
 
@@ -39,6 +44,7 @@ func (f *fakeGateway) Projection(_ context.Context, query domain.ProjectionQuery
 func (f *fakeGateway) asked() []domain.ProjectionQuery {
 	queries := slices.Clone(f.queries)
 	slices.SortFunc(queries, func(a, b domain.ProjectionQuery) int { return strings.Compare(a.Account, b.Account) })
+
 	return queries
 }
 
@@ -50,6 +56,7 @@ func months(ends []string, balances ...domain.MultiAmount) domain.Projection {
 	for _, end := range ends {
 		projection.Ends = append(projection.Ends, day(end))
 	}
+
 	return projection
 }
 
@@ -82,6 +89,7 @@ func TestForecastProjectsEachOpenAccountByName(t *testing.T) {
 	for _, query := range gw.asked() {
 		names = append(names, query.Account)
 	}
+
 	want := []string{"assets:cash", "assets:checking", "assets:savings", "liabilities:creditcard"}
 	if !reflect.DeepEqual(names, want) {
 		t.Errorf("projected %v, want %v: no closed, clearing or category account", names, want)
@@ -108,6 +116,7 @@ func TestForecastStartsAnImportFedAccountAfterItsWatermarkAndOthersToday(t *test
 			t.Errorf("%s counts rules from %v, want %s", account, from[account], want)
 		}
 	}
+
 	first := gw.asked()[0]
 	if !first.Begin.Equal(day("2026-03-30")) || !first.ForecastTo.Equal(day("2027-09-30")) {
 		t.Errorf("query = %+v, want six months back and twelve ahead", first)
@@ -128,6 +137,7 @@ func multiCurrency(t *testing.T) Forecast {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	return got
 }
 
@@ -152,9 +162,11 @@ func TestLinesRankByAccountNameAndAreZeroBeforeTheAccountHasABalance(t *testing.
 	if cash.Rank != 0 || euros.Lines[1].Rank != 1 {
 		t.Errorf("ranks = %d, %d; want each account's place by name", cash.Rank, euros.Lines[1].Rank)
 	}
+
 	if first := cash.Points[0].Balance; first.Mantissa != 0 || first.Commodity != "EUR" || first.Style != euroStyle {
 		t.Errorf("before the account has a balance the line is a zero in the same style, got %+v", first)
 	}
+
 	if cash.Points[1].Balance.Mantissa != 7 {
 		t.Errorf("points = %+v", cash.Points)
 	}
@@ -178,6 +190,7 @@ func TestForecastTakesTheMilestonesFromTheMonthsThatEndOnThoseDays(t *testing.T)
 	for _, milestone := range got.Charts[0].Lines[0].Milestones {
 		mantissas = append(mantissas, milestone.Mantissa)
 	}
+
 	if want := []int64{200, 500, 600, 700}; !reflect.DeepEqual(mantissas, want) {
 		t.Errorf("milestones = %v, want %v (today, +3, +6, +12 months)", mantissas, want)
 	}
@@ -255,6 +268,7 @@ func TestAnAccountThatNeverHeldAnythingIsAFlatZeroLineInTheLedgersCurrency(t *te
 	if err != nil || len(got.Charts) != 1 || len(got.Charts[0].Lines) != 2 {
 		t.Fatalf("charts = %+v, %v", got.Charts, err)
 	}
+
 	if line := got.Charts[0].Lines[1]; line.Account != "assets:new" || line.Points[0].Balance.Mantissa != 0 ||
 		line.Points[0].Balance.Style != euroStyle {
 		t.Errorf("line = %+v", line)

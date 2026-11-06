@@ -42,21 +42,31 @@ type invocation struct {
 
 func main() {
 	call := invoked()
-	args := call.Args
 	if err := record(os.Getenv("KONTO_E2E_SHIM_LOG"), call); err != nil {
 		fail(err)
 	}
+
 	cfg, err := load(os.Getenv("KONTO_E2E_SHIM_CONFIG"))
 	if err != nil {
 		fail(err)
 	}
 	time.Sleep(time.Duration(cfg.DelayMs) * time.Millisecond)
 
+	if fake(cfg, call.Args) {
+		return
+	}
+
+	handOver(os.Getenv("KONTO_E2E_REAL_HLEDGER"), call)
+}
+
+// fake answers the call as the config scripts it, exiting on a scripted failure; false leaves it to hledger.
+func fake(cfg shimconf.Config, args []string) bool {
 	isVersion := slices.Contains(args, "--version")
 	switch {
 	case isVersion && cfg.Version != "":
 		fmt.Printf("hledger %s, linux-x86_64\n", cfg.Version)
-		return
+
+		return true
 	case cfg.Fail != "" && !isVersion:
 		fmt.Fprintln(os.Stderr, cfg.Fail)
 		os.Exit(1)
@@ -65,10 +75,11 @@ func main() {
 		os.Exit(1)
 	case slices.ContainsFunc(cfg.GarbageFor, func(c string) bool { return slices.Contains(args, c) }):
 		fmt.Println("}{ not json, not hledger ]]")
-		return
+
+		return true
 	}
 
-	handOver(os.Getenv("KONTO_E2E_REAL_HLEDGER"), call)
+	return false
 }
 
 // invoked is this call: its arguments, and for `-f -` the stdin, read up.
@@ -81,6 +92,7 @@ func invoked() invocation {
 		}
 		call.Stdin = string(input)
 	}
+
 	return call
 }
 
@@ -100,6 +112,7 @@ func readsStdin(args []string) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -107,13 +120,16 @@ func readsStdin(args []string) bool {
 func runFed(bin string, args []string, input string) int {
 	cmd := exec.CommandContext(context.Background(), bin, args...)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = strings.NewReader(input), os.Stdout, os.Stderr
+
 	err := cmd.Run()
 	if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
 		return exitErr.ExitCode()
 	}
+
 	if err != nil {
 		fail(fmt.Errorf("run real hledger: %w", err))
 	}
+
 	return 0
 }
 
@@ -126,10 +142,12 @@ func record(path string, call invocation) (err error) {
 	if path == "" {
 		return nil
 	}
+
 	line, err := json.Marshal(call)
 	if err != nil {
 		return fmt.Errorf("encode call: %w", err)
 	}
+
 	callLog, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
 		return fmt.Errorf("open call log: %w", err)
@@ -139,9 +157,11 @@ func record(path string, call invocation) (err error) {
 			err = fmt.Errorf("close call log: %w", cerr)
 		}
 	}()
+
 	if _, err := callLog.Write(append(line, '\n')); err != nil {
 		return fmt.Errorf("write call log: %w", err)
 	}
+
 	return nil
 }
 
@@ -150,17 +170,21 @@ func load(path string) (shimconf.Config, error) {
 	if path == "" {
 		return cfg, nil
 	}
+
 	b, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
 		return cfg, nil
 	}
+
 	if err != nil {
 		return cfg, fmt.Errorf("read config: %w", err)
 	}
 	dec := json.NewDecoder(bytes.NewReader(b))
 	dec.DisallowUnknownFields() // a field the harness writes but the shim lacks would be ignored silently
+
 	if err := dec.Decode(&cfg); err != nil {
 		return cfg, fmt.Errorf("parse config: %w", err)
 	}
+
 	return cfg, nil
 }

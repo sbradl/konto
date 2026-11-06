@@ -18,6 +18,7 @@ type countingLoader struct{ loads *int }
 
 func (c countingLoader) Load(context.Context) (domain.Ledger, error) {
 	*c.loads++
+
 	return ledgerWith(*c.loads), nil
 }
 
@@ -26,6 +27,7 @@ type countingReporter struct{ builds *int }
 
 func (c countingReporter) Report(_ context.Context, period domain.ReportPeriod) (domain.Report, error) {
 	*c.builds++
+
 	return domain.Report{Period: period, IncomeStatement: []domain.ReportRow{
 		{Kind: domain.RowLeaf, Label: fmt.Sprintf("build %d", *c.builds)},
 	}}, nil
@@ -36,6 +38,7 @@ type countingForecaster struct{ builds *int }
 
 func (c countingForecaster) Forecast(context.Context, domain.Ledger) (forecastsvc.Forecast, error) {
 	*c.builds++
+
 	return oneChart(fmt.Sprintf("B%d", *c.builds)), nil
 }
 
@@ -44,6 +47,7 @@ func commands(cmd tea.Cmd) []tea.Cmd {
 	if batch, ok := cmd().(tea.BatchMsg); ok {
 		return batch
 	}
+
 	return []tea.Cmd{cmd}
 }
 
@@ -53,6 +57,7 @@ func run(cmds []tea.Cmd) []tea.Msg {
 	for i, cmd := range cmds {
 		msgs[i] = cmd()
 	}
+
 	return msgs
 }
 
@@ -64,6 +69,7 @@ func generationModel(t *testing.T) Model {
 		Reports: countingReporter{&reports}, Forecast: countingForecaster{&forecasts},
 	})
 	updated, _ := model.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+
 	return deliver(updated.(Model), model.Init())
 }
 
@@ -120,6 +126,7 @@ func TestReportsAndForecastsOfAnOlderReloadAreDropped(t *testing.T) {
 	if content := uitest.Plain(model.View().Content); !strings.Contains(content, "build 3") {
 		t.Errorf("reports view:\n%s", content)
 	}
+
 	model, _ = press(model, "4")
 	if content := uitest.Plain(model.View().Content); !strings.Contains(content, "╭─ B3 ") {
 		t.Errorf("forecast view:\n%s", content)

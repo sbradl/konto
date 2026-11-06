@@ -24,9 +24,11 @@ func readAmount(text string) (number, symbol string, ok bool) {
 	if match := rightAmount.FindStringSubmatch(text); match != nil {
 		return match[1], match[2], true
 	}
+
 	if match := leftAmount.FindStringSubmatch(text); match != nil {
 		return match[2], match[1], true
 	}
+
 	return "", "", false
 }
 
@@ -44,60 +46,73 @@ func parseRule(lines []string) (parsed, bool) {
 	if len(lines) != 3 || strings.Contains(strings.Join(lines, "\n"), ";") {
 		return parsed{}, false
 	}
-	var found parsed
-	if !readHeader(lines[0], &found) {
+
+	found, ok := readHeader(lines[0])
+	if !ok {
 		return parsed{}, false
 	}
+
 	return readPostings(lines[1], lines[2], found)
 }
 
 // readHeader reads the `~` line: the period, the dates and the description.
-func readHeader(line string, into *parsed) bool {
+func readHeader(line string) (parsed, bool) {
 	if match := onceHeader.FindStringSubmatch(line); match != nil {
-		into.input = Input{Frequency: Once, Date: match[1], Description: match[2]}
-		return true
+		return parsed{input: Input{Frequency: Once, Date: match[1], Description: match[2]}}, true
 	}
+
 	match := periodHeader.FindStringSubmatch(line)
 	if match == nil {
-		return false
+		return parsed{}, false
 	}
 	frequency, _ := frequencyOf(match[1])
-	into.input = Input{Frequency: frequency, Date: match[2], Description: match[4]}
+
+	found := parsed{input: Input{Frequency: frequency, Date: match[2], Description: match[4]}}
 	if match[3] != "" {
-		into.until, _ = time.Parse(time.DateOnly, match[3])
+		found.until, _ = time.Parse(time.DateOnly, match[3])
 	}
-	return true
+
+	return found, true
 }
 
 // readPostings reads the two postings: one has the amount, the sign of which says which is the account the
 // money comes from and which the one it goes to.
 func readPostings(first, second string, found parsed) (parsed, bool) {
-	accounts, amounts := [2]string{}, [2]string{}
-	for i, line := range [2]string{first, second} {
-		match := postingLine.FindStringSubmatch(line)
-		if match == nil {
-			return parsed{}, false
-		}
-		accounts[i], amounts[i] = match[1], match[2]
-	}
-	if (amounts[0] == "") == (amounts[1] == "") {
+	accounts, amounts, ok := splitPostings(first, second)
+	if !ok || (amounts[0] == "") == (amounts[1] == "") {
 		return parsed{}, false
 	}
+
 	which := 0
 	if amounts[0] == "" {
 		which = 1
 	}
+
 	signed, symbol, ok := readAmount(amounts[which])
 	if !ok {
 		return parsed{}, false
 	}
 	number, negative := strings.CutPrefix(signed, "-")
 	found.input.Amount, found.input.Currency = number, symbol
-	other := accounts[1-which]
+
+	from, to := accounts[1-which], accounts[which]
 	if negative {
-		found.input.From, found.input.To = accounts[which], other
-	} else {
-		found.input.From, found.input.To = other, accounts[which]
+		from, to = to, from
 	}
+	found.input.From, found.input.To = from, to
+
 	return found, true
+}
+
+// splitPostings is the account and the amount text of each of the two posting lines.
+func splitPostings(first, second string) (accounts, amounts [2]string, ok bool) {
+	for i, line := range [2]string{first, second} {
+		match := postingLine.FindStringSubmatch(line)
+		if match == nil {
+			return accounts, amounts, false
+		}
+		accounts[i], amounts[i] = match[1], match[2]
+	}
+
+	return accounts, amounts, true
 }

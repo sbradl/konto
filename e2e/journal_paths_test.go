@@ -36,11 +36,13 @@ func (w *world) startWithSources(invocation string) error {
 	if strings.Contains(invocation, "--file") {
 		args = []string{"--file", w.sourcePath(sourceFlag)}
 	}
+
 	if strings.Contains(invocation, "$LEDGER_FILE") {
 		w.env["LEDGER_FILE"] = w.sourcePath(sourceEnv)
 	} else {
 		w.unset["LEDGER_FILE"] = true
 	}
+
 	return w.start(args...)
 }
 
@@ -51,6 +53,7 @@ func registerJournalPathSteps(sc *godog.ScenarioContext, w *world) {
 				return err
 			}
 		}
+
 		return nil
 	})
 	step(sc, `^I start konto with (--file flag and \$LEDGER_FILE set|only \$LEDGER_FILE set|nothing set)$`, w.startWithSources)
@@ -59,10 +62,12 @@ func registerJournalPathSteps(sc *godog.ScenarioContext, w *world) {
 		if err != nil {
 			return err
 		}
+
 		return os.WriteFile(filepath.Join(w.dir, path), content, 0o644)
 	})
 	step(sc, `^the tab bar shows an absolute path ending in "([^"]*)"$`, func(suffix string) error {
 		absolute := regexp.MustCompile(`\s/\S*` + regexp.QuoteMeta(suffix) + `(\s|$)`)
+
 		return w.expectLine(0, "tab bar", "", func(line, _ string) bool { return absolute.MatchString(line) })
 	})
 	step(sc, `^the tab bar shows the path of (flag|env|default)$`, func(winner string) error {
@@ -70,6 +75,7 @@ func registerJournalPathSteps(sc *godog.ScenarioContext, w *world) {
 			winner = sourceDefault
 		}
 		path := w.sourcePath(winner)
+
 		return w.expectLine(0, "tab bar", path, strings.Contains)
 	})
 }

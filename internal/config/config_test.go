@@ -13,10 +13,12 @@ func env(vars map[string]string) Environment {
 
 func mustResolve(t *testing.T, args []string, vars map[string]string) Config {
 	t.Helper()
+
 	cfg, err := Resolve(args, env(vars))
 	if err != nil {
 		t.Fatalf("Resolve(%v) failed: %v", args, err)
 	}
+
 	return cfg
 }
 

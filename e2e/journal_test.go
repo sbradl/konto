@@ -34,6 +34,7 @@ func containsBlock(text, want string) bool {
 		for i, l := range lines {
 			lines[i] = normaliseLine(l)
 		}
+
 		return lines
 	}
 	have := norm(text)
@@ -43,6 +44,7 @@ func containsBlock(text, want string) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -52,6 +54,7 @@ func equalLines(a, b []string) bool {
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -71,6 +74,7 @@ func hledgerOn(hledger, journal string, args ...string) *exec.Cmd {
 	}
 	cmd := exec.CommandContext(context.Background(), hledger, append([]string{"-f", "-"}, args...)...)
 	cmd.Stdin = strings.NewReader(includes.String())
+
 	return cmd
 }
 
@@ -91,8 +95,10 @@ func runChecks(hledger, journal string, individually bool) error {
 			failures = append(failures, fmt.Sprintf("check %s: %s", strings.Join(g, " "), strings.TrimSpace(string(out))))
 		}
 	}
+
 	if len(failures) > 0 {
 		return fmt.Errorf("hledger checks failed:\n%s", strings.Join(failures, "\n"))
 	}
+
 	return nil
 }

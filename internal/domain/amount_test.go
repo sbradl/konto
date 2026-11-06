@@ -59,6 +59,7 @@ func TestMultiAmountExtraCount(t *testing.T) {
 	if got := (MultiAmount{}).ExtraCount(); got != 0 {
 		t.Errorf("empty ExtraCount = %d, want 0", got)
 	}
+
 	if got := (MultiAmount{eur(1), eur(2)}).ExtraCount(); got != 1 {
 		t.Errorf("two-commodity ExtraCount = %d, want 1", got)
 	}
@@ -101,6 +102,7 @@ func TestMultiAmountPlusAddsCommodityWise(t *testing.T) {
 	if want := (MultiAmount{eur(350), pln}); !reflect.DeepEqual(got, want) {
 		t.Errorf("Plus = %+v, want %+v", got, want)
 	}
+
 	if got := MultiAmount(nil).Plus(MultiAmount{eur(1)}); !reflect.DeepEqual(got, MultiAmount{eur(1)}) {
 		t.Errorf("nil.Plus = %+v", got)
 	}
@@ -167,19 +169,17 @@ func TestValueIsTheSameHoweverTheAmountIsStyled(t *testing.T) {
 
 func TestParseNumberReadsThePlacesTheStyleHas(t *testing.T) {
 	for text, want := range map[string]int64{
-		"1.234,5": 123450, "12": 1200, "-0,07": -7, "3.100,00": 310000, "0,5": 50, "1,234": 0,
+		"1.234,5": 123450, "12": 1200, "-0,07": -7, "3.100,00": 310000, "0,5": 50,
 	} {
 		got, err := ParseNumber(text, ",", ".", 2)
 
-		if text == "1,234" {
-			if err == nil {
-				t.Errorf("ParseNumber(%q) = %d, want too many decimals", text, got)
-			}
-			continue
-		}
 		if err != nil || got != want {
 			t.Errorf("ParseNumber(%q) = %d, %v; want %d", text, got, err, want)
 		}
+	}
+
+	if got, err := ParseNumber("1,234", ",", ".", 2); err == nil {
+		t.Errorf("ParseNumber(\"1,234\") = %d, want too many decimals", got)
 	}
 }
 
@@ -215,6 +215,7 @@ func TestFormatAlwaysShowsAtLeastTwoDecimalsAndKeepsFinerOnes(t *testing.T) {
 		if got := amount.Format(); got != c.want {
 			t.Errorf("%d at %d places = %q, want %q", c.mantissa, c.places, got, c.want)
 		}
+
 		if got := (MultiAmount{amount}).Format(); got != c.want {
 			t.Errorf("as a multi-amount: %q, want %q", got, c.want)
 		}

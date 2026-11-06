@@ -185,6 +185,7 @@ func (r repo) check() []string {
 		l, known := layers[p.dir]
 		if !known {
 			out = append(out, p.dir+": unclassified package; add it to archtest layers deliberately (spec §3)")
+
 			continue
 		}
 		for _, gf := range p.files {
@@ -194,6 +195,7 @@ func (r repo) check() []string {
 			out = append(out, checkColours(f)...)
 		}
 	}
+
 	return out
 }
 
@@ -210,10 +212,12 @@ func (r repo) checkImports(f file) []string {
 		default:
 			problem = thirdPartyImportProblem(f, imp)
 		}
+
 		if problem != "" {
 			out = append(out, f.where+": "+problem)
 		}
 	}
+
 	return out
 }
 
@@ -221,9 +225,11 @@ func kontoImportProblem(f file, dep string) string {
 	if dep == f.dir {
 		return "" // external test package importing its own package
 	}
+
 	if depLayer, known := layers[dep]; known && slices.Contains(mayImport[f.layer], depLayer) {
 		return ""
 	}
+
 	return fmt.Sprintf("%s must not import %s (ADR 0003)", layerNames[f.layer], dep)
 }
 
@@ -234,6 +240,7 @@ func stdlibImportProblem(f file, imp string) string {
 	case !f.test && slices.Contains(forbiddenStdlib[f.layer], imp):
 		return fmt.Sprintf("%s must not import %s; it does no I/O", layerNames[f.layer], imp)
 	}
+
 	return ""
 }
 
@@ -244,6 +251,7 @@ func thirdPartyImportProblem(f file, imp string) string {
 	case hasModulePrefix(imp, charmV2):
 		return fmt.Sprintf("%s must not import %s; Charm is confined to internal/ui and cmd", layerNames[f.layer], imp)
 	}
+
 	return fmt.Sprintf("third-party import %s not allowed in %s (spec §1)", imp, layerNames[f.layer])
 }
 
@@ -251,6 +259,7 @@ func checkClock(f file) []string {
 	if f.test || !slices.Contains(clockFree, f.layer) {
 		return nil
 	}
+
 	name := localName(f.ast, "time")
 	if name == "" {
 		return nil
@@ -261,8 +270,10 @@ func checkClock(f file) []string {
 			out = append(out, fmt.Sprintf("%s: %s reads time.Now; inject today func() domain.Date (ADR 0012)",
 				f.where, layerNames[f.layer]))
 		}
+
 		return true
 	})
+
 	return out
 }
 
@@ -280,11 +291,14 @@ func checkColours(f file) []string {
 		case *ast.CallExpr:
 			problem = colourCallProblem(f.dir, lipgloss, n)
 		}
+
 		if problem != "" {
 			out = append(out, f.where+": "+problem)
 		}
+
 		return true
 	})
+
 	return out
 }
 
@@ -292,9 +306,11 @@ func hexLiteralProblem(lit *ast.BasicLit) string {
 	if lit.Kind != token.STRING {
 		return ""
 	}
+
 	if s, err := strconv.Unquote(lit.Value); err == nil && hexColour.MatchString(s) {
 		return fmt.Sprintf("hex colour %q; use ANSI-16 indices (ADR 0005)", s)
 	}
+
 	return ""
 }
 
@@ -307,6 +323,7 @@ func colourCallProblem(dir, lipgloss string, call *ast.CallExpr) string {
 	case !isANSIIndex(call.Args):
 		return "lipgloss.Color takes a literal ANSI index \"0\"–\"15\" (ADR 0005)"
 	}
+
 	return ""
 }
 
@@ -314,12 +331,14 @@ func isANSIIndex(args []ast.Expr) bool {
 	if len(args) != 1 {
 		return false
 	}
+
 	lit, ok := args[0].(*ast.BasicLit)
 	if !ok || lit.Kind != token.STRING {
 		return false
 	}
 	s, _ := strconv.Unquote(lit.Value)
 	i, err := strconv.Atoi(s)
+
 	return err == nil && i >= 0 && i <= 15 && strconv.Itoa(i) == s
 }
 
@@ -329,6 +348,7 @@ func isSelector(n ast.Node, pkgName, sel string) bool {
 		return false
 	}
 	id, ok := s.X.(*ast.Ident)
+
 	return ok && id.Name == pkgName
 }
 
@@ -339,16 +359,20 @@ func localName(f *ast.File, importPath string) string {
 		if imp, _ := strconv.Unquote(spec.Path.Value); imp != importPath {
 			continue
 		}
+
 		if spec.Name != nil {
 			return spec.Name.Name
 		}
+
 		return path.Base(strings.TrimSuffix(importPath, "/v2"))
 	}
+
 	return ""
 }
 
 func isStdlib(imp string) bool {
 	first, _, _ := strings.Cut(imp, "/")
+
 	return !strings.Contains(first, ".")
 }
 
@@ -358,6 +382,7 @@ func hasModulePrefix(imp string, modules []string) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -365,6 +390,7 @@ func hasModulePrefix(imp string, modules []string) bool {
 func loadRepo(t *testing.T) repo {
 	t.Helper()
 	root := moduleRoot(t)
+
 	pkgs, err := parsePackages(root)
 	if err != nil {
 		t.Fatal(err)
@@ -375,11 +401,13 @@ func loadRepo(t *testing.T) repo {
 			r.pkgs = append(r.pkgs, p)
 		}
 	}
+
 	return r
 }
 
 func modulePath(t *testing.T, root string) string {
 	t.Helper()
+
 	mod, err := os.ReadFile(filepath.Join(root, "go.mod"))
 	if err != nil {
 		t.Fatal(err)
@@ -390,6 +418,7 @@ func modulePath(t *testing.T, root string) string {
 		}
 	}
 	t.Fatal("no module line in go.mod")
+
 	return ""
 }
 
@@ -408,11 +437,13 @@ func parsePackages(root string) ([]pkg, error) {
 		case d.IsDir() || !strings.HasSuffix(p, ".go"):
 			return nil
 		}
+
 		parsed, err := parser.ParseFile(fset, p, nil, parser.SkipObjectResolution)
 		if err != nil {
 			return err
 		}
 		rel, _ := filepath.Rel(root, filepath.Dir(p))
+
 		dir := filepath.ToSlash(rel)
 		if _, seen := index[dir]; !seen {
 			index[dir] = len(pkgs)
@@ -420,8 +451,10 @@ func parsePackages(root string) ([]pkg, error) {
 		}
 		gf := goFile{name: d.Name(), test: strings.HasSuffix(p, "_test.go"), ast: parsed}
 		pkgs[index[dir]].files = append(pkgs[index[dir]].files, gf)
+
 		return nil
 	})
+
 	return pkgs, err
 }
 
@@ -431,6 +464,7 @@ func ignoredDir(name string) bool {
 
 func moduleRoot(t *testing.T) string {
 	t.Helper()
+
 	dir, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
@@ -439,6 +473,7 @@ func moduleRoot(t *testing.T) string {
 		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
 			return dir
 		}
+
 		parent := filepath.Dir(dir)
 		if parent == dir {
 			t.Fatal("go.mod not found above the test directory")
@@ -471,6 +506,7 @@ func TestLoaderFindsKnownPackages(t *testing.T) {
 			t.Errorf("loader missed %s; saw %v", want, dirs)
 		}
 	}
+
 	if slices.Contains(dirs, "internal/archtest") {
 		t.Error("loader must skip archtest itself")
 	}
@@ -480,10 +516,12 @@ const testModule = "github.com/sbradl/konto"
 
 func fakeRepo(t *testing.T, dir, file, src string) repo {
 	t.Helper()
+
 	f, err := parser.ParseFile(token.NewFileSet(), file, src, parser.SkipObjectResolution)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	return repo{module: testModule, pkgs: []pkg{{dir: dir, files: []goFile{{name: file, test: strings.HasSuffix(file, "_test.go"), ast: f}}}}}
 }
 
@@ -494,6 +532,7 @@ func imports(pkgName string, paths ...string) string {
 		fmt.Fprintf(&b, "\t_ %q\n", p)
 	}
 	b.WriteString(")\n")
+
 	return b.String()
 }
 

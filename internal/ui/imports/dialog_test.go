@@ -27,6 +27,7 @@ func categorisable() csvimport.Staged {
 		{Name: "expenses:books"},
 		{Name: "income:salary"},
 	}
+
 	return s
 }
 
@@ -37,6 +38,7 @@ func keys(m Model, names ...string) Model {
 	for _, name := range names {
 		m, _ = m.Key(name)
 	}
+
 	return m
 }
 
@@ -45,6 +47,7 @@ func typed(m Model, text string) Model {
 	for _, r := range text {
 		m, _ = m.Key(string(r))
 	}
+
 	return m
 }
 
@@ -56,6 +59,7 @@ func onRow(m Model, n int) Model {
 		m, _ = m.Key("down")
 	}
 	m, _ = m.Key("enter")
+
 	return m
 }
 
@@ -66,10 +70,12 @@ func TestEnterOffersNewRuleAddToRuleAndOnceOnAQuestionRowAndOnlyOnceOnAMatchedRo
 			t.Errorf("popup lacks %q:\n%s", want, question)
 		}
 	}
+
 	matched := screen(onRow(categorising(), 0))
 	if strings.Contains(matched, "new rule") || !strings.Contains(matched, "once") {
 		t.Errorf("a matched row offers only once:\n%s", matched)
 	}
+
 	if !strings.Contains(matched, "╭─ ROWS ") {
 		t.Error("the table is hidden by the popup")
 	}
@@ -87,10 +93,12 @@ func TestEscClosesTheDialogAndChangesNothing(t *testing.T) {
 	if !m.Capturing() {
 		t.Fatal("the popup is not capturing keys")
 	}
+
 	m = keys(m, "esc")
 	if m.Capturing() || strings.Contains(screen(m), "─ categorise ") {
 		t.Error("Esc did not close the popup")
 	}
+
 	if got := m.staged.Rows[1].Target; got != "" {
 		t.Errorf("target = %q", got)
 	}
@@ -101,9 +109,11 @@ func TestChoicesAreMovedWithTheArrowKeysAndClamped(t *testing.T) {
 	if m.dlg.cursor.Row != 2 {
 		t.Errorf("cursor = %d, want 2", m.dlg.cursor.Row)
 	}
+
 	if m = keys(m, "home"); m.dlg.cursor.Row != 0 {
 		t.Errorf("home: cursor = %d", m.dlg.cursor.Row)
 	}
+
 	if m = keys(m, "end"); m.dlg.cursor.Row != 3 {
 		t.Errorf("end: cursor = %d", m.dlg.cursor.Row)
 	}
@@ -116,10 +126,12 @@ func TestOnceOpensThePickerAndPickingCategorisesOnlyThatRow(t *testing.T) {
 	}
 	m = typed(m, "expenses:books")
 	m = keys(m, "enter")
+
 	row := m.staged.Rows[2]
 	if m.Capturing() || row.Target != "expenses:books" || row.RuleID != "" || !row.Once {
 		t.Errorf("row = %+v, capturing %v", row, m.Capturing())
 	}
+
 	if !strings.Contains(screen(m), "1 need a category") {
 		t.Errorf("summary:\n%s", screen(m))
 	}
@@ -131,12 +143,14 @@ func TestThePickerFiltersAndOffersCreateWhenNothingMatches(t *testing.T) {
 		!strings.Contains(view, "assets:savings  (transfer)") {
 		t.Errorf("empty filter shows everything and + create:\n%s", view)
 	}
+
 	m = typed(m, "gro")
 	if view := screen(m); !strings.Contains(view, "expenses:groceries") || strings.Contains(view, "expenses:books") ||
 		strings.Contains(view, "+ create") {
 		t.Errorf("filtered:\n%s", view)
 	}
 	m = keys(m, "backspace", "backspace", "backspace")
+
 	m = typed(m, "coffee")
 	if view := screen(m); !strings.Contains(view, "+ create expenses:coffee") {
 		t.Errorf("no suggestion:\n%s", view)
@@ -145,10 +159,12 @@ func TestThePickerFiltersAndOffersCreateWhenNothingMatches(t *testing.T) {
 
 func TestCreatingACategoryStagesItAndPostsTheRowToIt(t *testing.T) {
 	m := typed(keys(onRow(categorising(), 2), "down", "down", "enter"), "coffee")
+
 	m = keys(m, "enter")
 	if m.staged.Rows[2].Target != "expenses:coffee" || len(m.staged.NewAccounts) != 1 {
 		t.Errorf("row %+v, new accounts %v", m.staged.Rows[2], m.staged.NewAccounts)
 	}
+
 	if !strings.Contains(screen(m), "account expenses:coffee") {
 		t.Errorf("the staged line does not list the directive:\n%s", screen(m))
 	}
@@ -156,13 +172,16 @@ func TestCreatingACategoryStagesItAndPostsTheRowToIt(t *testing.T) {
 
 func TestACategoryWhoseLeafExistsIsRefusedAndTheDialogStaysOpen(t *testing.T) {
 	m := typed(keys(onRow(categorising(), 2), "down", "down", "enter"), "income:groceries")
+
 	m = keys(m, "enter")
 	if view := screen(m); !strings.Contains(view, "refused: ") || !strings.Contains(view, "groceries") {
 		t.Errorf("no refusal:\n%s", view)
 	}
+
 	if m.staged.Rows[2].Target != "" {
 		t.Error("the row was categorised")
 	}
+
 	if m = typed(m, "x"); strings.Contains(screen(m), "refused: ") {
 		t.Error("typing did not clear the refusal")
 	}
@@ -177,10 +196,12 @@ func TestTheCategoryListCursorMovesAndSelectsACandidate(t *testing.T) {
 
 func newRule(t *testing.T) Model {
 	t.Helper()
+
 	m := keys(onRow(categorising(), 2), "enter")
 	if !strings.Contains(screen(m), "─ new rule ") {
 		t.Fatalf("no form:\n%s", screen(m))
 	}
+
 	return m
 }
 
@@ -191,10 +212,12 @@ func TestTheNewRuleFormIsPrefilledAndCountsTheRowsItMatches(t *testing.T) {
 			t.Errorf("form lacks %q:\n%s", want, view)
 		}
 	}
+
 	m := keys(newRule(t), "ctrl+u")
 	if !strings.Contains(screen(m), "enter a pattern") {
 		t.Errorf("an empty pattern is not asked for:\n%s", screen(m))
 	}
+
 	m = typed(m, "e")
 	if view := screen(m); !strings.Contains(view, "would take 1 row from rule 2") || !strings.Contains(view, "saving is blocked") {
 		t.Errorf("no overlap warning:\n%s", view)
@@ -203,19 +226,23 @@ func TestTheNewRuleFormIsPrefilledAndCountsTheRowsItMatches(t *testing.T) {
 
 func TestTheFormTakesAPurposeAndACategoryThenStagesTheRule(t *testing.T) {
 	m := keys(newRule(t), "tab")
+
 	m = typed(m, "Zeit")
 	if !strings.Contains(screen(m), "& %purpose Zeit") {
 		t.Errorf("purpose condition missing:\n%s", screen(m))
 	}
+
 	m = keys(m, "tab")
 	if !strings.Contains(screen(m), "─ category ") {
 		t.Fatalf("Tab onto the category did not open the picker:\n%s", screen(m))
 	}
+
 	m = keys(typed(m, "expenses:books"), "enter")
 	if !strings.Contains(screen(m), "expenses:books") || !strings.Contains(screen(m), "─ new rule ") {
 		t.Fatalf("the form did not come back with the category:\n%s", screen(m))
 	}
 	m = keys(m, "enter")
+
 	row := m.staged.Rows[2]
 	if m.Capturing() || row.RuleID != "3" || row.Target != "expenses:books" || !strings.Contains(screen(m), "rule 3") {
 		t.Errorf("row %+v, capturing %v:\n%s", row, m.Capturing(), screen(m))
@@ -227,10 +254,12 @@ func TestFocusMovesBothWaysAndWraps(t *testing.T) {
 	if !strings.Contains(screen(m), "─ category ") {
 		t.Errorf("Shift+Tab from the pattern should wrap to the category:\n%s", screen(m))
 	}
+
 	m = keys(m, "esc")
 	if m.mode != modeRuleForm || m.waiting != nil {
 		t.Errorf("Esc in the picker should go back to the form: %+v", m.dlg)
 	}
+
 	m = keys(m, "down", "up", "up")
 	if !strings.Contains(screen(m), "─ category ") {
 		t.Errorf("up from the pattern wraps to the category:\n%s", screen(m))
@@ -242,10 +271,12 @@ func TestConfirmingWithoutAPatternOrCategoryIsRefused(t *testing.T) {
 	if !strings.Contains(screen(m), "refused: choose a category") || len(m.staged.StagedRules()) != 0 {
 		t.Errorf("no refusal:\n%s", screen(m))
 	}
+
 	m = keys(m, "ctrl+u", "enter")
 	if !strings.Contains(screen(m), "the pattern is required") {
 		t.Errorf("no pattern refusal:\n%s", screen(m))
 	}
+
 	if m = keys(m, "backspace"); strings.Contains(screen(m), "refused:") {
 		t.Error("editing did not clear the refusal")
 	}
@@ -254,6 +285,7 @@ func TestConfirmingWithoutAPatternOrCategoryIsRefused(t *testing.T) {
 func TestAnOverlappingRuleIsRefusedNamingTheOtherRule(t *testing.T) {
 	m := keys(newRule(t), "ctrl+u")
 	m = typed(m, "REWE")
+
 	m = keys(typed(keys(m, "tab", "tab"), "expenses:books"), "enter", "enter")
 	if view := screen(m); !strings.Contains(view, "refused: rule 2") {
 		t.Errorf("no refusal:\n%s", view)
@@ -262,22 +294,27 @@ func TestAnOverlappingRuleIsRefusedNamingTheOtherRule(t *testing.T) {
 
 func TestAddToRuleListsTheRulesFiltersThemAndWidensTheOneChosen(t *testing.T) {
 	m := keys(onRow(categorising(), 2), "down", "enter")
+
 	view := screen(m)
 	if !strings.Contains(view, "─ add to rule ") || !strings.Contains(view, "#2   expenses:groceries") {
 		t.Fatalf("no rule list:\n%s", view)
 	}
+
 	if m2 := typed(m, "zzz"); len(m2.ruleChoices()) != 0 {
 		t.Errorf("the filter kept %v", m2.ruleChoices())
 	}
+
 	if m2 := keys(typed(m, "zzz"), "enter"); m2.mode != modeRuleList {
 		t.Error("Enter on an empty list moved on")
 	}
 	m = keys(typed(m, "groc"), "enter")
+
 	view = screen(m)
 	if !strings.Contains(view, "─ widen rule 2 ") || !strings.Contains(view, "%payee Kiosk") {
 		t.Fatalf("no widen form:\n%s", view)
 	}
 	m = keys(m, "enter")
+
 	row := m.staged.Rows[2]
 	if m.Capturing() || row.RuleID != "2" || row.Target != "expenses:groceries" {
 		t.Errorf("row = %+v", row)
@@ -286,10 +323,12 @@ func TestAddToRuleListsTheRulesFiltersThemAndWidensTheOneChosen(t *testing.T) {
 
 func widenForm(t *testing.T) Model {
 	t.Helper()
+
 	m := keys(onRow(categorising(), 2), "down", "enter", "enter")
 	if !strings.Contains(screen(m), "─ widen rule 2 ") {
 		t.Fatalf("no widen form:\n%s", screen(m))
 	}
+
 	return m
 }
 
@@ -298,6 +337,7 @@ func TestTheWidenFormTakesAPurposeConditionAndCountsWhatItMatches(t *testing.T) 
 	if view := screen(m); !strings.Contains(view, "matches 2 rows in this file") || !strings.Contains(view, "▸payee     Kiosk") {
 		t.Errorf("the form opens on the match, counting:\n%s", view)
 	}
+
 	m = typed(keys(m, "tab"), "Zeit")
 	if view := screen(m); !strings.Contains(view, "%payee Kiosk") || !strings.Contains(view, "& %purpose Zeit") ||
 		!strings.Contains(view, "▸purpose") {
@@ -316,13 +356,16 @@ func TestTheWidenFormsKeysMoveBetweenItsInputsWithTheCaretAtTheEnd(t *testing.T)
 
 func TestAWidenWithOnlyAPurposeMatchesOnThePurposeAlone(t *testing.T) {
 	m := typed(keys(widenForm(t), "ctrl+u", "tab"), "Zeit")
+
 	view := screen(m)
 	if !strings.Contains(view, "%purpose Zeit") || strings.Contains(view, "& %purpose") || strings.Contains(view, "%payee Kiosk") {
 		t.Errorf("the preview:\n%s", view)
 	}
+
 	if !strings.Contains(view, "matches ") || strings.Contains(view, "enter a pattern") {
 		t.Errorf("a purpose is a pattern:\n%s", view)
 	}
+
 	if view := screen(keys(widenForm(t), "ctrl+u")); !strings.Contains(view, "enter a pattern") {
 		t.Errorf("nothing typed asks for a pattern:\n%s", view)
 	}
@@ -335,10 +378,12 @@ func TestWideningIntoAnotherRulesRowsIsRefused(t *testing.T) {
 	})
 	m := New("/dl").Resize(180, 50).WithStaged(s)
 	m = keys(onRow(m, 2), "down", "enter", "down", "enter", "ctrl+u")
+
 	m = keys(typed(m, "REWE"), "enter")
 	if view := screen(m); !strings.Contains(view, "refused: rule 2") {
 		t.Errorf("no refusal:\n%s", view)
 	}
+
 	if m = typed(m, "x"); strings.Contains(screen(m), "refused:") {
 		t.Error("typing did not clear the refusal")
 	}
@@ -351,10 +396,12 @@ func TestDialogsLeaveTheTableAloneWhenTheyListManyEntries(t *testing.T) {
 	}
 	m := New("/dl").Resize(120, 30).WithStaged(s)
 	m = keys(onRow(m, 2), "down", "down", "enter", "end")
+
 	view := screen(m)
 	if !strings.Contains(view, "+ create") || !strings.Contains(view, "─ category ") {
 		t.Errorf("the cursor row is not in view:\n%s", view)
 	}
+
 	if lines := strings.Split(view, "\n"); len(lines) != 30 {
 		t.Errorf("view is %d lines, want 30", len(lines))
 	}
@@ -368,10 +415,12 @@ func TestAShortTerminalKeepsTheRuleListCursorAndAFormInView(t *testing.T) {
 		})
 	}
 	m := New("/dl").Resize(120, 16).WithStaged(s)
+
 	m = keys(onRow(m, 2), "down", "enter", "end")
 	if view := screen(m); !strings.Contains(view, "#t ") || len(strings.Split(view, "\n")) != 16 {
 		t.Errorf("the last rule is not in view:\n%s", view)
 	}
+
 	form := keys(onRow(New("/dl").Resize(120, 12).WithStaged(categorisable()), 2), "enter")
 	if view := screen(form); !strings.Contains(view, "─ new rule ") || len(strings.Split(view, "\n")) != 12 {
 		t.Errorf("the form:\n%s", view)
@@ -381,6 +430,7 @@ func TestAShortTerminalKeepsTheRuleListCursorAndAFormInView(t *testing.T) {
 func TestATransferRowIsMarked(t *testing.T) {
 	s := categorisable()
 	s.Rows[1].Target = "assets:transfers"
+
 	view := screen(New("/dl").Resize(180, 40).WithStaged(s))
 	if !strings.Contains(view, "assets:transfers ⇄") {
 		t.Errorf("no transfer mark:\n%s", view)
@@ -405,13 +455,16 @@ func TestThePickersInputSaysItFindsOrCreates(t *testing.T) {
 func TestTheFormEditsAtTheCaretAndAFieldStartsWithItsCaretAtTheEnd(t *testing.T) {
 	m := newRule(t)
 	pattern := m.dlg.draft.Pattern
+
 	m = typed(keys(m, "home"), "x")
 	if m.dlg.draft.Pattern != "x"+pattern {
 		t.Fatalf("typed at the start: %q", m.dlg.draft.Pattern)
 	}
+
 	if view := screen(m); !strings.Contains(view, "x"+layout.Caret+pattern[:1]) {
 		t.Errorf("the caret stands after the x:\n%s", view)
 	}
+
 	m = typed(keys(m, "tab"), "ab")
 	if m = keys(m, "left"); m.dlg.draft.Purpose != "ab" || !strings.Contains(screen(m), "a"+layout.Caret+"b") {
 		t.Errorf("the purpose starts at its end: %q\n%s", m.dlg.draft.Purpose, screen(m))
@@ -423,6 +476,7 @@ func TestTheOtherInputsEditAtTheirCaret(t *testing.T) {
 	if picker = typed(keys(picker, "left"), "b"); picker.dlg.filter != "abc" {
 		t.Errorf("picker filter = %q", picker.dlg.filter)
 	}
+
 	rules := typed(keys(onRow(categorising(), 2), "down", "enter"), "ac")
 	if rules = typed(keys(rules, "left"), "b"); rules.dlg.filter != "abc" {
 		t.Errorf("rule list filter = %q", rules.dlg.filter)
@@ -434,16 +488,20 @@ func TestMovingTheCaretKeepsTheListCursorAndHomeAndEndStayWithTheList(t *testing
 	if got := keys(picker, "left"); got.dlg.cursor.Row != 1 {
 		t.Errorf("picker: left moved the list cursor to %d", got.dlg.cursor.Row)
 	}
+
 	if got := keys(picker, "home"); got.dlg.cursor.Row != 0 {
 		t.Errorf("picker: home = %d", got.dlg.cursor.Row)
 	}
+
 	if got := keys(typed(picker, "e"), "left", "home"); got.dlg.back != 1 {
 		t.Errorf("picker: home moved the caret to %d", got.dlg.back)
 	}
+
 	rules := keys(onRow(categorising(), 2), "down", "enter")
 	if got := keys(rules, "end"); got.dlg.cursor.Row != len(got.ruleChoices())-1 {
 		t.Errorf("rule list: end = %d", got.dlg.cursor.Row)
 	}
+
 	if got := keys(typed(rules, "e"), "left", "end"); got.dlg.back != 1 {
 		t.Errorf("rule list: end moved the caret to %d", got.dlg.back)
 	}
@@ -451,14 +509,17 @@ func TestMovingTheCaretKeepsTheListCursorAndHomeAndEndStayWithTheList(t *testing
 
 func TestTheChoicesOfARowDependOnWhatHoldsIt(t *testing.T) {
 	open := categorising()
+
 	open.table.Row = 2
 	if got := open.choices(); !slices.Equal(got, []string{choiceNewRule, choiceAddToRule, choiceOnce, choiceFallback}) {
 		t.Errorf("a row that needs a category: %v", got)
 	}
+
 	open.staged.Rows[2].Target, open.staged.Rows[2].RuleID = "expenses:x", "f9"
 	if got := open.choices(); !slices.Equal(got, []string{choiceNewRule, choiceAddToRule, choiceOnce}) {
 		t.Errorf("a row a fallback rule holds: %v", got)
 	}
+
 	open.staged.Rows[2].RuleID = "9"
 	if got := open.choices(); !slices.Equal(got, []string{choiceOnce}) {
 		t.Errorf("a row a rule holds: %v", got)
@@ -470,6 +531,7 @@ func TestTheFallbackFormStagesAFallbackRule(t *testing.T) {
 	if view := screen(m); !strings.Contains(view, "─ fallback rule ") || !strings.Contains(view, "konto-rule:f") {
 		t.Fatalf("no fallback form:\n%s", view)
 	}
+
 	m = keys(typed(keys(m, "tab", "tab"), "expenses:misc"), "enter", "enter")
 	if row := m.staged.Rows[2]; !row.HeldByFallback() || m.Capturing() {
 		t.Errorf("row = %+v", row)

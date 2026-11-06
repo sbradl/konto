@@ -20,6 +20,7 @@ func TestPreflightRefusesWhenHledgerNotOnPath(t *testing.T) {
 	}
 	runVersion := func() (string, error) {
 		t.Fatal("runVersion must not be called when hledger is not on PATH")
+
 		return "", nil
 	}
 
@@ -28,9 +29,11 @@ func TestPreflightRefusesWhenHledgerNotOnPath(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected an error when hledger is not on PATH, got nil")
 	}
+
 	if !strings.Contains(err.Error(), "hledger") {
 		t.Errorf("error should identify hledger as not found, got: %v", err)
 	}
+
 	if !strings.Contains(err.Error(), "1.32") {
 		t.Errorf("error should name the minimum version 1.32, got: %v", err)
 	}
@@ -47,6 +50,7 @@ func TestPreflightRefusesWhenVersionCommandFails(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected an error when hledger --version fails to run, got nil")
 	}
+
 	if !strings.Contains(err.Error(), "killed") {
 		t.Errorf("error should mention the underlying cause, got: %v", err)
 	}
@@ -64,6 +68,7 @@ func TestPreflightRefusesWhenVersionUnrecognisable(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected an error when hledger --version output has no version number, got nil")
 	}
+
 	if !strings.Contains(err.Error(), "banana") {
 		t.Errorf("error should quote the unrecognised output, got: %v", err)
 	}
@@ -90,6 +95,7 @@ func TestPreflightReportsInstalledVersion(t *testing.T) {
 			if err != nil {
 				t.Fatalf("expected no error for a supported hledger, got: %v", err)
 			}
+
 			if got != tt.want {
 				t.Errorf("expected version %+v, got %+v", tt.want, got)
 			}
@@ -131,6 +137,7 @@ func versionOutput(out string) func() (string, error) {
 func fakeHledger(t *testing.T, stdout string, code int) {
 	t.Helper()
 	dir := t.TempDir()
+
 	script := fmt.Sprintf("#!/bin/sh\necho '%s'\nexit %d\n", stdout, code)
 	if err := os.WriteFile(filepath.Join(dir, "hledger"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
@@ -157,6 +164,7 @@ func TestPreflightOnPathAcceptsRecentHledger(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
 	if want := (domain.HledgerVersion{Major: 1, Minor: 32}); version != want {
 		t.Errorf("version = %+v, want %+v", version, want)
 	}

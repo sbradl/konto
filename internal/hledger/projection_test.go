@@ -20,6 +20,7 @@ const generatedJSON = `[
 func inputReturning(out, stderr string, err error, gotInput *string, gotArgs *[]string) runner {
 	return func(_ context.Context, stdin io.Reader, args ...string) ([]byte, string, error) {
 		*gotInput, *gotArgs = readAll(stdin), args
+
 		return []byte(out), stderr, err
 	}
 }
@@ -30,6 +31,7 @@ func readAll(stdin io.Reader) string {
 		return ""
 	}
 	text, _ := io.ReadAll(stdin)
+
 	return string(text)
 }
 
@@ -38,13 +40,13 @@ func TestOccurrencesAreTheDatesOfTheGeneratedTransactions(t *testing.T) {
 	var args []string
 	client := &Client{run: inputReturning(generatedJSON, "", nil, &input, &args)}
 
-	got, err := client.Occurrences(context.Background(), "~ monthly  Gym\n",
-		time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC), time.Date(2027, 10, 1, 0, 0, 0, 0, time.UTC))
+	got, err := client.Occurrences(context.Background(), "~ monthly  Gym\n", date(2026, 10, 1), date(2027, 10, 1))
 
-	want := []time.Time{time.Date(2026, 10, 15, 0, 0, 0, 0, time.UTC), time.Date(2026, 11, 15, 0, 0, 0, 0, time.UTC)}
+	want := []time.Time{date(2026, 10, 15), date(2026, 11, 15)}
 	if err != nil || !reflect.DeepEqual(got, want) {
 		t.Errorf("dates = %v, %v; want %v", got, err, want)
 	}
+
 	if input != "~ monthly  Gym\n" || !reflect.DeepEqual(args, []string{
 		"-f", "-", "print", "--forecast=2026-10-01..2027-10-01", "-O", "json",
 	}) {
@@ -53,9 +55,7 @@ func TestOccurrencesAreTheDatesOfTheGeneratedTransactions(t *testing.T) {
 }
 
 func TestOccurrencesReportWhatHledgerSaysAboutARuleItCannotRead(t *testing.T) {
-	var input string
-	var args []string
-	client := &Client{run: inputReturning("", "bad period expression\n", errors.New("exit 1"), &input, &args)}
+	client := hledgerOnText("", "bad period expression\n", errors.New("exit 1"))
 
 	_, err := client.Occurrences(context.Background(), "~ nonsense\n", time.Time{}, time.Time{})
 
@@ -65,11 +65,14 @@ func TestOccurrencesReportWhatHledgerSaysAboutARuleItCannotRead(t *testing.T) {
 }
 
 func TestOccurrencesReportOutputItCannotRead(t *testing.T) {
-	var input string
-	var args []string
-	client := &Client{run: inputReturning("oops", "", nil, &input, &args)}
+	client := hledgerOnText("oops", "", nil)
 
 	if _, err := client.Occurrences(context.Background(), "", time.Time{}, time.Time{}); err == nil {
 		t.Error("expected an error for output that is no JSON")
 	}
+}
+
+// hledgerOnText is a Client for journal text whose hledger answers out, stderr and err.
+func hledgerOnText(out, stderr string, err error) *Client {
+	return &Client{run: inputReturning(out, stderr, err, new(string), new([]string))}
 }

@@ -25,6 +25,7 @@ type fakeRules struct {
 
 func (f *fakeRules) Add(_ context.Context, input periodic.Input, _ domain.Ledger) (domain.Changeset, error) {
 	f.saved = append(f.saved, input)
+
 	return f.changeset, f.err
 }
 
@@ -33,11 +34,13 @@ func (f *fakeRules) Replace(
 ) (domain.Changeset, error) {
 	f.saved = append(f.saved, input)
 	f.replaced = append(f.replaced, rule)
+
 	return f.changeset, f.err
 }
 
 func (f *fakeRules) Form(_ context.Context, rule domain.PeriodicRule, _ domain.Ledger) (periodic.Input, error) {
 	f.shown = append(f.shown, rule)
+
 	return f.input, f.formErr
 }
 
@@ -63,6 +66,7 @@ func scheduledWithForm(t *testing.T, rules *fakeRules) ruleRig {
 	updated, _ := model.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	updated, _ = updated.Update(model.load())
 	opened, _ := press(updated.(Model), "3")
+
 	return ruleRig{model: opened, rules: rules, writer: writer, verifier: verifier}
 }
 
@@ -70,10 +74,12 @@ func keysFor(model Model, keys ...string) Model {
 	for _, key := range keys {
 		if key == "esc" {
 			model = pressEsc(model)
+
 			continue
 		}
 		model, _ = press(model, key)
 	}
+
 	return model
 }
 
@@ -84,6 +90,7 @@ func TestNOpensTheFormAndItsKeysAreTextNotViewKeys(t *testing.T) {
 	model = keysFor(model, "tab", "tab", "tab")
 	for _, key := range []string{"q", "2", "r", "!", "?"} {
 		var cmd tea.Cmd
+
 		model, cmd = press(model, key)
 		if cmd != nil || model.active != scheduledTab || model.popup != popupNone || model.busy() {
 			t.Fatalf("%q leaked out of the form", key)
@@ -105,6 +112,7 @@ func TestEscClosesTheFormAndWritesNothing(t *testing.T) {
 	if strings.Contains(uitest.Plain(model.View().Content), "new periodic rule") || len(rig.writer.applied) != 0 {
 		t.Error("Esc did not close the form without writing")
 	}
+
 	if model, _ = press(model, "1"); model.active != 0 {
 		t.Error("view keys do not work again")
 	}
@@ -125,6 +133,7 @@ func TestSavingPlansTheRuleThenChecksAndWritesItAndRefreshes(t *testing.T) {
 
 	model, cmd := press(model, "enter")
 	updated, write := model.Update(cmd())
+
 	model = updated.(Model)
 	if !model.busy() {
 		t.Error("the spinner should show while the rule is written")
@@ -135,12 +144,15 @@ func TestSavingPlansTheRuleThenChecksAndWritesItAndRefreshes(t *testing.T) {
 	if len(rig.rules.saved) != 1 || len(rig.verifier.checked) != 1 || len(rig.writer.applied) != 1 {
 		t.Fatalf("planned %d, checked %d, written %d; want one each", len(rig.rules.saved), len(rig.verifier.checked), len(rig.writer.applied))
 	}
+
 	if !model.scheduled.Capturing() {
 		t.Error("the form should stay open until the rule is written")
 	}
+
 	if done.(Model).scheduled.Capturing() || !done.(Model).busy() || reload == nil {
 		t.Error("the form should close and the journal reload")
 	}
+
 	if got := lastLine(done.(Model)); !strings.Contains(got, "rule added") {
 		t.Errorf("status bar = %q", got)
 	}
@@ -154,6 +166,7 @@ func TestARefusedRuleKeepsTheFormOpenWithTheReason(t *testing.T) {
 	updated, next := model.Update(cmd())
 
 	shown := updated.(Model)
+
 	content := uitest.Plain(shown.View().Content)
 	if next != nil || !shown.scheduled.Capturing() || !strings.Contains(content, "description is required") ||
 		len(rig.writer.applied) != 0 || shown.failure != nil {
@@ -191,6 +204,7 @@ func TestAFailedPreCheckOrWriteIsReportedAndKeepsTheForm(t *testing.T) {
 		if got := lastLine(done.(Model)); !strings.Contains(got, "write failed") {
 			t.Errorf("%s: status bar = %q", name, got)
 		}
+
 		if content := uitest.Plain(done.View().Content); !strings.Contains(content, "new periodic rule") ||
 			!strings.Contains(content, "B▏") {
 			t.Errorf("%s: the form and what was typed into it should survive; view:\n%s", name, content)
@@ -328,6 +342,7 @@ func TestSavingTwiceWhileTheRuleIsPlannedPlansItOnce(t *testing.T) {
 	if second != nil || !strings.Contains(uitest.Plain(model.View().Content), "try again in a moment") {
 		t.Fatalf("second save cmd %v; view:\n%s", second, uitest.Plain(model.View().Content))
 	}
+
 	updated, write := model.Update(first())
 	if write == nil || !updated.(Model).busy() {
 		t.Error("the first save should still be written")
@@ -347,6 +362,7 @@ func TestARulePlannedAfterTheFormWasClosedIsNotWritten(t *testing.T) {
 		if write != nil || updated.(Model).busy() || updated.(Model).scheduled.Capturing() != reopened {
 			t.Errorf("%s: write %v, busy %v", name, write, updated.(Model).busy())
 		}
+
 		if _, cmd := press(updated.(Model), "enter"); reopened && cmd == nil {
 			t.Errorf("%s: the reopened form cannot be saved", name)
 		}
@@ -364,6 +380,7 @@ func TestARulePlannedFromAnOlderJournalIsNotWritten(t *testing.T) {
 	if write != nil || !strings.Contains(uitest.Plain(updated.(Model).View().Content), "try again in a moment") {
 		t.Errorf("write %v; view:\n%s", write, uitest.Plain(updated.(Model).View().Content))
 	}
+
 	if _, cmd := press(updated.(Model), "enter"); cmd == nil {
 		t.Error("the form cannot be saved again")
 	}

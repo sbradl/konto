@@ -101,6 +101,7 @@ func TestPeriodicRulesReadsEachBlockWithItsPositionAndRawLines(t *testing.T) {
 	if err != nil || len(got) != 3 {
 		t.Fatalf("got %d rules, %v; want 3: %+v", len(got), err, got)
 	}
+
 	want := domain.PeriodicRule{
 		Period: "monthly from 2026-10-01", Description: "Vermieter Mueller", Pos: domain.SourcePos{File: file.path, Line: 2},
 		Lines: []string{"~ monthly from 2026-10-01  Vermieter Mueller", "    expenses:rent  900,00 EUR", "    assets:checking"},
@@ -117,6 +118,7 @@ func TestPeriodicRulesKeepCommentsInTheirBlockButOutOfTheDescription(t *testing.
 	if second.Description != "Streaming" || second.Pos.Line != 6 || len(second.Lines) != 4 || second.Lines[1] != "    ; a note" {
 		t.Errorf("second rule = %+v", second)
 	}
+
 	if got[2].Period != "2026-01-05" || got[2].Description != "Once-off" || got[2].Pos.Line != 13 {
 		t.Errorf("third rule = %+v", got[2])
 	}
@@ -131,6 +133,7 @@ func TestPeriodicRulesFollowIncludesAndReportUnreadableJournals(t *testing.T) {
 	if err != nil || len(got) != 1 || filepath.Base(got[0].Pos.File) != "rules.journal" {
 		t.Errorf("rules = %+v, %v; want the included one", got, err)
 	}
+
 	if _, err := NewFile("/nonexistent/main.journal", septemberOf(2026)).PeriodicRules(); err == nil {
 		t.Error("expected an error")
 	}
@@ -140,6 +143,7 @@ func TestRuleNameDropsATrailingComment(t *testing.T) {
 	if got := ruleName("~ monthly  Streaming  ; shared account"); got != "Streaming" {
 		t.Errorf("ruleName = %q, want Streaming", got)
 	}
+
 	if got := ruleName("~ monthly ; just a note"); got != "monthly" {
 		t.Errorf("ruleName = %q, want monthly", got)
 	}

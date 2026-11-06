@@ -5,7 +5,6 @@ package e2e
 import (
 	"errors"
 	"fmt"
-	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -31,6 +30,7 @@ func (w *world) activeTab() (string, error) {
 			return tab.name, nil
 		}
 	}
+
 	return "", errors.New("no tab is drawn as active:\n" + s.screenText())
 }
 
@@ -44,9 +44,11 @@ func (w *world) expectActiveTab(want string) error {
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
+
 	if err != nil {
 		return err
 	}
+
 	return fmt.Errorf("active tab is %q, want %q", got, want)
 }
 
@@ -56,10 +58,12 @@ func (w *world) setTerminalSize(width, height int) error {
 	if w.s == nil {
 		return nil
 	}
+
 	if err := w.s.resize(width, height); err != nil {
 		return err
 	}
 	w.s.settle(w.suite.timeout)
+
 	return nil
 }
 
@@ -71,11 +75,14 @@ func (w *world) expectScreenLines(check func(lines []string) error) error {
 	var failure error
 	s.waitFor(w.suite.timeout, func(string) bool {
 		failure = check(s.screenLines())
+
 		return failure == nil
 	})
+
 	if failure != nil {
 		return fmt.Errorf("%w\n%s", failure, s.screenText())
 	}
+
 	return nil
 }
 
@@ -86,6 +93,7 @@ func checkLineWidths(width int) func(lines []string) error {
 				return fmt.Errorf("line %d is %d cells wide, want at most %d", i, got, width)
 			}
 		}
+
 		return nil
 	}
 }
@@ -96,6 +104,7 @@ func checkHeight(height int) func(lines []string) error {
 			return fmt.Errorf("screen has %d lines and starts with %q, want %d lines from the tab bar down",
 				len(lines), lines[0], height)
 		}
+
 		return nil
 	}
 }
@@ -107,6 +116,7 @@ func checkStatusBarLast(lines []string) error {
 			return nil
 		}
 	}
+
 	return fmt.Errorf("last line is %q, want the status bar", last)
 }
 
@@ -156,6 +166,7 @@ func registerFeatureSteps(sc *godog.ScenarioContext, w *world) {
 			last := tabNames[len(tabNames)-1]
 			tabsEnd := strings.Index(line, last.key+" "+last.name) + len(last.key+" "+last.name)
 			rest := line[tabsEnd:]
+
 			return strings.Contains(rest, w.journal) && strings.Contains(rest, count)
 		})
 	})
@@ -166,21 +177,10 @@ func registerFeatureSteps(sc *godog.ScenarioContext, w *world) {
 
 func registerRefreshSteps(sc *godog.ScenarioContext, w *world) {
 	step(sc, `^I append this to the journal externally:$`, func(text *godog.DocString) error {
-		f, err := os.OpenFile(w.journal, os.O_APPEND|os.O_WRONLY, 0o644)
-		if err != nil {
-			return err
-		}
-		_, werr := f.WriteString("\n" + text.Content + "\n")
-		return errors.Join(werr, f.Close())
+		return w.appendToJournal("\n" + text.Content + "\n")
 	})
 	step(sc, `^I append a transaction to the journal externally$`, func() error {
-		f, err := os.OpenFile(w.journal, os.O_APPEND|os.O_WRONLY, 0o644)
-		if err != nil {
-			return err
-		}
-		const txn = "\n2026-09-30 Newly added\n    assets:checking    1,00 EUR\n    equity:opening-balances\n"
-		_, werr := f.WriteString(txn)
-		return errors.Join(werr, f.Close())
+		return w.appendToJournal("\n2026-09-30 Newly added\n    assets:checking    1,00 EUR\n    equity:opening-balances\n")
 	})
 	step(sc, `^the new transaction appears after refresh$`, func() error {
 		return w.expectLine(0, "tab bar", fmt.Sprintf("%d txns", w.transactionsAtStart()+1), strings.Contains)
@@ -212,23 +212,27 @@ func registerStatusBarSteps(sc *godog.ScenarioContext, w *world) {
 				return err
 			}
 		}
+
 		return nil
 	})
 }
 
 func registerThemeSteps(sc *godog.ScenarioContext, w *world) {
-	step(sc, `^no cell sets a background colour except the selected row and the popup$`, func() error {
-		s, err := w.session()
-		if err != nil {
-			return err
+	step(sc, `^no cell sets a background colour except the selected row and the popup$`, w.expectOnlySelectionBackground)
+}
+
+func (w *world) expectOnlySelectionBackground() error {
+	s, err := w.session()
+	if err != nil {
+		return err
+	}
+	s.settle(w.suite.timeout)
+	for colour := range s.backgrounds() {
+		if colour != selectionBackground {
+			return fmt.Errorf("a cell has background %d; only the selection background %d is allowed",
+				colour, selectionBackground)
 		}
-		s.settle(w.suite.timeout)
-		for colour := range s.backgrounds() {
-			if colour != selectionBackground {
-				return fmt.Errorf("a cell has background %d; only the selection background %d is allowed",
-					colour, selectionBackground)
-			}
-		}
-		return nil
-	})
+	}
+
+	return nil
 }

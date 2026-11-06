@@ -4,7 +4,6 @@ package e2e
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/cucumber/godog"
@@ -17,9 +16,11 @@ func (w *world) expectCursorOn(description string) error {
 		if err != nil {
 			return err
 		}
+
 		if !strings.Contains(rows[selected].text, description) {
 			return fmt.Errorf("the selected row is %q, want %q", rows[selected].text, description)
 		}
+
 		return nil
 	})
 }
@@ -27,27 +28,22 @@ func (w *world) expectCursorOn(description string) error {
 // appendExternally adds a checking transaction to the journal as another program would.
 func (w *world) appendExternally(date, payee, amount string) error {
 	text := fmt.Sprintf("\npayee %s\n\n%s %s\n    expenses:groceries  %s EUR\n    assets:checking\n", payee, date, payee, amount)
-	file, err := os.OpenFile(w.journal, os.O_APPEND|os.O_WRONLY, 0o644)
-	if err != nil {
-		return err
-	}
-	if _, err := file.WriteString(text); err != nil {
-		_ = file.Close()
-		return err
-	}
-	return file.Close()
+
+	return w.appendToJournal(text)
 }
 
 func (w *world) expectRuleFromDisk(id string) error {
 	if err := w.expectStaged(false, "rule "+id); err != nil {
 		return err
 	}
+
 	return w.expectPanel(rowsTitle, func(rows []recentRow) error {
 		for _, row := range rows {
 			if strings.Contains(row.text, "#"+id+" ") {
 				return nil
 			}
 		}
+
 		return fmt.Errorf("no row shows rule #%s", id)
 	})
 }
@@ -66,6 +62,7 @@ func registerStagingSteps(sc *godog.ScenarioContext, w *world) {
 		if err := w.press("w"); err != nil {
 			return err
 		}
+
 		return w.expectScreen(true, fmt.Sprintf("%d rows need a category", n))
 	})
 }

@@ -26,13 +26,16 @@ func (w *world) openInImport(name string) error {
 		return err
 	}
 	var target int
+
 	if err := w.expectPanel(pickerTitle, func(rows []recentRow) error {
 		for i, row := range rows[1:] { // the first row is the directory
 			if strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(row.text), "/")) == name {
 				target = i
+
 				return nil
 			}
 		}
+
 		return fmt.Errorf("the picker does not list %q", name)
 	}); err != nil {
 		return err
@@ -42,15 +45,18 @@ func (w *world) openInImport(name string) error {
 			return err
 		}
 	}
+
 	if err := w.press("Enter"); err != nil {
 		return err
 	}
+
 	s, err := w.session()
 	if err != nil {
 		return err
 	}
 	// opening reads the file asynchronously: what is typed next must not land in the picker
 	s.waitFor(w.suite.timeout, func(screen string) bool { return !strings.Contains(screen, pickerTitle) })
+
 	return nil
 }
 
@@ -60,10 +66,12 @@ func (w *world) importRow(title, description, date string) (recentRow, error) {
 	if err != nil {
 		return recentRow{}, err
 	}
+
 	index, err := importRowIndex(rows, description, date)
 	if err != nil {
 		return recentRow{}, fmt.Errorf("%w in %s", err, title)
 	}
+
 	return rows[index], nil
 }
 
@@ -78,6 +86,7 @@ func (w *world) expectImportRowHolds(description, date string, texts ...string) 
 				return fmt.Errorf("row %q lacks %q", row.text, text)
 			}
 		}
+
 		return nil
 	})
 }
@@ -87,10 +96,12 @@ func (w *world) expectImportRowColour(description, date, text string, colour int
 		return err
 	}
 	row, _ := w.importRow(rowsTitle, description, date)
+
 	before, _, _ := strings.Cut(row.text, text)
 	if got := w.s.cellColour(row.x+1+len([]rune(before)), row.y); got != colour {
 		return fmt.Errorf("%q in row %q is coloured %d, want %d", text, row.text, got, colour)
 	}
+
 	return nil
 }
 
@@ -102,9 +113,11 @@ func (w *world) expectPanelRowCount(title string, n int) error {
 				count++
 			}
 		}
+
 		if count != n {
 			return fmt.Errorf("%s has %d rows, want %d", title, count, n)
 		}
+
 		return nil
 	})
 }
@@ -118,12 +131,14 @@ func (w *world) expectRowState(description, amount, date, state string) error {
 	if state == "skipped" {
 		title = skippedTitle
 	}
+
 	return w.expectPanel(title, func(rows []recentRow) error {
 		for _, row := range rows {
 			if strings.Contains(row.text, description) && strings.Contains(row.text, amount) && strings.Contains(row.text, date) {
 				return nil
 			}
 		}
+
 		return fmt.Errorf("%q %s %s is not among the %s rows", description, amount, date, state)
 	})
 }
@@ -134,11 +149,14 @@ func (w *world) selectedRowIndex(rows []recentRow) (int, error) {
 		if w.s.cellBackground(row.x+4, row.y) != selectionBackground {
 			continue
 		}
+
 		if fg := w.s.cellColour(row.x+9, row.y); fg != 15 {
 			return 0, fmt.Errorf("the selected row has foreground %d", fg)
 		}
+
 		return i, nil
 	}
+
 	return 0, errors.New("no row is selected")
 }
 
@@ -148,9 +166,11 @@ func (w *world) expectSelectedRow(which string) error {
 		if err != nil {
 			return err
 		}
+
 		if want := map[string]int{"first": 0, "second": 1, "last": len(rows) - 1}[which]; got != want {
 			return fmt.Errorf("row %d is selected, want the %s", got, which)
 		}
+
 		return nil
 	})
 }
@@ -162,10 +182,12 @@ func (w *world) expectPickerLists(names ...string) error {
 			for _, row := range rows {
 				found = found || strings.Contains(row.text, name)
 			}
+
 			if !found {
 				return fmt.Errorf("the picker lacks %q", name)
 			}
 		}
+
 		return nil
 	})
 }
@@ -182,6 +204,7 @@ func (w *world) expectPickerLacks(names ...string) error {
 			}
 		}
 	}
+
 	return nil
 }
 
@@ -197,6 +220,7 @@ func (w *world) expectSkippedRows(table *godog.Table) error {
 				}
 			}
 		}
+
 		return nil
 	})
 }
@@ -208,6 +232,7 @@ func (w *world) expectSkippedDim() error {
 				return fmt.Errorf("skipped row %q is coloured %d, want 8", row.text, got)
 			}
 		}
+
 		return nil
 	})
 }
@@ -222,6 +247,7 @@ func (w *world) expectNoStateFiles() error {
 			return fmt.Errorf("unexpected file %s next to the journal", name)
 		}
 	}
+
 	return nil
 }
 
@@ -232,6 +258,7 @@ func allowedBesideJournal(name string) bool {
 	case ".journal", ".lock", ".log", ".json":
 		return true
 	}
+
 	return name == "categories.rules"
 }
 
@@ -241,9 +268,11 @@ func (w *world) expectNothingStaged() error {
 		if err != nil {
 			return err
 		}
+
 		if strings.Contains(s.screenText(), "╭─ ROWS ") {
 			return errors.New("an import is staged")
 		}
+
 		return nil
 	})
 }
@@ -255,6 +284,7 @@ func (w *world) expectNoStatusDots() error {
 				return errors.New("the Import view shows status dots")
 			}
 		}
+
 		return nil
 	})
 }
@@ -265,9 +295,11 @@ func (w *world) expectPickerOrMessage() error {
 		if err != nil {
 			return err
 		}
+
 		if screen := s.screenText(); !strings.Contains(screen, "OPEN A CSV FILE") && !strings.Contains(screen, "no such file") {
 			return errors.New("neither a picker nor a message")
 		}
+
 		return nil
 	})
 }
@@ -293,13 +325,16 @@ func registerImportPickerSteps(sc *godog.ScenarioContext, w *world) {
 // selectInPicker moves to the entry in the open picker and presses Enter.
 func (w *world) selectInPicker(name string) error {
 	var target int
+
 	if err := w.expectPanel(pickerTitle, func(rows []recentRow) error {
 		for i, row := range rows[1:] {
 			if strings.Contains(row.text, name) {
 				target = i
+
 				return nil
 			}
 		}
+
 		return fmt.Errorf("the picker does not list %q", name)
 	}); err != nil {
 		return err
@@ -309,6 +344,7 @@ func (w *world) selectInPicker(name string) error {
 			return err
 		}
 	}
+
 	return w.press("Enter")
 }
 
@@ -321,6 +357,7 @@ func registerImportRowSteps(sc *godog.ScenarioContext, w *world) {
 			if _, err := rowFor(rows, name); err == nil {
 				return fmt.Errorf("the row table has %q", name)
 			}
+
 			return nil
 		})
 	})
@@ -329,6 +366,7 @@ func registerImportRowSteps(sc *godog.ScenarioContext, w *world) {
 			if err := w.expectImportRowColour(name, date, mark, colour); err != nil {
 				return err
 			}
+
 			return w.expectImportRowHolds(name, date, "#"+id)
 		})
 	step(sc, `^the row "([^"]*)" on "([^"]*)" shows "([^"]*)" coloured (\d+)$`, func(name, date, mark string, colour int) error {
@@ -344,6 +382,7 @@ func registerImportRowSteps(sc *godog.ScenarioContext, w *world) {
 			if err == nil && strings.Contains(row.text, "#") {
 				return fmt.Errorf("row %q shows a rule id", row.text)
 			}
+
 			return err
 		})
 	})
@@ -382,6 +421,7 @@ func registerImportSkippedSteps(sc *godog.ScenarioContext, w *world) {
 			if len(rows) == 0 {
 				return errors.New("nothing is skipped")
 			}
+
 			return nil
 		})
 	})
@@ -390,6 +430,7 @@ func registerImportSkippedSteps(sc *godog.ScenarioContext, w *world) {
 			if len(rows) == 0 {
 				return errors.New("nothing is new")
 			}
+
 			return nil
 		})
 	})
@@ -406,16 +447,6 @@ func registerImportSkippedSteps(sc *godog.ScenarioContext, w *world) {
 	step(sc, `^"([^"]*)" is skipped$`, func(name string) error { return w.expectRowState(name, "", "", "skipped") })
 }
 
-// appendToJournal adds text to the end of the main journal.
-func (w *world) appendToJournal(text string) error {
-	f, err := os.OpenFile(w.journal, os.O_APPEND|os.O_WRONLY, 0o644)
-	if err != nil {
-		return err
-	}
-	_, werr := f.WriteString(text)
-	return errors.Join(werr, f.Close())
-}
-
 // editDirective rewrites the `account` directive line of the account.
 func (w *world) editDirective(account string, edit func(line string) string) error {
 	b, err := os.ReadFile(w.journal)
@@ -428,6 +459,7 @@ func (w *world) editDirective(account string, edit func(line string) string) err
 			lines[i] = edit(line)
 		}
 	}
+
 	return os.WriteFile(w.journal, []byte(strings.Join(lines, "\n")), 0o644)
 }
 
@@ -442,20 +474,25 @@ func (w *world) extraChecking(date, description, category, amount string) error 
 func (w *world) downloadDirContains(table *godog.Table) error {
 	for _, row := range table.Rows {
 		name := strings.TrimSpace(row.Cells[0].Value)
+
 		path := filepath.Join(w.downloads, strings.TrimSuffix(name, "/"))
 		if strings.HasSuffix(name, "/") {
 			if err := os.MkdirAll(path, 0o755); err != nil {
 				return err
 			}
+
 			continue
 		}
+
 		if _, err := os.Stat(path); err == nil {
 			continue // a file the scenario already made keeps its content
 		}
+
 		if err := os.WriteFile(path, []byte("x"), 0o644); err != nil {
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -466,6 +503,7 @@ func registerImportFixtureSteps(sc *godog.ScenarioContext, w *world) {
 	step(sc, `^the XDG download directory does not exist$`, func() error { return os.RemoveAll(w.downloads) })
 	step(sc, `^hledger fails on CSV conversion$`, func() error {
 		w.shim.FailCSV = "hledger: simulated CSV conversion failure"
+
 		return w.writeShim()
 	})
 	step(sc, `^a file "([^"]*)" in the download directory with random binary content$`, func(name string) error {
@@ -478,6 +516,7 @@ func registerImportFixtureSteps(sc *godog.ScenarioContext, w *world) {
 		if err != nil {
 			return err
 		}
+
 		return os.WriteFile(filepath.Join(w.downloads, name), b, 0o644)
 	})
 	step(sc, `^the journal "([^"]*)" where IBAN ([A-Z0-9]+) is a closed account$`, func(name, _ string) error {
@@ -490,6 +529,7 @@ func registerImportFixtureSteps(sc *godog.ScenarioContext, w *world) {
 		if err := w.useJournal(name, ""); err != nil {
 			return err
 		}
+
 		return w.editDirective(account, func(line string) string {
 			return sourceTag.ReplaceAllString(line, "")
 		})
@@ -498,12 +538,14 @@ func registerImportFixtureSteps(sc *godog.ScenarioContext, w *world) {
 		if err := w.useJournal(name, ""); err != nil {
 			return err
 		}
+
 		return w.editDirective("assets:transfers", func(line string) string { return line + ", konto:iban:" + iban })
 	})
 	step(sc, `^the journal "([^"]*)" with a later (checking|savings) transaction on ([\d-]+)$`, func(name, which, date string) error {
 		if err := w.useJournal(name, ""); err != nil {
 			return err
 		}
+
 		return w.laterTransaction("assets:"+which, date)
 	})
 	step(sc, `^the journal "([^"]*)" with an extra checking transaction on ([\d-]+): description "([^"]*)", category "([^"]*)", amount ([\d,.]+ EUR)$`,
@@ -511,6 +553,7 @@ func registerImportFixtureSteps(sc *godog.ScenarioContext, w *world) {
 			if err := w.useJournal(name, ""); err != nil {
 				return err
 			}
+
 			return w.extraChecking(date, description, category, amount)
 		})
 }

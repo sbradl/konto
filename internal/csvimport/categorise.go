@@ -19,6 +19,7 @@ func (r Row) field(name string) string {
 	case fieldPurpose:
 		return r.Purpose
 	}
+
 	return ""
 }
 
@@ -27,6 +28,7 @@ func (r Row) MatchField() string {
 	if r.Payee == "" {
 		return fieldType
 	}
+
 	return fieldPayee
 }
 
@@ -48,37 +50,53 @@ func (s Staged) clearing() string {
 			return account.Name
 		}
 	}
+
 	return domain.ClearingAccount
 }
 
 // Candidates are the accounts the row can go to, best first: the categories of its direction, the
 // categories of the other direction (refunds), then the other open accounts as transfer targets.
 func (s Staged) Candidates(row Row) []Candidate {
-	inflow := !row.Amount.IsAllNegative()
-	first, second := domain.ExpensesPrefix, domain.IncomePrefix
-	if inflow {
-		first, second = second, first
+	own, refunds := s.categoriesByDirection(row)
+
+	return slices.Concat(byName(own), byName(refunds), byName(s.transferTargets()))
+}
+
+// categoriesByDirection splits the categories into those of the row's direction and those of the other.
+func (s Staged) categoriesByDirection(row Row) (own, refunds []Candidate) {
+	ownPrefix, refundPrefix := domain.ExpensesPrefix, domain.IncomePrefix
+	if !row.Amount.IsAllNegative() {
+		ownPrefix, refundPrefix = refundPrefix, ownPrefix
 	}
-	var groups [3][]Candidate
+
 	for _, name := range s.categoryNames() {
 		switch {
-		case strings.HasPrefix(name, first):
-			groups[0] = append(groups[0], Candidate{Name: name, Target: name})
-		case strings.HasPrefix(name, second):
-			groups[1] = append(groups[1], Candidate{Name: name, Target: name})
+		case strings.HasPrefix(name, ownPrefix):
+			own = append(own, Candidate{Name: name, Target: name})
+		case strings.HasPrefix(name, refundPrefix):
+			refunds = append(refunds, Candidate{Name: name, Target: name})
 		}
 	}
+
+	return own, refunds
+}
+
+// transferTargets are the open accounts the row can be a transfer to.
+func (s Staged) transferTargets() []Candidate {
+	var targets []Candidate
 	for _, account := range s.Known {
 		if candidate, ok := s.transferTo(account); ok {
-			groups[2] = append(groups[2], candidate)
+			targets = append(targets, candidate)
 		}
 	}
-	var all []Candidate
-	for _, group := range groups {
-		slices.SortFunc(group, func(a, b Candidate) int { return cmp.Compare(a.Name, b.Name) })
-		all = append(all, group...)
-	}
-	return all
+
+	return targets
+}
+
+func byName(candidates []Candidate) []Candidate {
+	slices.SortFunc(candidates, func(a, b Candidate) int { return cmp.Compare(a.Name, b.Name) })
+
+	return candidates
 }
 
 // categoryNames are the income and expense accounts there are, declared ones and those staged.
@@ -94,6 +112,7 @@ func (s Staged) categoryNames() []string {
 			names = append(names, name)
 		}
 	}
+
 	return slices.Compact(slices.Sorted(slices.Values(names)))
 }
 
@@ -104,16 +123,19 @@ func (s Staged) transferTo(account domain.Account) (Candidate, bool) {
 		account.Name == s.Account.Name {
 		return Candidate{}, false
 	}
+
 	target := account.Name
 	if account.Source == domain.SourceImport {
 		target = s.clearing()
 	}
+
 	return Candidate{Name: account.Name, Target: target, Transfer: true}, true
 }
 
 // Matching are the candidates whose name contains the filter, case-insensitively.
 func Matching(candidates []Candidate, filter string) []Candidate {
 	needle := strings.ToLower(filter)
+
 	return slices.DeleteFunc(slices.Clone(candidates), func(c Candidate) bool {
 		return !strings.Contains(strings.ToLower(c.Name), needle)
 	})
@@ -126,9 +148,11 @@ func SuggestName(row Row, typed string) string {
 	if strings.Contains(typed, ":") || typed == "" {
 		return typed
 	}
+
 	if row.Amount.IsAllNegative() {
 		return domain.ExpensesPrefix + typed
 	}
+
 	return domain.IncomePrefix + typed
 }
 
@@ -141,11 +165,13 @@ func (s Staged) Create(name string) (Staged, Candidate, error) {
 	if name == "" {
 		return s, Candidate{}, domain.RefusalError{Reason: "the category needs a name"}
 	}
+
 	if err := s.checkLeaf(name); err != nil {
 		return s, Candidate{}, err
 	}
 	next := s
 	next.NewAccounts = append(slices.Clone(s.NewAccounts), name)
+
 	return next, Candidate{Name: name, Target: name}, nil
 }
 
@@ -156,6 +182,7 @@ func (s Staged) checkLeaf(name string) error {
 			return domain.RefusalError{Reason: "the name " + leaf(name) + " is already used by " + existing}
 		}
 	}
+
 	return nil
 }
 
@@ -175,11 +202,13 @@ func (s Staged) WithName(name string) (Staged, error) {
 	case !domain.HoldsMoney(name):
 		return s, domain.RefusalError{Reason: "the account must be an assets: or liabilities: account"}
 	}
+
 	if err := s.checkLeaf(name); err != nil {
 		return s, err
 	}
 	next := s
 	next.Named = name
+
 	return next, nil
 }
 
@@ -188,6 +217,7 @@ func (s Staged) allNames() []string {
 	for _, account := range s.Known {
 		names = append(names, account.Name)
 	}
+
 	return names
 }
 
@@ -195,8 +225,16 @@ func (s Staged) allNames() []string {
 func (s Staged) Once(index int, candidate Candidate) Staged {
 	next := s
 	next.Rows = slices.Clone(s.Rows)
-	next.Rows[index].Target, next.Rows[index].RuleID, next.Rows[index].Once = candidate.Target, "", true
+	next.Rows[index] = next.Rows[index].chosenOnce(candidate.Target)
+
 	return next
+}
+
+// chosenOnce is the row posted to target by a choice for it alone, which no rule may take away.
+func (r Row) chosenOnce(target string) Row {
+	r.Target, r.RuleID, r.Once = target, "", true
+
+	return r
 }
 
 // NextRuleID is the id a rule staged now gets.
@@ -215,6 +253,7 @@ type RuleDraft struct {
 // RuleDraftFor starts a rule for the row: its payee, else its transaction type, as an escaped literal.
 func (s Staged) RuleDraftFor(index int) RuleDraft {
 	row := s.Rows[index]
+
 	return RuleDraft{Field: row.MatchField(), Pattern: regexp.QuoteMeta(row.field(row.MatchField()))}
 }
 
@@ -225,9 +264,11 @@ func (d RuleDraft) Alternative() []Condition {
 	if d.Purpose == "" {
 		return []Condition{{Field: d.Field, Pattern: d.Pattern}}
 	}
+
 	if d.Pattern == "" {
 		return []Condition{purpose}
 	}
+
 	return []Condition{{Field: d.Field, Pattern: d.Pattern}, purpose}
 }
 
@@ -252,15 +293,23 @@ func (s Staged) Impact(rule Rule) Impact {
 		if !matches(*row) {
 			continue
 		}
+
 		impact.Matches++
-		if row.RuleID != "" && row.RuleID != rule.ID && row.HeldByFallback() == rule.Fallback() {
+		if rule.wouldTake(*row) {
 			impact.Takes++
 			if !slices.Contains(impact.From, row.RuleID) {
 				impact.From = append(impact.From, row.RuleID)
 			}
 		}
 	}
+
 	return impact
+}
+
+// wouldTake reports a row another rule of the same rank categorises: a fallback rule competes only with other
+// fallback rules, a rule only with other rules.
+func (r Rule) wouldTake(row Row) bool {
+	return row.RuleID != "" && row.RuleID != r.ID && row.HeldByFallback() == r.Fallback()
 }
 
 // checkPattern refuses a rule whose newest alternative has no pattern, or one that is no expression.
@@ -269,10 +318,12 @@ func checkPattern(rule Rule) error {
 		if condition.Pattern == "" {
 			return domain.RefusalError{Reason: "the pattern is required"}
 		}
+
 		if _, err := regexp.Compile(condition.Pattern); err != nil {
 			return domain.RefusalError{Reason: "the pattern is not a valid expression"}
 		}
 	}
+
 	return nil
 }
 
@@ -281,6 +332,7 @@ func (s Staged) checkOverlap(rule Rule) error {
 	if impact := s.Impact(rule); impact.Takes > 0 {
 		return domain.RefusalError{Reason: "rule " + impact.From[0] + " already categorises rows this pattern matches"}
 	}
+
 	return nil
 }
 
@@ -289,14 +341,17 @@ func (s Staged) AddRule(rule Rule) (Staged, error) {
 	if err := checkPattern(rule); err != nil {
 		return s, err
 	}
+
 	if rule.Category == "" {
 		return s, domain.RefusalError{Reason: "choose a category"}
 	}
+
 	if err := s.checkOverlap(rule); err != nil {
 		return s, err
 	}
 	next := s
 	next.Rules = append(slices.Clone(s.Rules), rule)
+
 	return next.apply(rule), nil
 }
 
@@ -306,22 +361,26 @@ func (s Staged) Widen(id string, alternative []Condition) (Staged, error) {
 	if index < 0 {
 		return s, domain.RefusalError{Reason: "rule " + id + " does not exist"}
 	}
+
 	rule.Staged = true
 	if err := checkPattern(rule); err != nil {
 		return s, err
 	}
+
 	if err := s.checkOverlap(rule); err != nil {
 		return s, err
 	}
 	next := s
 	next.Rules = slices.Clone(s.Rules)
 	next.Rules[index] = rule
+
 	return next.apply(rule), nil
 }
 
 // Widened is the rule as it would read after adding the alternative.
 func (s Staged) Widened(id string, alternative []Condition) (Rule, bool) {
 	rule, index := s.withAlternative(id, alternative)
+
 	return rule, index >= 0
 }
 
@@ -333,6 +392,7 @@ func (s Staged) withAlternative(id string, alternative []Condition) (rule Rule, 
 	}
 	rule = s.Rules[index]
 	rule.Alternatives = append(slices.Clone(rule.Alternatives), alternative)
+
 	return rule, index
 }
 
@@ -341,12 +401,19 @@ func (s Staged) withAlternative(id string, alternative []Condition) (rule Rule, 
 func (s Staged) apply(rule Rule) Staged {
 	rows, matches := slices.Clone(s.Rows), rule.matcher()
 	for i := range rows {
-		if (rows[i].Target == "" || rows[i].HeldByFallback() && !rule.Fallback()) && matches(rows[i]) {
+		if rule.mayClaim(rows[i]) && matches(rows[i]) {
 			rows[i].Target, rows[i].RuleID = rule.Category, rule.ID
 		}
 	}
 	s.Rows = rows
+
 	return s
+}
+
+// mayClaim reports a row open to the rule: one nothing has claimed, or one only a fallback rule holds while
+// this rule is none.
+func (r Rule) mayClaim(row Row) bool {
+	return row.Target == "" || row.HeldByFallback() && !r.Fallback()
 }
 
 // NetIncomeChange is what the categories chosen here would add to net income: the rows posted to income
@@ -362,6 +429,7 @@ func (s Staged) NetIncomeChange() domain.MultiAmount {
 			total = total.Plus(row.Amount)
 		}
 	}
+
 	return total
 }
 
@@ -376,33 +444,51 @@ func (s Staged) StagedRules() []Rule {
 // categorised by them.
 func (s Staged) Restage(earlier Staged) Staged {
 	next := s
+
 	next.Edits = earlier.Edits
 	if !next.NewAccount {
 		next.Named = ""
 	}
-	next.Rules = slices.Clone(s.Rules)
-	for _, rule := range earlier.StagedRules() {
-		if i := slices.IndexFunc(next.Rules, func(r Rule) bool { return r.ID == rule.ID }); i >= 0 {
-			next.Rules[i] = rule
-		} else {
-			next.Rules = append(next.Rules, rule)
-		}
-	}
-	next.Rows = slices.Clone(s.Rows)
-	choices := map[rowKey][]Row{}
-	for i := range earlier.Rows {
-		if row := earlier.Rows[i]; row.Once {
-			choices[row.key()] = append(choices[row.key()], row)
-		}
-	}
-	for i := range next.Rows {
-		if chosen := choices[next.Rows[i].key()]; len(chosen) > 0 {
-			next.Rows[i].Target, next.Rows[i].RuleID, next.Rows[i].Once = chosen[0].Target, "", true
-			choices[next.Rows[i].key()] = chosen[1:]
-		}
-	}
+	next.Rules = withStagedRules(s.Rules, earlier.StagedRules())
+	next.Rows = withOnceChoices(s.Rows, earlier.Rows)
 	for _, rule := range earlier.StagedRules() {
 		next = next.apply(rule)
 	}
+
 	return next
+}
+
+// withStagedRules are the rules with the staged ones put in, each over the rule of its ID.
+func withStagedRules(rules, staged []Rule) []Rule {
+	merged := slices.Clone(rules)
+	for _, rule := range staged {
+		if i := slices.IndexFunc(merged, func(r Rule) bool { return r.ID == rule.ID }); i >= 0 {
+			merged[i] = rule
+		} else {
+			merged = append(merged, rule)
+		}
+	}
+
+	return merged
+}
+
+// withOnceChoices are the rows with the choices made for single earlier rows carried over to the same rows.
+func withOnceChoices(rows, earlier []Row) []Row {
+	chosenRows := slices.Clone(rows)
+	choices := map[rowKey][]Row{}
+	for i := range earlier {
+		if row := earlier[i]; row.Once {
+			choices[row.key()] = append(choices[row.key()], row)
+		}
+	}
+
+	for i := range chosenRows {
+		key := chosenRows[i].key()
+		if chosen := choices[key]; len(chosen) > 0 {
+			chosenRows[i] = chosenRows[i].chosenOnce(chosen[0].Target)
+			choices[key] = chosen[1:]
+		}
+	}
+
+	return chosenRows
 }

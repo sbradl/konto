@@ -15,6 +15,7 @@ func (w *world) expectPanels(titles ...string) error {
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -29,6 +30,7 @@ func (w *world) expectNoLineWiderThan(width int) error {
 			return fmt.Errorf("line %d is %d cells wide, want at most %d: %q", y, n, width, line)
 		}
 	}
+
 	return nil
 }
 
@@ -41,6 +43,7 @@ func (w *world) expectRoundedBorders() error {
 			return err
 		}
 	}
+
 	return nil
 }
 
