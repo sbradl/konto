@@ -231,7 +231,7 @@ func euroFormat(mantissa int64) string { return eur(mantissa)[0].Format() }
 
 func TestPlanForANewAccountOpensItsBalanceTheDayBeforeTheOldestRow(t *testing.T) {
 	staged := Staged{
-		NewAccount: true, Named: "assets:holiday", IBAN: "DE27100777770209299700", Format: FormatPostbank,
+		NewAccount: true, Named: "assets:holiday", IBAN: "DE00000000000000000003", Format: FormatPostbank,
 		Zero: eur(0), Closing: "4.412,34",
 		Rows: []Row{
 			{Date: day("2026-09-15"), Description: "Kontoabrechnung", Purpose: "Zinsen", Amount: eur(1234), Target: "income:interest", RuleID: "6"},
@@ -247,7 +247,7 @@ func TestPlanForANewAccountOpensItsBalanceTheDayBeforeTheOldestRow(t *testing.T)
 	for _, want := range []string{
 		"2026-08-19 opening balance\n    assets:holiday  4.000,00 EUR = 4.000,00 EUR\n    equity:opening-balances",
 		"2026-09-15 Kontoabrechnung  ; Zinsen\n    income:interest  -12,34 EUR  ; konto-rule:6\n    assets:holiday  12,34 EUR = 4.412,34 EUR",
-		"account assets:holiday  ; konto:source:import, konto:iban:DE27100777770209299700, konto:format:postbank",
+		"account assets:holiday  ; konto:source:import, konto:iban:DE00000000000000000003, konto:format:postbank",
 		"payee opening balance", "account income:interest", "account expenses:cash",
 	} {
 		if !strings.Contains(text, want) {
@@ -290,7 +290,7 @@ func TestWithNameStagesAFreshAccountName(t *testing.T) {
 }
 
 func TestSuggestAccountNameEndsInTheLastDigitsOfTheIBAN(t *testing.T) {
-	if got := SuggestAccountName("DE27100777770209299700"); got != "assets:account-9700" {
+	if got := SuggestAccountName("DE00000000000000000003"); got != "assets:account-0003" {
 		t.Errorf("name = %q", got)
 	}
 

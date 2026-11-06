@@ -239,7 +239,7 @@ Feature: Import — writing, assertions, opening balance, staging and quitting
   Rule: First import into a new account
 
     Background:
-      Given a Postbank CSV "new.csv" for IBAN "DE27100777770209299700" with closing balance 4.412,34 EUR:
+      Given a Postbank CSV "new.csv" for IBAN "DE00000000000000000003" with closing balance 4.412,34 EUR:
         | date      | type            | payee          | purpose             | amount  |
         | 15.9.2026 | Kontoabrechnung |                | Zinsen              | 12,34   |
         | 1.9.2026  | Gutschrift      | Max Mustermann | Umbuchung vom Giro  | 500,00  |
@@ -304,7 +304,7 @@ Feature: Import — writing, assertions, opening balance, staging and quitting
       And I press "y"
       Then the journal contains
         """
-        account assets:holiday  ; konto:source:import, konto:iban:DE27100777770209299700, konto:format:postbank
+        account assets:holiday  ; konto:source:import, konto:iban:DE00000000000000000003, konto:format:postbank
         """
       And the journal's "opening balance" on "2026-08-19" posts 4.000,00 EUR to "assets:holiday" with assertion "= 4.000,00 EUR"
       And the journal's "opening balance" on "2026-08-19" posts to "equity:opening-balances"

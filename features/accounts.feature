@@ -19,7 +19,7 @@ Feature: Closing and reopening accounts (Dashboard Accounts panel)
       Then I see a y/n prompt naming "assets:spare"
       When I press "y"
       Then the journal's "account assets:spare" directive contains "konto:closed:2026-09-30"
-      And the directive still contains "konto:source:import" and "konto:iban:DE12500105170648489890" and "konto:format:postbank"
+      And the directive still contains "konto:source:import" and "konto:iban:DE00000000000000000004" and "konto:format:postbank"
       And the row "assets:spare" is listed below every open account
       And it shows "closed 2026-09-30"
       And the row is coloured 8
@@ -74,7 +74,7 @@ Feature: Closing and reopening accounts (Dashboard Accounts panel)
       Given I select "assets:spare"
       And I press "c"
       And I press "y"
-      And a Postbank CSV "spare.csv" for IBAN "DE12500105170648489890" with closing balance 0,00 EUR:
+      And a Postbank CSV "spare.csv" for IBAN "DE00000000000000000004" with closing balance 0,00 EUR:
         | date      | type       | payee | purpose | amount |
         | 29.9.2026 | Gutschrift | X     | x       | 1,00   |
       When I press "2"
@@ -154,7 +154,7 @@ Feature: Closing and reopening accounts (Dashboard Accounts panel)
       Then I see a y/n prompt naming "assets:old-account"
       When I press "y"
       Then the journal's "account assets:old-account" directive does not contain "konto:closed"
-      And the directive still contains "konto:source:import" and "konto:iban:DE75512108001245126199"
+      And the directive still contains "konto:source:import" and "konto:iban:DE00000000000000000007"
       And the row "assets:old-account" is listed among the open accounts
       And it shows "0,00 EUR" and is not coloured 8
       And every hledger check passes
@@ -181,7 +181,7 @@ Feature: Closing and reopening accounts (Dashboard Accounts panel)
       Given I select "assets:old-account"
       And I press "o"
       And I press "y"
-      And a Postbank CSV "old.csv" for IBAN "DE75512108001245126199" with closing balance 1,00 EUR:
+      And a Postbank CSV "old.csv" for IBAN "DE00000000000000000007" with closing balance 1,00 EUR:
         | date      | type       | payee | purpose | amount |
         | 29.9.2026 | Gutschrift | X     | x       | 1,00   |
       When I press "2"

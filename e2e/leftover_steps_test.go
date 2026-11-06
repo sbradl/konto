@@ -149,7 +149,7 @@ func (w *world) expectNoCounterpart(account, counterpart string) error {
 // openSavingsCSV writes a CSV for the savings account's IBAN and opens it in Import.
 func (w *world) openSavingsCSV() error {
 	if err := w.writeExport("savings.csv", postbankExport{
-		IBAN: "DE44500105175407324931", ClosingBalance: "13.501,00",
+		IBAN: "DE00000000000000000005", ClosingBalance: "13.501,00",
 		Rows: []postbankRow{{Date: "29.9.2026", Type: "Gutschrift", Payee: "Max", Purpose: "x", Amount: "1,00"}},
 	}); err != nil {
 		return err

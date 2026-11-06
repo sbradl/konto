@@ -11,7 +11,7 @@ import (
 func freshAccount() csvimport.Staged {
 	s := categorisable()
 	s.NewAccount, s.Account = true, domain.Account{}
-	s.IBAN = "DE27100777770209299700"
+	s.IBAN = "DE00000000000000000003"
 
 	return s
 }
@@ -42,7 +42,7 @@ func TestANewIBANOpensTheAccountNameDialogWithASuggestion(t *testing.T) {
 	m := naming()
 
 	view := screen(m)
-	for _, want := range []string{"─ create account ", "assets:account-9700", "DE27100777770209299700"} {
+	for _, want := range []string{"─ create account ", "assets:account-0003", "DE00000000000000000003"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("dialog lacks %q:\n%s", want, view)
 		}
@@ -61,12 +61,12 @@ func TestEnterAcceptsTheSuggestedNameAndStagesTheAccount(t *testing.T) {
 	}
 
 	staged, _ := m.Staged()
-	if staged.Named != "assets:account-9700" {
+	if staged.Named != "assets:account-0003" {
 		t.Errorf("named = %q", staged.Named)
 	}
 
 	view := screen(m)
-	if !strings.Contains(view, "assets:account-9700 (new)") || !strings.Contains(view, "account assets:account-9700") {
+	if !strings.Contains(view, "assets:account-0003 (new)") || !strings.Contains(view, "account assets:account-0003") {
 		t.Errorf("the info block does not show the new account:\n%s", view)
 	}
 }

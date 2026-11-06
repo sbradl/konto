@@ -120,7 +120,7 @@ func (w *world) afterWrite(write func() error) error {
 
 func newAccountExport() postbankExport {
 	return postbankExport{
-		IBAN: "DE27100777770209299700", ClosingBalance: "10,00",
+		IBAN: "DE00000000000000000003", ClosingBalance: "10,00",
 		Rows: []postbankRow{{Date: "29.9.2026", Type: "Gutschrift", Payee: "Oma", Purpose: "Geld", Amount: "10,00"}},
 	}
 }

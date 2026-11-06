@@ -69,7 +69,7 @@ Feature: Product invariants that must hold across the whole app
 
     Scenario: a new import account is import-fed and only that
       Given the journal "household"
-      And a Postbank CSV "new.csv" for IBAN "DE27100777770209299700" with closing balance 10,00 EUR:
+      And a Postbank CSV "new.csv" for IBAN "DE00000000000000000003" with closing balance 10,00 EUR:
         | date      | type       | payee | purpose | amount |
         | 29.9.2026 | Gutschrift | Oma   | Geld    | 10,00  |
       And I start konto

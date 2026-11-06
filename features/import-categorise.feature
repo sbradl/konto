@@ -575,7 +575,7 @@ Feature: Import — categorising rows, building and widening rules, the category
       Given a Postbank CSV "out.csv" for IBAN "DE89370400440532013000" with closing balance 13.040,00 EUR:
         | date      | type      | payee              | purpose | amount  |
         | 29.9.2026 | Umbuchung | Umbuchung Sparkonto| Sparen  | -200,00 |
-      And a Postbank CSV "in.csv" for IBAN "DE44500105175407324931" with closing balance 13.700,00 EUR:
+      And a Postbank CSV "in.csv" for IBAN "DE00000000000000000005" with closing balance 13.700,00 EUR:
         | date      | type      | payee              | purpose | amount |
         | 29.9.2026 | Umbuchung | Umbuchung Girokonto| Sparen  | 200,00 |
       When I import "out.csv" categorising "Umbuchung Sparkonto" as the transfer to "assets:savings"

@@ -139,12 +139,12 @@ func TestOpenGivesHledgerTheFormatThenTheAccountThenTheRules(t *testing.T) {
 }
 
 func TestOpenOfAnUnknownIBANStagesANewAccount(t *testing.T) {
-	staged, conv, err := open(t, "DE27100777770209299700", ledgerWith(importAccount()))
+	staged, conv, err := open(t, "DE00000000000000000003", ledgerWith(importAccount()))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	want := header{File: "sept.csv", Format: "postbank", IBAN: "DE27100777770209299700", Closing: "14.261,45", NewAccount: true}
+	want := header{File: "sept.csv", Format: "postbank", IBAN: "DE00000000000000000003", Closing: "14.261,45", NewAccount: true}
 	if got := headerOf(staged); got != want {
 		t.Errorf("staged %+v, want %+v", got, want)
 	}

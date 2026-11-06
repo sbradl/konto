@@ -122,7 +122,7 @@ Feature: Import — picking a file, the row table, skipped rows
         | DE89 3704 0044 0532 0130 00   |
 
     Scenario: unknown IBAN offers to create an account
-      Given a Postbank CSV "new.csv" for IBAN "DE27100777770209299700" with closing balance 4.412,34 EUR:
+      Given a Postbank CSV "new.csv" for IBAN "DE00000000000000000003" with closing balance 4.412,34 EUR:
         | date       | type           | payee | purpose | amount |
         | 15.9.2026  | Kontoabrechnung |      | Zinsen  | 12,34  |
       When I open "new.csv" in Import
@@ -143,14 +143,14 @@ Feature: Import — picking a file, the row table, skipped rows
 
       Examples:
         | setup                                           | iban                   | message                           |
-        | IBAN DE75512108001245126199 is a closed account | DE75512108001245126199 | account closed — reopen with o    |
+        | IBAN DE00000000000000000007 is a closed account | DE00000000000000000007 | account closed — reopen with o    |
         | "assets:cash" is manual with IBAN DE91100000000123456789 | DE91100000000123456789 | manual              |
         | "assets:checking" has no source tag             | DE89370400440532013000 | unclassified                      |
 
     @proposed
     Scenario: the clearing account is never an import target
-      Given the journal "household" where the clearing account carries IBAN DE55500105175407324999
-      And a Postbank CSV "x.csv" for IBAN "DE55500105175407324999" with closing balance 1,00 EUR:
+      Given the journal "household" where the clearing account carries IBAN DE00000000000000000006
+      And a Postbank CSV "x.csv" for IBAN "DE00000000000000000006" with closing balance 1,00 EUR:
         | date      | type       | payee | purpose | amount |
         | 29.9.2026 | Gutschrift | X     | x       | 1,00   |
       And I start konto
@@ -313,7 +313,7 @@ Feature: Import — picking a file, the row table, skipped rows
       Then the info block shows watermark "2026-09-26"
 
     Scenario: a fresh account has no watermark, every row is new
-      Given a Postbank CSV "new.csv" for IBAN "DE27100777770209299700" with closing balance 4.412,34 EUR:
+      Given a Postbank CSV "new.csv" for IBAN "DE00000000000000000003" with closing balance 4.412,34 EUR:
         | date      | type            | payee | purpose | amount |
         | 15.9.2026 | Kontoabrechnung |       | Zinsen  | 12,34  |
         | 20.8.2026 | Auszahlung      |       | Geld    | -100,00 |
