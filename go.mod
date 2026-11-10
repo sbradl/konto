@@ -7,7 +7,7 @@ require (
 	charm.land/lipgloss/v2 v2.0.6
 	github.com/NimbleMarkets/ntcharts/v2 v2.2.0
 	github.com/charmbracelet/x/ansi v0.11.8
-	github.com/charmbracelet/x/vt v0.0.0-20260927004216-9c77d672503d
+	github.com/charmbracelet/x/vt v0.1.0
 	github.com/creack/pty v1.1.24
 	github.com/cucumber/godog v0.16.0
 )
