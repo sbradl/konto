@@ -1,6 +1,6 @@
 [tools]
-go            = "1.27.1"
-golangci-lint = "2.13.2"
+go            = "1.27.4"
+golangci-lint = "2.15.0"
 gotestsum     = "1.13.0"
 hledger       = "1.52.1"   # hard runtime dep, spec requires >= 1.32; startup preflight also checks
 "go:github.com/go-gremlins/gremlins/cmd/gremlins" = "0.6.0"

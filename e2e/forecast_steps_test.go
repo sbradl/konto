@@ -590,12 +590,12 @@ func (w *world) expectMilestoneToday(account, want string, same bool) error {
 
 func (w *world) expectMilestoneColour(figure, account string, colour int) error {
 	return w.onMilestoneRow(account, func(text string, y int) error {
-		at := strings.LastIndex(text, figure)
-		if at < 0 {
+		before, _, found := strings.CutLast(text, figure)
+		if !found {
 			return fmt.Errorf("the row %q lacks %q", text, figure)
 		}
 
-		if got := w.s.cellColour(len([]rune(text[:at]))+1, y); got != colour {
+		if got := w.s.cellColour(len([]rune(before))+1, y); got != colour {
 			return fmt.Errorf("%q is coloured %d, want %d", figure, got, colour)
 		}
 
