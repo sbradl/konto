@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/cucumber/godog"
 )
@@ -386,10 +387,14 @@ func (w *world) expectLeftAlternateScreen() error {
 	if err != nil {
 		return err
 	}
-	out := string(s.rawOutput())
+	// polled: the editor runs untracked by the idle signal (see withIdleSignal), so the leave may still be on its way
+	left := s.waitFor(3*time.Second, func(string) bool {
+		out := string(s.rawOutput())
+		entered := strings.Index(out, "\x1b[?1049h")
 
-	entered := strings.Index(out, "\x1b[?1049h")
-	if entered < 0 || !strings.Contains(out[entered:], "\x1b[?1049l") {
+		return entered >= 0 && strings.Contains(out[entered:], "\x1b[?1049l")
+	})
+	if !left {
 		return errors.New("konto never left the alternate screen after entering it")
 	}
 
