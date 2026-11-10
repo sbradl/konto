@@ -81,6 +81,21 @@ func TestDeclareIgnoresTheLongerNameAndOtherDirectives(t *testing.T) {
 	}
 }
 
+// A payee or tag name runs to the comment, two spaces and all; only an account name ends at two spaces.
+func TestDeclareReadsAPayeeWithTwoSpacesWhole(t *testing.T) {
+	file := journalWith(t, "payee FOO  BAR\ntag A  B  ; c\npayee FOO\n")
+
+	apply(t, file,
+		domain.Declare{Directive: "payee", Name: "FOO  BAR"},
+		domain.Declare{Directive: "tag", Name: "A  B"},
+		domain.Declare{Directive: "tag", Name: "A"},
+	)
+
+	if got, want := readFile(t, file.path), "payee FOO  BAR\ntag A  B  ; c\npayee FOO\ntag A\n"; got != want {
+		t.Errorf("journal = %q, want %q", got, want)
+	}
+}
+
 const ordered = `2026-09-10 A
     expenses:x  1,00 EUR
     assets:checking
@@ -135,6 +150,18 @@ func TestAddTransactionsKeepsTheCommentsOfTheTransactionBelow(t *testing.T) {
 	apply(t, file, domain.AddTransactions{Transactions: []domain.NewTransaction{spend(day(28), "B")}})
 
 	if got := readFile(t, file.yearPath(2026)); !strings.HasPrefix(got, "2026-09-28 B\n") || !strings.Contains(got, "\n; about C\n2026-09-29 C") {
+		t.Errorf("journal =\n%s", got)
+	}
+}
+
+// hledger also starts a comment line with # or *, and those stay with the transaction below them too.
+func TestAddTransactionsKeepsHashAndStarCommentsOfTheTransactionBelow(t *testing.T) {
+	file := withYear(t, "x\n* star\n# hash\n2026-09-29 C\n    expenses:x  3,00 EUR\n    assets:checking\n")
+
+	apply(t, file, domain.AddTransactions{Transactions: []domain.NewTransaction{spend(day(28), "B")}})
+
+	if got := readFile(t, file.yearPath(2026)); !strings.Contains(got, "x\n2026-09-28 B\n") ||
+		!strings.Contains(got, "\n* star\n# hash\n2026-09-29 C") {
 		t.Errorf("journal =\n%s", got)
 	}
 }

@@ -114,6 +114,25 @@ func TestPlanWritesRowsOldestFirstWithTheAssertionOnTheNewest(t *testing.T) {
 	}
 }
 
+// hledger reads the payee from a description up to its `|`, the rest being a note: that is the name to declare.
+func TestPlanDeclaresThePayeeBeforeTheNote(t *testing.T) {
+	staged := weekImport()
+	staged.Rows[0].Description = "REWE Markt | Filiale 12"
+	staged.Rows[1].Description = "REWE Markt|Filiale 7"
+
+	var payees []domain.Edit
+	for _, edit := range planned(t, staged).Changeset.Edits {
+		if declare, ok := edit.(domain.Declare); ok && declare.Directive == "payee" {
+			payees = append(payees, edit)
+		}
+	}
+
+	want := []domain.Edit{domain.DeclarePayee("REWE Markt"), domain.DeclarePayee("Kiosk")}
+	if !reflect.DeepEqual(payees, want) {
+		t.Errorf("payee declarations = %+v, want %+v", payees, want)
+	}
+}
+
 func TestPlanDeclaresWhatIsNewAndWritesTheStagedRules(t *testing.T) {
 	plan := planned(t, weekImport())
 

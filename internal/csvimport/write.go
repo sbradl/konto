@@ -259,16 +259,23 @@ func (s Staged) usedNewAccounts() []string {
 	return slices.DeleteFunc(slices.Clone(s.NewAccounts), func(name string) bool { return !used[name] })
 }
 
-// payees are the descriptions of the rows, each once, newest row first.
+// payees are the payees of the rows' descriptions, each once, newest row first.
 func (s Staged) payees() []string {
 	var payees []string
 	for i := range s.Rows {
-		if !slices.Contains(payees, s.Rows[i].Description) {
-			payees = append(payees, s.Rows[i].Description)
+		if payee := payeeOf(s.Rows[i].Description); !slices.Contains(payees, payee) {
+			payees = append(payees, payee)
 		}
 	}
 
 	return payees
+}
+
+// payeeOf is the payee hledger reads from a description: the text before a `|`, the rest being a note.
+func payeeOf(description string) string {
+	payee, _, _ := strings.Cut(description, "|")
+
+	return strings.TrimSpace(payee)
 }
 
 // ruleEdits write the rules this import adds or widens.

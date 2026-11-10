@@ -43,12 +43,22 @@ func appendBlock(file *source, block []string) {
 func declare(sources []*source, edit domain.Declare) {
 	for _, source := range sources {
 		for _, line := range source.lines {
-			if directive, ok := parseDirective(line, edit.Directive); ok && directive.name == edit.Name {
+			if directive, ok := parseDirective(line, edit.Directive); ok && declaredName(directive, edit) == edit.Name {
 				return
 			}
 		}
 	}
 	appendLine(sources[0], edit.Line())
+}
+
+// declaredName is the name a directive line declares: two spaces end an account name, but a payee or tag name
+// runs to the comment.
+func declaredName(directive directiveLine, edit domain.Declare) string {
+	if edit.Directive == domain.DirectiveAccount {
+		return directive.name
+	}
+
+	return directive.head
 }
 
 // addTransactions writes each transaction into the year file of its date, at its date position. A year
@@ -111,7 +121,7 @@ func insertTransaction(file *source, transaction domain.NewTransaction) {
 func firstDatedAfter(lines []string, date time.Time) int {
 	for i, line := range lines {
 		if when, ok := headerDate(line); ok && when.After(date) {
-			for i > 0 && strings.HasPrefix(lines[i-1], ";") {
+			for i > 0 && strings.IndexAny(lines[i-1], ";#*") == 0 {
 				i--
 			}
 
