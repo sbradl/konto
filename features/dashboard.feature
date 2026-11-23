@@ -162,106 +162,91 @@ Feature: Dashboard
       Given the journal "household" with 200 transactions
       And the terminal is 100×30
       And I start konto
-      Then the Recent panel ends with "… N more" where N > 0
+      Then the Activity panel ends with "… N more" where N > 0
 
-  Rule: Recent panel
+  Rule: Activity panel, below today
 
     @proposed
     Scenario: newest first across all accounts
-      Then the Recent panel's first two rows are dated "2026-09-26" and describe "Sparen"
+      Then the first two rows below today are dated "2026-09-26" and describe "Sparen"
       And the third row is dated "2026-09-25" and describes "Acme GmbH"
       And the rows are in non-increasing date order
 
     @proposed
-    Scenario: row shape is date, description, category, amount
-      Then the Recent row for "Acme GmbH" on "2026-09-25" shows category "income:salary"
+    Scenario: row shape is date, description, category, amount, balance after
+      Then the Activity row for "Acme GmbH" on "2026-09-25" shows category "income:salary"
       And it shows "3.000,00 EUR" coloured 2
+      And it shows "13.740,00 EUR" coloured 2
 
     @proposed
     Scenario: expenses are not green
-      Then the Recent row for "REWE" on "2026-09-10" shows category "expenses:groceries"
+      Then the Activity row for "REWE" on "2026-09-10" shows category "expenses:groceries"
       And its amount is not coloured 2
 
     @proposed
     Scenario: a transfer shows the counterpart account, not a category
-      Then the Recent rows for "Sparen" show "assets:transfers"
+      Then the Activity rows for "Sparen" show "assets:transfers"
 
     @proposed
     Scenario: rows are not selectable
-      When I press "↓"
-      Then no Recent row is highlighted with background 8
+      When I press "Tab"
+      And I press "↓"
+      Then no Activity row is highlighted with background 8
 
     Scenario: no uncategorised marker
-      Then I do not see "?" in any Recent row
+      Then I do not see "?" in any Activity row
       And I do not see the word "uncategorized" anywhere
 
-    Scenario: no edit key on Recent
+    Scenario: no edit key on Activity
       When I press "e"
       Then the screen is unchanged
 
-  Rule: Upcoming panel
+  Rule: Activity panel, above today
 
-    Scenario: next occurrences from periodic rules, soonest first
-      Then the Upcoming panel lists in order
+    Scenario: next occurrences from periodic rules, the soonest next to today
+      Then I see "━━ today 2026-09-30 ━━"
+      And the rows above today, nearest first, are
         | 2026-10-01 | Vermieter Mueller |
         | 2026-10-05 | Streaming         |
         | 2026-10-25 | Acme GmbH         |
         | 2026-10-26 | Sparen            |
-
-    @proposed
-    Scenario: rows are not selectable
-      When I press "↓"
-      Then no Upcoming row is highlighted with background 8
 
     Scenario: upcoming items are not journal transactions
       Then the journal is unchanged
       And the transaction count in the tab bar is still 54
 
     @proposed
-    Scenario: no rules means an empty panel, not an error
+    Scenario: no rules means nothing above today, not an error
       Given the journal "household"
       And I start konto
-      Then the Upcoming panel is empty
+      Then there are no rows above today
       And the status bar shows no error indicator
 
   Rule: Panel focus
 
-    Scenario: Tab moves the focus from Accounts through Upcoming to Recent
+    Scenario: Tab moves the focus between Accounts and Activity
       Then I see "╭─ ACCOUNTS ◂"
       When I press "Tab"
-      Then I see "╭─ UPCOMING ◂"
+      Then I see "╭─ ACTIVITY ◂"
       When I press "Tab"
-      Then I see "╭─ RECENT ◂"
+      Then I see "╭─ ACCOUNTS ◂"
       When I press "Shift+Tab"
-      Then I see "╭─ UPCOMING ◂"
+      Then I see "╭─ ACTIVITY ◂"
 
     Scenario: the arrows scroll the focused read-only panel
-      When I press "Tab" twice
+      When I press "Tab"
+      And I press "Home"
       And I press "↓"
       Then the status bar shows "2/"
       And the status bar shows "Tab focus"
 
-  Rule: Monthly spend chart
-
-    Scenario: last six complete months of total expenses
-      Then I see a braille chart of monthly spend
-      And the x-axis labels are "Mar" "Apr" "May" "Jun" "Jul" "Aug"
-      And the x-axis does not include "Sep"
-
-    # Braille cells give the totals only to within a dot, so the steps compare within that tolerance.
-    Scenario: plotted values are the monthly expense totals
-      Then the plotted monthly totals are 1175, 1120, 1195, 1150, 1205, 1130
-    Scenario: single line
-      Then the chart has exactly 1 data series
-    Scenario: transfers and income are not spend
-      Then the plotted totals do not include the monthly 500,00 EUR transfer
-      And the plotted totals do not include salary
-
-    Scenario: y-axis labels are in thousands
-      Then the y-axis labels are formatted in thousands
-
-    Scenario: chart uses only ANSI-16 colours
-      Then every chart cell colour is an ANSI index below 16
+    Scenario: t brings the today line back to the middle
+      When I press "Tab"
+      And I press "End"
+      Then I do not see "━━ today 2026-09-30"
+      When I press "t"
+      Then I see "━━ today 2026-09-30"
+      And the status bar shows "t today"
 
   Rule: Dropped panels
 
@@ -275,6 +260,7 @@ Feature: Dashboard
         | JOURNAL CHECKS|
         | at cost       |
         | -V market     |
+        | SPEND         |
 
     Scenario Outline: dropped keys do nothing
       When I press "<key>"
@@ -297,7 +283,7 @@ Feature: Dashboard
         """
       And I press "r"
       Then I see a "SEPTEMBER NET INCOME" card showing "1.805,00 EUR"
-      And the Recent panel's first row is dated "2026-09-29"
+      And the first row below today is dated "2026-09-29"
 
     Scenario: external change is not visible before r
       When I append a transaction to the journal externally
@@ -320,7 +306,7 @@ Feature: Dashboard
     Scenario: dropped panels come back when the terminal grows
       Given the terminal is 100×30
       When I resize the terminal to 180×60
-      Then I see the "RECENT" and "UPCOMING" panels
+      Then I see the "ACTIVITY" panel
       And the status bar does not show "hidden"
 
     Scenario: panel titles are inset two cells

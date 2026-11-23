@@ -1,6 +1,7 @@
-// Package dashboard is the Dashboard view: the Accounts panel with its cursor over Upcoming, and beside them
-// the stat cards, Recent and the monthly spend chart as far as the terminal has room for them. Tab moves the
-// focus between Accounts, Upcoming and Recent; the cursor keys move the Accounts cursor or scroll the others.
+// Package dashboard is the Dashboard view: the Accounts panel and beside it the stat cards, and under them
+// the Activity panel, the upcoming occurrences over a today line over the recent transactions, as far as the
+// terminal has room for them. Tab moves the focus between Accounts and Activity; the cursor keys move the
+// Accounts cursor or scroll Activity.
 package dashboard
 
 import (
@@ -21,27 +22,27 @@ const (
 	cardHeight          = 4 // a stat card: border, figure, note, border
 	cardCount           = 2
 	minCardWidth        = 24 // narrower than this the cards give way
-	maxCategoryWidth    = 24 // the Recent panel's widest category column
+	maxCategoryWidth    = 24 // the Activity panel's widest category column
 	minDescriptionWidth = 8
 	descriptionShare    = 60 // percent of the room beside the date and amount that description takes
 	recentGap           = 2
-	recentFixed         = 16 // a Recent row's edges, its date and the gaps around the middle columns
-	upcomingHeight      = 10 // the least Upcoming takes under Accounts; it gets all the room Accounts leaves
-	minAccountsHeight   = 5  // Upcoming gives way rather than squeeze Accounts below this
-	spendHeight         = 10 // the spend chart under Recent
-	minRecentHeight     = 5  // the chart gives way rather than squeeze Recent below this
+	recentFixed         = 16 // an Activity row's edges, its date and the gaps around the middle columns
+	minFigureWidth      = 15 // an amount or balance column holds at least -100.000,00 EUR
+	activityHeight      = 10 // the least Activity takes under Accounts; it gets all the room Accounts leaves
+	minAccountsHeight   = 5  // Activity gives way rather than squeeze Accounts below this
 )
 
 // Model is the Dashboard's view-local state; the ledger is replaced wholesale on refresh.
 type Model struct {
 	accounts []domain.Account
-	recent   []domain.RecentEntry
-	upcoming []domain.RecentEntry
-	spend    []domain.MonthSpend
+	recent   []domain.RecentEntry // newest first
+	upcoming []domain.RecentEntry // soonest first
+	today    time.Time
 	figures  figures
 	cursor   layout.Cursor
 	focus    panel
-	scrolls  [panelCount]layout.Cursor // the first row Upcoming and Recent show; Accounts uses cursor
+	scroll   layout.Cursor // the first Activity row shown, once scrolled
+	scrolled bool          // until Activity is scrolled it keeps the today line in its middle
 	width    int
 	height   int
 }
@@ -51,9 +52,7 @@ type panel int
 
 const (
 	accountsPanel panel = iota
-	upcomingPanel
-	recentPanel
-	panelCount
+	activityPanel
 )
 
 // figures are the numbers the stat cards show.
@@ -65,7 +64,7 @@ type figures struct {
 	expenses domain.MultiAmount
 }
 
-// WithLedger shows a fresh snapshot: its accounts and the stat cards' figures.
+// WithLedger shows a fresh snapshot: its accounts, the stat cards' figures and the activity around today.
 func (m Model) WithLedger(ledger domain.Ledger) Model {
 	next := m
 	next.figures = figures{
@@ -74,7 +73,7 @@ func (m Model) WithLedger(ledger domain.Ledger) Model {
 	}
 	next.recent = ledger.Recent()
 	next.upcoming = ledger.UpcomingEntries()
-	next.spend = ledger.Spend
+	next.today = ledger.Today
 
 	return next.WithAccounts(ledger.Accounts)
 }
@@ -136,111 +135,84 @@ func (ReopenSelected) isAction() {}
 const (
 	keyClose  = "c"
 	keyReopen = "o"
+	keyToday  = "t"
 )
 
 // Bindings are the keys Key acts on besides the cursor keys, as the root hints them.
 func Bindings() []layout.Binding {
 	return []layout.Binding{
-		{Key: layout.KeyTab, Action: "focus"}, {Key: keyClose, Action: "close"}, {Key: keyReopen, Action: "reopen"},
+		{Key: layout.KeyTab, Action: "focus"},
+		{Key: keyClose, Action: "close"},
+		{Key: keyReopen, Action: "reopen"},
+		{Key: keyToday, Action: "today"},
 	}
 }
 
 // Key applies a key: c and o ask for the selected account to be closed or reopened, tab and shift+tab move
-// the focus, the cursor keys move or scroll the focused panel.
+// the focus, t puts Activity's today line back in its middle, the cursor keys move or scroll the focused panel.
 func (m Model) Key(key string) (Model, Action) {
 	switch key {
 	case keyClose:
 		return m, CloseSelected{}
 	case keyReopen:
 		return m, ReopenSelected{}
-	case layout.KeyTab:
-		return m.cycle(1), nil
-	case layout.KeyBackTab:
-		return m.cycle(-1), nil
+	case layout.KeyTab, layout.KeyBackTab:
+		return m.toggle(), nil
+	case keyToday:
+		next := m
+		next.scrolled = false
+
+		return next, nil
 	}
 
 	return m.Move(key), nil
 }
 
-// cycle moves the focus by step through the panels shown, wrapping around.
-func (m Model) cycle(step int) Model {
+// toggle moves the focus to the other panel; it stays on Accounts while Activity does not fit.
+func (m Model) toggle() Model {
 	next := m
-	shown := m.shownPanels()
-	at := slices.Index(shown, m.focused())
-	next.focus = shown[(at+step+len(shown))%len(shown)]
+	next.focus = accountsPanel
+
+	if m.focused() == accountsPanel && m.fit().activity {
+		next.focus = activityPanel
+	}
 
 	return next
 }
 
-// shownPanels are the focusable panels the terminal has room for, in tab order.
-func (m Model) shownPanels() []panel {
-	fit := m.fit()
-
-	shown := []panel{accountsPanel}
-	if fit.upcoming {
-		shown = append(shown, upcomingPanel)
-	}
-
-	if fit.right {
-		shown = append(shown, recentPanel)
-	}
-
-	return shown
-}
-
-// focused is the panel with the focus; Accounts when the focused panel no longer fits.
+// focused is the panel with the focus; Accounts when Activity no longer fits.
 func (m Model) focused() panel {
-	if slices.Contains(m.shownPanels(), m.focus) {
-		return m.focus
+	if m.focus == activityPanel && m.fit().activity {
+		return activityPanel
 	}
 
 	return accountsPanel
 }
 
 // Move applies a cursor key: up, down, home, end, pgup or pgdown. It moves the Accounts cursor, stopping at
-// both ends, or scrolls the focused Upcoming or Recent panel until its last entry shows.
+// both ends, or scrolls Activity between its first and last page.
 func (m Model) Move(key string) Model {
 	next := m
-
-	focus := m.focused()
-	if focus == accountsPanel {
+	if m.focused() == accountsPanel {
 		next.cursor = m.cursor.Move(key, len(m.accounts), m.pageSize())
 
 		return next
 	}
-	entries, capacity := m.entries(focus), m.capacity(focus)
-	next.scrolls[focus] = m.scrolls[focus].Scroll(key, lastOffset(len(entries), capacity), capacity)
+	capacity := m.capacity()
+	next.scroll = layout.Cursor{Offset: m.offset()}.Scroll(key, lastOffset(m.rowCount(), capacity), capacity)
+	next.scrolled = true
 
 	return next
 }
 
-// entries are what the Upcoming or Recent panel lists.
-func (m Model) entries(focus panel) []domain.RecentEntry {
-	if focus == upcomingPanel {
-		return m.upcoming
-	}
+// rowCount is how many rows Activity lists: the upcoming occurrences, the today line and the recent ones.
+func (m Model) rowCount() int { return len(m.upcoming) + 1 + len(m.recent) }
 
-	return m.recent
-}
+// capacity is how many rows fit inside Activity.
+func (m Model) capacity() int { return max(0, m.activityHeight()-layout.PanelChrome) }
 
-// capacity is how many rows fit inside the Upcoming or Recent panel.
-func (m Model) capacity(focus panel) int {
-	return max(0, m.panelHeight(focus)-layout.PanelChrome)
-}
-
-// panelHeight is the Upcoming or Recent panel's height: Upcoming takes what Accounts leaves, Recent what
-// the cards and the chart leave.
-func (m Model) panelHeight(focus panel) int {
-	if focus == upcomingPanel {
-		return m.height - m.accountsHeight()
-	}
-
-	if m.fit().chart {
-		return m.height - cardHeight - spendHeight
-	}
-
-	return m.height - cardHeight
-}
+// activityHeight is what Accounts and the cards leave of the height.
+func (m Model) activityHeight() int { return m.height - m.accountsHeight() }
 
 // lastOffset is the furthest a panel of capacity rows scrolls into count entries: its last page.
 func lastOffset(count, capacity int) int { return max(0, count-capacity) }
@@ -256,40 +228,39 @@ func (m Model) moveTo(i int) Model {
 // pageSize is how many account rows the panel shows at once.
 func (m Model) pageSize() int { return max(1, m.accountsHeight()-layout.PanelChrome) }
 
-// accountsHeight is just tall enough for every account when Upcoming fits under it, leaving Upcoming at
-// least upcomingHeight; the whole height when it does not.
+// accountsHeight is just tall enough for every account, and for the cards beside it, when Activity fits under
+// it, leaving Activity at least activityHeight; the whole height when it does not.
 func (m Model) accountsHeight() int {
-	if !m.fit().upcoming {
+	if !m.fit().activity {
 		return m.height
 	}
 
-	return min(len(m.accounts)+layout.PanelChrome, m.height-upcomingHeight)
+	return max(cardHeight, min(len(m.accounts)+layout.PanelChrome, m.height-activityHeight))
 }
 
 // Position is the focused panel's 1-based cursor row, or first row shown, and its row count; (0, 0) when the
 // panel is empty.
 func (m Model) Position() (row, total int) {
-	focus := m.focused()
-	if focus == accountsPanel {
-		if len(m.accounts) == 0 {
-			return 0, 0
-		}
-
-		return m.cursor.Row + 1, len(m.accounts)
+	if m.focused() == activityPanel {
+		return m.offset() + 1, m.rowCount()
 	}
 
-	entries := m.entries(focus)
-	if len(entries) == 0 {
+	if len(m.accounts) == 0 {
 		return 0, 0
 	}
 
-	return m.offset(focus) + 1, len(entries)
+	return m.cursor.Row + 1, len(m.accounts)
 }
 
-// offset is the first entry the Upcoming or Recent panel shows, kept within its last page as the ledger and
-// the terminal change.
-func (m Model) offset(focus panel) int {
-	return min(m.scrolls[focus].Offset, lastOffset(len(m.entries(focus)), m.capacity(focus)))
+// offset is the first row Activity shows: the today line in the middle until it is scrolled, and always
+// within its last page as the ledger and the terminal change.
+func (m Model) offset() int {
+	offset := m.scroll.Offset
+	if !m.scrolled {
+		offset = max(0, len(m.upcoming)-m.capacity()/2)
+	}
+
+	return min(offset, lastOffset(m.rowCount(), m.capacity()))
 }
 
 // title is the panel's title, marked when the panel has the focus.
@@ -310,123 +281,148 @@ func (m Model) Selected() (domain.Account, bool) {
 	return m.accounts[m.cursor.Row], true
 }
 
-// View draws Accounts over Upcoming in the left column and the stat cards over Recent and the spend chart
-// in the right.
+// View draws Accounts with the stat cards beside it, and Activity across the full width under them.
 func (m Model) View() string {
 	fit := m.fit()
 
-	left := m.accountsPanel()
-	if fit.upcoming {
-		left += "\n" + m.entriesPanel(upcomingPanel, "UPCOMING", m.accountsWidth())
+	top := m.accountsPanel()
+	if fit.cards {
+		top = lipgloss.JoinHorizontal(lipgloss.Top, append([]string{top}, m.cards(m.width-m.accountsWidth())...)...)
 	}
 
-	if !fit.right {
-		return left
-	}
-	right := m.width - m.accountsWidth()
-	column := lipgloss.JoinHorizontal(lipgloss.Top, m.cards(right)...)
-
-	column += "\n" + m.entriesPanel(recentPanel, "RECENT", right)
-	if fit.chart {
-		column += "\n" + spendPanel(m.spend, right, spendHeight)
+	if !fit.activity {
+		return top
 	}
 
-	return lipgloss.JoinHorizontal(lipgloss.Top, left, column)
+	return top + "\n" + m.activityPanel()
 }
 
-// fitting is which panels besides Accounts the terminal has room for: Upcoming under Accounts, the right
-// column (the stat cards over Recent) and, under Recent, the spend chart.
-type fitting struct{ upcoming, right, chart bool }
+// fitting is which panels besides Accounts the terminal has room for: the stat cards beside it and Activity
+// under it.
+type fitting struct{ cards, activity bool }
 
 // fit decides which panels besides Accounts are shown; View draws them and HiddenPanels counts the others.
 func (m Model) fit() fitting {
-	var fit fitting
-	fit.upcoming = m.height >= minAccountsHeight+upcomingHeight
-	fit.right = m.width-m.accountsWidth() >= cardCount*minCardWidth
-	fit.chart = fit.right && m.height-cardHeight >= spendHeight+minRecentHeight
-
-	return fit
+	return fitting{
+		cards:    m.width-m.accountsWidth() >= cardCount*minCardWidth,
+		activity: m.height >= minAccountsHeight+activityHeight,
+	}
 }
 
-// HiddenPanels is how many panels besides Accounts the terminal is too small to show; the chart sits in the
-// right column, so it hides with it.
+// HiddenPanels is how many panels besides Accounts the terminal is too small to show.
 func (m Model) HiddenPanels() int {
 	fit, hidden := m.fit(), 0
-	if !fit.upcoming {
-		hidden++
+	if !fit.cards {
+		hidden += cardCount
 	}
 
-	if !fit.right {
-		hidden += cardCount + 1 // the cards and Recent
-	}
-
-	if !fit.chart {
+	if !fit.activity {
 		hidden++
 	}
 
 	return hidden
 }
 
-// entriesPanel is the Upcoming or Recent panel from its scroll offset on.
-func (m Model) entriesPanel(focus panel, title string, width int) string {
-	return entriesPanel(m.title(focus, title), m.entries(focus)[m.offset(focus):], width, m.panelHeight(focus))
+// activityPanel lists, newest at the top, the upcoming occurrences, the today line and the recent
+// transactions, from its scroll offset on. A first or last row that has more beyond it says how many; it
+// always has room for several rows when it fits at all.
+// Rows are not selectable.
+func (m Model) activityPanel() string {
+	offset := m.offset()
+	end := min(m.rowCount(), offset+m.capacity())
+	rows := m.activityLines(offset, end, max(0, m.width-layout.PanelChrome))
+
+	if hidden := m.rowCount() - end; hidden > 0 {
+		rows[len(rows)-1] = layout.More(hidden + 1)
+	}
+
+	if offset > 0 {
+		rows[0] = layout.More(offset + 1)
+	}
+
+	return layout.Panel(m.title(activityPanel, "ACTIVITY"), m.width, m.activityHeight(), strings.Join(rows, "\n"))
 }
 
-// entriesPanel lists transactions one per row: date, description, category, amount. When they do not
-// all fit, the last row says how many more there are. Rows are not selectable.
-func entriesPanel(title string, entries []domain.RecentEntry, width, height int) string {
-	inner, capacity := max(0, width-layout.PanelChrome), max(0, height-layout.PanelChrome)
+// activityLines draws Activity's rows first up to end, the columns sized to every entry so they keep their
+// place while it scrolls.
+func (m Model) activityLines(first, end, width int) []string {
+	columns := recentColumns(slices.Concat(m.upcoming, m.recent), width)
+	var lines []string
+	for i := first; i < end; i++ {
+		entry, ok := m.entry(i)
+		if !ok {
+			lines = append(lines, todayLine(m.today, width))
 
-	shown := entries
-	if len(shown) > capacity {
-		shown = shown[:max(0, capacity-1)]
-	}
-	columns := recentColumns(shown, inner)
-	rows := make([]string, 0, capacity)
-	for _, entry := range shown {
-		rows = append(rows, columns.line(entry))
-	}
-
-	if hidden := len(entries) - len(shown); hidden > 0 {
-		rows = append(rows, layout.More(hidden))
+			continue
+		}
+		lines = append(lines, columns.line(entry))
 	}
 
-	return layout.Panel(title, width, height, strings.Join(rows, "\n"))
+	return lines
+}
+
+// entry is Activity's row i: an upcoming occurrence, the furthest first, or a recent transaction, the newest
+// first; false for the today line between them.
+func (m Model) entry(i int) (domain.RecentEntry, bool) {
+	if i < len(m.upcoming) {
+		return m.upcoming[len(m.upcoming)-1-i], true
+	}
+
+	if i == len(m.upcoming) {
+		return domain.RecentEntry{}, false
+	}
+
+	return m.recent[i-len(m.upcoming)-1], true
+}
+
+// todayLine is the rule between the upcoming and the recent rows, carrying today's date.
+func todayLine(today time.Time, width int) string {
+	label := " ━━ today " + today.Format(time.DateOnly) + " "
+
+	return theme.Warn.Render(label + strings.Repeat("━", max(0, width-lipgloss.Width(label)-1)))
 }
 
 // recent column widths for one panel width: what is left of the row after the date and the widest amount
-// is shared between description and category.
+// and balance is shared between description and category.
 type columns struct {
-	width, amount, description, category int
+	width, amount, balance, description, category int
 }
 
 func recentColumns(entries []domain.RecentEntry, width int) columns {
-	widest := 0
+	amount, balance := minFigureWidth, minFigureWidth
 	for _, entry := range entries {
-		widest = max(widest, lipgloss.Width(entry.Amount.Format()))
+		amount = max(amount, lipgloss.Width(entry.Amount.Format()))
+		balance = max(balance, lipgloss.Width(entry.Balance.Format()))
 	}
-	spare := max(0, width-recentFixed-widest)
+	spare := max(0, width-recentFixed-amount-recentGap-balance)
 	description := max(minDescriptionWidth, spare*descriptionShare/100)
 
 	return columns{
-		width: width, amount: widest, description: min(description, spare),
+		width: width, amount: amount, balance: balance, description: min(description, spare),
 		category: min(maxCategoryWidth, max(0, spare-description-recentGap)),
 	}
 }
 
-// line is one transaction: the amount at the right edge, red when negative and green when not.
+// line is one transaction: the amount, then the balance after it at the right edge.
 func (c columns) line(entry domain.RecentEntry) string {
-	amount := entry.Amount.Format()
-
-	style := theme.Ok
-	if entry.Amount.IsAllNegative() {
-		style = theme.Negative
-	}
 	left := " " + entry.Date.Format(time.DateOnly) + "  " + layout.Fit(entry.Description, c.description)
-	left += "  " + layout.Fit(entry.Category, c.category)
-	gap := strings.Repeat(" ", max(1, c.width-lipgloss.Width(left)-lipgloss.Width(amount)-1))
+	if c.category > 0 { // a narrow screen leaves the category out rather than squeeze the figures
+		left += "  " + layout.Fit(entry.Category, c.category)
+	}
+	right := layout.AlignRight(signed(entry.Amount), c.amount) + strings.Repeat(" ", recentGap)
+	right += layout.AlignRight(signed(entry.Balance), c.balance)
+	gap := strings.Repeat(" ", max(1, c.width-lipgloss.Width(left)-lipgloss.Width(right)-1))
 
-	return left + gap + style.Render(amount)
+	return left + gap + right
+}
+
+// signed is the amount red when negative and green when not.
+func signed(amount domain.MultiAmount) string {
+	if amount.IsAllNegative() {
+		return theme.Negative.Render(amount.Format())
+	}
+
+	return theme.Ok.Render(amount.Format())
 }
 
 // cards are the two stat cards sharing width between them.

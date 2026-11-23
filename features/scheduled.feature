@@ -364,12 +364,12 @@ Feature: Scheduled — periodic rules (forecast-only)
       When I press "n"
       And I create a rule with next due date 2026-10-15, frequency monthly, description "Book club", amount "12,00", currency "EUR", from "assets:checking", to "expenses:books"
       Then the main journal ends with the new rule
-    Scenario: the new rule appears in the list, dashboard Upcoming and forecast after the write
+    Scenario: the new rule appears in the list, dashboard Activity and forecast after the write
       When I press "n"
       And I create a rule with next due date 2026-10-03, frequency monthly, description "Book club", amount "12,00", currency "EUR", from "assets:checking", to "expenses:books"
       Then the rule list shows "Book club" with next date "2026-10-03"
       When I press "1"
-      Then the Upcoming panel lists "Book club" on "2026-10-03"
+      Then Activity lists "Book club" on "2026-10-03" above today
       When I press "4"
       Then the checking line has changed
     Scenario: the write is followed by a full reload
@@ -570,7 +570,7 @@ Feature: Scheduled — periodic rules (forecast-only)
       And I press "d"
       And I press "y"
       When I press "1"
-      Then the Upcoming panel does not list "Vermieter Mueller"
+      Then Activity does not list "Vermieter Mueller" above today
 
     Scenario: the cursor stays in range after deleting the last row
       Given I press "End"

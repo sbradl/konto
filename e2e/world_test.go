@@ -152,7 +152,7 @@ type world struct {
 	tabAtBaseline  string
 	lastStepType   string
 	focusedCard    statCard  // the stat card a step last looked at
-	focusedRecent  recentRow // the Recent row a step last looked at
+	focusedRecent  recentRow // the Activity row a step last looked at
 	focusedRow     string    // the checks panel row a step last looked at
 	leftRow        string    // the Import row the cursor was last moved to
 }

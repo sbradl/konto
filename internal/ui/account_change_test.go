@@ -57,8 +57,14 @@ var closeSpare = domain.Changeset{Edits: []domain.Edit{domain.SetAccountTag{Acco
 
 func withAccounts(t *testing.T, planner *fakePlanner, writer *fakeWriter) Model {
 	t.Helper()
+
+	return withLedger(t, accountsLedger(), planner, writer)
+}
+
+func withLedger(t *testing.T, ledger domain.Ledger, planner *fakePlanner, writer *fakeWriter) Model {
+	t.Helper()
 	model := New(journalPath, Ports{
-		Loader: fakeLoader{ledger: accountsLedger()}, Checker: fakeChecker{}, Creator: &fakeCreator{},
+		Loader: fakeLoader{ledger: ledger}, Checker: fakeChecker{}, Creator: &fakeCreator{},
 		Editor: recordingEditor(nil), Accounts: planner, Writer: writer,
 	})
 	updated, _ := model.Update(tea.WindowSizeMsg{Width: 120, Height: 40})

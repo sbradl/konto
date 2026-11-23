@@ -144,7 +144,6 @@ func registerFeatureSteps(sc *godog.ScenarioContext, w *world) {
 	registerStatCardSteps(sc, w)
 	registerRecentSteps(sc, w)
 	registerUpcomingSteps(sc, w)
-	registerSpendSteps(sc, w)
 	registerPanelSteps(sc, w)
 	registerChromeExtraSteps(sc, w)
 	registerReportsSteps(sc, w)

@@ -17,7 +17,7 @@ type fakeGateway struct {
 	accounts     []domain.Account
 	err          error
 	balancesErr  error
-	months       [][]domain.Account // nil: seven months without activity
+	months       [][]domain.Account // nil: a month without activity
 	activityErr  error
 	upcoming     []domain.Transaction
 	upcomingErr  error
@@ -33,7 +33,7 @@ func (f fakeGateway) Print(context.Context) ([]domain.Transaction, error) {
 
 func (f fakeGateway) MonthlyActivity(context.Context, time.Time, time.Time) ([][]domain.Account, error) {
 	if f.months == nil && f.activityErr == nil {
-		return make([][]domain.Account, spendMonths+1), nil
+		return make([][]domain.Account, 1), nil
 	}
 
 	return f.months, f.activityErr
@@ -180,21 +180,24 @@ func eur(mantissa int64) domain.MultiAmount {
 // The month to date runs from the first of today's month through today; income is shown as a positive figure.
 func TestLoadSummarisesTheMonthToDate(t *testing.T) {
 	gw := &periodRecorder{}
-	gw.months = make([][]domain.Account, spendMonths+1)
-	gw.months[spendMonths] = []domain.Account{
+	gw.months = [][]domain.Account{{
 		{Name: "income:salary", Balance: eur(-300000)},
 		{Name: "expenses:rent", Balance: eur(90000)},
 		{Name: "expenses:groceries", Balance: eur(25000)},
 		{Name: "assets:odd", Balance: eur(1)},
-	}
+	}}
 
 	got, err := NewLoader(gw, present, sept30).Load(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if want := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC); !gw.first.Equal(want) || gw.last.Day() != 30 {
-		t.Errorf("period = %v to %v, want 2026-03-01 through 2026-09-30", gw.first, gw.last)
+	if want := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC); !gw.first.Equal(want) || gw.last.Day() != 30 {
+		t.Errorf("period = %v to %v, want 2026-09-01 through 2026-09-30", gw.first, gw.last)
+	}
+
+	if !got.Today.Equal(sept30()) {
+		t.Errorf("Today = %v, want the loading day", got.Today)
 	}
 
 	month := got.Month
@@ -244,58 +247,13 @@ func (u *upcomingRecorder) Upcoming(_ context.Context, first, last time.Time) ([
 	return u.upcoming, nil
 }
 
-// The spend history is the six complete months before today's, oldest first, expenses only.
-func TestLoadSumsExpensesForTheLastSixCompleteMonths(t *testing.T) {
-	months := make([][]domain.Account, spendMonths+1)
-	for i := range months {
-		months[i] = []domain.Account{
-			{Name: "income:salary", Balance: eur(-300000)},
-			{Name: "expenses:rent", Balance: eur(90000)},
-			{Name: "expenses:food", Balance: eur(int64(25000 + i))},
-		}
-	}
-
-	got, err := NewLoader(fakeGateway{months: months}, present, sept30).Load(context.Background())
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if len(got.Spend) != 6 || got.Spend[0].Month.Month() != time.March || got.Spend[5].Month.Month() != time.August {
-		t.Fatalf("Spend = %+v, want March to August", got.Spend)
-	}
-	for i, month := range got.Spend {
-		if want := int64(115000 + i); month.Total[0].Mantissa != want {
-			t.Errorf("%v total = %v, want %d (income is not spend)", month.Month.Month(), month.Total, want)
-		}
-	}
-}
-
-func TestLoadSpendCrossesTheYearBoundary(t *testing.T) {
-	gw := &periodRecorder{}
-	jan15 := func() time.Time { return time.Date(2027, 1, 15, 0, 0, 0, 0, time.UTC) }
-
-	got, err := NewLoader(gw, present, jan15).Load(context.Background())
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if want := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC); !gw.first.Equal(want) {
-		t.Errorf("report starts %v, want %v", gw.first, want)
-	}
-
-	if got.Spend[0].Month.Month() != time.July || got.Spend[5].Month.Month() != time.December ||
-		got.Spend[5].Month.Year() != 2026 || got.Month.Month != time.January {
-		t.Errorf("Spend = %+v, month = %+v; want July to December 2026 and January", got.Spend, got.Month)
-	}
-}
-
 func TestLoadRejectsAReportWithTheWrongNumberOfMonths(t *testing.T) {
 	gw := fakeGateway{months: make([][]domain.Account, 3)}
 
 	_, err := NewLoader(gw, present, sept30).Load(context.Background())
 
 	if err == nil || !strings.Contains(err.Error(), "3 months") ||
-		!strings.Contains(err.Error(), "want 7") {
+		!strings.Contains(err.Error(), "want 1") {
 		t.Errorf("expected an error naming the month count, got: %v", err)
 	}
 }

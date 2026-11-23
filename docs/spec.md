@@ -427,7 +427,7 @@ Context-owned, in their use-case package (ADR 0012):
 ### 5.5 `Ledger` — the loaded snapshot (`internal/ledger`)
 
 No monolithic `Journal` type. `Ledger` `{Accounts, Transactions, Upcoming, Month, Rules,
-Commodities, Spend}` (see `internal/domain/ledger.go`); each field populated by its own
+Commodities, Today}` (see `internal/domain/ledger.go`); each field populated by its own
 gateway call, run in parallel.
 Views hold a read-only `*Ledger`, replaced wholesale on refresh, never mutated. The
 `CheckRun` is not part of it: `internal/checks` produces it and the root holds the latest
@@ -527,7 +527,7 @@ letter means the same action in every view (`d` = delete, `n` new, `e` edit, `c`
 |---|---|
 | Global | `1`–`5` views · `?` keys popup · `!` checks panel · `r` refresh · `q` / `Ctrl+C` quit · `Esc` cancel / close popup |
 | Movement | `↑`/`↓` row · `PgUp`/`PgDn` page · `Home`/`End` ends — the same in every list, popup and scrolled view (`layout.Cursor`) · `Tab`/`Shift+Tab` or `↓`/`↑` form fields (in the Scheduled form's account picker the arrows move through the matches; `←`/`→` cycle a dropdown). No `j`/`k`. |
-| Dashboard | `Tab`/`Shift+Tab` focus Accounts → Upcoming → Recent (ADR 0014) · arrows move the Accounts cursor or scroll the focused panel · `c` close · `o` reopen |
+| Dashboard | `Tab`/`Shift+Tab` focus Accounts ↔ Activity (ADR 0014, 0015) · arrows move the Accounts cursor or scroll the focused panel · `t` today back in Activity's middle · `c` close · `o` reopen |
 | Import | `Enter` categorise row (popup: new rule / add to rule / once — `✓` rows: once only; picked with arrows + Enter) · `c` next row that needs a category (wraps) · `w` write import (y/n, only with no `?` rows) · `n` new file |
 | Scheduled | `n` new · `c` copy a transaction into a new rule (filterable list, newest first) · `e` edit · `d` delete |
 | Reports | `p` cycle report period (Reports-local state; Dashboard is always month to date). Read-only, no cursor; arrows scroll both tables together. |
@@ -545,11 +545,13 @@ read-only panels that overflow show `… N more`.
   errors, amber warnings-only) · `? keys`. No mode badge.
 - **Dashboard**: two stat cards — `NET WORTH` (sum of open assets + liabilities) and
   `<MONTH> NET INCOME` (calendar month to date, income − expenses from `is`, note
-  `<in> in / <out> out`, green/red). Left column: Accounts, only as tall as its rows
-  (scrolls once Upcoming would get under 10 rows), and under it Upcoming (next occurrences, rows not
-  selectable, scrolls when focused) taking the rest. Right: Recent (newest first, all accounts, rows not
-  selectable, scrolls when focused), under it the
-  monthly spend chart (total `expenses:*` per month, last 6 complete months, one line).
+  `<in> in / <out> out`, green/red). Top: Accounts (a third of the width), only as tall as its rows
+  (scrolls once Activity would get under 10 rows), the cards beside it. Under them, full width,
+  **Activity** (ADR 0015): the next year's occurrences, furthest at the top, then a yellow
+  `━━ today <date> ━━` line, then the journal's transactions, newest first. A row is date,
+  description, category, amount and the balance of its account after it (both green/red). Rows are
+  not selectable; it opens with the today line in its middle (`t` puts it back) and scrolls when focused, a first or
+  last row with more beyond it reading `… N more`. No spend chart.
 - **`!` panel**: issues only; when clean a single dim-green `✓ all N checks pass`.
 - **Reports**: `p` cycles `month to date · quarter to date · year to date · all time`, all
   ending today. Balance sheet = balance at today (`bs -H`) + **`Δ period`** = change within
@@ -581,7 +583,7 @@ through. konto draws with hand-rolled helpers in `ui/layout`:
 | `Edit`, `WithCaret` | text input of the forms, dialogs and pickers: typed text at a caret, `←`/`→`, `Home`/`End` (in a list's input they stay with the list; `Ctrl+A`/`Ctrl+E` there), `Ctrl+←`/`Ctrl+→` by word, `Backspace`/`Delete`, `Ctrl+Backspace` / `Ctrl+W` / `Alt+Backspace` delete a word, `Ctrl+U` clears |
 | `Popup`, `PopupCapacity`, `Overlay`, `OverlayFlush`, `Columns` | every titled bottom popup — keys, checks, write preview, Import dialogs, Scheduled form (§6.5) — and the `?` reflow |
 | `Binding`, `Key…` | key hints and the shared key names |
-| `ChartStyle`, `Number` | `ntcharts` braille charts (Dashboard spend, Forecast) |
+| `ChartStyle`, `Number` | `ntcharts` braille charts (Forecast) |
 
 The refresh spinner is a static `⣾` while `refreshing`; scrolling panels clamp their own offsets.
 
@@ -773,10 +775,9 @@ The handoff (`design_handoff_hledger_tui/README.md`) is otherwise authoritative.
 - **Import has a `ROW` panel** above the row table: the selected row's type, payee and purpose
   (up to 3 lines), what a rule can match. The handoff shows the description only. Dropped below
   23 rows of content height.
-- **Dashboard layout**: Accounts is only as tall as its rows, with Upcoming under it in the left
-  column taking the rest; the spend chart sits under Recent on the right, full width. The handoff
-  has Accounts full height and Upcoming beside the chart under Recent, which left Accounts mostly
-  empty.
+- **Dashboard layout** (ADR 0015): Accounts is only as tall as its rows, the cards beside it, and one
+  full-width Activity panel under them replaces Upcoming, Recent and the spend chart. The handoff has
+  Accounts full height and Upcoming beside the chart under Recent, which left Accounts mostly empty.
 - **ADR 0010** — **no Entry view in v1**: five tabs on `1`–`5`, no manual-account UI, no
   classify-on-open prompt; accounts are created by first import.
 - **ADR 0011** — **keyboard and chrome**: arrows not `j`/`k`; views on `1`–`5` only (no `:`
@@ -808,7 +809,7 @@ Dashboard, Reports have no ticket; grill inline if a question surfaces. Entry is
 Every hledger call parses the whole journal (about 1.1 s at 20 000 transactions; startup makes ~23 calls
 side by side). konto does not cache or checkpoint. It owns a year-partitioned ledger and loads only this
 year and last year (ADR 0013): `main.journal` holds directives and rules, transactions live in
-`YYYY.journal` files, and carry transactions keep earlier balances right. Reports, dashboard spend and
+`YYYY.journal` files, and carry transactions keep earlier balances right. Reports and
 checks stop at the window's start.
 
 ---

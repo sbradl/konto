@@ -3,6 +3,8 @@ package ui
 import (
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
+
 	"github.com/sbradl/konto/internal/domain"
 	"github.com/sbradl/konto/internal/ui/uitest"
 )
@@ -25,15 +27,26 @@ func TestATabThatCapturesKeysHandsThemOn(t *testing.T) {
 	}
 }
 
+// scrolledDashboard has its Activity scrolled away from today, for t to bring it back, and the focus on Accounts.
+func scrolledDashboard(t *testing.T) Model {
+	t.Helper()
+	ledger := accountsLedger()
+	for range 60 { // more than Activity holds
+		ledger.Transactions = append(ledger.Transactions, domain.Transaction{Description: "Shop"})
+	}
+	model := withLedger(t, ledger, &fakePlanner{changeset: closeSpare}, &fakeWriter{})
+	for _, code := range []rune{tea.KeyTab, tea.KeyEnd, tea.KeyTab} {
+		model = pressKey(model, code)
+	}
+
+	return model
+}
+
 // Every key a tab hints at does something on a view that has something to do it to: the hints and the views'
 // key switches stay in step.
 func TestEveryHintedKeyIsHandled(t *testing.T) {
 	rigs := map[string]func(*testing.T) Model{
-		"dash": func(t *testing.T) Model {
-			t.Helper()
-
-			return withAccounts(t, &fakePlanner{changeset: closeSpare}, &fakeWriter{})
-		},
+		"dash": scrolledDashboard,
 		"import": func(t *testing.T) Model {
 			t.Helper()
 

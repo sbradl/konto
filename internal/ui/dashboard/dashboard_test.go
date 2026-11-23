@@ -71,15 +71,21 @@ func TestPanelHasTheAccountsTitleAndIsAsTallAsItsRows(t *testing.T) {
 	}
 }
 
-func TestPanelFillsTheHeightWhenUpcomingDoesNotFit(t *testing.T) {
-	if got := lines(loaded(minAccountsHeight + upcomingHeight - 1)); len(got) != minAccountsHeight+upcomingHeight-1 {
+func TestPanelFillsTheHeightWhenActivityDoesNotFit(t *testing.T) {
+	if got := lines(loaded(minAccountsHeight + activityHeight - 1)); len(got) != minAccountsHeight+activityHeight-1 {
 		t.Errorf("panel has %d rows, want the whole height", len(got))
 	}
 }
 
-func TestPanelScrollsRatherThanSqueezeUpcoming(t *testing.T) {
-	if got := lines(loaded(upcomingHeight + 6)); len(got) != 6 {
-		t.Errorf("panel has %d rows, want what Upcoming leaves", len(got))
+func TestPanelScrollsRatherThanSqueezeActivity(t *testing.T) {
+	if got := lines(loaded(activityHeight + 6)); len(got) != 6 {
+		t.Errorf("panel has %d rows, want what Activity leaves", len(got))
+	}
+}
+
+func TestPanelIsAtLeastAsTallAsTheCardsBesideIt(t *testing.T) {
+	if got := lines(New().Resize(180, 30).WithAccounts(nil)); len(got) != cardHeight {
+		t.Errorf("panel has %d rows, want the cards' %d", len(got), cardHeight)
 	}
 }
 
@@ -338,13 +344,13 @@ func TestCardsSitRightOfTheAccountsPanelAndTheViewFillsTheHeight(t *testing.T) {
 		}
 	}
 
-	if !strings.HasPrefix(got[cardHeight], "│ ") || !strings.Contains(got[cardHeight], "╭─ RECENT ") {
-		t.Errorf("row under the cards = %q, want the Accounts panel continuing beside the Recent panel", got[cardHeight])
+	if !strings.HasPrefix(got[cardHeight], "│ ") || !strings.HasSuffix(got[cardHeight], "│"+strings.Repeat(" ", 120)) {
+		t.Errorf("row under the cards = %q, want the Accounts panel continuing beside blank room", got[cardHeight])
 	}
 
 	below := len(listed()) + layout.PanelChrome
-	if !strings.HasPrefix(got[below], "╭─ UPCOMING ") {
-		t.Errorf("row under Accounts = %q, want Upcoming", got[below])
+	if !strings.HasPrefix(got[below], "╭─ ACTIVITY ") || lipgloss.Width(got[below]) != 180 {
+		t.Errorf("row under Accounts = %q, want Activity across the full width", got[below])
 	}
 }
 
@@ -426,8 +432,24 @@ func withTransactions(n int) domain.Ledger {
 	return ledger
 }
 
-func recentRows(m Model) []string {
-	return panelRows(m, "RECENT", func(line []rune) []rune { return line[m.accountsWidth():] })
+// withUpcoming adds one occurrence a day from 2026-10-01 to the ledger.
+func withUpcoming(ledger domain.Ledger, descriptions ...string) domain.Ledger {
+	for i, description := range descriptions {
+		ledger.Upcoming = append(ledger.Upcoming, domain.Transaction{
+			Date: time.Date(2026, 10, 1+i, 0, 0, 0, 0, time.UTC), Description: description,
+			Postings: []domain.Posting{
+				{Account: "expenses:rent", Amounts: eur(90000)},
+				{Account: "assets:cash", Amounts: eur(-90000)},
+			},
+		})
+	}
+	ledger.Today = time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC)
+
+	return ledger
+}
+
+func activityRows(m Model) []string {
+	return panelRows(m, "ACTIVITY", func(line []rune) []rune { return line })
 }
 
 // panelRows are the inside rows of the titled panel, read from one column of the view.
@@ -449,7 +471,42 @@ func panelRows(m Model, title string, column func([]rune) []rune) []string {
 	return rows
 }
 
-func TestRecentListsNewestFirstWithDescriptionCategoryAndAmount(t *testing.T) {
+// thirty are the descriptions of thirty occurrences.
+func thirty() []string {
+	listed := make([]string, 30)
+	for i := range listed {
+		listed[i] = fmt.Sprintf("entry %02d", i)
+	}
+
+	return listed
+}
+
+func TestActivityListsUpcomingFurthestFirstOverTodayOverRecentNewestFirst(t *testing.T) {
+	rows := activityRows(New().Resize(180, 40).WithLedger(withUpcoming(withTransactions(2), "Vermieter Mueller", "Streaming")))
+
+	for i, want := range []string{
+		"2026-10-02  Streaming", "2026-10-01  Vermieter Mueller", "━━ today 2026-09-30 ━━",
+		"2026-09-02  Shop 01", "2026-09-01  Shop 00",
+	} {
+		if !strings.Contains(rows[i], want) {
+			t.Errorf("row %d = %q, want it to hold %q", i, rows[i], want)
+		}
+	}
+}
+
+func TestTodayLineSpansThePanelInTheWarnColour(t *testing.T) {
+	m := New().Resize(180, 40).WithLedger(withUpcoming(withTransactions(1)))
+
+	if view := m.View(); !strings.Contains(view, opening(theme.Warn)+" ━━ today 2026-09-30 ━") {
+		t.Errorf("the today line should be yellow:\n%q", view)
+	}
+
+	if row := activityRows(m)[0]; !strings.HasSuffix(row, "━ │") || lipgloss.Width(row) != 180 {
+		t.Errorf("today line = %q, want it to run to the panel's edge", row)
+	}
+}
+
+func TestActivityRowShowsDescriptionCategoryAmountAndBalance(t *testing.T) {
 	ledger := domain.Ledger{Accounts: accounts(), Transactions: []domain.Transaction{
 		{Date: time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC), Description: "REWE", Postings: []domain.Posting{
 			{Account: "expenses:groceries", Amounts: eur(25000)}, {Account: "assets:cash", Amounts: eur(-25000)},
@@ -459,306 +516,146 @@ func TestRecentListsNewestFirstWithDescriptionCategoryAndAmount(t *testing.T) {
 		}},
 	}}
 
-	rows := recentRows(New().Resize(180, 20).WithLedger(ledger))
+	rows := activityRows(New().Resize(180, 40).WithLedger(ledger))[1:] // under the today line
 
-	if !strings.Contains(rows[0], "2026-09-25  Acme GmbH") || !strings.Contains(rows[0], "income:salary") || !strings.Contains(rows[0], "3.000,00 EUR") {
-		t.Errorf("first row = %q, want the salary", rows[0])
+	if !strings.Contains(rows[0], "2026-09-25  Acme GmbH") || !strings.Contains(rows[0], "income:salary") ||
+		!strings.HasSuffix(rows[0], "3.000,00 EUR        50,00 EUR │") {
+		t.Errorf("first row = %q, want the salary and the balance after it", rows[0])
 	}
 
-	if !strings.Contains(rows[1], "2026-09-10  REWE") || !strings.Contains(rows[1], "expenses:groceries") || !strings.Contains(rows[1], "-250,00 EUR") {
-		t.Errorf("second row = %q, want the groceries", rows[1])
+	if !strings.Contains(rows[1], "2026-09-10  REWE") || !strings.Contains(rows[1], "expenses:groceries") ||
+		!strings.HasSuffix(rows[1], "-250,00 EUR    -2.950,00 EUR │") {
+		t.Errorf("second row = %q, want the groceries and the balance after them", rows[1])
 	}
 }
 
-func TestRecentAmountsAreGreenOrRed(t *testing.T) {
-	ledger := domain.Ledger{Transactions: []domain.Transaction{
-		{Date: day1, Description: "in", Postings: []domain.Posting{{Account: "assets:a", Amounts: eur(100)}, {Account: "income:x", Amounts: eur(-100)}}},
-		{Date: day1, Description: "out", Postings: []domain.Posting{{Account: "assets:a", Amounts: eur(-100)}, {Account: "expenses:x", Amounts: eur(100)}}},
-	}}
+func TestUpcomingBalancesRunForwardFromTodaysOverToday(t *testing.T) {
+	rows := activityRows(New().Resize(180, 40).WithLedger(withUpcoming(ledgerFigures(), "a", "b")))
+
+	for i, want := range []string{"-900,00 EUR    -1.750,00 EUR │", "-900,00 EUR      -850,00 EUR │"} {
+		if !strings.HasSuffix(rows[i], want) {
+			t.Errorf("row %d = %q, want it to end with %q", i, rows[i], want)
+		}
+	}
+}
+
+func TestAmountsAndBalancesAreGreenOrRed(t *testing.T) {
+	ledger := domain.Ledger{
+		Accounts: []domain.Account{{Name: "assets:a", Source: domain.SourceManual, Balance: eur(-200)}},
+		Transactions: []domain.Transaction{
+			{Date: day1, Description: "in", Postings: []domain.Posting{{Account: "assets:a", Amounts: eur(400)}, {Account: "income:x", Amounts: eur(-400)}}},
+			{Date: day1, Description: "out", Postings: []domain.Posting{{Account: "assets:a", Amounts: eur(-500)}, {Account: "expenses:x", Amounts: eur(500)}}},
+		},
+	}
 
 	view := New().Resize(180, 20).WithLedger(ledger).View()
 
-	if !strings.Contains(view, opening(theme.Negative)+"-1,00 EUR") || !strings.Contains(view, opening(theme.Ok)+"1,00 EUR") {
-		t.Errorf("amounts should be red when negative and green otherwise:\n%q", view)
+	for _, want := range []string{
+		opening(theme.Ok) + "4,00 EUR", opening(theme.Negative) + "-5,00 EUR", // amounts
+		opening(theme.Ok) + "3,00 EUR", opening(theme.Negative) + "-2,00 EUR", // balances
+	} {
+		if !strings.Contains(view, want) {
+			t.Errorf("view lacks %q:\n%q", want, view)
+		}
 	}
 }
 
 var day1 = time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
 
-func TestRecentSaysHowManyRowsDontFit(t *testing.T) {
-	rows := recentRows(New().Resize(180, 24).WithLedger(withTransactions(200))) // Recent is 10 rows tall: 8 inside
+func TestActivityOpensWithTheTodayLineInTheMiddle(t *testing.T) {
+	m := New().Resize(180, 30).WithLedger(withUpcoming(withTransactions(30), thirty()...))
+	rows := activityRows(m) // 30 less Accounts' 9 rows less the border: 19 inside
 
-	if len(rows) != 8 {
-		t.Fatalf("panel has %d rows, want 8", len(rows))
+	if len(rows) != 19 || !strings.Contains(rows[9], "today") {
+		t.Fatalf("today should be the middle of 19 rows:\n%s", strings.Join(rows, "\n"))
 	}
 
-	if !strings.Contains(rows[7], "… 193 more") || strings.Contains(rows[6], "more") {
-		t.Errorf("last rows = %q / %q, want 7 transactions then … 193 more", rows[6], rows[7])
+	if !strings.Contains(rows[0], "… 22 more") || !strings.Contains(rows[18], "… 22 more") {
+		t.Errorf("first and last rows should count what is beyond them:\n%s", strings.Join(rows, "\n"))
 	}
-}
 
-func TestRecentShowsExactlyAsManyAsFitWithoutAMoreRow(t *testing.T) {
-	rows := recentRows(New().Resize(180, 24).WithLedger(withTransactions(8))) // exactly 8 inside
-
-	if text := strings.Join(rows, "\n"); strings.Contains(text, "more") || !strings.Contains(text, "Shop 07") {
-		t.Errorf("all 8 fit, so no … more row:\n%s", text)
+	if row, total := press(m, "tab").Position(); row != 22 || total != 61 {
+		t.Errorf("position = %d/%d, want 22/61", row, total)
 	}
 }
 
-func TestRecentShowsEverythingThatFitsWithoutAMoreRow(t *testing.T) {
-	rows := recentRows(New().Resize(180, 24).WithLedger(withTransactions(3)))
+func TestTodayIsTheFirstRowWithoutUpcomingOccurrences(t *testing.T) {
+	rows := activityRows(New().Resize(180, 30).WithLedger(withUpcoming(withTransactions(3))))
 
-	if strings.Contains(strings.Join(rows, "\n"), "more") {
-		t.Errorf("all 8 fit, so no … more row:\n%s", strings.Join(rows, "\n"))
+	if !strings.Contains(rows[0], "today") || !strings.Contains(rows[1], "Shop 02") {
+		t.Errorf("rows:\n%s", strings.Join(rows, "\n"))
 	}
 }
 
-func TestRecentRowsFillThePanelWidth(t *testing.T) {
-	for _, line := range recentRows(New().Resize(180, 24).WithLedger(withTransactions(3)))[:3] {
-		if w := lipgloss.Width(line); w != 120 { // the screen less the 60-wide Accounts column
-			t.Errorf("row is %d wide, want 120: %q", w, line)
+func TestActivityRowsFillThePanelWidth(t *testing.T) {
+	for _, line := range activityRows(New().Resize(180, 24).WithLedger(withTransactions(3)))[:4] {
+		if w := lipgloss.Width(line); w != 180 {
+			t.Errorf("row is %d wide, want 180: %q", w, line)
 		}
 	}
 }
 
-func TestRecentCutsLongDescriptionsToKeepTheColumns(t *testing.T) {
+func TestActivityCutsLongDescriptionsToKeepTheColumns(t *testing.T) {
 	ledger := withTransactions(1)
 	ledger.Transactions[0].Description = strings.Repeat("long ", 40)
 
-	row := recentRows(New().Resize(110, 24).WithLedger(ledger))[0]
+	row := activityRows(New().Resize(60, 24).WithLedger(ledger))[1]
 
-	if lipgloss.Width(row) != 110-minAccountsWidth || !strings.HasSuffix(strings.TrimRight(row, " │"), "-10,00 EUR") {
-		t.Errorf("row = %q, want it cut to the width with the amount kept", row)
+	if lipgloss.Width(row) != 60 || !strings.HasSuffix(row, "-10,00 EUR        50,00 EUR │") || strings.Contains(row, "expenses") {
+		t.Errorf("row = %q, want it cut to the width with the amount and balance kept and no room for the category", row)
 	}
 }
 
-func TestRecentIsNotSelectable(t *testing.T) {
-	view := New().Resize(180, 24).WithLedger(withTransactions(3)).Move("down").View()
+func TestActivityColumnsKeepTheirPlaceWhileScrolling(t *testing.T) {
+	ledger := withTransactions(40)
+	// the newest page stays under a million, the oldest pass it and need two cells more
+	ledger.Accounts = []domain.Account{{Name: "assets:cash", Source: domain.SourceManual, Balance: eur(99980000)}}
+	m := press(New().Resize(180, 24).WithLedger(ledger), "tab")
 
-	for line := range strings.SplitSeq(view, "\n") {
-		// Each row is the Accounts panel's border-to-border run, then the right column.
-		if _, right, found := strings.Cut(line, "│╭"); found && strings.Contains(right, "100m") {
-			t.Errorf("a right-column row is highlighted: %q", line)
-		}
+	top, bottom := activityRows(press(m, "home"))[1], activityRows(press(m, "end"))[1]
 
-		if _, right, found := strings.Cut(line, "││"); found && strings.Contains(right, "100m") {
-			t.Errorf("a Recent row is highlighted: %q", line)
-		}
+	if at, want := strings.Index(top, "-10,00 EUR"), strings.Index(bottom, "-10,00 EUR"); at != want {
+		t.Errorf("the amount moves from column %d to %d:\n%s\n%s", want, at, bottom, top)
 	}
 }
 
-func upcomingRows(m Model) []string {
-	return panelRows(m, "UPCOMING", func(line []rune) []rune { return line[:m.accountsWidth()] })
-}
+func TestActivityFiguresHaveRoomForAHundredThousand(t *testing.T) {
+	row := activityRows(New().Resize(180, 24).WithLedger(withTransactions(1)))[1]
 
-func withUpcoming(descriptions ...string) domain.Ledger {
-	ledger := ledgerFigures()
-	for i, description := range descriptions {
-		ledger.Upcoming = append(ledger.Upcoming, domain.Transaction{
-			Date: time.Date(2026, 10, 1+i, 0, 0, 0, 0, time.UTC), Description: description,
-			Postings: []domain.Posting{
-				{Account: "expenses:rent", Amounts: eur(90000)},
-				{Account: "assets:cash", Amounts: eur(-90000)},
-			},
-		})
-	}
-
-	return ledger
-}
-
-func TestUpcomingListsTheNextOccurrencesSoonestFirstUnderAccounts(t *testing.T) {
-	rows := upcomingRows(New().Resize(180, 20).WithLedger(withUpcoming("Vermieter Mueller", "Streaming")))
-
-	if !strings.Contains(rows[0], "2026-10-01  Vermieter Mueller") || !strings.Contains(rows[1], "2026-10-02  Streaming") {
-		t.Errorf("rows = %q, want the occurrences in date order", rows)
-	}
-
-	if !strings.Contains(rows[0], "-900,00 EUR") {
-		t.Errorf("first row = %q, want the amount seen from the account", rows[0])
+	if !strings.HasSuffix(row, "     -10,00 EUR        50,00 EUR │") {
+		t.Errorf("row = %q, want amount and balance %d wide", row, len("-100.000,00 EUR"))
 	}
 }
 
-func TestUpcomingWithoutRulesIsAnEmptyPanel(t *testing.T) {
-	rows := upcomingRows(New().Resize(180, 20).WithLedger(withUpcoming()))
+func TestActivityRowsAreNotSelectable(t *testing.T) {
+	m := press(New().Resize(180, 24).WithLedger(withUpcoming(withTransactions(3), "a")), "tab", "down")
 
-	panel := strings.ReplaceAll(strings.Join(rows, ""), "│", "")
-	if len(rows) == 0 || strings.TrimSpace(panel) != "" {
-		t.Errorf("rows = %q, want an empty panel", rows)
-	}
-}
-
-func TestUpcomingSaysHowManyOccurrencesDontFit(t *testing.T) {
-	rows := upcomingRows(New().Resize(180, 20).WithLedger(withUpcoming("a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l")))
-
-	if len(rows) != 9 || !strings.Contains(rows[8], "… 4 more") {
-		t.Errorf("rows = %q, want eight listed then … 4 more", rows)
-	}
-}
-
-func TestUpcomingGivesWayWhenThereIsNoRoomForBothPanels(t *testing.T) {
-	view := strings.Join(viewLines(New().Resize(180, 14).WithLedger(withUpcoming("a"))), "\n")
-
-	if strings.Contains(view, "UPCOMING") || !strings.Contains(view, "RECENT") {
-		t.Errorf("a short screen keeps Recent only:\n%s", view)
-	}
-}
-
-func TestUpcomingIsNotSelectable(t *testing.T) {
-	view := New().Resize(180, 20).WithLedger(withUpcoming("a", "b")).Move("down").View()
-
-	for line := range strings.SplitSeq(view, "\n") {
-		if _, right, found := strings.Cut(line, "││"); found && strings.Contains(right, "100m") {
-			t.Errorf("a right-column row is highlighted: %q", line)
+	for _, line := range strings.Split(m.View(), "\n")[m.accountsHeight():] {
+		if strings.Contains(line, "100m") {
+			t.Errorf("an Activity row is highlighted: %q", line)
 		}
 	}
 }
 
-func TestUpcomingFitsWhenRecentKeepsItsMinimum(t *testing.T) {
-	view := strings.Join(viewLines(New().Resize(180, cardHeight+upcomingHeight+minRecentHeight).WithLedger(withUpcoming("a"))), "\n")
+func TestActivityGivesWayWhenThereIsNoRoomUnderAccounts(t *testing.T) {
+	view := strings.Join(viewLines(New().Resize(180, minAccountsHeight+activityHeight-1).WithLedger(withUpcoming(ledgerFigures(), "a"))), "\n")
 
-	if !strings.Contains(view, "UPCOMING") || !strings.Contains(view, "RECENT") {
-		t.Errorf("exactly enough room for both panels should show both:\n%s", view)
-	}
-}
-
-func spendHistory(totals ...int64) []domain.MonthSpend {
-	history := make([]domain.MonthSpend, len(totals))
-	for i, total := range totals {
-		history[i] = domain.MonthSpend{Month: time.Date(2026, time.Month(3+i), 1, 0, 0, 0, 0, time.UTC), Total: eur(total)}
-	}
-
-	return history
-}
-
-func TestSpendChartLabelsTheSixMonthsOnTheXAxis(t *testing.T) {
-	ledger := withUpcoming()
-	ledger.Spend = spendHistory(117500, 112000, 119500, 115000, 120500, 113000)
-
-	chart := strings.Join(viewLines(New().Resize(180, 40).WithLedger(ledger)), "\n")
-
-	for _, month := range []string{"Mar", "Apr", "May", "Jun", "Jul", "Aug"} {
-		if !strings.Contains(chart, month) {
-			t.Errorf("x axis lacks %s:\n%s", month, chart)
-		}
-	}
-
-	if strings.Contains(chart, "Sep") {
-		t.Errorf("the current month is not complete and must not be plotted")
-	}
-}
-
-func TestSpendChartYAxisCountsThousandsAndTheLineIsBraille(t *testing.T) {
-	ledger := withUpcoming()
-	ledger.Spend = spendHistory(117500, 112000, 119500, 115000, 120500, 113000)
-
-	view := strings.Join(viewLines(New().Resize(180, 40).WithLedger(ledger)), "\n")
-
-	if !strings.Contains(view, "1.3k") || !strings.Contains(view, "0.0k") {
-		t.Errorf("y axis should read in thousands:\n%s", view)
-	}
-
-	if !strings.ContainsAny(view, "⠁⠂⠄⡀⢀⠈⠐⠠⣀⠤⠉") {
-		t.Errorf("expected a braille line:\n%s", view)
-	}
-}
-
-func TestSpendChartUsesOnlyAnsi16Colours(t *testing.T) {
-	ledger := withUpcoming()
-	ledger.Spend = spendHistory(117500, 112000, 119500)
-
-	view := New().Resize(180, 40).WithLedger(ledger).View()
-
-	if strings.Contains(view, "38;2;") || strings.Contains(view, "38;5;") {
-		t.Errorf("chart must use ANSI-16 colours only:\n%q", view)
-	}
-}
-
-func TestSpendChartPlotsTheCommodityOfTheFirstMonthWithSpend(t *testing.T) {
-	values, top := spendValues([]domain.MonthSpend{
-		{},
-		{Total: domain.MultiAmount{{Commodity: "PLN", Mantissa: 10000, Places: 2}, {Commodity: "EUR", Mantissa: 500, Places: 2}}},
-		{Total: eur(99900)},
-	})
-
-	if values[0] != 0 || values[1] != 100 || values[2] != 0 || top != 100 {
-		t.Errorf("values = %v top = %v, want only PLN plotted", values, top)
-	}
-}
-
-func TestSpendCommodityIsNoneWhenNoMonthSpentAnything(t *testing.T) {
-	if got := spendCommodity([]domain.MonthSpend{{}, {}}); got != "" {
-		t.Errorf("commodity = %q, want none", got)
-	}
-}
-
-func TestSpendPanelIsEmptyWithoutHistoryOrRoom(t *testing.T) {
-	for name, panel := range map[string]string{
-		"no history": spendPanel(nil, 60, 10),
-		"too narrow": spendPanel(spendHistory(100), 8, 10),
-		"too short":  spendPanel(spendHistory(100), 60, 5),
-	} {
-		if strings.ContainsAny(uitest.Plain(panel), "⠁⠂⠄⡀⢀⠈⠐⠠⣀⠤⠉k") || !strings.Contains(uitest.Plain(panel), "SPEND") {
-			t.Errorf("%s: want an empty SPEND panel:\n%s", name, uitest.Plain(panel))
-		}
-	}
-}
-
-func TestSpendChartSitsUnderRecentWhenItFits(t *testing.T) {
-	ledger := withUpcoming("a")
-	ledger.Spend = spendHistory(100, 200)
-
-	for height, want := range map[int]bool{cardHeight + spendHeight + minRecentHeight: true, cardHeight + spendHeight + minRecentHeight - 1: false} {
-		got := viewLines(New().Resize(180, height).WithLedger(ledger))
-		spend := slices.IndexFunc(got, func(line string) bool { return strings.Contains(line, "╭─ SPEND ") })
-		recent := slices.IndexFunc(got, func(line string) bool { return strings.Contains(line, "╭─ RECENT ") })
-
-		if (spend >= 0) != want || (want && spend != height-spendHeight) || recent != cardHeight {
-			t.Errorf("height %d: spend at %d, recent at %d:\n%s", height, spend, recent, strings.Join(got, "\n"))
-		}
+	if strings.Contains(view, "ACTIVITY") || !strings.Contains(view, "NET WORTH") {
+		t.Errorf("a short screen keeps Accounts and the cards only:\n%s", view)
 	}
 }
 
 func TestHiddenPanelsCountWhatTheTerminalIsTooSmallFor(t *testing.T) {
 	for name, tc := range map[string]struct{ width, height, want int }{
 		"everything fits":          {180, 40, 0},
-		"no room for the chart":    {180, cardHeight + spendHeight + minRecentHeight - 1, 1},
-		"chart just fits":          {180, cardHeight + spendHeight + minRecentHeight, 0},
-		"no room for upcoming":     {180, minAccountsHeight + upcomingHeight - 1, 1 + 1},
-		"upcoming just fits":       {minAccountsWidth + 2*minCardWidth, minAccountsHeight + upcomingHeight, 1},
-		"no room for the cards":    {minAccountsWidth + 2*minCardWidth - 1, 40, 4},
-		"cards just fit":           {minAccountsWidth + 2*minCardWidth, 40, 0},
-		"accounts alone, too tiny": {40, 5, 5},
+		"no room for activity":     {180, minAccountsHeight + activityHeight - 1, 1},
+		"activity just fits":       {minAccountsWidth + 2*minCardWidth, minAccountsHeight + activityHeight, 0},
+		"no room for the cards":    {minAccountsWidth + 2*minCardWidth - 1, 40, 2},
+		"accounts alone, too tiny": {40, 5, 3},
 	} {
 		if got := New().Resize(tc.width, tc.height).HiddenPanels(); got != tc.want {
 			t.Errorf("%s: %d hidden, want %d", name, got, tc.want)
 		}
-	}
-}
-
-func TestSpendPanelDrawsTheChartAtTheSmallestSizeItFits(t *testing.T) {
-	want := "╭─ SPEND ╮\n│    │   │\n│    │   │\n│0.0k└───│\n│    Mar │\n╰────────╯"
-
-	if got := uitest.Plain(spendPanel(spendHistory(100), minChartSize+layout.PanelChrome, minChartSize/2+layout.PanelChrome)); got != want {
-		t.Errorf("spend panel =\n%s\nwant\n%s", got, want)
-	}
-}
-
-func TestSpendChartPlacesTheLineAndTheMonthLabelsAlongTheAxes(t *testing.T) {
-	want := "╭─ SPEND ──────────────────────────────╮\n" +
-		"│1.3k│⣀⣀⣀⡀   ⢀⣀⣀⡠⠤⠤⠤⠤⣀⣀⣀⣀⣀⡠⠤⠤⠤⠤⠤⢄⣀⣀⡀   │\n" +
-		"│    │   ⠈⠉⠉⠉⠁                         │\n" +
-		"│0.9k│                                 │\n" +
-		"│    │                                 │\n" +
-		"│0.4k│                                 │\n" +
-		"│    │                                 │\n" +
-		"│0.0k└─────────────────────────────────│\n" +
-		"│    Mar   Apr  May   Jun   Jul   Aug  │\n" +
-		"╰──────────────────────────────────────╯"
-
-	got := uitest.Plain(spendPanel(spendHistory(117500, 112000, 119500, 115000, 120500, 113000), 40, 10))
-
-	if got != want {
-		t.Errorf("spend panel =\n%s\nwant\n%s", got, want)
 	}
 }
 
@@ -798,7 +695,7 @@ func press(m Model, keys ...string) Model {
 func focusedTitles(m Model) []string {
 	var titles []string
 	for _, line := range viewLines(m) {
-		for _, title := range []string{"ACCOUNTS", "UPCOMING", "RECENT"} {
+		for _, title := range []string{"ACCOUNTS", "ACTIVITY"} {
 			if strings.Contains(line, "╭─ "+title+" ◂") {
 				titles = append(titles, title)
 			}
@@ -808,35 +705,30 @@ func focusedTitles(m Model) []string {
 	return titles
 }
 
-func TestTabMovesTheFocusThroughThePanelsAndBack(t *testing.T) {
-	m := New().Resize(180, 30).WithLedger(withUpcoming("a"))
+func TestTabAndShiftTabMoveTheFocusBetweenAccountsAndActivity(t *testing.T) {
+	m := New().Resize(180, 30).WithLedger(withUpcoming(ledgerFigures(), "a"))
 
-	for i, want := range []string{"ACCOUNTS", "UPCOMING", "RECENT", "ACCOUNTS"} {
+	for i, want := range []string{"ACCOUNTS", "ACTIVITY", "ACCOUNTS"} {
 		if got := focusedTitles(press(m, slices.Repeat([]string{"tab"}, i)...)); !slices.Equal(got, []string{want}) {
 			t.Errorf("after %d tabs the focus is on %v, want %s", i, got, want)
 		}
 	}
 
-	if got := focusedTitles(press(m, "shift+tab")); !slices.Equal(got, []string{"RECENT"}) {
-		t.Errorf("shift+tab from Accounts focuses %v, want Recent", got)
+	if got := focusedTitles(press(m, "shift+tab")); !slices.Equal(got, []string{"ACTIVITY"}) {
+		t.Errorf("shift+tab from Accounts focuses %v, want Activity", got)
 	}
 }
 
-func TestTabSkipsPanelsTheTerminalHasNoRoomFor(t *testing.T) {
-	short := New().Resize(180, minAccountsHeight+upcomingHeight-1).WithLedger(withUpcoming("a"))
-	narrow := New().Resize(80, 30).WithLedger(withUpcoming("a"))
+func TestTabStaysOnAccountsWithoutRoomForActivity(t *testing.T) {
+	short := New().Resize(180, minAccountsHeight+activityHeight-1).WithLedger(withUpcoming(ledgerFigures(), "a"))
 
-	if got := focusedTitles(press(short, "tab")); !slices.Equal(got, []string{"RECENT"}) {
-		t.Errorf("without Upcoming, tab focuses %v, want Recent", got)
-	}
-
-	if got := focusedTitles(press(narrow, "tab", "tab")); !slices.Equal(got, []string{"ACCOUNTS"}) {
-		t.Errorf("without the right column, tab twice focuses %v, want Accounts", got)
+	if got := focusedTitles(press(short, "tab")); !slices.Equal(got, []string{"ACCOUNTS"}) {
+		t.Errorf("without Activity, tab focuses %v, want Accounts", got)
 	}
 }
 
-func TestTheFocusFallsBackToAccountsWhenItsPanelNoLongerFits(t *testing.T) {
-	m := press(New().Resize(180, 30).WithLedger(withUpcoming("a")), "tab", "tab").Resize(80, 30)
+func TestTheFocusFallsBackToAccountsWhenActivityNoLongerFits(t *testing.T) {
+	m := press(New().Resize(180, 30).WithLedger(withUpcoming(ledgerFigures(), "a")), "tab").Resize(180, 12)
 
 	if got := focusedTitles(m); !slices.Equal(got, []string{"ACCOUNTS"}) {
 		t.Errorf("focus on %v, want Accounts", got)
@@ -847,65 +739,61 @@ func TestTheFocusFallsBackToAccountsWhenItsPanelNoLongerFits(t *testing.T) {
 	}
 }
 
-func letters(n int) []string {
-	names := make([]string, n)
-	for i := range names {
-		names[i] = fmt.Sprintf("entry %02d", i)
+func TestTheArrowsScrollTheFocusedActivityPanel(t *testing.T) {
+	m := press(New().Resize(180, 30).WithLedger(withUpcoming(withTransactions(30), thirty()...)), "tab") // 19 inside
+
+	up := press(m, "up")
+	if rows := activityRows(up); !strings.Contains(rows[10], "today") {
+		t.Errorf("one up moves today a row down:\n%s", strings.Join(rows, "\n"))
 	}
 
-	return names
-}
-
-func TestTheArrowsScrollTheFocusedUpcomingPanel(t *testing.T) {
-	m := press(New().Resize(180, 20).WithLedger(withUpcoming(letters(12)...)), "tab") // 9 rows inside
-
-	down := press(m, "down")
-	if rows := upcomingRows(down); !strings.Contains(rows[0], "entry 01") || !strings.Contains(rows[8], "… 3 more") {
-		t.Errorf("one down shows from the second entry:\n%s", strings.Join(rows, "\n"))
+	if account, _ := up.Selected(); account.Name != "assets:cash" {
+		t.Errorf("scrolling Activity moved the Accounts cursor to %s", account.Name)
 	}
 
-	if row, total := down.Position(); row != 2 || total != 12 {
-		t.Errorf("position = %d/%d, want 2/12", row, total)
+	home := activityRows(press(m, "home"))
+	if !strings.Contains(home[0], "entry 29") || !strings.Contains(home[18], "… 43 more") {
+		t.Errorf("home shows the furthest occurrence first:\n%s", strings.Join(home, "\n"))
 	}
 
-	if account, _ := down.Selected(); account.Name != "assets:cash" {
-		t.Errorf("scrolling Upcoming moved the Accounts cursor to %s", account.Name)
-	}
-
-	end := press(m, "end", "down")
-	if rows := upcomingRows(end); !strings.Contains(rows[0], "entry 03") || !strings.Contains(rows[8], "entry 11") {
-		t.Errorf("end shows the last page without a more row:\n%s", strings.Join(rows, "\n"))
+	end := activityRows(press(m, "end"))
+	if !strings.Contains(end[0], "… 43 more") || !strings.Contains(end[18], "Shop 00") {
+		t.Errorf("end shows the oldest transaction last:\n%s", strings.Join(end, "\n"))
 	}
 }
 
-func TestTheArrowsScrollTheFocusedRecentPanelAboveAndWithoutTheChart(t *testing.T) {
-	for height, inside := range map[int]int{30: 30 - cardHeight - spendHeight - layout.PanelChrome, 18: 18 - cardHeight - layout.PanelChrome} {
-		m := press(New().Resize(180, height).WithLedger(withTransactions(40)), "tab", "tab")
-		if height < minAccountsHeight+upcomingHeight {
-			m = press(m, "shift+tab") // no Upcoming to pass
-		}
+func TestTCentresTheTodayLineAgainFromEitherPanel(t *testing.T) {
+	m := press(New().Resize(180, 30).WithLedger(withUpcoming(withTransactions(30), thirty()...)), "tab", "end")
 
-		rows := recentRows(press(m, "end"))
-		if len(rows) != inside || strings.Contains(rows[inside-1], "more") || !strings.Contains(rows[inside-1], "Shop 00") {
-			t.Errorf("height %d: end should show the oldest %d entries:\n%s", height, inside, strings.Join(rows, "\n"))
+	for _, keys := range [][]string{{"t"}, {"tab", "t"}} {
+		centred, action := press(m, keys[:len(keys)-1]...).Key("t")
+		if rows := activityRows(centred); action != nil || !strings.Contains(rows[9], "today") {
+			t.Errorf("after %v today should be the middle row again:\n%s", keys, strings.Join(rows, "\n"))
 		}
+	}
+
+	if got := Bindings(); !slices.Contains(got, layout.Binding{Key: "t", Action: "today"}) {
+		t.Errorf("bindings = %v, want t today", got)
 	}
 }
 
 func TestAScrolledPanelStaysOnItsLastPageWhenTheLedgerShrinks(t *testing.T) {
-	m := press(New().Resize(180, 20).WithLedger(withUpcoming(letters(12)...)), "tab", "end").WithLedger(withUpcoming(letters(10)...))
+	m := press(New().Resize(180, 30).WithLedger(withUpcoming(withTransactions(30), thirty()...)), "tab", "end").
+		WithLedger(withUpcoming(withTransactions(20), thirty()...))
 
-	if rows := upcomingRows(m); !strings.Contains(rows[0], "entry 01") || !strings.Contains(rows[8], "entry 09") {
+	if rows := activityRows(m); !strings.Contains(rows[18], "Shop 00") {
 		t.Errorf("rows:\n%s", strings.Join(rows, "\n"))
 	}
 
-	if row, _ := m.Position(); row != 2 {
-		t.Errorf("position row = %d, want 2", row)
+	if row, total := m.Position(); row != 33 || total != 51 {
+		t.Errorf("position = %d/%d, want 33/51", row, total)
 	}
 }
 
-func TestAnEmptyFocusedPanelHasNoPosition(t *testing.T) {
-	if row, total := press(New().Resize(180, 30).WithLedger(withUpcoming()), "tab").Position(); row != 0 || total != 0 {
-		t.Errorf("position = %d/%d, want 0/0", row, total)
+func TestAnEmptyActivityHoldsTheTodayLineAlone(t *testing.T) {
+	m := press(New().Resize(180, 30).WithLedger(withUpcoming(ledgerFigures())), "tab")
+
+	if row, total := m.Position(); row != 1 || total != 1 {
+		t.Errorf("position = %d/%d, want 1/1", row, total)
 	}
 }

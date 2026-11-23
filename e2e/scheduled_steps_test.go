@@ -372,7 +372,7 @@ func (w *world) expectUpcomingLacks(description string) error {
 	return w.expectUpcoming(func(rows []recentRow) error {
 		for _, row := range rows {
 			if strings.Contains(row.text, description) {
-				return fmt.Errorf("Upcoming still lists %q", description)
+				return fmt.Errorf("Activity still lists %q above today", description)
 			}
 		}
 
@@ -401,5 +401,5 @@ func registerScheduledDeleteSteps(sc *godog.ScenarioContext, w *world) {
 	step(sc, `^the rule "([^"]*)" is intact$`, w.expectRuleIntact)
 	step(sc, `^the main journal is unchanged$`, w.expectMainJournalUnchanged)
 	step(sc, `^"([^"]*)" no longer contains the rule$`, w.expectFileLacksRule)
-	step(sc, `^the Upcoming panel does not list "([^"]*)"$`, w.expectUpcomingLacks)
+	step(sc, `^Activity does not list "([^"]*)" above today$`, w.expectUpcomingLacks)
 }

@@ -142,7 +142,7 @@ _Avoid_: Scheduled transaction, Recurring transaction, Template
 
 **Occurrence**:
 One projected dated instance of a periodic rule, computed by hledger. Feeds the forecast and
-upcoming lists; never written to the journal.
+the Dashboard's Activity above today; never written to the journal.
 _Avoid_: Instance, Posting (a periodic rule posts nothing)
 
 ## Import

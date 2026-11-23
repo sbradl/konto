@@ -8,7 +8,7 @@ source in `@spec-N.N` / `@adr-NNNN` tags so every requirement is traceable.
 | `startup` | preflight, journal path, first-run, parse error, too-small terminal, lock |
 | `chrome` | tab/status bar, global keys, `?` popup, refresh, quit, responsive layout, ANSI-16 theme |
 | `checks` | `● clean` indicator, `!` panel, every check + severity, unclassified WARN, `$EDITOR` jump |
-| `dashboard` | stat cards, Accounts / Recent / Upcoming / spend chart, dropped panels |
+| `dashboard` | stat cards, Accounts / Activity (upcoming over today over recent), dropped panels |
 | `accounts` | close (`c`) / reopen (`o`) |
 | `import-flow` | picker, IBAN detection, row table, skipped list, watermark dedup, bad input |
 | `import-categorise` | popup, once / new rule / add to rule, overlap refusal, category picker, transfers |
@@ -85,7 +85,7 @@ checks), `keys_test.go`, `postbank_test.go` (CSV generator), `harness_test.go` (
 | `journal_paths_test.go` · `firstrun_steps_test.go` · `instance_steps_test.go` | startup: path resolution, first run and parse error, the lock |
 | `chrome_steps_test.go` · `chrome_extra_steps_test.go` · `popup_steps_test.go` | tab/status bar, refresh, theme, layout, `?` popup |
 | `checks_steps_test.go` | checks indicator and `!` panel, check fixtures, `$EDITOR` jump |
-| `stat_card_steps_test.go` · `accounts_panel_steps_test.go` · `recent_steps_test.go` · `spend_steps_test.go` · `spend_line_steps_test.go` · `panels_steps_test.go` | dashboard panels |
+| `stat_card_steps_test.go` · `accounts_panel_steps_test.go` · `recent_steps_test.go` · `panels_steps_test.go` | dashboard panels |
 | `account_change_steps_test.go` | close/reopen accounts, prompts, refusals, `account` directives |
 | `import_steps_test.go` · `import_format_steps_test.go` · `import_staging_steps_test.go` | import picker, row table, info block, skipped list, Postbank bytes, staging |
 | `categorise_steps_test.go` | categorise dialog, category picker, rule form and drafts |

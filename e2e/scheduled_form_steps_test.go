@@ -583,7 +583,7 @@ func (w *world) expectUpcomingLists(description, date string) error {
 			}
 		}
 
-		return fmt.Errorf("Upcoming lacks %q on %s", description, date)
+		return fmt.Errorf("Activity lacks %q on %s above today", description, date)
 	})
 }
 
@@ -716,7 +716,7 @@ func registerFormResultSteps(sc *godog.ScenarioContext, w *world) {
 	})
 	step(sc, `^the main journal ends with the new rule$`, w.expectMainEndsWithRule)
 	step(sc, `^the rule list shows "([^"]*)" with next date "([^"]*)"$`, w.expectRuleListRow)
-	step(sc, `^the Upcoming panel lists "([^"]*)" on "([^"]*)"$`, w.expectUpcomingLists)
+	step(sc, `^Activity lists "([^"]*)" on "([^"]*)" above today$`, w.expectUpcomingLists)
 	step(sc, `^the checking line has changed$`, w.expectCheckingChanged)
 	step(sc, `^the journal was reloaded$`, w.expectReloaded)
 	step(sc, `^the tab bar still shows "(\d+)" transactions$`, w.expectTabCountStill)
