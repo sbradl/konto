@@ -5,6 +5,7 @@ package e2e
 import (
 	"errors"
 	"fmt"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -91,7 +92,7 @@ func (w *world) expectRecent(check func(rows []recentRow) error) error {
 		}
 		var filled []recentRow
 		for _, row := range rows {
-			if strings.TrimSpace(row.text) != "" {
+			if strings.TrimSpace(row.text) != "" && !monthLine.MatchString(row.text) {
 				filled = append(filled, row)
 			}
 		}
@@ -106,6 +107,9 @@ func (w *world) expectRecent(check func(rows []recentRow) error) error {
 
 	return nil
 }
+
+// monthLine is a month's totals row, which sits outside the transaction rows.
+var monthLine = regexp.MustCompile(`^ ── [A-Z][a-z]+ \d{4} ── `)
 
 // recentFor is the row with the description (and date, when given).
 func recentFor(rows []recentRow, description, date string) (recentRow, error) {
@@ -309,7 +313,7 @@ func (w *world) expectUpcoming(check func(rows []recentRow) error) error {
 		}
 		var filled []recentRow
 		for _, row := range rows {
-			if strings.TrimSpace(row.text) != "" {
+			if strings.TrimSpace(row.text) != "" && !monthLine.MatchString(row.text) {
 				filled = append(filled, row)
 			}
 		}

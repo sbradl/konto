@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"reflect"
 	"testing"
 	"time"
 )
@@ -154,5 +155,26 @@ func TestAmountLikeFallsBackToTheCommaStyle(t *testing.T) {
 
 	if got.Format() != "0,00 EUR" || got.Style.GroupMark != "." {
 		t.Errorf("like = %+v (%s)", got, got.Format())
+	}
+}
+
+func TestMonthTotalsSumIncomeAndExpensesByMonthOverBookedAndUpcoming(t *testing.T) {
+	ledger := Ledger{
+		Transactions: []Transaction{
+			{Date: date(2026, 8, 31), Postings: []Posting{posting("expenses:rent", 90000), posting("assets:checking", -90000)}},
+			{Date: day(10), Postings: []Posting{posting("expenses:groceries", 25000), posting("assets:checking", -25000)}},
+			{Date: day(25), Postings: []Posting{posting("assets:checking", 300000), posting("income:salary", -300000)}},
+		},
+		Upcoming: []Transaction{
+			{Date: day(30), Postings: []Posting{posting("expenses:rent", 90000), posting("assets:checking", -90000)}},
+		},
+	}
+
+	want := map[time.Time]MonthSummary{
+		date(2026, 8, 1): {Month: time.August, Expenses: MultiAmount{eur(90000)}},
+		date(2026, 9, 1): {Month: time.September, Income: MultiAmount{eur(300000)}, Expenses: MultiAmount{eur(115000)}},
+	}
+	if got := ledger.MonthTotals(); !reflect.DeepEqual(got, want) {
+		t.Errorf("totals = %v, want %v", got, want)
 	}
 }

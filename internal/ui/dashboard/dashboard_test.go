@@ -485,12 +485,50 @@ func TestActivityListsUpcomingFurthestFirstOverTodayOverRecentNewestFirst(t *tes
 	rows := activityRows(New().Resize(180, 40).WithLedger(withUpcoming(withTransactions(2), "Vermieter Mueller", "Streaming")))
 
 	for i, want := range []string{
-		"2026-10-02  Streaming", "2026-10-01  Vermieter Mueller", "━━ today 2026-09-30 ━━",
-		"2026-09-02  Shop 01", "2026-09-01  Shop 00",
+		"October 2026", "2026-10-02  Streaming", "2026-10-01  Vermieter Mueller", "━━ today 2026-09-30 ━━",
+		"September 2026", "2026-09-02  Shop 01", "2026-09-01  Shop 00",
 	} {
 		if !strings.Contains(rows[i], want) {
 			t.Errorf("row %d = %q, want it to hold %q", i, rows[i], want)
 		}
+	}
+}
+
+func TestEachMonthOpensWithItsIncomeAndExpensesAboveItsLatestRow(t *testing.T) {
+	ledger := withUpcoming(withTransactions(1), "rent")
+	ledger.Upcoming = append(ledger.Upcoming, domain.Transaction{
+		Date: time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC), Description: "salary",
+		Postings: []domain.Posting{{Account: "assets:cash", Amounts: eur(300000)}, {Account: "income:salary", Amounts: eur(-300000)}},
+	})
+	ledger.Transactions = append(ledger.Transactions, domain.Transaction{
+		Date: time.Date(2026, 8, 31, 0, 0, 0, 0, time.UTC), Description: "august",
+		Postings: []domain.Posting{{Account: "expenses:food", Amounts: eur(500)}, {Account: "assets:cash", Amounts: eur(-500)}},
+	})
+	m := New().Resize(180, 40).WithLedger(ledger)
+
+	for i, want := range []string{
+		"── October 2026 ── -900,00 EUR (0,00 EUR / -900,00 EUR) ──", "rent",
+		"── September 2026 ── +2.990,00 EUR (+3.000,00 EUR / -10,00 EUR) ──", "salary", "today", "Shop 00", // the month counts both sides of today
+		"── August 2026 ── -5,00 EUR (0,00 EUR / -5,00 EUR) ──", "august",
+	} {
+		if row := activityRows(m)[i]; !strings.Contains(row, want) {
+			t.Errorf("row %d = %q, want it to hold %q", i, row, want)
+		}
+	}
+
+	if view := m.View(); !strings.Contains(view, opening(theme.Ok)+"+2.990,00 EUR") ||
+		!strings.Contains(view, "── \x1b[m"+opening(theme.Negative)+"-900,00 EUR") ||
+		!strings.Contains(view, "("+opening(theme.Ok)+"+3.000,00 EUR") ||
+		!strings.Contains(view, opening(theme.Negative)+"-10,00 EUR\x1b[m)") {
+		t.Errorf("the net should be signed and coloured, income green and expenses red:\n%q", view)
+	}
+
+	if row := activityRows(m)[0]; !strings.HasSuffix(row, "─ │") || lipgloss.Width(row) != 180 {
+		t.Errorf("month line = %q, want it to run to the panel's edge", row)
+	}
+
+	if view := m.View(); !strings.Contains(view, opening(theme.Warn)+" ── ") {
+		t.Errorf("the month line's rule should be yellow:\n%q", view)
 	}
 }
 
@@ -516,7 +554,7 @@ func TestActivityRowShowsDescriptionCategoryAmountAndBalance(t *testing.T) {
 		}},
 	}}
 
-	rows := activityRows(New().Resize(180, 40).WithLedger(ledger))[1:] // under the today line
+	rows := activityRows(New().Resize(180, 40).WithLedger(ledger))[2:] // under the today and month lines
 
 	if !strings.Contains(rows[0], "2026-09-25  Acme GmbH") || !strings.Contains(rows[0], "income:salary") ||
 		!strings.HasSuffix(rows[0], "3.000,00 EUR        50,00 EUR │") {
@@ -530,7 +568,7 @@ func TestActivityRowShowsDescriptionCategoryAmountAndBalance(t *testing.T) {
 }
 
 func TestUpcomingBalancesRunForwardFromTodaysOverToday(t *testing.T) {
-	rows := activityRows(New().Resize(180, 40).WithLedger(withUpcoming(ledgerFigures(), "a", "b")))
+	rows := activityRows(New().Resize(180, 40).WithLedger(withUpcoming(ledgerFigures(), "a", "b")))[1:] // under October
 
 	for i, want := range []string{"-900,00 EUR    -1.750,00 EUR │", "-900,00 EUR      -850,00 EUR │"} {
 		if !strings.HasSuffix(rows[i], want) {
@@ -570,19 +608,19 @@ func TestActivityOpensWithTheTodayLineInTheMiddle(t *testing.T) {
 		t.Fatalf("today should be the middle of 19 rows:\n%s", strings.Join(rows, "\n"))
 	}
 
-	if !strings.Contains(rows[0], "… 22 more") || !strings.Contains(rows[18], "… 22 more") {
+	if !strings.Contains(rows[0], "… 23 more") || !strings.Contains(rows[18], "… 23 more") {
 		t.Errorf("first and last rows should count what is beyond them:\n%s", strings.Join(rows, "\n"))
 	}
 
-	if row, total := press(m, "tab").Position(); row != 22 || total != 61 {
-		t.Errorf("position = %d/%d, want 22/61", row, total)
+	if row, total := press(m, "tab").Position(); row != 23 || total != 63 {
+		t.Errorf("position = %d/%d, want 23/63", row, total)
 	}
 }
 
 func TestTodayIsTheFirstRowWithoutUpcomingOccurrences(t *testing.T) {
 	rows := activityRows(New().Resize(180, 30).WithLedger(withUpcoming(withTransactions(3))))
 
-	if !strings.Contains(rows[0], "today") || !strings.Contains(rows[1], "Shop 02") {
+	if !strings.Contains(rows[0], "today") || !strings.Contains(rows[1], "September 2026") || !strings.Contains(rows[2], "Shop 02") {
 		t.Errorf("rows:\n%s", strings.Join(rows, "\n"))
 	}
 }
@@ -599,7 +637,7 @@ func TestActivityCutsLongDescriptionsToKeepTheColumns(t *testing.T) {
 	ledger := withTransactions(1)
 	ledger.Transactions[0].Description = strings.Repeat("long ", 40)
 
-	row := activityRows(New().Resize(60, 24).WithLedger(ledger))[1]
+	row := activityRows(New().Resize(60, 24).WithLedger(ledger))[2]
 
 	if lipgloss.Width(row) != 60 || !strings.HasSuffix(row, "-10,00 EUR        50,00 EUR │") || strings.Contains(row, "expenses") {
 		t.Errorf("row = %q, want it cut to the width with the amount and balance kept and no room for the category", row)
@@ -612,7 +650,7 @@ func TestActivityColumnsKeepTheirPlaceWhileScrolling(t *testing.T) {
 	ledger.Accounts = []domain.Account{{Name: "assets:cash", Source: domain.SourceManual, Balance: eur(99980000)}}
 	m := press(New().Resize(180, 24).WithLedger(ledger), "tab")
 
-	top, bottom := activityRows(press(m, "home"))[1], activityRows(press(m, "end"))[1]
+	top, bottom := activityRows(press(m, "home"))[2], activityRows(press(m, "end"))[1]
 
 	if at, want := strings.Index(top, "-10,00 EUR"), strings.Index(bottom, "-10,00 EUR"); at != want {
 		t.Errorf("the amount moves from column %d to %d:\n%s\n%s", want, at, bottom, top)
@@ -620,7 +658,7 @@ func TestActivityColumnsKeepTheirPlaceWhileScrolling(t *testing.T) {
 }
 
 func TestActivityFiguresHaveRoomForAHundredThousand(t *testing.T) {
-	row := activityRows(New().Resize(180, 24).WithLedger(withTransactions(1)))[1]
+	row := activityRows(New().Resize(180, 24).WithLedger(withTransactions(1)))[2]
 
 	if !strings.HasSuffix(row, "     -10,00 EUR        50,00 EUR │") {
 		t.Errorf("row = %q, want amount and balance %d wide", row, len("-100.000,00 EUR"))
@@ -752,12 +790,12 @@ func TestTheArrowsScrollTheFocusedActivityPanel(t *testing.T) {
 	}
 
 	home := activityRows(press(m, "home"))
-	if !strings.Contains(home[0], "entry 29") || !strings.Contains(home[18], "… 43 more") {
+	if !strings.Contains(home[1], "entry 29") || !strings.Contains(home[18], "… 45 more") {
 		t.Errorf("home shows the furthest occurrence first:\n%s", strings.Join(home, "\n"))
 	}
 
 	end := activityRows(press(m, "end"))
-	if !strings.Contains(end[0], "… 43 more") || !strings.Contains(end[18], "Shop 00") {
+	if !strings.Contains(end[0], "… 45 more") || !strings.Contains(end[18], "Shop 00") {
 		t.Errorf("end shows the oldest transaction last:\n%s", strings.Join(end, "\n"))
 	}
 }
@@ -785,8 +823,8 @@ func TestAScrolledPanelStaysOnItsLastPageWhenTheLedgerShrinks(t *testing.T) {
 		t.Errorf("rows:\n%s", strings.Join(rows, "\n"))
 	}
 
-	if row, total := m.Position(); row != 33 || total != 51 {
-		t.Errorf("position = %d/%d, want 33/51", row, total)
+	if row, total := m.Position(); row != 35 || total != 53 {
+		t.Errorf("position = %d/%d, want 35/53", row, total)
 	}
 }
 
@@ -795,5 +833,13 @@ func TestAnEmptyActivityHoldsTheTodayLineAlone(t *testing.T) {
 
 	if row, total := m.Position(); row != 1 || total != 1 {
 		t.Errorf("position = %d/%d, want 1/1", row, total)
+	}
+}
+
+func TestAMonthThatCameToNothingHasNoSign(t *testing.T) {
+	line := uitest.Plain(monthLine(day1, domain.MonthSummary{Income: eur(500), Expenses: eur(500)}, 80))
+
+	if !strings.Contains(line, "── 0,00 EUR (+5,00 EUR / -5,00 EUR) ──") {
+		t.Errorf("line = %q, want an unsigned zero", line)
 	}
 }

@@ -549,7 +549,10 @@ read-only panels that overflow show `… N more`.
   (scrolls once Activity would get under 10 rows), the cards beside it. Under them, full width,
   **Activity** (ADR 0015): the next year's occurrences, furthest at the top, then a yellow
   `━━ today <date> ━━` line, then the journal's transactions, newest first. A row is date,
-  description, category, amount and the balance of its account after it (both green/red). Rows are
+  description, category, amount and the balance of its account after it (both green/red). Each
+  month opens, above its latest row, with a line outside the columns: a thin yellow rule like the
+  today line, `── <Month> <year> ── +<net> (+<income> / -<expenses>) ───…` (each signed, green/red), booked and
+  upcoming together, so the current month counts both. Rows are
   not selectable; it opens with the today line in its middle (`t` puts it back) and scrolls when focused, a first or
   last row with more beyond it reading `… N more`. No spend chart.
 - **`!` panel**: issues only; when clean a single dim-green `✓ all N checks pass`.

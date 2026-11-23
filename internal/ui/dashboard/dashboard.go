@@ -37,6 +37,8 @@ type Model struct {
 	accounts []domain.Account
 	recent   []domain.RecentEntry // newest first
 	upcoming []domain.RecentEntry // soonest first
+	rows     []activityRow        // Activity's rows, top to bottom
+	todayRow int                  // the today line's index in rows
 	today    time.Time
 	figures  figures
 	cursor   layout.Cursor
@@ -74,12 +76,13 @@ func (m Model) WithLedger(ledger domain.Ledger) Model {
 	next.recent = ledger.Recent()
 	next.upcoming = ledger.UpcomingEntries()
 	next.today = ledger.Today
+	next.rows, next.todayRow = timeline(next.upcoming, next.recent, ledger.MonthTotals())
 
 	return next.WithAccounts(ledger.Accounts)
 }
 
 // New returns an empty Dashboard.
-func New() Model { return Model{} }
+func New() Model { return Model{rows: []activityRow{{}}} } // the today line alone
 
 // WithAccounts shows the asset and liability accounts of a fresh snapshot: open
 // ones first, closed ones after, each group by name. The cursor stays on its row
@@ -206,7 +209,7 @@ func (m Model) Move(key string) Model {
 }
 
 // rowCount is how many rows Activity lists: the upcoming occurrences, the today line and the recent ones.
-func (m Model) rowCount() int { return len(m.upcoming) + 1 + len(m.recent) }
+func (m Model) rowCount() int { return len(m.rows) }
 
 // capacity is how many rows fit inside Activity.
 func (m Model) capacity() int { return max(0, m.activityHeight()-layout.PanelChrome) }
@@ -257,7 +260,7 @@ func (m Model) Position() (row, total int) {
 func (m Model) offset() int {
 	offset := m.scroll.Offset
 	if !m.scrolled {
-		offset = max(0, len(m.upcoming)-m.capacity()/2)
+		offset = max(0, m.todayRow-m.capacity()/2)
 	}
 
 	return min(offset, lastOffset(m.rowCount(), m.capacity()))
@@ -349,30 +352,72 @@ func (m Model) activityLines(first, end, width int) []string {
 	columns := recentColumns(slices.Concat(m.upcoming, m.recent), width)
 	var lines []string
 	for i := first; i < end; i++ {
-		entry, ok := m.entry(i)
-		if !ok {
+		row := m.rows[i]
+		switch {
+		case row.isMonth:
+			lines = append(lines, monthLine(row.month, row.totals, width))
+		case row.isEntry:
+			lines = append(lines, columns.line(row.entry))
+		default:
 			lines = append(lines, todayLine(m.today, width))
-
-			continue
 		}
-		lines = append(lines, columns.line(entry))
 	}
 
 	return lines
 }
 
-// entry is Activity's row i: an upcoming occurrence, the furthest first, or a recent transaction, the newest
-// first; false for the today line between them.
-func (m Model) entry(i int) (domain.RecentEntry, bool) {
-	if i < len(m.upcoming) {
-		return m.upcoming[len(m.upcoming)-1-i], true
+// activityRow is one row of Activity: a transaction, a month's totals, or else the today line.
+type activityRow struct {
+	isEntry, isMonth bool
+	entry            domain.RecentEntry
+	month            time.Time // the first of the month the totals are for
+	totals           domain.MonthSummary
+}
+
+// timeline is the upcoming occurrences furthest first, the today line and the recent transactions newest
+// first, each month opened by its totals line above its latest row, and the today line's index.
+func timeline(
+	upcoming, recent []domain.RecentEntry, totals map[time.Time]domain.MonthSummary,
+) (rows []activityRow, today int) {
+	var month time.Time
+	add := func(entry domain.RecentEntry) {
+		if first := domain.FirstOfMonth(entry.Date); !first.Equal(month) {
+			month = first
+			rows = append(rows, activityRow{isMonth: true, month: first, totals: totals[first]})
+		}
+		rows = append(rows, activityRow{isEntry: true, entry: entry})
+	}
+	for _, entry := range slices.Backward(upcoming) {
+		add(entry)
+	}
+	today = len(rows)
+	rows = append(rows, activityRow{})
+	for _, entry := range recent {
+		add(entry)
 	}
 
-	if i == len(m.upcoming) {
-		return domain.RecentEntry{}, false
+	return rows, today
+}
+
+// monthLine is a yellow rule like the today line, but thin, carrying the month, its net change green or red,
+// then in brackets its income in green and its expenses in red, each signed.
+func monthLine(month time.Time, totals domain.MonthSummary, width int) string {
+	rule := func(text string) string { return theme.Warn.Render(text) }
+	net := totals.Net()
+	label := rule(" ── ") + theme.Bold.Render(month.Format("January 2006")) + rule(" ── ") +
+		signStyle(net).Render(plus(net)) + " (" + theme.Ok.Render(plus(totals.Income)) + " / " +
+		theme.Negative.Render(totals.Expenses.Negated().Format()) + ") "
+
+	return label + rule(strings.Repeat("─", max(0, width-lipgloss.Width(label)-1)))
+}
+
+// plus is the amount with a plus in front when it is above zero.
+func plus(amount domain.MultiAmount) string {
+	if amount.IsAllNegative() || amount.IsZero() {
+		return amount.Format()
 	}
 
-	return m.recent[i-len(m.upcoming)-1], true
+	return "+" + amount.Format()
 }
 
 // todayLine is the rule between the upcoming and the recent rows, carrying today's date.
@@ -417,12 +462,15 @@ func (c columns) line(entry domain.RecentEntry) string {
 }
 
 // signed is the amount red when negative and green when not.
-func signed(amount domain.MultiAmount) string {
+func signed(amount domain.MultiAmount) string { return signStyle(amount).Render(amount.Format()) }
+
+// signStyle is red for a negative amount and green for any other.
+func signStyle(amount domain.MultiAmount) lipgloss.Style {
 	if amount.IsAllNegative() {
-		return theme.Negative.Render(amount.Format())
+		return theme.Negative
 	}
 
-	return theme.Ok.Render(amount.Format())
+	return theme.Ok
 }
 
 // cards are the two stat cards sharing width between them.

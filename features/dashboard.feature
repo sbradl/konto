@@ -201,6 +201,10 @@ Feature: Dashboard
       When I press "e"
       Then the screen is unchanged
 
+    Scenario: every month opens with its income and expenses, past and future
+      Then I see "── September 2026 ── +1.815,00 EUR (+3.000,00 EUR / -1.185,00 EUR) ──"
+      And I see "── October 2026 ── "
+
   Rule: Activity panel, above today
 
     Scenario: next occurrences from periodic rules, the soonest next to today
