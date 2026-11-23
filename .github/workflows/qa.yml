@@ -25,7 +25,7 @@ jobs:
     name: build · vet · lint · archtest · unit tests (100% coverage)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
       - run: mise run tidy
       - run: mise run check
@@ -40,7 +40,7 @@ jobs:
     name: govulncheck
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
       - run: mise run vuln
 
@@ -48,7 +48,7 @@ jobs:
     name: integration (real hledger)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
       - run: mise run test:integration
 
@@ -61,7 +61,7 @@ jobs:
       # scenarios (the local default), so the run below uses 2
       KONTO_E2E_TIMEOUT: 20s
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
       - run: mise run test:e2e -- -godog.concurrency=2
       - uses: actions/upload-artifact@v7
@@ -76,7 +76,7 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - run: git fetch --no-tags origin main:main
@@ -89,6 +89,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
       - run: mise run mutation
