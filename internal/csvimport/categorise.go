@@ -142,10 +142,11 @@ func Matching(candidates []Candidate, filter string) []Candidate {
 }
 
 // SuggestName is the account a new category is declared as: the typed name, prefixed from the direction
-// of the row when it names no account type.
+// of the row unless it already starts with income, expenses, assets or liabilities; insurance:x is a
+// subcategory under expenses, not a top level of its own.
 func SuggestName(row Row, typed string) string {
 	typed = strings.TrimSpace(typed)
-	if strings.Contains(typed, ":") || typed == "" {
+	if domain.IsCategory(typed) || domain.HoldsMoney(typed) || typed == "" {
 		return typed
 	}
 
