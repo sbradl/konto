@@ -686,17 +686,6 @@ func registerFormInputSteps(sc *godog.ScenarioContext, w *world) {
 
 		return w.press(key)
 	})
-	step(sc, `^the field "to account" is empty or shows an error$`, func() error {
-		return w.onForm(func(rows []string) error {
-			value, _ := fieldRow(rows, "to account")
-			if strings.TrimSpace(strings.ReplaceAll(value, "▏", "")) != "—" &&
-				!slices.ContainsFunc(rows, func(row string) bool { return strings.Contains(row, "no account matches") }) {
-				return fmt.Errorf("the to account holds %q", value)
-			}
-
-			return nil
-		})
-	})
 	step(sc, `^I change the amount to "([^"]*)"$`, w.changeAmount)
 }
 

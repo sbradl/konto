@@ -3,6 +3,7 @@ package periodic
 import (
 	"cmp"
 	"context"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -44,7 +45,7 @@ func (s *Service) Add(ctx context.Context, input Input, ledger domain.Ledger) (d
 		return domain.Changeset{}, err
 	}
 
-	return domain.Changeset{Edits: []domain.Edit{domain.AddRule{Lines: lines}}}, nil
+	return input.changeset(domain.AddRule{Lines: lines}, ledger), nil
 }
 
 // Replace plans the new text of an existing rule, in place.
@@ -58,7 +59,51 @@ func (s *Service) Replace(
 
 	replace := domain.ReplaceRule{Pos: rule.Pos, Was: rule.Entry(), Lines: lines}
 
-	return domain.Changeset{Edits: []domain.Edit{replace}}, nil
+	return input.changeset(replace, ledger), nil
+}
+
+// changeset is the rule's edit, then a declaration of each account the form created.
+func (in Input) changeset(rule domain.Edit, ledger domain.Ledger) domain.Changeset {
+	created := in.newAccounts(ledger)
+	declarations := make([]domain.Edit, len(created))
+	for i, name := range created {
+		declarations[i] = domain.DeclareAccount(name, "")
+	}
+
+	return domain.Changeset{Edits: append([]domain.Edit{rule}, declarations...)}
+}
+
+// checkAccounts refuses the same account for from and to, and an account the form created whose last part
+// another account ends in.
+func (in Input) checkAccounts(ledger domain.Ledger) error {
+	if in.From == in.To {
+		return domain.RefusalError{Reason: "from account and to account must differ"}
+	}
+
+	for _, name := range in.newAccounts(ledger) {
+		if err := domain.CheckLeaf(name, accountNames(ledger)); err != nil {
+			return err //nolint:wrapcheck // a refusal
+		}
+	}
+
+	return nil
+}
+
+// newAccounts are the from and to accounts no account of the ledger is named.
+func (in Input) newAccounts(ledger domain.Ledger) []string {
+	return slices.DeleteFunc([]string{in.From, in.To}, func(name string) bool {
+		return slices.Contains(accountNames(ledger), name)
+	})
+}
+
+// accountNames are the names of the ledger's accounts, closed ones included.
+func accountNames(ledger domain.Ledger) []string {
+	names := make([]string, 0, len(ledger.Accounts))
+	for _, account := range ledger.Accounts {
+		names = append(names, account.Name)
+	}
+
+	return names
 }
 
 // Form is what the form shows for editing the rule: its next occurrence as hledger projects it, and the
@@ -139,8 +184,8 @@ func (in Input) check(ledger domain.Ledger) (entered, error) {
 		return read, domain.RefusalError{Reason: field + " is required"}
 	}
 
-	if in.From == in.To {
-		return read, domain.RefusalError{Reason: "from account and to account must differ"}
+	if err := in.checkAccounts(ledger); err != nil {
+		return read, err
 	}
 
 	var err error
