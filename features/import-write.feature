@@ -211,7 +211,7 @@ Feature: Import — writing, assertions, opening balance, staging and quitting
       When I import "sept.csv" categorising every row
       And I press "1"
       Then the row "assets:checking" shows "13.182,03 EUR"
-      And the Recent panel's first row is dated "2026-09-30"
+      And the first row below today is dated "2026-09-30"
       And the tab bar shows "59" transactions
 
     Scenario: n picks the next file

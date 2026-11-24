@@ -214,6 +214,31 @@ func (f *form) matches() []string {
 	})
 }
 
+// created is the new category the typed filter would declare, "" when it offers none: nothing is typed, it
+// ends in a colon, or an account of that name exists already.
+func (f *form) created() string {
+	topLevel := domain.ExpensesPrefix
+	if f.focus == fieldFrom {
+		topLevel = domain.IncomePrefix
+	}
+
+	name := domain.CategoryName(f.filter, topLevel)
+	if name == "" || strings.HasSuffix(name, ":") || slices.Contains(f.accounts, name) {
+		return ""
+	}
+
+	return name
+}
+
+// entries counts what the picker lists: the matches, then the new category when one is offered.
+func (f *form) entries() int {
+	if f.created() == "" {
+		return len(f.matches())
+	}
+
+	return len(f.matches()) + 1
+}
+
 // picks reports that Enter takes a match of the picker instead of saving: something was typed, the cursor was
 // moved, or the field has no account yet.
 func (f *form) picks() bool {
@@ -224,15 +249,19 @@ func (f *form) picks() bool {
 	return f.filter != "" || f.browsing || f.text(f.focus) == ""
 }
 
-// pick gives the focused field the match under the cursor and moves on, or says there is none.
+// pick gives the focused field the entry under the cursor, a match or the new category, and moves on, or says
+// there is none.
 func (f *form) pick() {
-	matches := f.matches()
-	if len(matches) == 0 {
+	if f.entries() == 0 {
 		f.message = "no account matches " + f.filter
 
 		return
 	}
-	chosen := matches[f.cursor.Row] // the cursor never leaves the matches
+
+	chosen := f.created()
+	if matches := f.matches(); f.cursor.Row < len(matches) { // the cursor never leaves the entries
+		chosen = matches[f.cursor.Row]
+	}
 
 	*fields()[f.focus].text(&f.input) = chosen
 	if f.focus == fieldFrom {
@@ -271,7 +300,7 @@ func (f *form) edit(key string) {
 // editPicker moves the picker's cursor by a cursor key, or types into its filter.
 func (f *form) editPicker(key string) {
 	if layout.Moves(key) {
-		f.cursor, f.browsing = f.cursor.Move(key, len(f.matches()), pickerRows), true
+		f.cursor, f.browsing = f.cursor.Move(key, f.entries(), pickerRows), true
 
 		return
 	}

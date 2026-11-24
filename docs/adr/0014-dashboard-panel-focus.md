@@ -21,4 +21,4 @@ Only the Dashboard has panel focus. Every other view keeps ADR 0011's single cur
 Amends ADR 0011 ("no panel focus") for the Dashboard only. Reversible: focus is view-local state in
 `internal/ui/dashboard`; the root and the use cases are unchanged.
 
-Status: accepted.
+Status: accepted; its panels amended by ADR 0015 (Upcoming and Recent are one Activity panel).

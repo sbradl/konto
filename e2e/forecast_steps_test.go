@@ -79,6 +79,9 @@ func (w *world) onChart(title string, check func(chart screenPanel) error) error
 	})
 }
 
+// isBraille reports whether r is a braille cell, the dots charts plot with.
+func isBraille(r rune) bool { return r >= 0x2800 && r <= 0x28FF }
+
 func isChart(panel screenPanel) bool { return panel.title != "MILESTONES" && panel.title != "FORECAST" }
 
 func chartTitled(panels []screenPanel, title string) (screenPanel, error) {

@@ -94,12 +94,13 @@ func (l *Loader) fromHledger(ctx context.Context) (domain.Ledger, []domain.Accou
 		accounts []domain.Account
 	)
 	today := l.today()
+	snapshot.Today = today
 
 	err := parallel.RunAll(
 		func() error { return assign(&snapshot.Transactions)(l.gw.Print(ctx)) },
 		func() error { return assign(&accounts)(l.gw.Balances(ctx)) },
 		func() (err error) {
-			snapshot.Month, snapshot.Spend, err = l.activity(ctx, today)
+			snapshot.Month, err = l.activity(ctx, today)
 
 			return err
 		},
@@ -171,36 +172,20 @@ func declaredOnly(declarations []domain.Declaration, listed []domain.Account) []
 	return accounts
 }
 
-const spendMonths = 6
-
-// activity sums the calendar month so far (income as a positive figure, and expenses) and totals the
-// expenses of each of the six complete months before it, oldest first, from one monthly report.
-func (l *Loader) activity(ctx context.Context, today time.Time) (domain.MonthSummary, []domain.MonthSpend, error) {
+// activity sums the calendar month so far: income as a positive figure, and expenses.
+func (l *Loader) activity(ctx context.Context, today time.Time) (domain.MonthSummary, error) {
 	thisMonth := time.Date(today.Year(), today.Month(), 1, 0, 0, 0, 0, today.Location())
-	oldest := thisMonth.AddDate(0, -spendMonths, 0)
 
-	months, err := l.gw.MonthlyActivity(ctx, oldest, today)
+	months, err := l.gw.MonthlyActivity(ctx, thisMonth, today)
 	if err != nil {
-		return domain.MonthSummary{}, nil, err //nolint:wrapcheck // Load adds the context
+		return domain.MonthSummary{}, err //nolint:wrapcheck // Load adds the context
 	}
 
-	if len(months) != spendMonths+1 {
-		return domain.MonthSummary{}, nil, fmt.Errorf(
-			"hledger reported %d months of activity, want %d", len(months), spendMonths+1)
+	if len(months) != 1 {
+		return domain.MonthSummary{}, fmt.Errorf("hledger reported %d months of activity, want 1", len(months))
 	}
 
-	return summarise(months[spendMonths], thisMonth), spendHistory(months[:spendMonths], oldest), nil
-}
-
-// spendHistory is the expenses of each month's activity, the first month starting on oldest.
-func spendHistory(months [][]domain.Account, oldest time.Time) []domain.MonthSpend {
-	history := make([]domain.MonthSpend, len(months))
-	for i, activity := range months {
-		first := oldest.AddDate(0, i, 0)
-		history[i] = domain.MonthSpend{Month: first, Total: summarise(activity, first).Expenses}
-	}
-
-	return history
+	return summarise(months[0], thisMonth), nil
 }
 
 // summarise sums income (as a positive figure) and expenses of a month's activity.

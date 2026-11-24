@@ -583,7 +583,7 @@ func (w *world) expectUpcomingLists(description, date string) error {
 			}
 		}
 
-		return fmt.Errorf("Upcoming lacks %q on %s", description, date)
+		return fmt.Errorf("Activity lacks %q on %s above today", description, date)
 	})
 }
 
@@ -686,17 +686,6 @@ func registerFormInputSteps(sc *godog.ScenarioContext, w *world) {
 
 		return w.press(key)
 	})
-	step(sc, `^the field "to account" is empty or shows an error$`, func() error {
-		return w.onForm(func(rows []string) error {
-			value, _ := fieldRow(rows, "to account")
-			if strings.TrimSpace(strings.ReplaceAll(value, "▏", "")) != "—" &&
-				!slices.ContainsFunc(rows, func(row string) bool { return strings.Contains(row, "no account matches") }) {
-				return fmt.Errorf("the to account holds %q", value)
-			}
-
-			return nil
-		})
-	})
 	step(sc, `^I change the amount to "([^"]*)"$`, w.changeAmount)
 }
 
@@ -716,7 +705,7 @@ func registerFormResultSteps(sc *godog.ScenarioContext, w *world) {
 	})
 	step(sc, `^the main journal ends with the new rule$`, w.expectMainEndsWithRule)
 	step(sc, `^the rule list shows "([^"]*)" with next date "([^"]*)"$`, w.expectRuleListRow)
-	step(sc, `^the Upcoming panel lists "([^"]*)" on "([^"]*)"$`, w.expectUpcomingLists)
+	step(sc, `^Activity lists "([^"]*)" on "([^"]*)" above today$`, w.expectUpcomingLists)
 	step(sc, `^the checking line has changed$`, w.expectCheckingChanged)
 	step(sc, `^the journal was reloaded$`, w.expectReloaded)
 	step(sc, `^the tab bar still shows "(\d+)" transactions$`, w.expectTabCountStill)

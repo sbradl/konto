@@ -115,3 +115,48 @@ func TestUpcomingListsTheProjectedOccurrencesSoonestFirstSeenFromTheirOwnAccount
 		t.Errorf("upcoming = %v, want %v", order, want)
 	}
 }
+
+// balances reads each entry's balance after it, in cents.
+func balances(entries []RecentEntry) []int64 {
+	cents := make([]int64, len(entries))
+	for i, entry := range entries {
+		cents[i] = entry.Balance[0].Mantissa
+	}
+
+	return cents
+}
+
+func withBalances(ledger Ledger) Ledger {
+	ledger.Accounts[0].Balance = MultiAmount{eur(225000)} // checking: +3.000 -250 -500
+	ledger.Accounts[1].Balance = MultiAmount{eur(50000)}
+	ledger.Accounts[2].Balance = MultiAmount{eur(0)}
+
+	return ledger
+}
+
+func TestRecentShowsItsAccountsBalanceAfterEachTransaction(t *testing.T) {
+	got := balances(withBalances(recentLedger()).Recent())
+
+	// savings after the savings leg, then checking after the checking leg, the salary and REWE
+	want := []int64{50000, 225000, 275000, -25000}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("balances = %v, want %v", got, want)
+	}
+}
+
+func TestUpcomingShowsItsAccountsBalanceAfterEachOccurrence(t *testing.T) {
+	ledger := withBalances(recentLedger())
+	ledger.Upcoming = []Transaction{
+		{Date: day(26), Description: "Sparen", Postings: []Posting{posting("assets:savings", 50000), posting("assets:checking", -50000)}},
+		{Date: day(25), Description: "Acme", Postings: []Posting{posting("assets:checking", 300000), posting("income:salary", -300000)}},
+		{Date: day(27), Description: "Miete", Postings: []Posting{posting("expenses:rent", 90000), posting("assets:checking", -90000)}},
+	}
+
+	got := balances(ledger.UpcomingEntries())
+
+	// checking after the salary, savings after Sparen, checking after rent (Sparen's checking leg counted)
+	want := []int64{525000, 100000, 385000}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("balances = %v, want %v", got, want)
+	}
+}

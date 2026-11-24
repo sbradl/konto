@@ -16,7 +16,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   0009 import: journal is the watermark, 0010 no manual-entry UI in v1, 0011 v1 keyboard and chrome,
   0012 context-owned models, Account aggregate, shared Changeset write model,
   0013 konto-owned year-partitioned ledger, only this and last year loaded,
-  0014 Dashboard panel focus).
+  0014 Dashboard panel focus, 0015 Dashboard Activity timeline).
 - **`docs/design_handoff_hledger_tui/README.md`** — the frozen UX spec (six views — Entry deferred in v1,
   keymaps, panels, tokens). Authoritative except the deviations listed in `docs/spec.md` §11.
   The bundled `.dc.html` is a browser mock, **not code to port** — consult it for the `HINTS`

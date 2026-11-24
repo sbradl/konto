@@ -213,7 +213,7 @@ func TestMatchingFiltersByCaseInsensitiveSubstring(t *testing.T) {
 	}
 }
 
-func TestSuggestNameUsesTheDirectionPrefixUnlessTheNameHasOne(t *testing.T) {
+func TestSuggestNameUsesTheDirectionPrefixUnlessTheNameHasAnAccountType(t *testing.T) {
 	out, in := Row{Amount: eur(-1)}, Row{Amount: eur(1)}
 	for _, c := range []struct {
 		row         Row
@@ -224,6 +224,10 @@ func TestSuggestNameUsesTheDirectionPrefixUnlessTheNameHasOne(t *testing.T) {
 		{out, "income:x", "income:x"},
 		{out, "  ", ""},
 		{out, " tea ", "expenses:tea"},
+		{out, "insurance:life", "expenses:insurance:life"},
+		{in, "refunds:shop", "income:refunds:shop"},
+		{out, "assets:cash", "assets:cash"},
+		{in, "liabilities:card", "liabilities:card"},
 	} {
 		if got := SuggestName(c.row, c.typed); got != c.want {
 			t.Errorf("SuggestName(%q) = %q, want %q", c.typed, got, c.want)

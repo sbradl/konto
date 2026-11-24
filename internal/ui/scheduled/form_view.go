@@ -9,11 +9,12 @@ import (
 )
 
 const (
-	focusMark  = "▸"
-	labelWidth = 20
-	pickerRows = 5
-	noValue    = "—"
-	formHint   = "Tab/↑/↓ field · ←/→ choose · Enter save · Esc cancel"
+	focusMark   = "▸"
+	labelWidth  = 20
+	pickerRows  = 5
+	noValue     = "—"
+	createLabel = "+ create"
+	formHint    = "Tab/↑/↓ field · ←/→ choose · Enter save · Esc cancel"
 )
 
 // withForm draws the open form over the view, bottom-anchored like the other popups but, unlike them, not
@@ -130,17 +131,21 @@ func choice(name string, held bool) string { //nolint:revive // the held mark is
 	return name
 }
 
-// pickerLines are the accounts the typed filter leaves, a few around the cursor.
+// pickerLines are the accounts the typed filter leaves and the new category it offers, a few around the cursor.
 func (f *form) pickerLines() []string {
-	matches := f.matches()
-	if len(matches) == 0 {
+	entries := f.matches()
+	if created := f.created(); created != "" {
+		entries = append(entries, createLabel+" "+created)
+	}
+
+	if len(entries) == 0 {
 		return []string{"   " + theme.Dim.Render("no account matches")}
 	}
 	lines := make([]string, 0, pickerRows)
-	for i, match := range layout.Visible(f.cursor, matches, pickerRows) {
-		text := "   " + match
+	for i, entry := range layout.Visible(f.cursor, entries, pickerRows) {
+		text := "   " + entry
 		if f.cursor.Offset+i == f.cursor.Row {
-			text = "  " + theme.Selected.Render(" "+match)
+			text = "  " + theme.Selected.Render(" "+entry)
 		}
 		lines = append(lines, text)
 	}

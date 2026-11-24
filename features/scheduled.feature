@@ -229,7 +229,7 @@ Feature: Scheduled — periodic rules (forecast-only)
       When I press "n"
       And I choose the from account "income:salary"
       Then the currency is the first declared currency
-    Scenario: account pickers filter by typing and offer existing accounts only
+    Scenario: account pickers filter by typing and offer existing accounts
       When I press "n"
       And I focus the field "from account"
       And I type "check"
@@ -240,12 +240,12 @@ Feature: Scheduled — periodic rules (forecast-only)
       Then the from-account picker does not offer "assets:old-account"
       And the to-account picker does not offer "assets:old-account"
 
-    @proposed
-    Scenario: an unknown account cannot be typed in
+    Scenario: a category that does not exist yet is created with the rule
       When I press "n"
-      And I focus the field "to account"
-      And I type "expenses:nonexistent" and press "Enter"
-      Then the field "to account" is empty or shows an error
+      And I create a rule with next due date 2026-10-15, frequency monthly, description "Gym", amount "30,00", currency "EUR", from "assets:checking", to "gym"
+      Then the journal contains "account expenses:gym"
+      And the journal contains "    expenses:gym  30,00 EUR"
+      And the status bar shows "● clean"
 
     @proposed
     Scenario Outline: required fields block saving
@@ -364,12 +364,12 @@ Feature: Scheduled — periodic rules (forecast-only)
       When I press "n"
       And I create a rule with next due date 2026-10-15, frequency monthly, description "Book club", amount "12,00", currency "EUR", from "assets:checking", to "expenses:books"
       Then the main journal ends with the new rule
-    Scenario: the new rule appears in the list, dashboard Upcoming and forecast after the write
+    Scenario: the new rule appears in the list, dashboard Activity and forecast after the write
       When I press "n"
       And I create a rule with next due date 2026-10-03, frequency monthly, description "Book club", amount "12,00", currency "EUR", from "assets:checking", to "expenses:books"
       Then the rule list shows "Book club" with next date "2026-10-03"
       When I press "1"
-      Then the Upcoming panel lists "Book club" on "2026-10-03"
+      Then Activity lists "Book club" on "2026-10-03" above today
       When I press "4"
       Then the checking line has changed
     Scenario: the write is followed by a full reload
@@ -570,7 +570,7 @@ Feature: Scheduled — periodic rules (forecast-only)
       And I press "d"
       And I press "y"
       When I press "1"
-      Then the Upcoming panel does not list "Vermieter Mueller"
+      Then Activity does not list "Vermieter Mueller" above today
 
     Scenario: the cursor stays in range after deleting the last row
       Given I press "End"

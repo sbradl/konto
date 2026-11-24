@@ -265,15 +265,63 @@ func TestPageKeysMoveThePickersCursorToItsEnds(t *testing.T) {
 	}
 }
 
-func TestEnterWithNoMatchSaysSoAndPicksNothing(t *testing.T) {
+func TestATypedNameNoAccountHasIsOfferedAsANewCategoryAndEnterTakesIt(t *testing.T) {
 	m, _ := pressed(opened(), "tab", "tab", "tab", "tab", "tab", "tab", "tab")
-	m = typed(m, "expenses:nonexistent")
+	m = typed(m, "gym")
+
+	if view := screen(m); !strings.Contains(view, "+ create expenses:gym") {
+		t.Errorf("no create entry:\n%s", view)
+	}
+	m, _ = pressed(m, "enter")
+
+	if view := screen(m); !strings.Contains(view, "to account          expenses:gym") {
+		t.Errorf("view:\n%s", view)
+	}
+}
+
+func TestANewCategoryMoneyComesFromGoesUnderIncome(t *testing.T) {
+	m, _ := pressed(opened(), "tab", "tab", "tab", "tab", "tab", "tab")
+	m = typed(m, "bonus")
+
+	m, _ = pressed(m, "enter")
+
+	if view := screen(m); !strings.Contains(view, "from account        income:bonus") {
+		t.Errorf("view:\n%s", view)
+	}
+}
+
+func TestTheNewCategoryFollowsTheMatchesAndTheCursorReachesIt(t *testing.T) {
+	m, _ := pressed(opened(), "tab", "tab", "tab", "tab", "tab", "tab", "tab")
+	m = typed(m, "book")
+
+	m, _ = pressed(m, "down", "down", "enter")
+
+	if view := screen(m); !strings.Contains(view, "to account          expenses:book") ||
+		strings.Contains(view, "expenses:books") {
+		t.Errorf("view:\n%s", view)
+	}
+}
+
+func TestEnterWithNothingToPickSaysSoAndPicksNothing(t *testing.T) {
+	m, _ := pressed(opened(), "tab", "tab", "tab", "tab", "tab", "tab", "tab")
+	m = typed(m, "zz:")
 
 	m, _ = pressed(m, "enter")
 
 	view := screen(m)
-	if !strings.Contains(view, "no account matches expenses:nonexistent") || !strings.Contains(view, "to account          expenses:nonexistent") {
+	if !strings.Contains(view, "no account matches zz:") || !strings.Contains(view, "to account          zz:") {
 		t.Errorf("view:\n%s", view)
+	}
+}
+
+func TestNoNewCategoryIsOfferedForAnAccountNameOrAnUnfinishedOne(t *testing.T) {
+	for _, text := range []string{"expenses:books", "expenses:"} {
+		m, _ := pressed(opened(), "tab", "tab", "tab", "tab", "tab", "tab", "tab")
+		m = typed(m, text)
+
+		if view := screen(m); strings.Contains(view, "+ create") {
+			t.Errorf("%q offers a create entry:\n%s", text, view)
+		}
 	}
 }
 

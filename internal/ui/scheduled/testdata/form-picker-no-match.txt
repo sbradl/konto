@@ -34,7 +34,7 @@
  description         
  amount              
  currency            [EUR]  PLN
-▸from account        zz:x▏
+▸from account        zz:x:▏
    no account matches
  to account          —
  Tab/↑/↓ field · ←/→ choose · Enter save · Esc cancel

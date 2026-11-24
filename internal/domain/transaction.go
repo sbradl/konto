@@ -29,32 +29,57 @@ type RecentEntry struct {
 	Description string
 	Category    string // the counterpart account: an expense or income category, or a transfer
 	Amount      MultiAmount
+	Balance     MultiAmount // the account's balance once the transaction is booked
 }
 
 // Recent lists the transactions newest first (later ones first within a day). Each is seen from
 // its own asset or liability account: the first such posting that is not the transfer clearing
 // account gives the amount, and the posting beside it the category.
 func (l Ledger) Recent() []RecentEntry {
-	clearing := l.clearingAccounts()
-	entries := make([]RecentEntry, 0, len(l.Transactions))
-	for _, transaction := range slices.Backward(l.Transactions) {
-		entries = append(entries, transaction.recentEntry(clearing))
+	opening := l.balances()
+	for _, transaction := range l.Transactions {
+		for _, posting := range transaction.Postings {
+			opening[posting.Account] = opening[posting.Account].Plus(posting.Amounts.Negated())
+		}
 	}
-	slices.SortStableFunc(entries, func(a, b RecentEntry) int { return b.Date.Compare(a.Date) })
+	entries := l.entries(l.Transactions, opening)
+	slices.Reverse(entries)
 
 	return entries
 }
 
 // UpcomingEntries lists the periodic rules' projected occurrences soonest first, shaped like Recent's.
 func (l Ledger) UpcomingEntries() []RecentEntry {
+	return l.entries(l.Upcoming, l.balances())
+}
+
+// entries books the transactions oldest first (in their given order within a day) onto the running
+// balances, each entry taking its account's balance once it is booked.
+func (l Ledger) entries(transactions []Transaction, running map[string]MultiAmount) []RecentEntry {
 	clearing := l.clearingAccounts()
-	entries := make([]RecentEntry, 0, len(l.Upcoming))
-	for _, transaction := range l.Upcoming {
-		entries = append(entries, transaction.recentEntry(clearing))
+	byDate := func(a, b Transaction) int { return a.Date.Compare(b.Date) }
+	oldest := slices.SortedStableFunc(slices.Values(transactions), byDate)
+	entries := make([]RecentEntry, 0, len(oldest))
+	for _, transaction := range oldest {
+		for _, posting := range transaction.Postings {
+			running[posting.Account] = running[posting.Account].Plus(posting.Amounts)
+		}
+		entry, account := transaction.recentEntry(clearing)
+		entry.Balance = running[account]
+		entries = append(entries, entry)
 	}
-	slices.SortStableFunc(entries, func(a, b RecentEntry) int { return a.Date.Compare(b.Date) })
 
 	return entries
+}
+
+// balances are the accounts' current balances by name.
+func (l Ledger) balances() map[string]MultiAmount {
+	balances := make(map[string]MultiAmount, len(l.Accounts))
+	for _, account := range l.Accounts {
+		balances[account.Name] = account.Balance
+	}
+
+	return balances
 }
 
 func (l Ledger) clearingAccounts() map[string]bool {
@@ -66,16 +91,17 @@ func (l Ledger) clearingAccounts() map[string]bool {
 	return clearing
 }
 
-func (t Transaction) recentEntry(clearing map[string]bool) RecentEntry {
-	entry := RecentEntry{Date: t.Date, Description: t.Description}
+// recentEntry is the transaction seen from its subject posting, and that posting's account.
+func (t Transaction) recentEntry(clearing map[string]bool) (entry RecentEntry, account string) {
+	entry = RecentEntry{Date: t.Date, Description: t.Description}
 	if len(t.Postings) == 0 {
-		return entry
+		return entry, ""
 	}
 	subject := t.subjectPosting(clearing)
 	entry.Amount = t.Postings[subject].Amounts
 	entry.Category = t.counterpart(subject)
 
-	return entry
+	return entry, t.Postings[subject].Account
 }
 
 // subjectPosting is the index of the posting the transaction is seen from: its first asset or liability posting

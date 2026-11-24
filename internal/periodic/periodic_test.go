@@ -373,3 +373,38 @@ func TestInputFromCopiesATransactionIntoANewMonthlyRule(t *testing.T) {
 		t.Errorf("a posting without an amount fills nothing: %+v", got)
 	}
 }
+
+func TestANewAccountIsDeclaredWithTheRule(t *testing.T) {
+	input := valid()
+	input.To = "expenses:gym"
+
+	changeset, err := NewService(&fakeGateway{}, today).Add(context.Background(), input, ledger())
+
+	want := []domain.Edit{domain.DeclareAccount("expenses:gym", "")}
+	if err != nil || len(changeset.Edits) != 2 || !slices.Equal(changeset.Edits[1:], want) {
+		t.Errorf("changeset = %+v, %v", changeset, err)
+	}
+}
+
+func TestAKnownAccountIsNotDeclaredAgain(t *testing.T) {
+	known := ledger()
+	known.Accounts = append(known.Accounts, domain.Account{Name: "expenses:books"})
+
+	changeset, err := NewService(&fakeGateway{}, today).Add(context.Background(), valid(), known)
+
+	if err != nil || len(changeset.Edits) != 1 {
+		t.Errorf("changeset = %+v, %v", changeset, err)
+	}
+}
+
+func TestANewAccountWhoseLastPartIsTakenIsRefused(t *testing.T) {
+	input := valid()
+	input.To = "expenses:checking"
+
+	_, err := NewService(&fakeGateway{}, today).Replace(context.Background(), input, domain.PeriodicRule{}, ledger())
+
+	var refusal domain.RefusalError
+	if !errors.As(err, &refusal) || refusal.Reason != "the name checking is already used by assets:checking" {
+		t.Errorf("err = %v", err)
+	}
+}

@@ -141,23 +141,14 @@ func Matching(candidates []Candidate, filter string) []Candidate {
 	})
 }
 
-// SuggestName is the account a new category is declared as: the typed name, prefixed from the direction
-// of the row when it names no account type.
+// SuggestName is the account a new category is declared as, by the direction of the row.
 func SuggestName(row Row, typed string) string {
-	typed = strings.TrimSpace(typed)
-	if strings.Contains(typed, ":") || typed == "" {
-		return typed
-	}
-
 	if row.Amount.IsAllNegative() {
-		return domain.ExpensesPrefix + typed
+		return domain.CategoryName(typed, domain.ExpensesPrefix)
 	}
 
-	return domain.IncomePrefix + typed
+	return domain.CategoryName(typed, domain.IncomePrefix)
 }
-
-// leaf is the last part of an account name.
-func leaf(name string) string { return name[strings.LastIndex(name, ":")+1:] }
 
 // Create stages a new category; the name must not end in a leaf some account already has (hledger's
 // uniqueleafnames), and an empty name is no name.
@@ -177,13 +168,7 @@ func (s Staged) Create(name string) (Staged, Candidate, error) {
 
 // checkLeaf refuses a name whose last part some account already ends in.
 func (s Staged) checkLeaf(name string) error {
-	for _, existing := range s.allNames() {
-		if leaf(existing) == leaf(name) {
-			return domain.RefusalError{Reason: "the name " + leaf(name) + " is already used by " + existing}
-		}
-	}
-
-	return nil
+	return domain.CheckLeaf(name, s.allNames()) //nolint:wrapcheck // a refusal
 }
 
 // SuggestAccountName is the name offered for the account a new IBAN stands for.

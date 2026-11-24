@@ -60,6 +60,8 @@ func TestTheFormViewIsLaidOutAsTheGoldenFilesShow(t *testing.T) {
 	golden(t, "form-picker-fifth", pressedDown)
 	pressedDown, _ = pressed(pressedDown, "down", "down", "down", "down")
 	golden(t, "form-picker-last", pressedDown)
-	nothing := typed(picking, "x")
+	nothing := typed(picking, "x:")
 	golden(t, "form-picker-no-match", nothing)
+	cleared, _ := pressed(picking, "ctrl+u")
+	golden(t, "form-picker-create", typed(cleared, "gym"))
 }

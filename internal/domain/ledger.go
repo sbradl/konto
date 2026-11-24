@@ -1,6 +1,9 @@
 package domain
 
-import "time"
+import (
+	"slices"
+	"time"
+)
 
 // MonthSummary is what came in and went out in a calendar month to date: income and expense
 // accounts only, so transfers between own accounts never show up. Income is positive.
@@ -13,12 +16,6 @@ type MonthSummary struct {
 // Net is income less expenses.
 func (s MonthSummary) Net() MultiAmount { return s.Income.Plus(s.Expenses.Negated()) }
 
-// MonthSpend is what went out on expense accounts in one calendar month.
-type MonthSpend struct {
-	Month time.Time // the first day of the month
-	Total MultiAmount
-}
-
 // Ledger is a point-in-time snapshot of everything konto has loaded.
 type Ledger struct {
 	Accounts     []Account
@@ -27,7 +24,7 @@ type Ledger struct {
 	Month        MonthSummary
 	Rules        []PeriodicRule // every `~` block of the journal, in file order
 	Commodities  []string       // the currencies the journal declares, in order
-	Spend        []MonthSpend   // the last six complete months, oldest first
+	Today        time.Time      // the day the snapshot was loaded: Upcoming starts the day after
 }
 
 // TransactionCount is the number of transactions in the journal.
@@ -72,6 +69,33 @@ func (l Ledger) orZero(amounts MultiAmount) MultiAmount {
 	}
 
 	return amounts
+}
+
+// MonthTotals sums each month's income (positive) and expenses over the booked and the upcoming transactions,
+// keyed by the first of the month (FirstOfMonth): the current month counts both.
+func (l Ledger) MonthTotals() map[time.Time]MonthSummary {
+	totals := map[time.Time]MonthSummary{}
+	for _, transaction := range slices.Concat(l.Transactions, l.Upcoming) {
+		first := FirstOfMonth(transaction.Date)
+		summary := totals[first]
+		summary.Month = first.Month()
+		for _, posting := range transaction.Postings {
+			switch {
+			case IsIncome(posting.Account):
+				summary.Income = summary.Income.Plus(posting.Amounts.Negated())
+			case IsExpense(posting.Account):
+				summary.Expenses = summary.Expenses.Plus(posting.Amounts)
+			}
+		}
+		totals[first] = summary
+	}
+
+	return totals
+}
+
+// FirstOfMonth is midnight on the first of the date's month, in its location.
+func FirstOfMonth(date time.Time) time.Time {
+	return time.Date(date.Year(), date.Month(), 1, 0, 0, 0, 0, date.Location())
 }
 
 // UnclassifiedIssues is konto's own check: one WARN per asset or liability without a source.
