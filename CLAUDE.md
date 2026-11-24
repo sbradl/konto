@@ -93,8 +93,10 @@ Verified against this repo's `mise.toml` / installed toolchain.
   Whole-module gate: `mise run cover:check` (fails under `THRESHOLD`, default **100**).
 - **Mutation testing** — `mise run mutation internal/pkg` (one directory, recurses) ·
   `mise run mutation` (whole module) · `mise run mutation:diff` (only lines changed vs
-  `main`). Efficacy + mutant-coverage thresholds are **100**.
-  Raw equivalent: `gremlins unleash --coverpkg=./... internal/pkg`
+  `main`). Gate: no mutant may survive (efficacy, in `.gremlins.yaml`; gremlins ignores the
+  threshold flags). Screens (`internal/ui`) skip the +/- and minus-sign mutants; test helpers
+  are not mutated. Raw equivalent: `GOFLAGS=-count=1 gremlins unleash --coverpkg=./... internal/pkg`
+  (`-count=1`: a cached test run makes every mutant falsely "time out").
 
 ## Workflow
 

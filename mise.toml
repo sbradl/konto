@@ -77,8 +77,10 @@ printf 'total coverage: %s%%  (threshold %s%%)\n' "$total" "$THRESHOLD"
 awk -v t="$total" -v th="$THRESHOLD" 'BEGIN { exit (t + 0 < th + 0) }'
 '''
 
-# Mutation thresholds start maxed: efficacy = % of covered mutants killed,
-# mcover = % of mutants that are covered. Loosen in this file only with a reason.
+# Mutation gate: efficacy (% of covered mutants killed) at the max, in .gremlins.yaml since gremlins
+# 0.6.0 ignores the --threshold-* flags; loosen it there only with a reason (that file says why there is
+# no mutant-coverage threshold). GOFLAGS=-count=1: gremlins times each mutant by its first test
+# run, and a cached one takes ~0s, so every mutant would "time out" and the run pass falsely.
 # gremlins takes a DIRECTORY and recurses (not the `go` `./...` pattern); "." = whole module.
 # Cuts to shrink the run (user decision 2026-11-24): screens (internal/ui) skip the +/- swap and the minus-sign
 # flip (--arithmetic-base=false --invert-negatives=false): there they are string joins, widths and offsets,
@@ -87,11 +89,12 @@ awk -v t="$total" -v th="$THRESHOLD" 'BEGIN { exit (t + 0 < th + 0) }'
 # screens. The screens pass runs from the root, everything outside internal/ui excluded: --diff wants root paths.
 [tasks.mutation]
 description = "Mutation testing (gremlins). Scope it: mise run mutation internal/domain"
+env = { GOFLAGS = "-count=1" }
 usage = 'arg "[dir]" default="."'
 run = '''
 set -e
 dir="${usage_dir:-.}"
-opts="--coverpkg=./... --timeout-coefficient=4 --threshold-efficacy=100 --threshold-mcover=100"
+opts="--coverpkg=./... --timeout-coefficient=4"
 case "$dir" in
   internal/ui*) gremlins unleash $opts --arithmetic-base=false --invert-negatives=false "$dir" ;;
   .) gremlins unleash $opts -E '^(e2e|internal/ui)/' . &&
@@ -103,6 +106,7 @@ esac
 
 [tasks."mutation:diff"]
 description = "Mutation testing only on lines changed since the branch left main, or in the last commit on a clean main (fast, for pre-push / CI)"
+env = { GOFLAGS = "-count=1" }
 run = '''
 set -e
 ref=main
@@ -110,7 +114,7 @@ ref=main
 if [ "$(git merge-base main HEAD)" = "$(git rev-parse HEAD)" ] && git diff --quiet HEAD; then
   ref=HEAD~1
 fi
-opts="--diff $ref --coverpkg=./... --timeout-coefficient=4 --threshold-efficacy=100 --threshold-mcover=100"
+opts="--diff $ref --coverpkg=./... --timeout-coefficient=4"
 gremlins unleash $opts -E '^(e2e|internal/ui)/' .
 gremlins unleash $opts --arithmetic-base=false --invert-negatives=false \
   -E '^(cmd|e2e)/|^internal/([^u]|u[^i]|ui[^/])|^internal/ui/uitest/' .
