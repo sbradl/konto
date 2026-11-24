@@ -1,0 +1,9 @@
+# Read by gremlins from the module root. gremlins 0.6.0 ignores the --threshold-* flags, so the gate lives
+# here. It fails at or below the threshold (`<=`), so 99.99 means "every mutant killed": one survivor in
+# fewer than 10,000 already drops below it.
+# No mutant-coverage threshold (user decision 2026-11-24): gremlins counts a mutant as unreached by source
+# position, and Go's coverage data leaves out case conditions of a switch, conditions beside a closure and
+# package-level constants, so it only ever tripped on those. `mise run cover:check` keeps line coverage at 100%.
+unleash:
+  threshold:
+    efficacy: 99.99

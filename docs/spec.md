@@ -716,8 +716,9 @@ bar at fixed sizes only, not whole views during active development.
   `hledger`), `cover` / `cover:html` / `cover:check`, `mutation` / `mutation:diff`, and
   `check` (build + vet + lint + cover:check — the CI gate).
 - **Quality gates start maxed** (user directive): line coverage `THRESHOLD` = 100;
-  gremlins efficacy + mutant-coverage thresholds = 100. Loosening any threshold needs a
-  recorded reason in `mise.toml`.
+  gremlins efficacy = 100 (in `.gremlins.yaml`). Loosening any threshold needs a recorded
+  reason in `mise.toml` or `.gremlins.yaml`; the mutant-coverage threshold was dropped (reason there:
+  it only tripped on gaps in Go's coverage data, which line coverage at 100 already covers).
 - `gofmt` / standard Go idioms; match surrounding code.
 - CI: `.github/workflows/qa.yml` — jobs `check` (tidy + build/vet/lint/archtest/unit
   tests at 100% coverage), `vuln` (govulncheck), `integration`, `e2e`, `mutation-diff` on pull
