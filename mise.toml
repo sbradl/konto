@@ -87,6 +87,7 @@ awk -v t="$total" -v th="$THRESHOLD" 'BEGIN { exit (t + 0 < th + 0) }'
 # ~665 of ~1,740 mutants. Everything else, the money arithmetic above all, keeps every mutant. Test helpers
 # (e2e/, internal/ui/uitest/) are not mutated at all. So each task runs gremlins twice: the rest, then the
 # screens. The screens pass runs from the root, everything outside internal/ui excluded: --diff wants root paths.
+# scripts/unleash.sh passes a run with no mutant at all, which gremlins would fail at 0% efficacy.
 [tasks.mutation]
 description = "Mutation testing (gremlins). Scope it: mise run mutation internal/domain"
 env = { GOFLAGS = "-count=1" }
@@ -96,11 +97,11 @@ set -e
 dir="${usage_dir:-.}"
 opts="--coverpkg=./... --timeout-coefficient=4"
 case "$dir" in
-  internal/ui*) gremlins unleash $opts --arithmetic-base=false --invert-negatives=false "$dir" ;;
-  .) gremlins unleash $opts -E '^(e2e|internal/ui)/' . &&
-     gremlins unleash $opts --arithmetic-base=false --invert-negatives=false \
+  internal/ui*) scripts/unleash.sh $opts --arithmetic-base=false --invert-negatives=false "$dir" ;;
+  .) scripts/unleash.sh $opts -E '^(e2e|internal/ui)/' . &&
+     scripts/unleash.sh $opts --arithmetic-base=false --invert-negatives=false \
        -E '^(cmd|e2e)/|^internal/([^u]|u[^i]|ui[^/])|^internal/ui/uitest/' . ;;
-  *) gremlins unleash $opts "$dir" ;;
+  *) scripts/unleash.sh $opts "$dir" ;;
 esac
 '''
 
@@ -115,8 +116,8 @@ if [ "$(git merge-base main HEAD)" = "$(git rev-parse HEAD)" ] && git diff --qui
   ref=HEAD~1
 fi
 opts="--diff $ref --coverpkg=./... --timeout-coefficient=4"
-gremlins unleash $opts -E '^(e2e|internal/ui)/' .
-gremlins unleash $opts --arithmetic-base=false --invert-negatives=false \
+scripts/unleash.sh $opts -E '^(e2e|internal/ui)/' .
+scripts/unleash.sh $opts --arithmetic-base=false --invert-negatives=false \
   -E '^(cmd|e2e)/|^internal/([^u]|u[^i]|ui[^/])|^internal/ui/uitest/' .
 '''
 
