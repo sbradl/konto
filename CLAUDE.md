@@ -100,6 +100,8 @@ Verified against this repo's `mise.toml` / installed toolchain.
 
 ## Workflow
 
+Trunk-based: commit and push straight to `main`. No feature branches, no pull requests.
+
 Test-first. Skills in `.claude/skills/`:
 - `tdd-loop` — drives `tdd-red` → `tdd-green` slice by slice, with a `craft-review`-fed
   `tdd-refactor` at each batch boundary.
