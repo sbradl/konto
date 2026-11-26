@@ -9,7 +9,7 @@ sees those types.
 
 The cost is a mapping layer to write and maintain. The benefit: views survive hledger
 upgrades, positional JSON never leaks into UI code, and konto-only concepts (account source,
-"+ N cur", uncategorized markers, report row kinds, import staging, forecast drivers) have a
+"+ N cur", uncategorized markers, import staging) have a
 natural home. Reversing this later would mean rewriting every view against hledger's schema.
 
 Status: accepted.

@@ -69,10 +69,8 @@ var layers = map[string]layer{
 	"internal/accounts":  layerUseCase,
 	"internal/checks":    layerUseCase,
 	"internal/carry":     layerUseCase,
-	"internal/report":    layerUseCase,
 	"internal/csvimport": layerUseCase,
 	"internal/periodic":  layerUseCase,
-	"internal/forecast":  layerUseCase,
 
 	"internal/ui": layerUIRoot,
 
@@ -85,8 +83,6 @@ var layers = map[string]layer{
 	"internal/ui/dashboard": layerView,
 	"internal/ui/imports":   layerView,
 	"internal/ui/scheduled": layerView,
-	"internal/ui/forecast":  layerView,
-	"internal/ui/reports":   layerView,
 
 	"e2e":             layerE2E,
 	"e2e/hledgershim": layerE2E,
@@ -116,7 +112,6 @@ var charmV2 = []string{
 	"charm.land/bubbletea/v2",
 	"charm.land/lipgloss/v2",
 	"charm.land/bubbles/v2",
-	"github.com/NimbleMarkets/ntcharts/v2",
 }
 
 // e2eDeps is the harness's toolkit (features/README.md): Gherkin runner, pty,
@@ -545,27 +540,27 @@ func TestRules(t *testing.T) {
 	}{
 		// layering (ADR 0003, 0004)
 		{"domain imports nothing of konto's", "internal/domain", "a.go", imports("domain", k("internal/ledger")), "domain must not import internal/ledger"},
-		{"use case must not import adapter", "internal/report", "a.go", imports("report", k("internal/hledger")), "use case must not import internal/hledger"},
-		{"use case must not import use case", "internal/forecast", "a.go", imports("forecast", k("internal/periodic")), "use case must not import internal/periodic"},
+		{"use case must not import adapter", "internal/accounts", "a.go", imports("accounts", k("internal/hledger")), "use case must not import internal/hledger"},
+		{"use case must not import use case", "internal/accounts", "a.go", imports("accounts", k("internal/periodic")), "use case must not import internal/periodic"},
 		{"use case imports domain", "internal/csvimport", "a.go", imports("csvimport", k("internal/domain")), ""},
 		{"use case imports support", "internal/checks", "a.go", imports("checks", k("internal/parallel")), ""},
 		{"support imports nothing of konto's", "internal/parallel", "a.go", imports("parallel", k("internal/domain")), "support must not import internal/domain"},
 		{"domain does not import support", "internal/domain", "a.go", imports("domain", k("internal/parallel")), "domain must not import internal/parallel"},
-		{"adapter must not import use case", "internal/hledger", "a.go", imports("hledger", k("internal/report")), "adapter must not import internal/report"},
+		{"adapter must not import use case", "internal/hledger", "a.go", imports("hledger", k("internal/accounts")), "adapter must not import internal/accounts"},
 		{"adapter must not import adapter", "internal/journal", "a.go", imports("journal", k("internal/hledger")), "adapter must not import internal/hledger"},
 		{"config must not import adapter", "internal/config", "a.go", imports("config", k("internal/journal")), "config must not import internal/journal"},
-		{"view must not import view", "internal/ui/dashboard", "a.go", imports("dashboard", k("internal/ui/reports")), "view must not import internal/ui/reports"},
+		{"view must not import view", "internal/ui/dashboard", "a.go", imports("dashboard", k("internal/ui/scheduled")), "view must not import internal/ui/scheduled"},
 		{"view must not import adapter", "internal/ui/imports", "a.go", imports("imports", k("internal/journal")), "view must not import internal/journal"},
 		{"view must not import ui root", "internal/ui/scheduled", "a.go", imports("scheduled", k("internal/ui")), "view must not import internal/ui"},
-		{"view imports domain, use case, leaves, charm", "internal/ui/forecast", "a.go", imports("forecast", k("internal/domain"), k("internal/forecast"), k("internal/ui/widgets"), "charm.land/bubbletea/v2", "github.com/NimbleMarkets/ntcharts/v2/linechart"), ""},
+		{"view imports domain, use case, leaves, charm", "internal/ui/scheduled", "a.go", imports("scheduled", k("internal/domain"), k("internal/periodic"), k("internal/ui/widgets"), "charm.land/bubbletea/v2"), ""},
 		{"leaf must not import view", "internal/ui/widgets", "a.go", imports("widgets", k("internal/ui/dashboard")), "ui leaf must not import internal/ui/dashboard"},
 		{"leaf imports leaf", "internal/ui/widgets", "a.go", imports("widgets", k("internal/ui/theme")), ""},
 		{"ui root imports views and use cases", "internal/ui", "a.go", imports("ui", k("internal/ui/dashboard"), k("internal/checks")), ""},
 		{"ui root must not import adapter", "internal/ui", "a.go", imports("ui", k("internal/hledger")), "ui root must not import internal/hledger"},
 		{"main wires everything", "cmd/konto", "main.go", imports("main", k("internal/hledger"), k("internal/journal"), k("internal/config"), k("internal/ledger"), k("internal/ui")), ""},
-		{"importing an unclassified package", "internal/report", "a.go", imports("report", k("internal/util")), "use case must not import internal/util"},
-		{"external test package imports its own package", "internal/report", "a_test.go", imports("report_test", k("internal/report"), k("internal/domain")), ""},
-		{"test files obey layering too", "internal/report", "a_test.go", imports("report", k("internal/hledger")), "use case must not import internal/hledger"},
+		{"importing an unclassified package", "internal/accounts", "a.go", imports("accounts", k("internal/util")), "use case must not import internal/util"},
+		{"external test package imports its own package", "internal/accounts", "a_test.go", imports("accounts_test", k("internal/accounts"), k("internal/domain")), ""},
+		{"test files obey layering too", "internal/accounts", "a_test.go", imports("accounts", k("internal/hledger")), "use case must not import internal/hledger"},
 		{"unclassified package", "internal/entry", "a.go", imports("entry"), "internal/entry: unclassified package"},
 
 		// dependencies (spec §1)
@@ -586,11 +581,11 @@ func TestRules(t *testing.T) {
 		{"ui root execs $EDITOR", "internal/ui", "a.go", imports("ui", "os/exec"), ""},
 
 		// clock (ADR 0012)
-		{"use case must not read the clock", "internal/forecast", "a.go", "package forecast\nimport \"time\"\nvar x = time.Now()\n", "use case reads time.Now"},
+		{"use case must not read the clock", "internal/accounts", "a.go", "package accounts\nimport \"time\"\nvar x = time.Now()\n", "use case reads time.Now"},
 		{"aliased time import still caught", "internal/accounts", "a.go", "package accounts\nimport t \"time\"\nvar x = t.Now()\n", "use case reads time.Now"},
 		{"domain must not read the clock", "internal/domain", "a.go", "package domain\nimport \"time\"\nvar x = time.Now()\n", "domain reads time.Now"},
-		{"other time functions fine", "internal/forecast", "a.go", "package forecast\nimport \"time\"\nvar x = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)\n", ""},
-		{"use case tests may read the clock", "internal/forecast", "a_test.go", "package forecast\nimport \"time\"\nvar x = time.Now()\n", ""},
+		{"other time functions fine", "internal/accounts", "a.go", "package accounts\nimport \"time\"\nvar x = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)\n", ""},
+		{"use case tests may read the clock", "internal/accounts", "a_test.go", "package accounts\nimport \"time\"\nvar x = time.Now()\n", ""},
 		{"main reads the clock", "cmd/konto", "main.go", "package main\nimport \"time\"\nvar x = time.Now()\n", ""},
 
 		// colours (ADR 0005)
@@ -601,11 +596,11 @@ func TestRules(t *testing.T) {
 		{"theme non-literal colour", "internal/ui/theme", "a.go", "package theme\nimport \"charm.land/lipgloss/v2\"\nvar n = \"3\"\nvar a = lipgloss.Color(n)\n", "literal ANSI index"},
 		{"theme non-string literal", "internal/ui/theme", "a.go", "package theme\nimport \"charm.land/lipgloss/v2\"\nvar a = lipgloss.Color(3)\n", "literal ANSI index"},
 		{"theme colour arity", "internal/ui/theme", "a.go", "package theme\nimport \"charm.land/lipgloss/v2\"\nvar a = lipgloss.Color()\n", "literal ANSI index"},
-		{"views use theme names", "internal/ui/reports", "a.go", "package reports\nimport lg \"charm.land/lipgloss/v2\"\nvar a = lg.Color(\"1\")\n", "lipgloss.Color outside internal/ui/theme"},
+		{"views use theme names", "internal/ui/scheduled", "a.go", "package scheduled\nimport lg \"charm.land/lipgloss/v2\"\nvar a = lg.Color(\"1\")\n", "lipgloss.Color outside internal/ui/theme"},
 		{"hex colour", "internal/ui/theme", "a.go", "package theme\nvar a = \"#1e1e2e\"\n", "hex colour \"#1e1e2e\""},
 		{"short hex colour", "internal/ui/widgets", "a.go", "package widgets\nvar a = \"#fff\"\n", "hex colour \"#fff\""},
 		{"non-colour hash strings fine", "internal/ui/widgets", "a.go", "package widgets\nvar a, b = \"#12\", \"# heading\"\n", ""},
-		{"colour tests may use lipgloss.Color", "internal/ui/reports", "a_test.go", "package reports\nimport \"charm.land/lipgloss/v2\"\nvar a = lipgloss.Color(\"#ff0000\")\n", ""},
+		{"colour tests may use lipgloss.Color", "internal/ui/scheduled", "a_test.go", "package scheduled\nimport \"charm.land/lipgloss/v2\"\nvar a = lipgloss.Color(\"#ff0000\")\n", ""},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

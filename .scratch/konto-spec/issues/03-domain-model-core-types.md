@@ -11,7 +11,7 @@ is a real hard-to-reverse trade-off):
 
 - Where the boundary sits: thin DTOs that mirror `hledger` JSON output 1:1, or a richer
   konto-owned model that the gateway maps into? Different answers per concern (e.g. thin for
-  reports, rich for the import-staging state that has no hledger equivalent)?
+  balances, rich for the import-staging state that has no hledger equivalent)?
 - The core nouns and their relationships: Journal, Account (+ the manual-vs-import-fed
   distinction — a hard product rule), Transaction, Posting, Amount, Commodity,
   PriceDirective, PeriodicTransaction, ImportRule, CsvRow, Check/CheckResult.
@@ -20,10 +20,10 @@ is a real hard-to-reverse trade-off):
 - How multi-commodity amounts are modelled so "+ 2 cur" and market collapse both fall out
   naturally.
 - Which concepts are konto's own with no hledger counterpart (import staging,
-  `.latest.<file>` markers, rule match-stats, forecast drivers) and therefore fully owned here.
+  `.latest.<file>` markers, rule match-stats) and therefore fully owned here.
 
 Feeds **Go package and module layout**, **Bubble Tea model composition**, **CSV import
-subsystem design**, **Forecast computation design**, **Test seams and fixture strategy**.
+subsystem design**, **Test seams and fixture strategy**.
 
 ## Answer
 
@@ -49,8 +49,7 @@ place (per ticket 01: the JSON schema has drifted in minor ways).
   `Single() (Amount, bool)`, `ExtraCount() int` (= `len-1`, the "+ N cur"),
   `IsAllNegative() bool`. Market valuation collapses a MultiAmount to `len 1`.
 - **`ValuationMode`** = `Native | Market`. A gateway **query parameter** — toggling `v`
-  re-runs the relevant hledger call with/without `-V`. Views needing the cost-vs-market
-  delta (Reports footnote) issue two queries and diff. No valuation math in konto.
+  re-runs the relevant hledger call with/without `-V`. No valuation math in konto.
 
 ### Account
 
@@ -66,8 +65,6 @@ place (per ticket 01: the JSON schema has drifted in minor ways).
   prompts manual/import and writes the tag to the `account` directive (creating the
   directive if absent). That write is a "journal write" — feeds ticket 02 and the new
   periodic-subsystem ticket, which share the write path.
-- Balance-report hierarchies (`bal`/`bs`/`is`) are unaffected — they map into `ReportTable`,
-  separate from `[]Account`.
 
 ### Domain entities (mapped from hledger JSON)
 
@@ -89,16 +86,11 @@ place (per ticket 01: the JSON schema has drifted in minor ways).
   balanced = ERR; commodities/accounts/ordereddates/uniqueleafnames/tags/recentassertions
   and konto's own unclassified-account check = WARN). **`CheckRun`** aggregates issues +
   clean/dirty for the `● clean` indicator.
-- **`ReportTable`** ← compound balance report JSON (`bs`/`is`): `Rows []ReportRow` where
-  `ReportRow{Kind, Label, Depth, Amounts []MultiAmount (per period), Delta *MultiAmount
-  (bs "Δ period"), Share *float64 (is "% share")}` and `Kind ∈ {SectionHeader, Leaf,
-  NegativeLeaf, Subtotal, GrandTotal}`, computed from structure + sign.
 
 ### konto-only entities (no hledger counterpart)
 
 `ImportSource`, `CsvRow`, `ImportRule`, `RuleMatchStats`, `Watermark` (`.latest.<file>`) —
-detailed in **CSV import subsystem design**. `ForecastDriver`, `Scenario` — detailed in
-**Forecast computation design**.
+detailed in **CSV import subsystem design**.
 
 ### `Ledger` — the loaded snapshot
 

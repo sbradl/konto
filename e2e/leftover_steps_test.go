@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 
 	"github.com/cucumber/godog"
@@ -21,34 +20,6 @@ func (w *world) expectFocusedInputHolds(text string) error {
 		}
 
 		return fmt.Errorf("the focused input does not hold %q: %q", text, rows)
-	})
-}
-
-// forecastLegendHas waits for the forecast's charts to list the account in a legend, or not.
-func (w *world) forecastLegendHas(account string, want bool) error {
-	return w.onForecast(func(panels []screenPanel) error {
-		listed := false
-		for _, panel := range panels {
-			if isChart(panel) && slices.Contains(panel.accounts(), account) {
-				listed = true
-			}
-		}
-
-		if listed != want {
-			return fmt.Errorf("%s in the forecast legend is %v, want %v", account, listed, want)
-		}
-
-		return nil
-	})
-}
-
-func (w *world) expectInMilestones(account string, want bool) error {
-	return w.onMilestones(func(table screenPanel) error {
-		if got := strings.Contains(table.text(), " "+account+" "); got != want {
-			return fmt.Errorf("%s in the milestone table is %v, want %v", account, got, want)
-		}
-
-		return nil
 	})
 }
 
@@ -182,12 +153,6 @@ func (w *world) expectDashboardShows(account, text string) error {
 
 func registerLeftoverSteps(sc *godog.ScenarioContext, w *world) {
 	step(sc, `^the focused input contains "([^"]*)"$`, w.expectFocusedInputHolds)
-	step(sc, `^I (do not )?see "([^"]*)" in the forecast legend$`, func(not, account string) error {
-		return w.forecastLegendHas(account, not == "")
-	})
-	step(sc, `^I do not see "([^"]*)" in the milestone table$`, func(account string) error {
-		return w.expectInMilestones(account, false)
-	})
 	step(sc, `^I see the row table with (\d+) new rows?$`, func(n int) error { return w.expectPanelRowCount(rowsTitle, n) })
 	step(sc, `^I delete the rule "([^"]*)" in Scheduled$`, w.deleteRuleInScheduled)
 	step(sc, `^the journal "([^"]*)" where "([^"]*)" is used in a transaction but never declared$`, w.useUndeclaredCash)

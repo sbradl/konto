@@ -18,8 +18,6 @@ Feature: Journal checks — status bar indicator and the ! panel
       And "● clean" is coloured 2
       When I press "3"
       Then the status bar shows "● clean"
-      When I press "5"
-      Then the status bar shows "● clean"
 
     Scenario: ! opens a panel with a single all-pass line
       When I press "!"

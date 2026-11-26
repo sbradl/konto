@@ -239,9 +239,5 @@ func (m Model) statusLeft() string {
 
 // hiddenNotice says how many panels of the active view did not fit.
 func hiddenNotice(hidden int) string {
-	if hidden == 1 {
-		return "1 panel hidden · widen terminal"
-	}
-
 	return fmt.Sprintf("%d panels hidden · widen terminal", hidden)
 }

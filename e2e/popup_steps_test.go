@@ -17,7 +17,7 @@ var popupTitle = regexp.MustCompile(`^─ (keys|checks) `)
 
 // keyLabels are the labels the keys popup shows for keys, used to count its columns.
 var keyLabels = map[string]bool{
-	"1–5": true, "?": true, "!": true, "r": true, "q": true, "Esc": true,
+	"1–3": true, "?": true, "!": true, "r": true, "q": true, "Esc": true,
 	"c": true, "o": true, "n": true, "w": true, "e": true, "d": true, "p": true, "Enter": true,
 }
 

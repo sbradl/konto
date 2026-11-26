@@ -1,7 +1,7 @@
 # Handoff: hledger TUI (Bubble Tea)
 
 ## Overview
-A terminal UI (TUI) frontend for [hledger](https://hledger.org), a plain-text accounting tool. Single user, personal finance. Six views: dashboard, CSV import with rule-building, manual entry, scheduled/periodic transactions, forecast, and reports (balance sheet + income statement). Navigation is vim-style: number keys jump views, `j`/`k` move a cursor, `:` opens a command line, `g` is a goto-prefix which-key menu, `?` lists all keys.
+A terminal UI (TUI) frontend for [hledger](https://hledger.org), a plain-text accounting tool. Single user, personal finance. Four views: dashboard, CSV import with rule-building, manual entry, and scheduled/periodic transactions. Navigation is vim-style: number keys jump views, `j`/`k` move a cursor, `:` opens a command line, `g` is a goto-prefix which-key menu, `?` lists all keys.
 
 ## About the design file
 The bundled file, `hledger_tui_v2_cell_grid.dc.html`, is a **design reference built in HTML/JS, not code to port**. It works by painting into a plain 2D character array (a `grid()` of `{c, f, b, o}` cells — character, foreground, background, bold) and rendering that array as one `<div>` per row, one `<span>` per style run. This is a simulation of a terminal cell buffer, chosen specifically so the layout maps 1:1 to real terminal-rendering constraints (fixed cell grid, box-drawing border characters, no sub-pixel positioning, no CSS layout).
@@ -14,7 +14,7 @@ High-fidelity for layout, color intent, and information hierarchy. Low-fidelity 
 ## Screens / Views
 
 Global chrome, present on every screen:
-- **Tab bar** (row 0): six tabs, ` 1 dash │ 2 import │ 3 entry │ 4 sched │ 5 forecast │ 6 reports `. Active tab: bold white text on `sel` background. Inactive: `dim` foreground, no background. Right-aligned: journal path, transaction count, valuation mode (`at cost` / `-V market`), a `● clean` health indicator (green dot when `hledger check` passes).
+- **Tab bar** (row 0): four tabs, ` 1 dash │ 2 import │ 3 entry │ 4 sched `. Active tab: bold white text on `sel` background. Inactive: `dim` foreground, no background. Right-aligned: journal path, transaction count, valuation mode (`at cost` / `-V market`), a `● clean` health indicator (green dot when `hledger check` passes).
 - **Horizontal rule** (row 1): a full-width `─` line in `dim`.
 - **Status bar** (bottom row): mode indicator ` NORMAL ` (blue bg) or ` PENDING g ` (yellow bg, when the goto-prefix is armed) in bold on dark text; current screen name; a context-sensitive hint string (see `HINTS` map in the source, e.g. `j/k row   c categorize   e edit   v valuation   ! journal checks`); a position counter `n/total`; `? keys` at the far right.
 - **Command line** (`:`): replaces the status bar with `:<typed text>` and a blinking block cursor. Typeahead-filters a command list (`CMDS` in source); Tab autocompletes to the top match; Enter navigates to that command's screen.
@@ -30,7 +30,7 @@ Layout: three stat cards across the top (Net Worth, Cash Flow, Journal Checks). 
 - **Market Prices panel**: hledger `P` price directives, magenta directive text, right-aligned rate.
 - **Recent panel**: selectable list (`j`/`k` moves a highlighted row, `sel` background). Date, a `?` marker in yellow for uncategorized transactions, description, category (dim, or amber "uncategorized" if none), amount (green if income).
 - **Upcoming panel**: same row shape as Recent but not selectable — generated from scheduled transactions, doesn't affect any balance until it actually posts.
-- **Monthly spend chart**: a line chart using braille characters for sub-cell resolution (2×4 dots per terminal cell — see Design Tokens > Braille chart below), y-axis labels in thousands, x-axis month labels.
+- **Monthly spend chart**: a line chart using braille characters for sub-cell resolution (2×4 dots per terminal cell), y-axis labels in thousands, x-axis month labels.
 
 ### 2. Import
 Purpose: bring in bank CSVs, review/accept matches, build categorization rules, avoid re-importing rows already seen.
@@ -59,24 +59,8 @@ Layout: left (full list of periodic transactions), right column (the raw journal
 - **Annual impact table**: every active schedule × its annual frequency = per-year total, summed to a net figure at the bottom. This is meant to answer "what does my recurring commitment load look like over a year," which the row-by-row list doesn't show at a glance.
 - Keys: `n` new, `e` edit, `p` pause, `x` delete, Enter posts the next occurrence into the real journal now.
 
-### 5. Forecast
-Purpose: project net worth forward combining scheduled transactions (exact) with trailing averages (estimated), under a switchable scenario.
-Layout: full-width chart across the top half, then a projection table (left) and a drivers table (right) in the bottom half.
-- **Chart**: braille line chart, 6 months of actual history (green) joined to 12 months of forecast (blue), y-axis in thousands, x-axis months, a legend line distinguishing "actual" from "forecast — periodic transactions plus a 6-month trailing average for everything else."
-- **Scenario switcher** (`s` key, cycles): `base`, `lean (-15% spend)`, `3-month income gap`. Changes the forecast's growth rate and, for the income-gap scenario, income for the first 3 forecast months.
-- **Projection table**: month, income, expenses, net, running balance, and a note column for anything unusual (e.g. "reduced income", "property tax in Feb").
-- **Drivers panel**: what's actually feeding the forecast — tagged `sched` (exact figure from a periodic transaction) or `avg 6m` (a trailing average), so the forecast's assumptions are inspectable and, per the note in-panel, an average should be editable in place.
-- Forecast transactions are never written to the journal — dropping the flag makes them disappear. This must hold in the real implementation: forecasting is a `hledger balance --forecast`-style read-only projection, not a write.
-
-### 6. Reports
-Purpose: balance sheet and income statement, standard hledger `bal`/`is` reports, with a period switcher and a valuation toggle.
-Layout: a period switcher bar across the top (`month to date`, `quarter`, `year to date`, `all time`, cycled with `P`), then two side-by-side report panels.
-- **Report table row kinds** (this distinction matters for styling): section header (cyan bold, e.g. "Assets"), leaf account (plain), negative leaf (red, used for liability balances), subtotal (bold-ish, a `└─` marker), grand total (white bold, e.g. "Net worth"). Balance sheet's third column is "Δ period" (green positive / red negative); income statement's third column is "% share".
-- **Valuation** (`v` key, toggles, shared with Dashboard): "at cost" shows each commodity separately when an account holds more than one (e.g. total reads `85748.24 + 2 cur` because hledger will not silently add EUR + PLN + CZK) — a footnote explains this. "`-V` market" converts everything to EUR using the latest price directive and collapses to one number — a footnote notes the delta from cost is unrealized exchange-rate gain, not spending.
-- Keys: `P` cycle period, `v` toggle valuation, `y` yank the visible table as CSV, Enter drills into an account.
-
 ## Interactions & Behavior
-- All navigation is keyboard-only by design (no mouse target sizing needed), matching the "vim-like" brief: number keys 1–6 switch screens directly; `j`/`k`/arrows move the row cursor within a screen; `g` arms a one-shot goto-prefix (next key picks a screen, Escape cancels); `:` opens a command line with prefix-matching + Tab-complete + Enter-to-navigate; `?` toggles the full keymap; `!` toggles the journal-check panel; `v` toggles valuation mode; `s` cycles the forecast scenario; `P` cycles the report period; `Tab` moves between form fields on the Entry screen.
+- All navigation is keyboard-only by design (no mouse target sizing needed), matching the "vim-like" brief: number keys 1–4 switch screens directly; `j`/`k`/arrows move the row cursor within a screen; `g` arms a one-shot goto-prefix (next key picks a screen, Escape cancels); `:` opens a command line with prefix-matching + Tab-complete + Enter-to-navigate; `?` toggles the full keymap; `!` toggles the journal-check panel; `v` toggles valuation mode; `Tab` moves between form fields on the Entry screen.
 - No animations — a TUI redraws instantly on state change; there is no transition to design.
 - Popups (which-key, command palette, journal checks) are bottom-anchored overlays that occupy their own rows, compositing on top of the current screen's content rather than replacing it — in a real Bubble Tea app this must be done by splicing rendered lines together yourself (Bubble Tea has no z-index/layer primitive; Lip Gloss v2 / community overlay packages can help).
 
@@ -86,8 +70,6 @@ Suggested state shape (mirrors the mock's `Component.state`):
 - `cursor` per list-bearing screen (dashboard/import/scheduled each need their own selected-row index)
 - `formField`: focused field index on the Entry screen
 - `valuationMode`: `native` | `market`
-- `period`: index into the report period list
-- `scenario`: index into the forecast scenario list
 - `commandPaletteOpen` + `commandText`
 - `whichKeyMode`: none | `root` | `g`
 - `checksPanelOpen`
@@ -104,10 +86,10 @@ Use `lipgloss.Color("N")` ANSI indices (0–15) in the real build, not literal h
 - Red (negative/error): `#f7768e`
 - Green (positive/success): `#9ece6a`
 - Yellow/Amber (warning/manual-source/focus): `#e0af68`
-- Blue (mode indicator/forecast line): `#7aa2f7`
+- Blue (mode indicator): `#7aa2f7`
 - Magenta (rule/price directive text): `#bb9af7`
 - Cyan (panel titles, cyan headers): `#7dcfff`
-- Bright white (emphasized values, grand totals): `#c0caf5`
+- Bright white (emphasized values): `#c0caf5`
 
 ### Typography
 Single monospace family throughout — **a TUI cannot mix fonts or sizes**; the terminal emulator, not the app, determines the typeface (Cascadia Mono/Code is what the mock assumes, matching the user's stated preference). All hierarchy comes from **bold, color, and the ANSI palette only** — never font-size or font-family changes. The mock's cell size (13px / 16px line-height) is arbitrary presentation scale; a real terminal's cell size is whatever the user's font/zoom produces.
@@ -118,11 +100,8 @@ Box-drawing characters only: `╭ ─ ╮ │ ╰ ╯`. In Lip Gloss, `lipgloss.
 ### Spacing
 All padding/gaps are whole character cells (columns/rows), never fractional. Panel titles are inset 2 cells from the left border, e.g. `╭─ ACCOUNTS ─────╮`.
 
-### Braille chart (line charts)
-Sub-cell resolution using Unicode braille (U+2800 block): each terminal cell holds a 2×4 dot matrix, giving 8x the effective vertical/horizontal resolution of block characters for line/area charts. The mock's `braille()` helper builds this from a `{cols, rows}` cell buffer plus a `series()` line-interpolation method. In Go, use an existing library for this rather than hand-rolling it — `NimbleMarkets/ntcharts` implements exactly this technique for Bubble Tea.
-
 ### Valuation
-Two toggle-able display modes, shared across Dashboard and Reports:
+Two toggle-able display modes on the Dashboard:
 - **At cost** (`native`, default): amounts shown in their original posted commodity. An account/total holding more than one commodity (this user holds EUR, PLN, CZK cash) cannot collapse to a single number — hledger reports it as multiple lines/amounts, and the mock represents that as `85748.24 + 2 cur` with a footnote.
 - **Market** (`-V` / `--value=end`): every commodity converted to EUR using the latest `P` price directive. The gap between the two totals is unrealized exchange-rate gain/loss, not spending — call this out in UI copy, don't just show a bigger number.
 
@@ -139,4 +118,4 @@ Most bank CSV exports include a running-balance column. On import, write a `= <b
 No image/icon assets — everything is Unicode text (box-drawing, braille, a handful of glyphs: `✎` manual-entry marker, `↓` import marker, `●`/`⏸` status dots, `✓`/`?` match markers).
 
 ## Files
-- `hledger_tui_v2_cell_grid.dc.html` — the full six-screen interactive mock described above. Open it directly in a browser; it's a single self-contained file with inline JS (no build step). The earlier, less terminal-accurate iteration (proportional CSS spacing instead of a real character grid) is not included in this handoff — this v2 file supersedes it.
+- `hledger_tui_v2_cell_grid.dc.html` — the full four-screen interactive mock described above. Open it directly in a browser; it's a single self-contained file with inline JS (no build step). The earlier, less terminal-accurate iteration (proportional CSS spacing instead of a real character grid) is not included in this handoff — this v2 file supersedes it.

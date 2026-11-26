@@ -18,7 +18,7 @@ Once tickets 01–06, 10, 11 are closed, write `docs/spec.md` from the resolved 
   composition, overlay mechanics, config + theming, test seams + fixtures, and a short
   dev-tooling conventions section.
 - Mark the per-feature areas as **grilled just-in-time during the build**: CSV import
-  subsystem (08/14), forecast computation (09), periodic transaction subsystem (13),
+  subsystem (08/14), periodic transaction subsystem (13),
   responsive layout details (07 — prototype during shell build).
 - List the deliberate UX deviations from the handoff (ADR 0002: flat Accounts panel; plus
   any later ones) in one place.
@@ -39,5 +39,5 @@ Synthesised from tickets 01–06, 10, 11, `CONTEXT.md`, and `docs/adr/0001`–`0
 the handoff for all UX. `CLAUDE.md` rewritten to point new sessions at spec + CONTEXT + ADRs
 first.
 
-Per-feature areas (07, 08/14, 09, 13, 15) are explicitly marked deferred — grilled just
+Per-feature areas (07, 08/14, 13, 15) are explicitly marked deferred — grilled just
 before the `tdd-loop` pass for their view.

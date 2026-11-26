@@ -587,18 +587,6 @@ func (w *world) expectUpcomingLists(description, date string) error {
 	})
 }
 
-// expectCheckingChanged looks for a forecast of the checking account that is not the one of the fixture: its
-// balance in three months, 17.761,00 EUR, is different once a new rule takes money out.
-func (w *world) expectCheckingChanged() error {
-	return w.onMilestoneRow("assets:checking", func(text string, _ int) error {
-		if strings.Contains(text, "17.761,00 EUR") {
-			return errors.New("the checking line is as it was")
-		}
-
-		return nil
-	})
-}
-
 func registerScheduledFormSteps(sc *godog.ScenarioContext, w *world) {
 	registerFormFieldSteps(sc, w)
 	registerFormPickerSteps(sc, w)
@@ -706,7 +694,6 @@ func registerFormResultSteps(sc *godog.ScenarioContext, w *world) {
 	step(sc, `^the main journal ends with the new rule$`, w.expectMainEndsWithRule)
 	step(sc, `^the rule list shows "([^"]*)" with next date "([^"]*)"$`, w.expectRuleListRow)
 	step(sc, `^Activity lists "([^"]*)" on "([^"]*)" above today$`, w.expectUpcomingLists)
-	step(sc, `^the checking line has changed$`, w.expectCheckingChanged)
 	step(sc, `^the journal was reloaded$`, w.expectReloaded)
 	step(sc, `^the tab bar still shows "(\d+)" transactions$`, w.expectTabCountStill)
 	step(sc, `^hledger prints occurrences for "([^"]*)" on "([^"]*)" and "([^"]*)"$`, w.expectHledgerPrints)

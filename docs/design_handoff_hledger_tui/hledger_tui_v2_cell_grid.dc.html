@@ -32,8 +32,7 @@ const W=180,H=60;
 
 const SCREENS=[
  {id:'dashboard',label:'1 dash',key:'d'},{id:'import',label:'2 import',key:'i'},
- {id:'entry',label:'3 entry',key:'n'},{id:'scheduled',label:'4 sched',key:'s'},
- {id:'forecast',label:'5 forecast',key:'f'},{id:'reports',label:'6 reports',key:'r'}
+ {id:'entry',label:'3 entry',key:'n'},{id:'scheduled',label:'4 sched',key:'s'}
 ];
 
 const ACCOUNTS=[
@@ -183,74 +182,6 @@ const ACCT_OF={'Rent':'expenses:rent','Salary Contoso GmbH':'income:salary','Car
  'Liability insurance':'expenses:insurance','Gym membership':'expenses:health:gym',
  'Savings sweep':'assets:bank:savings','Property tax':'expenses:tax:property','Newspaper':'expenses:news'};
 
-const SCENARIOS=[{id:'base',label:'base',rate:1912,inc:5240,exp:3328},
- {id:'lean',label:'lean · -15% spend',rate:2411,inc:5240,exp:2829},
- {id:'gap',label:'3-month income gap',rate:980,inc:3930,exp:3328}];
-
-const DRIVERS=[['sched','Rent','monthly','-1450.00',0],['sched','Salary Contoso','monthly','+5240.00',1],
- ['sched','Car loan','monthly','-312.00',0],['sched','IRA contribution','monthly','-500.00',0],
- ['avg 6m','expenses:groceries','avg','-438.20',0],['avg 6m','expenses:transport','avg','-176.50',0],
- ['avg 6m','expenses:dining','avg','-121.90',0],['avg 6m','expenses:household','avg','-64.30',0],
- ['sched','Insurance','quarterly','-186.40',0],['sched','Property tax','yearly','-940.00',0]];
-
-const PERIODS=[['month to date','2026-08-01..08-27'],['quarter','2026 Q3'],
- ['year to date','2026-01-01..08-27'],['all time','2019-04-02..2026-08-27']];
-
-/* kind: 0 leaf · 1 subtotal · 2 header · 3 negative leaf · 4 grand total */
-const BS=[['Assets','','','',2],
- ['bank:checking','4182.36','4182.36','+612.44',0],
- ['bank:savings','18940.00','18940.00','+250.00',0],
- ['broker:ira','62410.88','62410.88','+1884.10',0],
- ['cash:eur','215.00','215.00','-40.00',0],
- ['cash:pln','340.00 PLN','79.87','+28.19',0],
- ['cash:czk','1250.00 CZK','49.60','+9.92',0],
- ['lending','180.00','180.00','0.00',0],
- ['total','85748.24 + 2 cur','85877.71','+2744.65',1],
- ['','','','',2],
- ['Liabilities','','','',2],
- ['visa','-1284.19','-1284.19','+318.20',3],
- ['loan:car','-8420.00','-8420.00','+264.10',3],
- ['total','-9704.19','-9704.19','+582.30',1],
- ['','','','',2],
- ['Net worth','76044.05 + 2 cur','76173.52','+3326.95',4]];
-
-const IST=[['Revenues','','','',2],
- ['salary','5240.00','5240.00','100.0%',0],
- ['interest','3.12','3.12','0.1%',0],
- ['total','5243.12','5243.12','100.0%',1],
- ['','','','',2],
- ['Expenses','','','',2],
- ['rent','1450.00','1450.00','27.7%',0],
- ['groceries','412.88','412.88','7.9%',0],
- ['transport','184.20','188.36','3.6%',0],
- ['utilities','142.65','142.65','2.7%',0],
- ['dining','98.40','98.40','1.9%',0],
- ['health','62.85','62.85','1.2%',0],
- ['subscriptions','57.72','57.72','1.1%',0],
- ['total','2408.70','2412.86','46.0%',1],
- ['','','','',2],
- ['Net','2834.42','2830.26','54.0%',4]];
-
-const MANUAL=[['assets:cash:eur','215.00 EUR','12 txns'],['assets:cash:pln','340.00 PLN','31 txns'],
- ['assets:cash:czk','1250.00 CZK','8 txns'],['assets:lending','180.00 EUR','2 txns']];
-
-const FORM=[['date','2026-08-27','today · +/- shifts a day'],
- ['description','Bilety MPK Kraków','12 past matches'],
- ['account','assets:cash:pln','manual accounts only'],
- ['amount','-16.00',''],
- ['commodity','PLN','declared: EUR PLN CZK'],
- ['category','expenses:transport','from past entries'],
- ['note','','optional']];
-
-const SIMILAR=[['2026-07-19','Bilety MPK Kraków','expenses:transport','-16.00 PLN'],
- ['2026-07-04','Bilety MPK Kraków','expenses:transport','-16.00 PLN'],
- ['2026-06-22','Bilet PKP Kraków','expenses:transport','-34.90 PLN'],
- ['2026-06-11','Bilety MPK Kraków','expenses:transport','-16.00 PLN'],
- ['2026-05-28','Jízdenka DPP Praha','expenses:transport','-120.00 CZK'],
- ['2026-05-14','Bilety MPK Kraków','expenses:transport','-16.00 PLN'],
- ['2026-04-30','Bilety MPK Kraków','expenses:transport','-15.00 PLN'],
- ['2026-04-12','Bilet PKP Katowice','expenses:transport','-42.10 PLN']];
-
 const CHECKS=[
  ['ERR ','transaction does not balance · off by 0.42 EUR','2026.journal:812'],
  ['ERR ','balance assertion failed · want 3821.14, got 3759.74 EUR','2026.journal:1044'],
@@ -265,23 +196,20 @@ const CHECKS=[
 
 const CMDS=[[':dashboard','balances, recent activity, budget','dashboard'],
  [':import','read CSV, build rules','import'],[':entry','manual transaction','entry'],
- [':sched','periodic transactions','scheduled'],[':forecast 12m','project balances forward','forecast'],
- [':bal --tree','balance report','reports'],[':is --monthly','income statement','reports'],
+ [':sched','periodic transactions','scheduled'],
  [':check --strict','run journal checks',null],[':reload','re-read journal from disk',null],
  [':w','write pending entries',null],[':q','quit',null]];
 
-const WK_ROOT=[['1-6','jump to view'],[':','command line'],['g','goto prefix'],['j/k','move cursor'],
+const WK_ROOT=[['1-4','jump to view'],[':','command line'],['g','goto prefix'],['j/k','move cursor'],
  ['e','edit entry'],['c','categorize'],['n','new transaction'],['a','accept import row'],
  ['v','valuation at market'],['!','journal checks'],['R','reload journal'],['q','quit']];
 const WK_G=[['gd','dashboard'],['gi','import'],['gn','entry'],['gs','scheduled'],
- ['gf','forecast'],['gr','reports'],['gg','top of list'],['gj','journal in $EDITOR']];
+ ['gg','top of list'],['gj','journal in $EDITOR']];
 
 const HINTS={dashboard:'j/k row   c categorize   e edit   v valuation   ! journal checks',
  import:'j/k row   a accept   A accept all matched   r edit rules   9 rows skipped by .latest',
  entry:'Tab next field   j/k field   ⏎ commit to cash.journal   Esc discard',
- scheduled:'j/k row   n new   e edit   p pause   x delete   ⏎ post next occurrence now',
- forecast:'s cycle scenario   +/- horizon   ⏎ drill into month',
- reports:'P cycle period   v valuation   y yank as CSV   ⏎ drill into account'};
+ scheduled:'j/k row   n new   e edit   p pause   x delete   ⏎ post next occurrence now'};
 
 /* ---------- character grid ---------- */
 function grid(){const g=[];for(let y=0;y<H;y++){const r=[];for(let x=0;x<W;x++)r.push({c:' ',f:C.fg,b:null,o:0});g.push(r);}return g;}
@@ -335,8 +263,8 @@ function toLines(g){
 }
 
 class Component extends DCLogic {
-  state={screen:'dashboard',cur:{dashboard:2,import:9,scheduled:2,reports:0},field:1,
-   val:'native',period:0,scenario:0,file:0,doctor:false,whichKey:null,cmdOpen:false,cmdText:''};
+  state={screen:'dashboard',cur:{dashboard:2,import:9,scheduled:2},field:1,
+   val:'native',file:0,doctor:false,whichKey:null,cmdOpen:false,cmdText:''};
 
   componentDidMount(){if(this.root)this.root.focus();}
   set(k,v){this.setState({[k]:v});}
@@ -366,14 +294,12 @@ class Component extends DCLogic {
    if(k===':'){this.setState({cmdOpen:true,cmdText:'',whichKey:null,doctor:false});e.preventDefault();return;}
    if(k==='?'){this.setState({whichKey:st.whichKey?null:'root',doctor:false});e.preventDefault();return;}
    if(k==='g'){this.setState({whichKey:'g'});e.preventDefault();return;}
-   if(k>='1'&&k<='6'){this.go(SCREENS[+k-1].id);e.preventDefault();return;}
+   if(k>='1'&&k<='4'){this.go(SCREENS[+k-1].id);e.preventDefault();return;}
    if(k==='!'){this.setState({doctor:!st.doctor,whichKey:null});e.preventDefault();return;}
    if(k==='v'){this.set('val',st.val==='native'?'eur':'native');e.preventDefault();return;}
    if(k==='j'||k==='ArrowDown'){this.move(1);e.preventDefault();return;}
    if(k==='k'||k==='ArrowUp'){this.move(-1);e.preventDefault();return;}
    if(k==='Tab'&&st.screen==='entry'){this.setState({field:(st.field+1)%FORM.length});e.preventDefault();return;}
-   if(k==='s'&&st.screen==='forecast'){this.set('scenario',(st.scenario+1)%SCENARIOS.length);e.preventDefault();return;}
-   if(k==='P'&&st.screen==='reports'){this.set('period',(st.period+1)%PERIODS.length);e.preventDefault();return;}
   };
 
   chrome(g){
@@ -619,7 +545,7 @@ class Component extends DCLogic {
    put(g,37,28,'balances · 0.00 PLN',{f:C.grn,o:1});
    put(g,58,28,'✓',{f:C.grn,o:1});
    put(g,37,30,'Amount is in PLN. hledger keeps the posting in PLN and',{f:C.dim});
-   put(g,37,31,'converts only for reports, using the price directive below.',{f:C.dim});
+   put(g,37,31,'converts only for display, using the price directive below.',{f:C.dim});
    put(g,37,33,'Tab / j / k  move between fields',{f:C.dim});
    put(g,37,34,'⏎            append to cash.journal and clear the form',{f:C.dim});
    put(g,37,35,'C-s          append and keep values for a second entry',{f:C.dim});
@@ -669,7 +595,7 @@ class Component extends DCLogic {
     'Cash accounts are per-commodity, so a PLN entry can',
     'only be posted to assets:cash:pln. The category side',
     'takes the same commodity — conversion happens at',
-    'report time.']
+    'display time.']
     .forEach((l,i)=>put(g,112,49+i,tr(l,66),{f:C.dim}));
   }
 
@@ -691,10 +617,10 @@ class Component extends DCLogic {
    });
    put(g,2,28,'─'.repeat(106),{f:C.dim});
    put(g,2,29,'These live in periodic.journal as ~ entries. hledger does not post them automatically —',{f:C.dim});
-   put(g,2,30,'they generate forecast transactions for reports, and ⏎ writes the next occurrence into',{f:C.dim});
+   put(g,2,30,'they generate upcoming occurrences, and ⏎ writes the next occurrence into',{f:C.dim});
    put(g,2,31,'2026.journal as a real transaction when it actually happens.',{f:C.dim});
-   put(g,2,33,'n new    e edit    p pause    x delete    ⏎ post next occurrence now    f forecast only',{f:C.fg});
-   ['n','e','p','x','⏎','f'].forEach((k,i)=>{const xs=[2,11,20,31,42,73];put(g,xs[i],33,k,{f:C.yel,o:1});});
+   put(g,2,33,'n new    e edit    p pause    x delete    ⏎ post next occurrence now',{f:C.fg});
+   ['n','e','p','x','⏎'].forEach((k,i)=>{const xs=[2,11,20,31,42];put(g,xs[i],33,k,{f:C.yel,o:1});});
 
    const s=SCHED[cur];
    box(g,110,2,70,16,'JOURNAL ENTRY','periodic.journal');
@@ -715,7 +641,7 @@ class Component extends DCLogic {
     put(g,157,y,padl(s[3],20),{f:s[5]?C.dim:(s[4]?C.grn:C.fg)});
    });
    put(g,112,28,'─'.repeat(66),{f:C.dim});
-   put(g,112,29,'Shown in the forecast and in Upcoming on the',{f:C.dim});
+   put(g,112,29,'Shown in Upcoming on the',{f:C.dim});
    put(g,112,30,'dashboard. Not part of any balance until posted.',{f:C.dim});
    put(g,112,32,'⏎ writes the 2026-09-01 one into 2026.journal.',{f:C.dim});
    put(g,112,32,'⏎',{f:C.yel,o:1});
@@ -734,131 +660,7 @@ class Component extends DCLogic {
    put(g,112,49,'─'.repeat(66),{f:C.dim});
    put(g,112,50,padr('net scheduled per year',25),{f:C.wht,o:1});
    put(g,145,50,padl('+21285.26',32),{f:C.grn,o:1});
-   put(g,112,52,'Everything not listed here is estimated in the',{f:C.dim});
-   put(g,112,53,'forecast from a 6-month trailing average.',{f:C.dim});
-   put(g,112,55,'Paused entries are excluded from both.',{f:C.dim});
-  }
-
-  /* ---------- 5 forecast ---------- */
-  fc(g){
-   const sc=SCENARIOS[this.state.scenario];
-   box(g,0,2,180,32,'NET WORTH · 6 MONTHS ACTUAL + 12 MONTHS FORECAST',
-    'scenario: '+sc.label+'   s cycles   +/- horizon');
-   const hist=[66100,68020,69940,71830,74140,76044];
-   const fcv=[76044];let v=76044;
-   for(let i=0;i<12;i++){v+=(sc.id==='gap'&&i<3)?-900:sc.rate;fcv.push(v);}
-   const all=hist.concat(fcv);
-   const max=Math.ceil(Math.max.apply(null,all)/5000)*5000;
-   const min=Math.floor(Math.min.apply(null,all)/5000)*5000-2500;
-
-   const CW=164,CH=24;
-   const bc=braille(CW,CH);
-   const span=CW*2-1;
-   const histEnd=Math.round(span*5/17);
-   bc.series(hist,0,histEnd,min,max,C.grn);
-   bc.series(fcv,histEnd,span,min,max,C.blu);
-   bc.draw(g,12,4);
-
-   for(let r=0;r<=6;r++){
-    const val=max-(max-min)*r/6;
-    put(g,3,4+Math.round(r*(CH-1)/6),padl((val/1000).toFixed(0)+'k',6),{f:C.dim});
-   }
-   put(g,12,28,'─'.repeat(CW),{f:C.dim});
-   const months=['Mar 26','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan 27','Feb','Mar','Apr','May','Jun','Jul','Aug'];
-   months.forEach((m,i)=>put(g,12+Math.round(i*(CW-1)/17),29,m,{f:i===5?C.fg:C.dim}));
-   put(g,12+Math.round(5*(CW-1)/17),28,'┴',{f:C.fg});
-   put(g,12,31,'⣿ actual',{f:C.grn});
-   put(g,24,31,'⣿ forecast — periodic transactions plus a 6-month trailing average for everything else',{f:C.blu});
-   put(g,12,32,'braille plot, 2×4 dots per cell, as ntcharts draws it',{f:C.dim});
-
-   box(g,0,34,110,25,'PROJECTION','--forecast --monthly');
-   put(g,2,35,'MONTH          INCOME     EXPENSES          NET          BALANCE   NOTE',{f:C.dim});
-   const names=['Sep 2026','Oct 2026','Nov 2026','Dec 2026','Jan 2027','Feb 2027',
-    'Mar 2027','Apr 2027','May 2027','Jun 2027','Jul 2027','Aug 2027'];
-   for(let i=0;i<12;i++){
-    const y=37+i*(i<12?1:1)+Math.floor(i/12);
-    const yy=37+i;
-    const gap=sc.id==='gap'&&i<3;
-    const inc=gap?sc.inc:SCENARIOS[0].inc,exp=sc.exp,net=inc-exp;
-    put(g,2,yy,padr(names[i],13),{f:C.fg});
-    put(g,15,yy,padl(inc.toFixed(2),10),{f:gap?C.yel:C.grn});
-    put(g,28,yy,padl(exp.toFixed(2),11),{f:C.red});
-    put(g,42,yy,padl((net>=0?'+':'')+net.toFixed(2),11),{f:net>=0?C.fg:C.red});
-    put(g,56,yy,padl(fcv[i+1].toFixed(2),14),{f:C.wht,o:1});
-    put(g,73,yy,gap?'reduced income':(i===5?'property tax in Feb':''),{f:C.dim});
-   }
-   put(g,2,50,'─'.repeat(106),{f:C.dim});
-   put(g,2,51,'12-month change',{f:C.wht,o:1});
-   put(g,56,51,padl(((fcv[12]-fcv[0])>=0?'+':'')+(fcv[12]-fcv[0]).toFixed(2),14),{f:C.grn,o:1});
-   put(g,2,53,'Forecast transactions are generated on the fly. They never enter the journal, so a',{f:C.dim});
-   put(g,2,54,'forecast can never corrupt your actuals — drop the flag and they are gone.',{f:C.dim});
-   put(g,2,56,'⏎ drills into a month and lists the generated transactions behind the number.',{f:C.dim});
-   put(g,2,56,'⏎',{f:C.yel,o:1});
-
-   box(g,110,34,70,25,'DRIVERS','what builds the forecast');
-   put(g,112,35,'SOURCE   ACCOUNT                CADENCE        PER MONTH',{f:C.dim});
-   DRIVERS.forEach((d,i)=>{
-    const y=37+i;
-    put(g,112,y,padr(d[0],8),{f:d[0]==='sched'?C.cyn:C.dim});
-    put(g,121,y,padr(d[1],22),{f:C.fg});
-    put(g,144,y,padr(d[2],10),{f:C.dim});
-    put(g,155,y,padl(d[3],22),{f:d[4]?C.grn:C.fg});
-   });
-   put(g,112,48,'─'.repeat(66),{f:C.dim});
-   put(g,112,49,'sched   exact, from periodic.journal',{f:C.dim});
-   put(g,112,49,'sched',{f:C.cyn});
-   put(g,112,50,'avg 6m  estimated from the last 6 months',{f:C.dim});
-   put(g,112,52,'Scenarios adjust the estimated half only:',{f:C.dim});
-   put(g,112,53,'base                 as-is',{f:C.fg});
-   put(g,112,54,'lean                 −15% on avg expenses',{f:C.fg});
-   put(g,112,55,'3-month income gap   salary at 75% to Nov',{f:C.fg});
-   put(g,112,57,'s cycles · e edits an average in place',{f:C.dim});
-   put(g,112,57,'s',{f:C.yel,o:1});
-  }
-
-  /* ---------- 6 reports ---------- */
-  rep(g){
-   const st=this.state,p=PERIODS[st.period],eur=st.val==='eur';
-   let x=1;
-   PERIODS.forEach((q,i)=>{
-    const lbl=' '+q[0]+' ',on=i===st.period;
-    put(g,x,2,lbl,on?{f:C.wht,b:C.sel,o:1}:{f:C.dim});
-    x+=lbl.length+1;
-   });
-   put(g,x+3,2,p[1],{f:C.dim});
-   put(g,W-58,2,eur?'valuation: market EUR (-V)':'valuation: at cost',{f:C.yel});
-   put(g,W-28,2,'P period   v value   y yank',{f:C.dim});
-
-   const mk=(x0,w,title,cmd,rows,c3)=>{
-    box(g,x0,4,w,55,title,cmd);
-    put(g,x0+2,5,padr('ACCOUNT',30)+padl(eur?'EUR VALUE':'BALANCE',18)+padl(c3,14),{f:C.dim});
-    rows.forEach((r,i)=>{
-     const y=7+i*2;if(y>56)return;
-     const kind=r[4];
-     if(!r[0]&&kind===2)return;
-     if(kind===1)put(g,x0+2,y,'└─',{f:C.dim});
-     const nameX=x0+2+(kind===2||kind===4?0:(kind===1?3:2));
-     const col=kind===2?C.cyn:(kind===4?C.wht:(kind===1?C.fg:C.fg));
-     put(g,nameX,y,tr(r[0],28),{f:col,o:kind===2||kind===4||kind===1?1:0});
-     if(kind===2)return;
-     const bal=eur?r[2]:r[1];
-     put(g,x0+32,y,padl(bal,18),{f:kind===3?C.red:(kind===4?C.wht:C.fg),o:kind===4?1:0});
-     const d=r[3];
-     put(g,x0+51,y,padl(d,14),{f:d&&d[0]==='-'?C.red:(d&&d[0]==='+'?C.grn:C.fg)});
-    });
-   };
-   mk(0,90,'BALANCE SHEET','bal --tree'+(eur?' -V':''),BS,'Δ PERIOD');
-   mk(90,90,'INCOME STATEMENT','is --tree'+(eur?' -V':''),IST,'SHARE');
-
-   if(!eur){
-    put(g,2,52,'At cost, assets hold three commodities, so the total cannot collapse to one number.',{f:C.dim});
-    put(g,2,53,'v applies the market prices in prices.journal and gives a single EUR figure.',{f:C.dim});
-   }else{
-    put(g,2,52,'Valued with the latest price for each commodity (--value=end).',{f:C.dim});
-    put(g,2,53,'The difference against cost is exchange-rate gain, not spending.',{f:C.dim});
-   }
-   put(g,92,52,'Δ PERIOD compares against the previous period of the same length.',{f:C.dim});
-   put(g,92,53,'y copies the visible table as CSV; Y includes the hidden subaccounts.',{f:C.dim});
+   put(g,112,52,'Paused entries are excluded.',{f:C.dim});
   }
 
   /* ---------- overlays, composited into the buffer ---------- */
@@ -909,9 +711,7 @@ class Component extends DCLogic {
    if(s==='dashboard')this.dash(g);
    else if(s==='import')this.imp(g);
    else if(s==='entry')this.entry(g);
-   else if(s==='scheduled')this.sched(g);
-   else if(s==='forecast')this.fc(g);
-   else this.rep(g);
+   else this.sched(g);
    this.overlay(g);
    this.status(g);
    return {lines:toLines(g),rootRef:el=>{this.root=el;},onKey:this.onKey};

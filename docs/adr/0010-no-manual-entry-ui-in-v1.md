@@ -4,7 +4,7 @@ The design handoff has six views, the third being Entry: hand-entered transactio
 accounts never touched by CSV import (cash, informal lending), plus a classify-on-open
 prompt asking whether a new asset/liability account is manual or import-fed.
 
-v1 ships **five views** — Dashboard, Import, Scheduled, Forecast, Reports, on keys `1`–`5` —
+v1 ships **three views** — Dashboard, Import, Scheduled, on keys `1`–`3` —
 and no manual-account UI at all:
 
 - no Entry tab, no `internal/ui/entry` view, no `internal/entry` use case; Entry's `CMDS` /

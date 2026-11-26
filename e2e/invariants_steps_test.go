@@ -189,12 +189,8 @@ func (w *world) expectCounterpartsAreAccounts() error {
 
 // visitEveryView visits every view and presses the read-only keys on it.
 func (w *world) visitEveryView() error {
-	for _, view := range []string{"1", "2", "3", "4", "5"} {
+	for _, view := range []string{"1", "2", "3"} {
 		keys := []string{view, "Down", "Up", "End", "Home", "PgDn", "PgUp", "?", "Esc", "!", "Esc", "r"}
-		if view == "5" {
-			keys = append(keys, "p")
-		}
-
 		if err := w.press(keys...); err != nil {
 			return err
 		}
@@ -379,24 +375,6 @@ func (w *world) deleteJournal() error {
 	return os.Remove(w.journal)
 }
 
-func (w *world) expectReportsWithin(seconds int) error {
-	started := time.Now()
-
-	if err := w.press("5"); err != nil {
-		return err
-	}
-
-	if err := w.expectScreen(true, "BALANCE SHEET"); err != nil {
-		return err
-	}
-
-	if elapsed := time.Since(started); elapsed > time.Duration(seconds)*time.Second {
-		return fmt.Errorf("the reports took %v", elapsed)
-	}
-
-	return nil
-}
-
 func (w *world) expectTabBarWithin(seconds int) error {
 	started := time.Now()
 
@@ -465,7 +443,6 @@ func registerInvariantSteps(sc *godog.ScenarioContext, w *world) {
 	step(sc, `^the journal "([^"]*)" at "([^"]*)"$`, w.useJournalAt)
 	step(sc, `^I start konto with "--file" pointing there$`, func() error { return w.start("--file", w.journal) })
 	step(sc, `^I see the tab bar within (\d+) seconds$`, w.expectTabBarWithin)
-	step(sc, `^pressing "5" shows reports within (\d+) seconds$`, w.expectReportsWithin)
 	step(sc, `^the journal "([^"]*)" is read-only$`, w.useReadOnly)
 	step(sc, `^I try to write the import$`, w.tryWriteImport)
 	step(sc, `^the Accounts panel lists no "expenses:\*" or "income:\*" entries$`, w.expectNoCategoryRows)

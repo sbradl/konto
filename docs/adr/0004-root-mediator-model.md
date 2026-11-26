@@ -21,6 +21,6 @@ Status: accepted.
 
 Amended (as built): the views are pure value models with no ports and no commands — a key returns
 the view and an action, and the root runs what the action asks for and hands the views their data
-(`WithLedger`, `WithReport`, …). There is no per-view generation counter: the root keeps one `loads`
+(`WithLedger`, …). There is no per-view generation counter: the root keeps one `loads`
 counter, bumped by every reload, and stamps every async result asked for from a snapshot with it; a
 result whose stamp no longer matches is dropped. See spec §6.1–6.3.

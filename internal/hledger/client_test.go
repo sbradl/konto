@@ -237,7 +237,7 @@ func TestPrintToleratesMissingMessage(t *testing.T) {
 	}
 }
 
-var forecastJSON = `[
+var upcomingJSON = `[
   {"tdate": "2026-09-14", "tdescription": "Rent", "ttags": [[]], "tpostings": []},
   {"tdate": "2026-10-01", "tdescription": "Vermieter Mueller", "ttags": [["_generated-transaction", "~ monthly from 2026-10-01"]],
    "tsourcepos": [{"sourceName": "/data/main.journal", "sourceLine": 10}, {"sourceName": "/data/main.journal", "sourceLine": 13}], "tpostings": [
@@ -245,10 +245,10 @@ var forecastJSON = `[
   ]}
 ]`
 
-// Upcoming asks for the forecast over an explicit period and keeps only the generated occurrences.
+// Upcoming asks for the occurrences over an explicit period and keeps only the generated occurrences.
 func TestUpcomingReturnsOnlyGeneratedOccurrencesInThePeriod(t *testing.T) {
 	var calls []call
-	client := newClient(recording(forecastJSON, nil, &calls), "/data/main.journal")
+	client := newClient(recording(upcomingJSON, nil, &calls), "/data/main.journal")
 	from, to := date(2026, 9, 30), date(2027, 9, 30)
 
 	got, err := client.Upcoming(context.Background(), from, to)

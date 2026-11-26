@@ -238,9 +238,9 @@ func TestLoadProjectsThePeriodicRulesFromTheOverdueWindowToNextYear(t *testing.T
 }
 
 func TestLoadReportsAFailureToProjectTheRules(t *testing.T) {
-	_, err := NewLoader(fakeGateway{upcomingErr: errors.New("forecast failed")}, present, sept30).Load(context.Background())
+	_, err := NewLoader(fakeGateway{upcomingErr: errors.New("occurrences failed")}, present, sept30).Load(context.Background())
 
-	assertCarriesCause(t, err, "forecast failed")
+	assertCarriesCause(t, err, "occurrences failed")
 }
 
 type upcomingRecorder struct {

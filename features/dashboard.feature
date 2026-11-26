@@ -73,12 +73,6 @@ Feature: Dashboard
       And I start konto
       Then the "assets:spare" row shows "+ 1 cur" or "100,00 PLN"
       And I do not see the words "commodity" or "at cost"
-    Scenario: dashboard is month to date whatever Reports shows
-      Given I press "5"
-      And I press "p" 3 times
-      When I press "1"
-      Then I see a "SEPTEMBER NET INCOME" card showing "1.815,00 EUR"
-
   Rule: Accounts panel
 
     @proposed

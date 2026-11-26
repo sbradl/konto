@@ -16,8 +16,6 @@ source in `@spec-N.N` / `@adr-NNNN` tags so every requirement is traceable.
 | `import-staging` | staged work survives view switches, `q` guard, discard |
 | `import-format` | raw Postbank bytes: BOM, preamble, trailer, German numbers/dates |
 | `scheduled` | list, panels, form (`n`), edit (`e`), delete (`d`), never-posts |
-| `forecast` | chart per currency, milestones, watermark start, never-written |
-| `reports` | period cycling, balance sheet Δ, income statement, boundaries, scrolling |
 | `ledger-window` | only this and last year loaded, carried-in balances, the window follows today (ADR 0013) |
 | `ledger-carry` | year-end close/open on the first import of a new year, older rows into their year files (ADR 0013) |
 | `invariants` | cross-cutting product rules (checks after every write, manual xor import, …) |
@@ -42,7 +40,7 @@ reading — confirm or change · `@needs-decision` two readings are plausible, b
   (`LEDGER_FILE`), `KONTO_TODAY` (default 2026-09-30), `EDITOR` stub.
 - **Idle signal, no sleeps.** The harness sets `KONTO_E2E=1`; konto (`cmd/konto/idle.go`) then sets the
   window title, after each frame, to `konto idle N` or `konto busy N`: busy while a command it started (load,
-  write, plan, report, forecast) is in flight, N the keys and resizes taken in. After each key the harness
+  write, plan) is in flight, N the keys and resizes taken in. After each key the harness
   waits for N to count it and for idle; with `hledger is slowed` it only waits for the key to be taken in,
   so the scenario can watch the work in flight. "Unchanged" and other absence checks wait for idle first.
 - **`hledger` shim** (`e2e/hledgershim`) first on `PATH`: records every call, fakes the version,
@@ -91,10 +89,9 @@ checks), `keys_test.go`, `postbank_test.go` (CSV generator), `harness_test.go` (
 | `categorise_steps_test.go` | categorise dialog, category picker, rule form and drafts |
 | `import_write_steps_test.go` · `carry_steps_test.go` | writing the import, assertions, opening balance, new account; year carry |
 | `scheduled_steps_test.go` · `scheduled_form_steps_test.go` | rule list and panels, delete; the new/edit form and its writes |
-| `forecast_steps_test.go` | forecast charts, lines, milestone table |
-| `reports_steps_test.go` | balance sheet, income statement, periods |
+| `tables_test.go` | panel-table rows and figures shared by the import and scheduled steps |
 | `invariants_steps_test.go` | cross-cutting writes, the lock, visiting every view, signals |
-| `leftover_steps_test.go` | phrasings added late across features (forecast legend, transfers, undeclared accounts); a home is still to be found |
+| `leftover_steps_test.go` | phrasings added late across features (transfers, undeclared accounts); a home is still to be found |
 
 ## Step vocabulary (keep it small)
 

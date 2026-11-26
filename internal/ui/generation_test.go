@@ -2,15 +2,12 @@ package ui
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sbradl/konto/internal/domain"
-	forecastsvc "github.com/sbradl/konto/internal/forecast"
-	"github.com/sbradl/konto/internal/ui/uitest"
 )
 
 // countingLoader loads a journal with one more transaction on every load.
@@ -22,51 +19,11 @@ func (c countingLoader) Load(context.Context) (domain.Ledger, error) {
 	return ledgerWith(*c.loads), nil
 }
 
-// countingReporter builds a report whose single row says which build it was.
-type countingReporter struct{ builds *int }
-
-func (c countingReporter) Report(_ context.Context, period domain.ReportPeriod) (domain.Report, error) {
-	*c.builds++
-
-	return domain.Report{Period: period, IncomeStatement: []domain.ReportRow{
-		{Kind: domain.RowLeaf, Label: fmt.Sprintf("build %d", *c.builds)},
-	}}, nil
-}
-
-// countingForecaster projects a forecast whose commodity says which build it was.
-type countingForecaster struct{ builds *int }
-
-func (c countingForecaster) Forecast(context.Context, domain.Ledger) (forecastsvc.Forecast, error) {
-	*c.builds++
-
-	return oneChart(fmt.Sprintf("B%d", *c.builds)), nil
-}
-
-// commands are the commands a batch runs, run one by one so a test can order what they find out.
-func commands(cmd tea.Cmd) []tea.Cmd {
-	if batch, ok := cmd().(tea.BatchMsg); ok {
-		return batch
-	}
-
-	return []tea.Cmd{cmd}
-}
-
-// run runs the commands in order and collects what they found out.
-func run(cmds []tea.Cmd) []tea.Msg {
-	msgs := make([]tea.Msg, len(cmds))
-	for i, cmd := range cmds {
-		msgs[i] = cmd()
-	}
-
-	return msgs
-}
-
 func generationModel(t *testing.T) Model {
 	t.Helper()
-	loads, reports, forecasts := 0, 0, 0
+	loads := 0
 	model := New(journalPath, Ports{
 		Loader: countingLoader{&loads}, Checker: fakeChecker{}, Creator: &fakeCreator{}, Editor: recordingEditor(nil),
-		Reports: countingReporter{&reports}, Forecast: countingForecaster{&forecasts},
 	})
 	updated, _ := model.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 
@@ -110,29 +67,6 @@ func TestAReloadStillInFlightKeepsTheSpinnerWhenAnOlderOneLands(t *testing.T) {
 	}
 }
 
-func TestReportsAndForecastsOfAnOlderReloadAreDropped(t *testing.T) {
-	model := generationModel(t)
-	model, first := press(model, "r")
-	updated, older := model.Update(first())
-	model, second := press(updated.(Model), "r")
-	updated, newer := model.Update(second())
-
-	olderResults := run(commands(older))
-	for _, msg := range append(run(commands(newer)), olderResults...) {
-		updated, _ = updated.Update(msg)
-	}
-
-	model, _ = press(updated.(Model), "5")
-	if content := uitest.Plain(model.View().Content); !strings.Contains(content, "build 3") {
-		t.Errorf("reports view:\n%s", content)
-	}
-
-	model, _ = press(model, "4")
-	if content := uitest.Plain(model.View().Content); !strings.Contains(content, "╭─ B3 ") {
-		t.Errorf("forecast view:\n%s", content)
-	}
-}
-
 func TestAnExportReadAgainForAnOlderReloadIsDropped(t *testing.T) {
 	importer := listing()
 	importer.reread = reread()
@@ -165,4 +99,22 @@ func TestAnExportOpenedBeforeAReloadIsDropped(t *testing.T) {
 	if _, staged := updated.(Model).imports.Staged(); staged {
 		t.Error("an export read against the journal before the reload was staged")
 	}
+}
+
+// deliver feeds the messages a command produces back into the model until nothing is left.
+func deliver(m Model, cmd tea.Cmd) Model {
+	for cmd != nil {
+		msg := cmd()
+		if _, isBatch := msg.(tea.BatchMsg); isBatch {
+			for _, c := range msg.(tea.BatchMsg) {
+				m = deliver(m, c)
+			}
+
+			return m
+		}
+		updated, next := m.Update(msg)
+		m, cmd = updated.(Model), next
+	}
+
+	return m
 }

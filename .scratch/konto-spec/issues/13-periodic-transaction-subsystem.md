@@ -13,7 +13,7 @@ no command to list, edit, or pause `~` rules, and no "paused" concept. Decide:
 - **Parsing.** konto reads `~` blocks (interval expression, postings, rule-level
   comment/tags) straight from journal text. Confirm the parser's scope and where it lives
   relative to the hledger gateway — it is shared with the `account`-directive parsing from
-  ticket 03 and the `~`-for-forecast use in ticket 09. Is there one small journal-text
+  ticket 03. Is there one small journal-text
   parser, or several targeted extractors?
 - **`PeriodicRule` fields** (named but not detailed in ticket 03): raw text, interval
   expression, parsed postings, start/end bounds, status.
@@ -34,17 +34,16 @@ Feeds **Assemble docs/spec.md**; clears most of the "journal writes beyond CSV i
 
 ## Answer
 
-Grilled 2026-09-30. Headline: **periodic rules are forecast-only** — konto never writes an
+Grilled 2026-09-30. Headline: **periodic rules are never posted** — konto never writes an
 occurrence into the journal. This dissolves the post-occurrence write path entirely.
 
 ### Scope
 
-- **No Enter-to-post.** A `~` rule only feeds Forecast, Dashboard Upcoming and the Scheduled
+- **No Enter-to-post.** A `~` rule only feeds Dashboard Upcoming and the Scheduled
   view's projections. Real transactions arrive via CSV import or Entry. Deviation from the
   handoff → ADR 0006.
 - **No pause.** No `p` key, no paused state. To stop a rule: set a remaining count, delete
-  it, or create a new one. (Temporary stops = end + new rule; "what if I cancel" = Forecast
-  scenarios, ticket 09.) Additive later if missed.
+  it, or create a new one. (Temporary stops = end + new rule.) Additive later if missed.
 
 ### Reading
 
@@ -131,9 +130,9 @@ indented lines (postings, posting comments). Comment lines *above* the `~` are k
 
 `{Period string (raw expression), Description, Postings []Posting (raw), Raw string (block
 text), Pos SourcePos, FitsForm bool (computed)}`; projections (`Occurrences []Date`,
-annual impact) joined from the forecast call, not stored on the rule.
+annual impact) joined from the occurrences call, not stored on the rule.
 
-### Amendment (ticket 09, 2026-09-30)
+### Amendment (2026-09-30)
 
 Frequency dropdown gains **`once`** → `~ <date>  <description>`; remaining-payments field
-hidden. Account picker excludes closed accounts. See ticket 09.
+hidden. Account picker excludes closed accounts.

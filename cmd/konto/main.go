@@ -21,12 +21,10 @@ import (
 	"github.com/sbradl/konto/internal/csvimport"
 	"github.com/sbradl/konto/internal/domain"
 	"github.com/sbradl/konto/internal/files"
-	"github.com/sbradl/konto/internal/forecast"
 	"github.com/sbradl/konto/internal/hledger"
 	"github.com/sbradl/konto/internal/journal"
 	"github.com/sbradl/konto/internal/ledger"
 	"github.com/sbradl/konto/internal/periodic"
-	"github.com/sbradl/konto/internal/report"
 	"github.com/sbradl/konto/internal/ui"
 )
 
@@ -129,8 +127,6 @@ func buildPorts(cfg config.Config, getenv func(string) string, today func() time
 		// The UI hands the Verifier the changeset the carry writer prepared, so it renders it through the very
 		// file that writer writes to (TestBuildPortsVerifiesTheJournalTheWriterWrites).
 		Verifier:    checks.NewVerifier(file, client),
-		Reports:     report.NewService(client, today),
-		Forecast:    forecast.NewService(client, today),
 		Rules:       periodic.NewService(client, today),
 		Importer:    csvimport.NewService(files.System{}, client, file.RulesPath()),
 		DownloadDir: downloadDir(getenv, cfg.Home),

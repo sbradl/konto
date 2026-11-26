@@ -319,18 +319,6 @@ func (s *session) cellBackground(x, y int) int {
 	return ansi16(c.Style.Bg)
 }
 
-// attrBold is the bold bit of a cell style (ultraviolet's AttrBold, which this harness need not import).
-const attrBold = 1
-
-// cellBold reports whether the cell is drawn bold.
-func (s *session) cellBold(x, y int) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	c := s.term.CellAt(x, y)
-
-	return c != nil && c.Style.Attrs&attrBold != 0
-}
-
 // backgrounds returns the distinct non-default background colours on screen,
 // as ANSI-16 indices, or -1 for any other kind of colour.
 func (s *session) backgrounds() map[int]bool {

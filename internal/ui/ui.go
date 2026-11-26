@@ -12,13 +12,10 @@ import (
 
 	"github.com/sbradl/konto/internal/csvimport"
 	"github.com/sbradl/konto/internal/domain"
-	forecastsvc "github.com/sbradl/konto/internal/forecast"
 	"github.com/sbradl/konto/internal/ledger"
 	"github.com/sbradl/konto/internal/ui/dashboard"
-	forecastview "github.com/sbradl/konto/internal/ui/forecast"
 	"github.com/sbradl/konto/internal/ui/imports"
 	"github.com/sbradl/konto/internal/ui/layout"
-	"github.com/sbradl/konto/internal/ui/reports"
 	"github.com/sbradl/konto/internal/ui/scheduled"
 )
 
@@ -40,16 +37,6 @@ type checkRunner interface {
 type accountPlanner interface {
 	Close(account domain.Account) (domain.Changeset, error)
 	Reopen(account domain.Account) (domain.Changeset, error)
-}
-
-// reportBuilder builds the Reports view's tables for a period.
-type reportBuilder interface {
-	Report(ctx context.Context, period domain.ReportPeriod) (domain.Report, error)
-}
-
-// forecaster builds the Forecast view's projection of the loaded ledger.
-type forecaster interface {
-	Forecast(ctx context.Context, snapshot domain.Ledger) (forecastsvc.Forecast, error)
 }
 
 // csvImporter lists folders for the file picker and reads a bank export against the journal.
@@ -104,8 +91,6 @@ type Model struct {
 	accounts    accountPlanner
 	writer      journalWriter
 	verifier    changeVerifier
-	reporter    reportBuilder
-	forecaster  forecaster
 	rules       rulePlanner
 	importer    csvImporter
 	editor      func(file string, line int) *exec.Cmd
@@ -114,8 +99,6 @@ type Model struct {
 	dash      dashboard.Model
 	imports   imports.Model
 	scheduled scheduled.Model
-	forecasts forecastview.Model
-	reports   reports.Model
 
 	// session state
 	ledger    *domain.Ledger  // the latest good snapshot; nil until a load succeeds
@@ -160,25 +143,6 @@ type openedMsg struct {
 
 func (msg openedMsg) takeIn(m Model) (Model, tea.Cmd) { return m.onOpened(msg), nil }
 
-// forecastLoadedMsg carries a forecast built from the journal of a load, or why it could not be built.
-type forecastLoadedMsg struct {
-	load     int
-	forecast forecastsvc.Forecast
-	err      error
-}
-
-func (msg forecastLoadedMsg) takeIn(m Model) (Model, tea.Cmd) { return m.onForecast(msg), nil }
-
-// reportLoadedMsg carries a built report for the period and load it was asked for.
-type reportLoadedMsg struct {
-	load   int
-	period domain.ReportPeriod
-	report domain.Report
-	err    error
-}
-
-func (msg reportLoadedMsg) takeIn(m Model) (Model, tea.Cmd) { return m.onReport(msg), nil }
-
 // writtenMsg reports that a changeset was applied, and what was to follow, or why it was not. A write is never
 // stale: whatever was reloaded meanwhile, the journal has changed (or not) and the model must hear of it.
 type writtenMsg struct {
@@ -201,8 +165,6 @@ type Ports struct {
 	Accounts accountPlanner // plans closing and reopening accounts
 	Writer   journalWriter  // applies planned changes to the journal
 	Verifier changeVerifier // checks an import's changes before they are written; none skips the check
-	Reports  reportBuilder  // builds the Reports view's tables
-	Forecast forecaster     // projects the Forecast view's balances
 	Rules    rulePlanner    // plans the Scheduled form's writes
 	Importer csvImporter    // lists folders and reads bank exports
 	// DownloadDir is where the file picker starts.
@@ -221,16 +183,12 @@ func New(journalPath string, ports Ports) Model {
 		accounts:    ports.Accounts,
 		writer:      ports.Writer,
 		verifier:    ports.Verifier,
-		reporter:    ports.Reports,
-		forecaster:  ports.Forecast,
 		rules:       ports.Rules,
 		importer:    ports.Importer,
 		editor:      ports.Editor,
 		dash:        dashboard.New(),
 		imports:     imports.New(ports.DownloadDir),
 		scheduled:   scheduled.New(),
-		forecasts:   forecastview.New(),
-		reports:     reports.New(),
 	}
 }
 
@@ -283,8 +241,6 @@ var _ = []result{
 	ledgerLoadedMsg{},
 	browsedMsg{},
 	openedMsg{},
-	forecastLoadedMsg{},
-	reportLoadedMsg{},
 	writtenMsg{},
 	editorClosedMsg{},
 	formReadyMsg{},
@@ -317,15 +273,15 @@ func (m Model) resize(size tea.WindowSizeMsg) Model {
 	return m
 }
 
-// onLedgerLoaded takes the latest load in and builds what follows from it: the report, the staged export read
-// again, the forecast. A load asked for before the latest is dropped.
+// onLedgerLoaded takes the latest load in and reads the staged export again. A load asked for before the
+// latest is dropped.
 func (m Model) onLedgerLoaded(loaded ledgerLoadedMsg) (Model, tea.Cmd) {
 	if !m.fresh(loaded.load) {
 		return m, nil
 	}
 	m = m.onLoaded(loaded)
 
-	return m, tea.Batch(m.loadReport(loaded.err), m.reopen(loaded), m.loadForecast(loaded))
+	return m, m.reopen(loaded)
 }
 
 // onLoaded takes a load result in. Once a good snapshot is held, a failed reload
@@ -354,66 +310,6 @@ func (m Model) firstRun() bool { return errors.Is(m.loadErr, ledger.ErrNoJournal
 
 // parseIssue is the located journal error that kept the journal from loading, if there is one.
 func (m Model) parseIssue() *domain.CheckIssue { return issueOf(m.loadErr) }
-
-// loadReport builds the Reports view's report for its current period, once the journal has loaded.
-func (m Model) loadReport(loadErr error) tea.Cmd {
-	if m.reporter == nil || loadErr != nil {
-		return nil
-	}
-	period := m.reports.Period()
-
-	return func() tea.Msg {
-		report, err := m.reporter.Report(context.Background(), period)
-
-		return reportLoadedMsg{load: m.loads, period: period, report: report, err: err}
-	}
-}
-
-// onReport takes a built report in; one for a period no longer shown or of an earlier load is dropped, and a
-// failed one is flagged, the Reports view saying why when it has no report of the period to show.
-func (m Model) onReport(loaded reportLoadedMsg) Model {
-	shown := loaded.period == m.reports.Period()
-	switch {
-	case !shown || !m.fresh(loaded.load):
-	case loaded.err != nil:
-		m.failure = loaded.err
-		m.reports = m.reports.WithFailure(loaded.err)
-	default:
-		m.reports = m.reports.WithReport(loaded.report)
-	}
-
-	return m
-}
-
-// loadForecast projects the freshly loaded journal for the Forecast view.
-func (m Model) loadForecast(loaded ledgerLoadedMsg) tea.Cmd {
-	if m.forecaster == nil || loaded.err != nil {
-		return nil
-	}
-
-	return func() tea.Msg {
-		built, err := m.forecaster.Forecast(context.Background(), loaded.ledger)
-
-		return forecastLoadedMsg{load: loaded.load, forecast: built, err: err}
-	}
-}
-
-// onForecast takes a built forecast in; one of an earlier load is dropped, and a failed one leaves the last
-// projection on screen with the error flagged.
-func (m Model) onForecast(built forecastLoadedMsg) Model {
-	if !m.fresh(built.load) {
-		return m
-	}
-
-	if built.err != nil {
-		m.failure = built.err
-
-		return m
-	}
-	m.forecasts = m.forecasts.WithForecast(built.forecast)
-
-	return m
-}
 
 // hasSnapshot reports whether a good ledger is on screen.
 func (m Model) hasSnapshot() bool { return m.ledger != nil }
@@ -516,7 +412,7 @@ func (m Model) onViewKey(key string) (Model, tea.Cmd) {
 }
 
 // onGlobalKey handles the keys the root keeps from every view (spec §6.4): r reloads, ? and ! open the popups,
-// 1–5 switch the view; q and Ctrl+C are handled before, since they work on every screen. global is false
+// 1–3 switch the view; q and Ctrl+C are handled before, since they work on every screen. global is false
 // for any other key.
 func (m Model) onGlobalKey(key string) (updated Model, cmd tea.Cmd, global bool) {
 	switch key {
@@ -547,18 +443,6 @@ func tabIndex(key string) (int, bool) {
 	}
 
 	return number - 1, true
-}
-
-// onReportsKey hands a key to the Reports view and builds the report it asks for.
-func (m Model) onReportsKey(key string) (Model, tea.Cmd) {
-	var action reports.Action
-
-	m.reports, action = m.reports.Key(key)
-	if _, load := action.(reports.LoadReport); load {
-		return m, m.loadReport(nil)
-	}
-
-	return m, nil
 }
 
 // openEditor suspends konto while the user's editor shows the issue.

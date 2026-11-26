@@ -10,7 +10,7 @@ Decide how konto is tested (`tdd-loop` will drive the later build, so the seams 
 the spec):
 
 - Two seam levels now exist (ticket 04, ADR 0003): (a) use cases test against a hand-written
-  fake of their own port interface (`report.ledgerGateway` etc.) — no adapter involved;
+  fake of their own port interface (`ledger.gateway` etc.) — no adapter involved;
   (b) the adapters `internal/hledger` / `internal/journal` themselves need testing against
   real hledger behaviour. Decide (b): fake the unexported `run()` with recorded `hledger`
   JSON fixtures, or golden files, or a required real `hledger` binary in CI. Trade-offs.
@@ -30,7 +30,7 @@ Feeds **Assemble docs/spec.md**; may graduate an "install hledger + sample journ
 
 Three seam levels, matching the layers (ADR 0003):
 
-### 1. Use cases (`ledger`, `report`, `csvimport`, `periodic`, `forecast`, `entry`)
+### 1. Use cases (`ledger`, `csvimport`, `periodic`, `entry`)
 
 Test against a **hand-written fake of the use case's own port interface**, in that package's
 `_test.go` (`type fakeLedgerGateway struct { ... }`). No adapter, no hledger, no journal

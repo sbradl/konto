@@ -82,7 +82,7 @@ Feature: Product invariants that must hold across the whole app
     # No catch-all account: import-write.feature, "there is no catch-all account".
     # No write with an uncategorised row: import-write.feature, "w is blocked while ? rows remain".
 
-  Rule: Forecast and periodic rules never write transactions (ADR 0006, 0007)
+  Rule: Periodic rules never write transactions (ADR 0006)
 
 
     Scenario: a long session across every view writes nothing

@@ -622,5 +622,3 @@ Feature: Import — categorising rows, building and widening rules, the category
       When I press "1"
       Then I see a "NET WORTH" card showing "26.600,00 EUR"
       And the row "assets:checking" shows "13.240,00 EUR"
-      When I press "5"
-      Then I do not see "expenses:books" change in the reports

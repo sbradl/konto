@@ -61,7 +61,7 @@ The single account both legs of a transfer between import-fed accounts post agai
 import-fed account only ever holds transactions from its own CSV. A non-zero balance means a
 transfer whose other leg is not imported yet. `assets:transfers`, source `Clearing`, created
 with the journal; counts in net worth, shown in the account list, never closed, never an
-import target, not forecast.
+import target.
 
 **Account source**:
 Whether an account's entries come from manual entry (`Manual`), CSV import (`Import`), or
@@ -81,7 +81,7 @@ every account tagged (ADR 0010).
 An account the user has retired, marked by a `konto:closed:<date>` tag on its `account`
 directive. Only closable at zero balance and when no periodic rule references it; can be
 reopened. Shown only in the account list, dimmed; counted in no total; excluded from the
-forecast and the periodic-rule form. Importing a CSV whose IBAN belongs to a closed account
+periodic-rule form. Importing a CSV whose IBAN belongs to a closed account
 is refused until it is reopened.
 
 **Account list**:
@@ -109,7 +109,7 @@ UI copy calls it **currency**; "commodity" stays in code and docs.
 **Valuation mode**:
 Whether amounts show in their original commodity (`Native`, "at cost") or all converted to
 one commodity via the latest price directives (`Market`, hledger's `-V`). Not surfaced in
-v1 (EUR-only UI, ADR 0011); when it returns, one toggle shared by Dashboard and Reports. konto never computes valuation — it re-asks hledger.
+v1 (EUR-only UI, ADR 0011); when it returns, one toggle for the Dashboard. konto never computes valuation — it re-asks hledger.
 _Avoid_: Cost (hledger "cost", `-B`, is conversion at transaction price — a different thing)
 
 **Price directive**:
@@ -136,12 +136,12 @@ that balance is the bank format's concern.
 
 **Periodic rule**:
 A `~` rule in the journal describing a recurring transaction (rent, salary). hledger has no
-command to list these; konto parses them from journal text. Forecast-only: it generates
+command to list these; konto parses them from journal text. It generates
 projected occurrences (via hledger) and never posts into the journal.
 _Avoid_: Scheduled transaction, Recurring transaction, Template
 
 **Occurrence**:
-One projected dated instance of a periodic rule, computed by hledger. Feeds the forecast and
+One projected dated instance of a periodic rule, computed by hledger. Feeds the Scheduled view and
 the Dashboard's Activity above today; never written to the journal.
 _Avoid_: Instance, Posting (a periodic rule posts nothing)
 
@@ -197,15 +197,6 @@ A konto-built-in hledger rules preamble describing one bank's CSV layout (e.g. P
 Assigned to an import-fed account by a `konto:format:<bank>` tag; the account itself is
 recognised by its `konto:iban:<IBAN>` tag. v1 ships Postbank only.
 
-## Forecast
-
-**Forecast**:
-Each open asset/liability account's journal balance projected forward by its periodic
-rules' occurrences — nothing averaged or guessed. Projection starts from the account's
-watermark, not today, so occurrences since its last import count too and "today" is itself a
-projected figure. Never written to the journal.
-_Avoid_: Scenario, Forecast driver, Trailing average (dropped, ADR 0007)
-
 ## Figures
 
 **Net worth**:
@@ -215,11 +206,6 @@ The sum of the balances of all open accounts (assets plus liabilities).
 Income minus expenses over a period — the Dashboard shows it for the calendar month to date.
 _Avoid_: Cash flow (hledger's `cashflow` is the change in cash accounts — a different figure;
 a transfer to savings or a card payment moves cash but is neither income nor expense)
-
-**Report period**:
-The span a report covers, always ending today: month to date, quarter to date, year to date,
-or all time. Chosen in Reports only; the Dashboard is always month to date.
-_Avoid_: Period (alone — clashes with a periodic rule's period expression)
 
 ## Checks
 
@@ -232,7 +218,3 @@ One problem found by a check: the check name, konto-assigned severity (`ERR` / `
 message, and a file:line reference. hledger reports every issue as an error and stops at the
 first; konto runs checks individually and assigns severity by check name.
 
-**Report table**:
-konto's shape for a balance sheet or income statement — rows each tagged with a kind
-(section header, leaf, subtotal, grand total) that drives styling. Mapped
-from hledger's compound balance report, not passed through.

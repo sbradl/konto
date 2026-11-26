@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"errors"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -12,6 +13,8 @@ import (
 	"github.com/sbradl/konto/internal/domain"
 	"github.com/sbradl/konto/internal/ui/uitest"
 )
+
+var regexpPosition = regexp.MustCompile(`\b\d+/\d+\b`)
 
 type fakeImporter struct {
 	browsed []string
@@ -199,16 +202,6 @@ func TestImportFollowsTheTerminalSize(t *testing.T) {
 
 	if len(rows) != 50 || !strings.HasPrefix(rows[len(rows)-2], "╰") {
 		t.Errorf("view has %d rows; the panels should end just above the status bar, got %q", len(rows), rows[len(rows)-2])
-	}
-}
-
-func TestKeysInViewsWithoutKeysOfTheirOwnDoNothing(t *testing.T) {
-	model, _ := press(started(t, fakeLoader{}), "4")
-
-	after, cmd := press(model, "x")
-
-	if cmd != nil || uitest.Plain(after.View().Content) != uitest.Plain(model.View().Content) {
-		t.Errorf("Forecast has no keys of its own")
 	}
 }
 

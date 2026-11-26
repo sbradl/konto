@@ -424,25 +424,6 @@ func registerCategoriseRowSteps(sc *godog.ScenarioContext, w *world) {
 		return w.expectStaged(true, "net income "+whole+","+cents+" EUR")
 	})
 	step(sc, `^no new file exists next to the journal$`, w.expectNoStateFiles)
-	step(sc, `^I do not see "([^"]*)" change in the reports$`, w.expectReportsUnchangedFor)
-}
-
-// expectReportsUnchangedFor shows the reports and checks the account has no staged amount there: the
-// journal is not written while categorising, so its balance there is the journal's own.
-func (w *world) expectReportsUnchangedFor(account string) error {
-	if err := w.press("5"); err != nil {
-		return err
-	}
-
-	return w.expectScreenLines(func(lines []string) error {
-		for _, line := range lines {
-			if strings.Contains(line, account) && strings.Contains(line, " 2,00 EUR") {
-				return fmt.Errorf("the reports show the staged amount: %q", line)
-			}
-		}
-
-		return nil
-	})
 }
 
 func registerPickerSteps(sc *godog.ScenarioContext, w *world) {

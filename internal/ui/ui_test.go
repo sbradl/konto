@@ -140,7 +140,7 @@ func TestViewShowsLoadingUntilLoaded(t *testing.T) {
 
 // Once loaded, the user sees the five-tab bar on the first line of the screen.
 func TestViewShowsTabBarOnFirstLine(t *testing.T) {
-	want := " 1 dash │ 2 import │ 3 sched │ 4 forecast │ 5 reports "
+	want := " 1 dash │ 2 import │ 3 sched "
 
 	if first := firstLine(started(t, fakeLoader{})); !strings.Contains(first, want) {
 		t.Errorf("first line = %q, want it to contain %q", first, want)
@@ -203,23 +203,22 @@ func TestFailedLoadIsShown(t *testing.T) {
 
 // A failed load leaves no journal to act on: the view keys do nothing, the root's keys still work.
 func TestAFailedLoadLeavesOnlyTheRootsKeys(t *testing.T) {
-	var periods []domain.ReportPeriod
 	model := New(journalPath, Ports{
 		Loader: fakeLoader{err: errors.New("hledger exploded")}, Checker: fakeChecker{}, Creator: &fakeCreator{},
-		Editor: recordingEditor(nil), Reports: fakeReporter{periods: &periods}, Importer: listing(), DownloadDir: "/dl",
+		Editor: recordingEditor(nil), Importer: listing(), DownloadDir: "/dl",
 		Rules: &fakeRules{},
 	})
 	updated, _ := model.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	updated, _ = updated.Update(model.load())
 	failed := updated.(Model)
 
-	for _, keys := range [][]string{{"2", "n"}, {"5", "p"}, {"3", "n"}} {
+	for _, keys := range [][]string{{"2", "n"}, {"3", "n"}} {
 		pressed, cmd := failed, tea.Cmd(nil)
 		for _, key := range keys {
 			pressed, cmd = press(pressed, key)
 		}
 
-		if cmd != nil || pressed.capturing() || pressed.reports.Period() != domain.MonthToDate {
+		if cmd != nil || pressed.capturing() {
 			t.Errorf("%v: cmd %v, capturing %v", keys, cmd, pressed.capturing())
 		}
 	}
@@ -265,7 +264,7 @@ func TestTabBarKeepsTabsAndPathApartWhenPathIsLong(t *testing.T) {
 
 	first, _, _ := strings.Cut(uitest.Plain(updated.View().Content), "\n")
 
-	if !strings.Contains(first, "5 reports "+long) {
+	if !strings.Contains(first, "3 sched "+long) {
 		t.Errorf("tabs and path should be separated by a space, got %q", first)
 	}
 }
@@ -540,7 +539,7 @@ func TestGrowingTheTerminalRecovers(t *testing.T) {
 	}
 }
 
-// The status bar names the active view; number keys 1–5 switch between them.
+// The status bar names the active view; number keys 1–3 switch between them.
 func TestNumberKeysSwitchViews(t *testing.T) {
 	model := started(t, fakeLoader{})
 	if got := lastLine(model); !strings.HasPrefix(strings.TrimSpace(got), "dash") {
@@ -548,7 +547,7 @@ func TestNumberKeysSwitchViews(t *testing.T) {
 	}
 	model, _ = press(model, "3") // every key must switch from another view, including 1
 
-	for key, view := range map[string]string{"1": "dash", "2": "import", "3": "sched", "4": "forecast", "5": "reports"} {
+	for key, view := range map[string]string{"1": "dash", "2": "import", "3": "sched"} {
 		switched, _ := press(model, key)
 
 		if got := lastLine(switched); !strings.HasPrefix(strings.TrimSpace(got), view) {
@@ -628,7 +627,6 @@ func TestStatusBarHintIsPerView(t *testing.T) {
 		"1": {"c close", "o reopen"},
 		"2": {"n new file", "Enter categorise", "w write"},
 		"3": {"n new", "e edit", "d delete"},
-		"5": {"p period"},
 	} {
 		switched, _ := press(model, key)
 
@@ -637,15 +635,6 @@ func TestStatusBarHintIsPerView(t *testing.T) {
 				t.Errorf("view %s: status bar = %q, want it to contain %q", key, got, hint)
 			}
 		}
-	}
-}
-
-// Views without keys of their own show no hint beyond the global ones.
-func TestForecastHasNoHint(t *testing.T) {
-	model, _ := press(started(t, fakeLoader{}), "4")
-
-	if got := strings.Fields(lastLine(model)); !reflect.DeepEqual(got, []string{"forecast", "●", "clean", "?", "keys"}) {
-		t.Errorf("status bar words = %v, want only the view name and ? keys", got)
 	}
 }
 

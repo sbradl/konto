@@ -28,7 +28,7 @@ Given ticket 01's findings on subcommands and output formats, decide how konto i
   with per-check regexes, fix-rerun-repeat — or accept "first error only" for v1?
 
 Feeds **Go package and module layout**, **CSV import subsystem design**,
-**Forecast computation design**, **Test seams and fixture strategy**.
+**Test seams and fixture strategy**.
 
 ## Answer
 
@@ -56,7 +56,7 @@ snapshot. The UI wraps `Loader.Load()` / `Loader.Refresh()` in a `tea.Cmd`.
 
 ### Gateway shape
 
-- Plain **blocking Go**, no `bubbletea` import (grilled). `client.Balance(q) (ReportTable,
+- Plain **blocking Go**, no `bubbletea` import (grilled). `client.Balances(ctx) ([]Account,
   error)` etc. The UI wraps each call in a `tea.Cmd` goroutine that returns a result `Msg`.
 - Two layers inside `internal/hledger`:
   - an unexported **command runner** `run(ctx context.Context, args ...string) ([]byte,

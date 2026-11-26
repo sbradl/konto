@@ -21,11 +21,11 @@ Evans / Vernon, applied to konto's settled model. Package layering, allowed impo
 - **Invariant bypass** — code that can produce an aggregate state its invariants forbid (a closed clearing account, a writable import with `?` rows, overlapping rules). → only aggregate methods change that state.
 - **Invalid construction** — a constructor or literal that can build an invalid value (`Amount` with mismatched scale, empty account name). → validate in a constructor; unexported fields where it matters.
 - **Mutable value object** — a value type with pointer receivers that mutate, or shared slices callers can modify. → value receivers, copies out.
-- **Primitive obsession** — a bare `string`/`int`/`time.Time` for a glossary concept (account name, rule id, report period, watermark date). → a small named type.
+- **Primitive obsession** — a bare `string`/`int`/`time.Time` for a glossary concept (account name, rule id, watermark date). → a small named type.
 - **Write path** — a journal write not expressed as a `domain.Changeset` through the use case's `journalWriter` port, or not followed by validate → apply → refresh (ADR 0012). → produce a `Changeset`.
 - **Cross-view effect** — a view changing another view's state or calling the `Loader` instead of emitting `journalChangedMsg` (ADR 0004, 0012). → a message to the root.
 - **Snapshot mutation** — anything mutating the `*Ledger` instead of replacing it. → a new snapshot via refresh.
 
 ## Product rules (spec §10)
 
-Flag any hunk that can break: manual xor import; forecast never written; periodic rules never post; every transaction categorised, a transfer or an opening balance; import writes the `=` assertion; skipped rows as a list; every hledger check passes after a write; closed accounts only in the account list.
+Flag any hunk that can break: manual xor import; periodic rules never post; every transaction categorised, a transfer or an opening balance; import writes the `=` assertion; skipped rows as a list; every hledger check passes after a write; closed accounts only in the account list.

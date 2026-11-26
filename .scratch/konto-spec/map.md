@@ -5,8 +5,8 @@
 
 **Foundation laid, build under way.** `docs/spec.md` captures the settled architecture
 (tickets 01–06, 10, 11) + `CONTEXT.md` + `docs/adr/`; the app shell and first Dashboard
-slices are built test-first on top of it. Per-feature design — CSV import (08/14), forecast
-(09), periodic transactions (13) — is grilled **just-in-time** as each view is built.
+slices are built test-first on top of it. Per-feature design — CSV import (08/14), periodic
+transactions (13) — is grilled **just-in-time** as each view is built.
 
 Done when the foundation spec exists and every view is built; per-feature tickets close as
 their views land.
@@ -14,10 +14,10 @@ their views land.
 ## Notes
 
 - **Domain**: terminal UI frontend for [hledger](https://hledger.org) (plain-text accounting),
-  single-user personal finance. Target stack: Go + Bubble Tea + Lip Gloss + Bubbles + `ntcharts`.
+  single-user personal finance. Target stack: Go + Bubble Tea + Lip Gloss + Bubbles.
 - **Stack version decided** (via *Overlay and popup compositing mechanics*): the **Charm v2
   stack** — `charm.land/bubbletea/v2`, `charm.land/lipgloss/v2`, `charm.land/bubbles/v2`
-  (vanity import paths, *not* `github.com/charmbracelet/.../v2`), `ntcharts/v2`. v1 is frozen.
+  (vanity import paths, *not* `github.com/charmbracelet/.../v2`). v1 is frozen.
   Every downstream ticket (package layout, model composition, layout strategy) assumes v2.
 - **UX is frozen** in `docs/design_handoff_hledger_tui/README.md` — authoritative, not
   re-litigated. Wayfinding decides *implementation* only (architecture, data model, package
@@ -41,7 +41,7 @@ their views land.
   prototype tickets. `tdd-loop` + `craft-review` drive the build.
 - **This effort carries execution** (overriding wayfinder's plan-only default, re-scoped
   2026-09-10): the foundation is decided; remaining work is the `tdd-loop` build plus JIT
-  grilling of per-feature tickets (08 import, 09 forecast, 13 periodic) when their view is
+  grilling of per-feature tickets (08 import, 13 periodic) when their view is
   built. 14 (bank CSV samples, user-supplied) is a prerequisite for 08. 07 (responsive
   layout) was grilled 2026-09-30 ahead of the shell build; the shell build tunes numbers.
 - **Environment fact** (dev machine, 2026-09-10): `hledger 1.52.1` is now installed
@@ -69,29 +69,25 @@ their views land.
   accounts dimmed at bottom, import into one refused. Key principle: first letter of the
   action (Scheduled `x` → `d`). Spec §4.5, §5.3, §6.4.
 - *v1 UI surface sweep* (grilled inline 2026-09-30, ADR 0011) — arrows, no `j`/`k`; views
-  `1`–`5` only (no `:`, no `g`); no panel focus; EUR-only UI (no `v`, no prices); no Budget,
+  `1`–`3` only (no `:`, no `g`); no panel focus; EUR-only UI (no `v`, no prices); no Budget,
   no Dashboard checks panel/card (check status in status bar), no drill-in, no export, no
   Recent edit; Cash Flow = month-to-date income − expenses; spend chart = 6 complete
-  months; Import `Enter` categorise / `w` write / `n` new file; Reports `p`. Spec §6.4/§6.4a.
-- *Reports columns* (grilled inline 2026-09-30) — periods all "to date" (quarter = QTD);
-  bs `Δ period` = change within period via `bs --change`, hidden under all time; is has no
-  `% share`. Spec §5, §6.4a.
+  months; Import `Enter` categorise / `w` write / `n` new file. Spec §6.4/§6.4a.
 
 - [Responsive layout strategy](issues/07-responsive-layout-strategy.md) — floor ≈100×30
   (too-small screen below); **priority drop** (shrink to mins, then hide low-priority
   panels, per-view order; dim `N panels hidden` note); `ui/layout` = pure 1-D `Allocate`
-  nested by views + `Panel`; popups full width, height ≤ ½ screen, scroll/reflow. ntcharts/v2
-  builds against real bubbletea v2 — stack locked. Spec §6.8.
+  nested by views + `Panel`; popups full width, height ≤ ½ screen, scroll/reflow. Spec §6.8.
 
 - [Assemble docs/spec.md](issues/12-assemble-spec.md) — **`docs/spec.md`** written: the
   foundation spec synthesising tickets 01–06, 10, 11 + `CONTEXT.md` + ADRs 0001–0005, with
-  a build order. `CLAUDE.md` rewritten to point at it. Per-feature areas (07, 08/14, 09,
+  a build order. `CLAUDE.md` rewritten to point at it. Per-feature areas (07, 08/14,
   13, 15) marked deferred.
 - [hledger machine-readable output](issues/01-hledger-machine-readable-output.md) —
-  `-O json` for `print`/`register`/`aregister`/`bal`/`bs`/`is`/`cf`; **no** machine format
+  `-O json` for `print`/`register`/`aregister`/`bal`; **no** machine format
   for `check`/`accounts`/`commodities`/`prices`. `print` drops `~` rules (konto parses the
   journal itself for verbatim rule text); `check --strict` = first-failure-only prose on
-  stderr, exit 1, no severities (run per-check + regex + fix-rerun to enumerate); forecast
+  stderr, exit 1, no severities (run per-check + regex + fix-rerun to enumerate); generated
   rows only separable via the `_generated-transaction` tag on `print`/`aregister --forecast`;
   `import --dry-run` doesn't list skipped rows (konto builds its own). **Version floor:
   `hledger >= 1.32`**, checked at startup, JSON decoded tolerantly. Full detail:
@@ -99,9 +95,7 @@ their views land.
 - [Overlay and popup compositing mechanics](issues/06-overlay-popup-compositing.md) —
   build on the **Charm v2 stack** and composite overlays with `lipgloss.Compositor` (v2's
   cell-grid `Layer`/`Compositor`); no community overlay package, no hand-rolled splicing.
-  Cursor via `tea.View.Cursor`. One caveat handed to *Responsive layout strategy*: verify
-  `ntcharts/v2` builds against real `charm.land/bubbletea/v2` (its `go.mod` carries an
-  ignored `replace`). Full findings: `research/06-overlay-compositing.md`.
+  Cursor via `tea.View.Cursor`. Full findings: `research/06-overlay-compositing.md`.
 - [hledger invocation architecture](issues/02-hledger-invocation-architecture.md) — two
   data paths behind a `Loader` that builds the `Ledger` snapshot: an `internal/hledger`
   **gateway** (plain blocking Go, no `bubbletea` import; unexported `run()` exec chokepoint
@@ -134,13 +128,13 @@ their views land.
   routed to the owner with a per-view generation counter for stale-drop. Shared-state
   changes are messages. `View` interface = `Update/View/Title/StatusHint/KeyMap`. Keymaps in
   `ui/keys` (global set + per-view). Components: `bubbles/table` for grids, custom list
-  widget for Dashboard panels, `textinput`/`viewport`/`help`/`spinner`, `ntcharts`;
+  widget for Dashboard panels, `textinput`/`viewport`/`help`/`spinner`;
   `bubbles/list` not used. First-run / parse-error are root `appMode`s, not views.
 - [Go package and module layout](issues/04-package-module-layout.md) — **ports-and-adapters
   / Clean Architecture** (ADR 0003). Circles inward: `cmd/konto` (composition root) →
   `internal/ui` + one package per view (Bubble Tea confined here; import domain + the app
   services they use; never adapters, never each other; leaves `ui/theme|layout|keys|widgets`)
-  → use cases `internal/{ledger,report,csvimport,periodic,forecast,entry}` (plain Go, each
+  → use cases `internal/{ledger,csvimport,periodic,entry}` (plain Go, each
   **declares its own port interfaces**, imports domain only, no `app.App` facade) →
   adapters `internal/hledger` + `internal/journal` (import domain only, satisfy the ports
   **structurally**) → `internal/domain` (entities + pure rules, imports nothing). `cmd`
@@ -160,9 +154,9 @@ their views land.
 
 <!-- in-scope fog, too dim to ticket precisely; graduates as the frontier advances -->
 
-- **Per-view build + JIT design** — each of the five v1 views is built in its own `tdd-loop`
+- **Per-view build + JIT design** — each of the three views is built in its own `tdd-loop`
   pass; the views with real subsystem logic carry a grilling ticket done just before that
-  pass: Import (08), Scheduled (13), Forecast (09) and config (15) all resolved 2026-09-30. Dashboard, Reports have
+  pass: Import (08), Scheduled (13) and config (15) all resolved 2026-09-30. Dashboard has
   no open design ticket — grill inline if a question surfaces during the build.
 - **`HINTS` strings** — transcribe the mock's per-view
   hint strings (adapted to the ADR 0011 keymap) into the `internal/ui/keys` structures (shape decided in ticket 05); a
@@ -174,8 +168,8 @@ their views land.
 
 - **Entry view / manual-account UI in v1** (ADR 0010) — the model keeps manual accounts;
   the view returns after v1 over the unchanged model.
-- **Export** (`y` yank / CSV of reports) — dropped entirely, not deferred (ADR 0011).
-- **Post-v1, not v1**: budgets (own design ticket), Reports register drill-in, multi-currency
+- **Export** (`y` yank / CSV) — dropped entirely, not deferred (ADR 0011).
+- **Post-v1, not v1**: budgets (own design ticket), multi-currency
   valuation UI, panel focus.
 - **Revising the design handoff's UX** — views, navigation model, feature scope are frozen
   (except the recorded deviations under Notes).

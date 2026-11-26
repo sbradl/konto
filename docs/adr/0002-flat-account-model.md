@@ -7,8 +7,6 @@ the Dashboard's Accounts panel renders a flat, non-indented list of full account
 shown in the design handoff (`docs/design_handoff_hledger_tui/README.md`).
 
 This is a deliberate deviation from the otherwise-frozen handoff UX, chosen for model and
-view simplicity in a single-user tool. Balance-report hierarchies (balance sheet, income
-statement) are unaffected — they use the separate report-table type mapped from hledger's
-compound balance report.
+view simplicity in a single-user tool.
 
 Status: accepted.

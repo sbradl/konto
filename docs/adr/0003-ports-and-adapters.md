@@ -7,9 +7,9 @@ konto follows Clean Architecture (Martin): every source dependency points inward
 - **`internal/ui/…`** — Frameworks & Drivers; Bubble Tea / Lip Gloss confined here. One
   package per view; views import `domain` + the application services they use, never the
   adapters, never each other.
-- **`internal/{ledger,report,csvimport,periodic,forecast,entry}`** — Use Cases; plain Go
+- **`internal/{ledger,accounts,checks,carry,csvimport,periodic,entry}`** — Use Cases; plain Go
   (no `tea`, no `exec`). Each **declares the port interfaces it needs** (e.g.
-  `report.ledgerGateway`) and imports `domain` only. Split by concern — no single `app.App`.
+  `ledger.gateway`) and imports `domain` only. Split by concern — no single `app.App`.
 - **`internal/hledger`, `internal/journal`** — Interface Adapters to the `hledger` binary and
   the journal file. Import `domain` only. They satisfy the use-case ports **structurally**
   (Go implicit interfaces), so no dependency runs from use case to adapter or back;

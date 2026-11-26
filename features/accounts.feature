@@ -55,13 +55,6 @@ Feature: Closing and reopening accounts (Dashboard Accounts panel)
       And I press "y"
       Then the status bar shows "● clean"
       And no full-screen error is shown
-    Scenario: a closed account leaves the forecast
-      Given I select "assets:spare"
-      And I press "c"
-      And I press "y"
-      When I press "4"
-      Then I do not see "assets:spare" in the forecast legend
-      And I do not see "assets:spare" in the milestone table
     Scenario: a closed account leaves the periodic rule form
       Given I select "assets:spare"
       And I press "c"
@@ -171,12 +164,6 @@ Feature: Closing and reopening accounts (Dashboard Accounts panel)
       When I press "o"
       Then no y/n prompt is shown
       And the journal is unchanged
-    Scenario: a reopened account is forecast again
-      Given I select "assets:old-account"
-      And I press "o"
-      And I press "y"
-      When I press "4"
-      Then I see "assets:old-account" in the forecast legend
     Scenario: a reopened account is an import target again
       Given I select "assets:old-account"
       And I press "o"

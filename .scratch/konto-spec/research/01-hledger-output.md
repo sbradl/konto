@@ -179,7 +179,7 @@ robustness:
    bounds.
 
 Recommendation: **konto parses `~` blocks out of the journal text itself** for the
-Scheduled view, and uses `print --forecast` only for the Forecast projection.
+Scheduled view, and uses `print --forecast` only for the occurrence dates.
 
 ---
 
@@ -232,7 +232,7 @@ must flag upcoming forecast items.
 
 ---
 
-### 2.4 `balance` / `bal` — the reporting workhorse (konto: Dashboard totals, custom reports)
+### 2.4 `balance` / `bal` — the reporting workhorse (konto: Dashboard totals)
 
 **`bal -O json`** — a **positional** structure, not keyed objects (verified 1.52.1):
 
@@ -281,7 +281,7 @@ returned `expenses:rent 8800.00 EUR` where the plain run returned nothing.
 aggregates postings; there is no per-transaction data and no "forecast" flag or
 column in txt / csv / json. To show forecast-vs-actual, konto must either:
 - run `balance` twice (with and without `--forecast`) and diff, or
-- build the forecast view from `print --forecast -O json` / `aregister --forecast -O json`
+- build it from `print --forecast -O json` / `aregister --forecast -O json`
   and aggregate client-side (filtering on the `_generated-transaction` tag).
 
 `bal --budget` is a separate feature (compares actuals to `~` rule amounts in a
@@ -289,7 +289,7 @@ budget report) — relevant if konto ever wants budget vs actual, out of scope h
 
 ---
 
-### 2.5 `balancesheet` / `bs`, `incomestatement` / `is` (konto: Reports view)
+### 2.5 `balancesheet` / `bs`, `incomestatement` / `is`
 
 **`bs -O json` / `is -O json`** — a "compound balance report" object (verified 1.52.1):
 

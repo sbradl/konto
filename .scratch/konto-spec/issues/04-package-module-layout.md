@@ -47,17 +47,16 @@ internal/ui/…        Frameworks & Drivers + Interface Adapters (controller/pre
   ui/theme          ANSI-16 palette + lipgloss styles.
   ui/layout         responsive layout helpers + the lipgloss.Compositor overlay wrapper.
   ui/keys           keymap (bubbles/key), the CMDS / HINTS / goto tables.
-  ui/widgets        shared render helpers (stat card, panel frame, list styling, ntcharts
-                    wrapper).
-  ui/dashboard  ui/imports  ui/entry  ui/scheduled  ui/forecast  ui/reports
+  ui/widgets        shared render helpers (stat card, panel frame, list styling).
+  ui/dashboard  ui/imports  ui/entry  ui/scheduled
                     one package per view. Imports domain + the application service(s) it
                     uses + the ui leaves. NEVER imports hledger/journal. NEVER imports
                     another view.
 
-internal/{ledger,report,csvimport,periodic,forecast,entry}
+internal/{ledger,csvimport,periodic,entry}
                     Use Cases (application business rules). Plain Go — no tea, no lipgloss,
                     no exec. Each declares the PORT interfaces it needs from the outside
-                    (e.g. report.ledgerGateway) and holds them as struct fields. Imports
+                    (e.g. ledger.gateway) and holds them as struct fields. Imports
                     domain only. Split by concern — no single app.App facade.
 
 internal/hledger    Interface Adapter → the hledger binary. unexported run(ctx, args...)
@@ -72,7 +71,7 @@ internal/journal    Interface Adapter → the journal text file. Targeted line r
 internal/config     Config load + path resolution. Imported by cmd only.
 
 internal/domain     Entities. Types + pure rules (Amount arithmetic/format, MultiAmount
-                    helpers, ReportRow.Kind, check-severity-by-name). No I/O. Imports
+                    helpers, check-severity-by-name). No I/O. Imports
                     nothing of konto's. Everyone may import it.
 ```
 
@@ -81,29 +80,29 @@ internal/domain     Entities. Types + pure rules (Amount arithmetic/format, Mult
 A use case names the interface it needs, unexported, in its own package:
 
 ```go
-// internal/report
-type ledgerGateway interface {
-    BalanceSheet(p domain.Period, v domain.ValuationMode) (domain.ReportTable, error)
-    IncomeStatement(p domain.Period, v domain.ValuationMode) (domain.ReportTable, error)
+// internal/ledger
+type gateway interface {
+    Balances(ctx context.Context) ([]domain.Account, error)
+    Print(ctx context.Context) ([]domain.Transaction, error)
 }
-type Service struct { gw ledgerGateway }
-func New(gw ledgerGateway) *Service { return &Service{gw} }
+type Loader struct { gw gateway }
+func NewLoader(gw gateway) *Loader { return &Loader{gw} }
 ```
 
-`*hledger.Client` already has methods with those signatures, so it satisfies `ledgerGateway`
-with **no `implements` keyword and no import in either direction** — `report` imports
+`*hledger.Client` already has methods with those signatures, so it satisfies `gateway`
+with **no `implements` keyword and no import in either direction** — `ledger` imports
 `domain`, `hledger` imports `domain`, neither imports the other. `cmd/konto` is where the
 concrete meets the port:
 
 ```go
 hl := hledger.New(cfg.HledgerBin)
-reports := report.New(hl)          // *hledger.Client used as report.ledgerGateway
+loader := ledger.NewLoader(hl)     // *hledger.Client used as ledger.gateway
 ```
 
 Consequences:
 - **Dependency Rule holds everywhere.** No inner circle imports an outer one.
-- **Adapters are the only mockable seam and they are fully swappable** — `report` etc. test
-  against a hand-written fake `ledgerGateway`, never touching `internal/hledger` (ticket 11).
+- **Adapters are the only mockable seam and they are fully swappable** — `ledger` etc. test
+  against a hand-written fake `gateway`, never touching `internal/hledger` (ticket 11).
 - Each use case declares its **own narrow** port even if two of them overlap (interface
   segregation); one `*hledger.Client` satisfies all of them.
 
@@ -119,14 +118,13 @@ Consequences:
 ### Naming
 
 - View packages live at `internal/ui/<name>` with plain package names (`dashboard`,
-  `imports`, `entry`, `scheduled`, `forecast`, `reports`). `imports` avoids shadowing the
+  `imports`, `entry`, `scheduled`). `imports` avoids shadowing the
   `import` keyword in tooling/prose; the app service stays `csvimport`.
-- Two app/view package-name clashes (`forecast`, `entry`): the view importing its app
-  service aliases it — `forecastsvc "…/internal/forecast"`.
+- One app/view package-name clash (`entry`): the view importing its app service aliases it.
 
 ### Downstream
 
 - **Bubble Tea model composition** (now unblocked): root model in `ui`, sub-models in
   `ui/<view>`; how shared state and the `tea.Cmd` results route.
-- Ticket 08 → `internal/csvimport`; ticket 09 → `internal/forecast`; ticket 13 →
+- Ticket 08 → `internal/csvimport`; ticket 13 →
   `internal/periodic`; ticket 10 → `internal/config`.

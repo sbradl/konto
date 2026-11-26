@@ -171,21 +171,6 @@ func amounts(cell []jsonAmount) (domain.MultiAmount, error) {
 	return balance, nil
 }
 
-// Activity returns the change in the accounts under the prefixes (all when there are none) from
-// first through last (inclusive).
-func (c *Client) Activity(ctx context.Context, first, last time.Time, prefixes ...string) ([]domain.Account, error) {
-	return c.flatBalances(ctx, slices.Concat(through(first, last).flags(), []string{notCarry}, under(prefixes...))...)
-}
-
-// notCarry leaves the carry out: bringing last year's balance into 1 January is no change of the period.
-const notCarry = "not:tag:" + domain.KontoTag + "=" + domain.CarryValue
-
-// BalancesUntil returns the balances of the accounts under the prefixes, counting everything
-// dated up to and including last; zero balances are left out.
-func (c *Client) BalancesUntil(ctx context.Context, last time.Time, prefixes ...string) ([]domain.Account, error) {
-	return c.flatBalances(ctx, slices.Concat(endingBefore(dayAfter(last)), under(prefixes...))...)
-}
-
 // under is the hledger query for the accounts under each of the name prefixes.
 func under(prefixes ...string) []string {
 	queries := make([]string, len(prefixes))
@@ -195,9 +180,6 @@ func under(prefixes ...string) []string {
 
 	return queries
 }
-
-// exactly is the hledger query for the one account and none under it.
-func exactly(account string) string { return "acct:^" + regexp.QuoteMeta(account) + "$" }
 
 // flatBalances runs `hledger bal` as a flat JSON report with the given extra arguments.
 func (c *Client) flatBalances(ctx context.Context, extra ...string) ([]domain.Account, error) {

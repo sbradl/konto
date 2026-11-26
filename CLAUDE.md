@@ -11,13 +11,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **`CONTEXT.md`** — the domain glossary (ubiquitous language). Use these terms.
 - **`docs/adr/`** — the hard-to-reverse decisions (0001 rich domain model, 0002 flat
   account model, 0003 ports-and-adapters, 0004 root-mediator Bubble Tea model, 0005 fixed
-  ANSI-16 palette, 0006 periodic rules forecast-only,
-  0007 forecast = balances + schedules, 0008 always categorised,
+  ANSI-16 palette, 0006 periodic rules never posted,
+  0008 always categorised,
   0009 import: journal is the watermark, 0010 no manual-entry UI in v1, 0011 v1 keyboard and chrome,
   0012 context-owned models, Account aggregate, shared Changeset write model,
   0013 konto-owned year-partitioned ledger, only this and last year loaded,
   0014 Dashboard panel focus, 0015 Dashboard Activity timeline).
-- **`docs/design_handoff_hledger_tui/README.md`** — the frozen UX spec (six views — Entry deferred in v1,
+- **`docs/design_handoff_hledger_tui/README.md`** — the frozen UX spec (four views — Entry deferred in v1,
   keymaps, panels, tokens). Authoritative except the deviations listed in `docs/spec.md` §11.
   The bundled `.dc.html` is a browser mock, **not code to port** — consult it for the `HINTS`
   strings and layout proportions only (keymap = spec §6.4, ADR 0011), never literal coordinates.
@@ -28,13 +28,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## What this is
 
 `konto` — a terminal UI frontend for [hledger](https://hledger.org) (plain-text accounting),
-single-user personal finance. Five views in v1: dashboard, CSV import with rule-building,
-scheduled/periodic transactions, forecast, reports (manual entry deferred, ADR 0010). Keyboard-only: arrows move, `1`–`5` switch views, `Tab` moves the Dashboard's panel focus, keys are the first letter of their action.
+single-user personal finance. Three views: dashboard, CSV import with rule-building,
+scheduled/periodic transactions (manual entry deferred, ADR 0010). Keyboard-only: arrows move, `1`–`3` switch views, `Tab` moves the Dashboard's panel focus, keys are the first letter of their action.
 
 ## State
 
-All five v1 views are built and their feature files pass end to end: Dashboard, Import (open, categorise,
-write, staging, Postbank format), Scheduled (list, detail, new/edit form, delete), Forecast and Reports,
+All three views are built and their feature files pass end to end: Dashboard, Import (open, categorise,
+write, staging, Postbank format), Scheduled (list, detail, new/edit form, delete),
 on top of the preflight, architecture tests, e2e harness and CI. No `@wip` or `@needs-decision` scenario is left in
 `features/` (`grep -c @wip features/*.feature`). Per-feature design lives in `docs/spec.md` §4 and the tickets in
 `.scratch/konto-spec/issues/`.
@@ -42,7 +42,7 @@ on top of the preflight, architecture tests, e2e harness and CI. No `@wip` or `@
 ## Non-negotiables (full detail in docs/spec.md)
 
 - **Charm v2 stack**, vanity import paths: `charm.land/bubbletea/v2`, `charm.land/lipgloss/v2`,
-  `charm.land/bubbles/v2`, `github.com/NimbleMarkets/ntcharts/v2`. Not the `github.com/charmbracelet/.../v2` paths. v1 is frozen.
+  `charm.land/bubbles/v2`. Not the `github.com/charmbracelet/.../v2` paths. v1 is frozen.
 - **`hledger` binary is a hard runtime dependency**, `>= 1.32`, checked at startup. konto
   shells out; it does **not** reimplement hledger's parsing, balance math, `check`,
   `--forecast`, or valuation. The one exception is `internal/journal`, a targeted
@@ -53,7 +53,7 @@ on top of the preflight, architecture tests, e2e harness and CI. No `@wip` or `@
   them structurally; `cmd/konto` wires. Views never import the adapters or each other.
 - **Colours are ANSI-16 indices** (`lipgloss.Color("0")`–`"15"`), never hex.
 - **All layout responsive to `tea.WindowSizeMsg`** — never hardcoded to the mock's 180×60.
-- **An account is manual or import-fed, never both.** **Forecast is never written.** **CSV
+- **An account is manual or import-fed, never both.** **CSV
   dedup shows skipped rows as a list.** **CSV import writes a `= <balance>` assertion.**
 
 ## Commands

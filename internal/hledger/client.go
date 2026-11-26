@@ -148,7 +148,7 @@ func (c *Client) Print(ctx context.Context) ([]domain.Transaction, error) {
 const generatedTag = "_generated-transaction"
 
 // Upcoming returns the occurrences of the periodic rules from begin up to, not including, until, as hledger
-// projects them. The forecast period is always explicit: its default starts after the latest regular transaction.
+// projects them. The `--forecast` period is always explicit: its default starts after the latest regular transaction.
 // A period starting in the past puts occurrences before the journal's balance assertions, so those are ignored.
 func (c *Client) Upcoming(ctx context.Context, begin, until time.Time) ([]domain.Transaction, error) {
 	return c.transactions(ctx, jsonTransaction.isGenerated, "print", span{begin, until}.forecast(), "-I", "-O", "json")

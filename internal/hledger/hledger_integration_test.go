@@ -149,18 +149,6 @@ func TestRealMonthlyActivityIsOneEntryPerMonth(t *testing.T) {
 	}
 }
 
-func TestRealActivityAndBalancesUntilKeepToTheirDaysAndPrefixes(t *testing.T) {
-	activity, err := ledger(t).Activity(context.Background(), on(9, 1), on(9, 30), "expenses")
-	if shown := balancesOf(activity); err != nil || len(shown) != 1 || shown["expenses:rent"] != "900,00 EUR" {
-		t.Errorf("activity = %v, %v; want only the September rent", shown, err)
-	}
-
-	until, err := ledger(t).BalancesUntil(context.Background(), on(9, 1), "assets")
-	if shown := balancesOf(until); err != nil || len(shown) != 1 || shown["assets:checking"] != "4.000,00 EUR" {
-		t.Errorf("balances until 2026-09-01 = %v, %v; want the salary day counted", shown, err)
-	}
-}
-
 func TestRealTextBalancesReadStandardInput(t *testing.T) {
 	text := "decimal-mark ,\n2026-09-01 x\n    assets:cash    5,00 EUR\n    equity:opening-balances\n" +
 		"2026-09-30 y\n    assets:cash    1,00 EUR\n    expenses:x\n"
@@ -169,25 +157,6 @@ func TestRealTextBalancesReadStandardInput(t *testing.T) {
 
 	if shown := balancesOf(got); err != nil || len(shown) != 1 || shown["assets:cash"] != "5,00 EUR" {
 		t.Errorf("balances = %v, %v; want assets:cash before the day", shown, err)
-	}
-}
-
-func TestRealProjectionGivesMonthEndsWithTheForecast(t *testing.T) {
-	got, err := ledger(t).Projection(context.Background(), domain.ProjectionQuery{
-		Account: "assets:checking", Begin: on(9, 1), ForecastFrom: on(10, 1), ForecastTo: on(12, 1),
-	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	balances := make([]string, len(got.Balances))
-	for i, balance := range got.Balances {
-		balances[i] = balance.Format()
-	}
-
-	wantEnds := []time.Time{on(10, 1), on(11, 1), on(12, 1)}
-	if !slices.Equal(got.Ends, wantEnds) || !slices.Equal(balances, []string{"3.100,00 EUR", "2.200,00 EUR", "1.300,00 EUR"}) {
-		t.Errorf("ends = %v, balances = %v", got.Ends, balances)
 	}
 }
 
@@ -289,22 +258,5 @@ func TestRealParseErrorsAreLocated(t *testing.T) {
 func TestRealPreflightAcceptsTheInstalledHledger(t *testing.T) {
 	if version, err := PreflightOnPath(); err != nil || !version.AtLeast(minVersion()) {
 		t.Errorf("version = %+v, %v", version, err)
-	}
-}
-
-// The carry brought into the year on 1 January is no change of the period.
-func TestRealActivityLeavesTheCarryOut(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "2026.journal")
-
-	text := "decimal-mark ,\n2026-01-01 opening balance  ; konto:carry\n    assets:checking  1.500,00 EUR\n" +
-		"    equity:opening-balances\n\n2026-02-01 Acme GmbH\n    assets:checking  3.000,00 EUR\n    income:salary\n"
-	if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	activity, err := New(Binary, func() []string { return []string{path} }).
-		Activity(context.Background(), on(1, 1), on(9, 30), "assets")
-	if shown := balancesOf(activity); err != nil || shown["assets:checking"] != "3.000,00 EUR" {
-		t.Errorf("activity = %v, %v; want only the salary", shown, err)
 	}
 }

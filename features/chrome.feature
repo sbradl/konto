@@ -7,7 +7,7 @@ Feature: Chrome, navigation and global keys
     And I start konto
 
   Scenario: tab bar
-    Then the tab bar reads " 1 dash │ 2 import │ 3 sched │ 4 forecast │ 5 reports "
+    Then the tab bar reads " 1 dash │ 2 import │ 3 sched "
     And the tab bar shows the journal path and "54" transactions on the right
     And the tab bar does not show a check status
 
@@ -21,11 +21,9 @@ Feature: Chrome, navigation and global keys
       | 1   | dash     | dash     |
       | 2   | import   | import   |
       | 3   | sched    | sched    |
-      | 4   | forecast | forecast |
-      | 5   | reports  | reports  |
 
-  Scenario: there is no sixth view
-    When I press "6"
+  Scenario: there is no fourth view
+    When I press "4"
     Then the active tab is unchanged
 
   Scenario Outline: vim-style and dropped chrome is unbound
@@ -56,14 +54,10 @@ Feature: Chrome, navigation and global keys
   Scenario: hint is per view
     When I press "3"
     Then the status bar hint lists "n new" "e edit" "d delete"
-    When I press "5"
-    Then the status bar hint lists "p period"
 
   Scenario: n/total only on cursor views
     When I press "1"
     Then the status bar shows a row position
-    When I press "5"
-    Then the status bar does not show a row position
 
   Rule: Every key press is a real key, not a substring match
 
@@ -90,7 +84,7 @@ Feature: Chrome, navigation and global keys
 
     Scenario: ? opens and Esc closes it
       When I press "?"
-      Then I see the keys popup listing "1–5" "?" "!" "r" "q"
+      Then I see the keys popup listing "1–3" "?" "!" "r" "q"
       When I press "Esc"
       Then I do not see the keys popup
 

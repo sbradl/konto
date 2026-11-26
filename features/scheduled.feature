@@ -1,5 +1,5 @@
 @spec-4.8 @adr-0006
-Feature: Scheduled — periodic rules (forecast-only)
+Feature: Scheduled — periodic rules (never posted)
 
   Periodic rules are `~` blocks in the journal. konto lists them, projects occurrences via
   hledger, and offers n (new) / e (edit) / d (delete). It never posts an occurrence.
@@ -385,14 +385,12 @@ Feature: Scheduled — periodic rules (forecast-only)
       When I press "n"
       And I create a rule with next due date 2026-10-15, frequency monthly, description "Book club", amount "12,00", currency "EUR", from "assets:checking", to "expenses:books"
       Then the main journal ends with the new rule
-    Scenario: the new rule appears in the list, dashboard Activity and forecast after the write
+    Scenario: the new rule appears in the list and dashboard Activity after the write
       When I press "n"
       And I create a rule with next due date 2026-10-03, frequency monthly, description "Book club", amount "12,00", currency "EUR", from "assets:checking", to "expenses:books"
       Then the rule list shows "Book club" with next date "2026-10-03"
       When I press "1"
       Then Activity lists "Book club" on "2026-10-03" above today
-      When I press "4"
-      Then the checking line has changed
     Scenario: the write is followed by a full reload
       When I press "n"
       And I create a rule with next due date 2026-10-15, frequency monthly, description "Book club", amount "12,00", currency "EUR", from "assets:checking", to "expenses:books"
@@ -586,7 +584,7 @@ Feature: Scheduled — periodic rules (forecast-only)
       Then "rules.journal" no longer contains the rule
       And the main journal is unchanged
 
-    Scenario: the dashboard and forecast drop the deleted rule
+    Scenario: the dashboard drops the deleted rule
       Given I select the rule "Vermieter Mueller"
       And I press "d"
       And I press "y"

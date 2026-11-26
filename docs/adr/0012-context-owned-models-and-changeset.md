@@ -9,7 +9,7 @@ periodic rules, close/reopen) reach the journal. We decided:
   `internal/csvimport`; `RuleSpec` (the periodic-rule form) in `internal/periodic`.
   `internal/domain` is the **shared kernel** only: `Amount`, `MultiAmount`, `Commodity`,
   `Account`, `Transaction`, `Posting`, `PeriodicRule`, `SourcePos`, `CheckIssue`,
-  `ReportTable`, `Changeset`.
+  `Changeset`.
 - **`Account` is an aggregate with behaviour.** `Close(balance, referencingRules)`,
   `Reopen()` and `CanBeImportTarget()` enforce the account invariants (source immutable,
   clearing account never closed or imported into, close only at zero balance with no

@@ -57,12 +57,6 @@ func TestEveryHintedKeyIsHandled(t *testing.T) {
 
 			return scheduledWithForm(t, &fakeRules{}).model
 		},
-		"reports": func(t *testing.T) Model {
-			t.Helper()
-			model, _ := press(startedWithReports(t, fakeReporter{periods: new([]domain.ReportPeriod)}), "5")
-
-			return model
-		},
 	}
 	for _, tab := range tabs() {
 		if len(tab.keys) == 0 {

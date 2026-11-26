@@ -22,14 +22,9 @@ The mock is a fixed 180×60 grid; the real app must recompute all layout from
   `lipgloss.Compositor` (Charm v2), base view as Z0 layer, single popup as Z10 layer at
   `Y(screenH - popupH - 1)`. This ticket decides how popup height/width is computed from
   the live `WindowSizeMsg`.
-- Confirm `ntcharts` braille line chart handles the dual-series actual+forecast join and
-  thousands y-axis the Forecast and Dashboard charts need — **and** that `ntcharts/v2`
-  (`v2.2.0`) builds against real `charm.land/bubbletea/v2` (its `go.mod` carries an ignored
-  `replace charm.land/bubbletea/v2 => github.com/neomantra/bubbletea/v2 ...`). A build
-  failure here forces reconsidering the v1 stack (see ticket 06 answer).
 
 **Prototype**: rough Lip Gloss layout of the Dashboard's three-column grid at ~3 widths
-(wide, laptop, narrow) plus a stub braille chart, to react to before locking the strategy.
+(wide, laptop, narrow), to react to before locking the strategy.
 
 Feeds **Assemble docs/spec.md** and the "per-view implementation notes" fog.
 
@@ -51,13 +46,6 @@ Spec: `docs/spec.md` §6.8, §6.6, §1.
    `Y(screenH−popupH−1)`; popup reports natural size, root clamps. Checks list + command
    dropdown scroll; which-key reflows to `min(4, floor(w/minColW))` columns.
 5. **Hidden panels**: dim status-bar note `N panels hidden · widen terminal`; no zoom key.
-6. **Stack check passed**: trivial `timeserieslinechart` program builds against real
-   `charm.land/bubbletea/v2 v2.0.10`, `lipgloss/v2 v2.0.6`, `ntcharts/v2 v2.2.0` — the
-   ignored `replace` is harmless; v1 fallback dropped. API fit: named datasets
-   (`PushDataSet`, `SetDataSetStyle`, `DrawBrailleDataSets`) → one line per account
-   (ticket 09 made history+forecast one continuous series per account, so no "join"
-   needed); `WithYLabelFormatter` → thousands labels.
 
 **Deferred to the shell build** (implementation): exact floor numbers, per-view priority
-orders, gap cells, `Allocate` remainder distribution + tie-break, visual check of the
-forecast-start vertical line and shared-braille-cell colour.
+orders, gap cells, `Allocate` remainder distribution + tie-break.

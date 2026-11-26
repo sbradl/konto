@@ -26,7 +26,7 @@ math, or guarding a cache against stale money). It controls what hledger is give
 - **Older rows are kept, not loaded.** Rows dated before last year are written to their own year
   files with the carry chain between them; those files are not loaded.
 
-Consequences: reports, dashboard spend and checks see the window only (no way to look further
+Consequences: balances, dashboard spend and checks see the window only (no way to look further
 back in v1; the files stay on disk and consistent so a later feature can). `hledger files` lists
 the loaded set, so `internal/journal` needs no include resolution. Check issues point into the
 right year file.

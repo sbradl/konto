@@ -50,8 +50,7 @@ dissolved.
 ### UI terms
 
 - **"category"** = `expenses:*` / `income:*`; **"account"** = `assets:*` / `liabilities:*`.
-  Code and journal keep hledger's "account" for both. The Forecast view (ticket 09) shows
-  accounts only — never categories.
+  Code and journal keep hledger's "account" for both.
 
 ### Journal checks → all, fixed
 

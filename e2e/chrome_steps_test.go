@@ -14,7 +14,7 @@ import (
 )
 
 // tabNames are the v1 tabs as the tab bar labels them.
-var tabNames = []struct{ key, name string }{{"1", "dash"}, {"2", "import"}, {"3", "sched"}, {"4", "forecast"}, {"5", "reports"}}
+var tabNames = []struct{ key, name string }{{"1", "dash"}, {"2", "import"}, {"3", "sched"}}
 
 // selectionBackground is the ANSI index of the selected-row background (spec §7.2).
 const selectionBackground = 8
@@ -146,7 +146,6 @@ func registerFeatureSteps(sc *godog.ScenarioContext, w *world) {
 	registerUpcomingSteps(sc, w)
 	registerPanelSteps(sc, w)
 	registerChromeExtraSteps(sc, w)
-	registerReportsSteps(sc, w)
 	registerScheduledSteps(sc, w)
 	registerScheduledDeleteSteps(sc, w)
 	registerImportSteps(sc, w)
@@ -154,7 +153,6 @@ func registerFeatureSteps(sc *godog.ScenarioContext, w *world) {
 	registerImportWriteSteps(sc, w)
 	registerStagingSteps(sc, w)
 	registerFormatSteps(sc, w)
-	registerForecastSteps(sc, w)
 	registerScheduledFormSteps(sc, w)
 	registerLeftoverSteps(sc, w)
 	registerInvariantSteps(sc, w)

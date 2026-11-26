@@ -55,7 +55,7 @@ inherits the user's terminal theme (ADR 0005).
 | red — negative, error | `1` | |
 | green — positive | `2` | |
 | amber — warning, focus, manual-source `✎` | `3` | (not `11`) |
-| blue — mode indicator, forecast line | `4` | |
+| blue — mode indicator | `4` | |
 | magenta — rule / price directive text | `5` | |
 | cyan — panel titles | `6` | |
 | bright-white — emphasis, grand totals | `15` | |

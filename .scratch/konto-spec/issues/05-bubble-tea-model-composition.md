@@ -47,7 +47,7 @@ A single root model (`internal/ui`) is the program's `tea.Model`. It holds:
 
 Views never reference each other. All cross-view effects are mediated by the root: a view
 acts → journal/state changes → root broadcasts → every view updates. (Rationale: without
-this, "Import committed, so Reports must refresh" needs a view-to-view reference, which
+this, "Import committed, so the Dashboard must refresh" needs a view-to-view reference, which
 ADR 0003 forbids.)
 
 ### View sub-model interface
@@ -71,10 +71,10 @@ replaced wholesale on refresh, never mutated.
 
 | Message class | Routed to |
 |---|---|
-| `tea.KeyMsg`, `tea.MouseMsg` | the open overlay if any, else the **active view only**. Global keys (`1`–`6`, `g`, `:`, `?`, `!`, `v`, `q`/`ctrl+c`) are caught by root **before** forwarding; if the active view reports a focused text input, only `Esc`/`Ctrl+C` are caught. |
+| `tea.KeyMsg`, `tea.MouseMsg` | the open overlay if any, else the **active view only**. Global keys (`1`–`4`, `g`, `:`, `?`, `!`, `v`, `q`/`ctrl+c`) are caught by root **before** forwarding; if the active view reports a focused text input, only `Esc`/`Ctrl+C` are caught. |
 | `tea.WindowSizeMsg` | root computes the content rect (window − tab bar − rule − status bar) and forwards a **content-dimension** `WindowSizeMsg` to **all six** views |
 | `ledgerLoadedMsg{*Ledger, error}`, `valuationChangedMsg`, `checksLoadedMsg`, ticks | root updates its state, then **broadcasts** to all six views |
-| view-specific async results (`reportLoadedMsg`, `importPreviewMsg`, …) | root forwards to the **one owning view** |
+| view-specific async results (`importPreviewMsg`, …) | root forwards to the **one owning view** |
 
 **Shared-state changes are messages, not shared pointers.** `v` → root flips
 `valuationMode`, fires the re-fetch `tea.Cmd`, broadcasts `valuationChangedMsg`.
@@ -104,12 +104,11 @@ overlays; the `!` panel renders from root's held `CheckRun`.
 
 | Component | Use |
 |---|---|
-| `bubbles/table` | Import CSV-row grid, Reports tables |
+| `bubbles/table` | Import CSV-row grid |
 | custom selectable-list widget (`ui/widgets`) | Dashboard panels (Recent, Upcoming, Accounts) — rows need glyphs + coloured amounts `bubbles/list` fights |
 | `bubbles/textinput` | Entry form fields, command line, rule-editor target |
 | `bubbles/viewport` | scrollable panels (journal preview, checks body) |
 | `bubbles/key`, `bubbles/help`, `bubbles/spinner` | bindings, `?` render, ticket-02 refresh indicator |
-| `ntcharts` | Dashboard trend + Forecast braille charts |
 | `bubbles/list` | evaluated, **not used** |
 
 Final component fit is confirmed by the **Responsive layout strategy** prototype.

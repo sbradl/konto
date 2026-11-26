@@ -53,15 +53,10 @@ line-splicing.**
 charm.land/bubbletea/v2 v2.0.9
 charm.land/lipgloss/v2  v2.0.6
 charm.land/bubbles/v2   v2.2.1
-github.com/NimbleMarkets/ntcharts/v2 v2.2.0   # see caveat
 ```
 
-**Caveat carried to ticket 07:** `ntcharts/v2` `go.mod` has
-`replace charm.land/bubbletea/v2 => github.com/neomantra/bubbletea/v2 ... // Awaiting upstream merges`.
-A dependency's `replace` is ignored by konto's build, so `ntcharts/v2` will compile against
-real `charm.land/bubbletea/v2` — must be build-verified with a trivial chart before v2 is
-locked. This is the only thing that could force the v1 fallback
-(`rmhubbert/bubbletea-overlay` + Bubble Tea v1.3.10, accepting a cursor hack).
+The v1 fallback (`rmhubbert/bubbletea-overlay` + Bubble Tea v1.3.10, accepting a cursor hack)
+is off the table.
 
 **Fallback if pinned to v1:** `rmhubbert/bubbletea-overlay` `v0.6.x` — it's the tested
 packaging of the string-splice algorithm (do not hand-roll); supports bottom-anchored

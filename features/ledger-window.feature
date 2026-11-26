@@ -19,15 +19,6 @@ Feature: The ledger window — this year and last year
     When I start konto
     Then I see a "NET WORTH" card showing "3.600,00 EUR"
 
-  # all time = 3.500,00 salary (2025 + 2026) - 900,00 rent; the 2024 salary of 1.000,00 is outside the window.
-  Scenario: income of an older year is not counted
-    When I start konto
-    And I press "5"
-    And I press "p"
-    And I press "p"
-    And I press "p"
-    Then the income statement net is "2.600,00 EUR"
-
   Scenario: the window follows today
     Given today is 2027-01-15
     When I start konto

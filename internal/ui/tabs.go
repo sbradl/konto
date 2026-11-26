@@ -6,15 +6,14 @@ import (
 	"github.com/sbradl/konto/internal/ui/dashboard"
 	"github.com/sbradl/konto/internal/ui/imports"
 	"github.com/sbradl/konto/internal/ui/layout"
-	"github.com/sbradl/konto/internal/ui/reports"
 	"github.com/sbradl/konto/internal/ui/scheduled"
 )
 
 // tabCount is the number of v1 views.
-const tabCount = 5
+const tabCount = 3
 
-// tab is one view as the root drives it; adding a view is adding a tab. A view without a cursor, hidden
-// panels or a dialog of its own leaves the field nil.
+// tab is one view as the root drives it; adding a view is adding a tab. A view without hidden panels or a
+// dialog of its own leaves the field nil.
 type tab struct {
 	name     string
 	keys     []layout.Binding                     // what the status bar and the keys popup list
@@ -32,9 +31,9 @@ type capture struct {
 	key    func(Model, string) (Model, tea.Cmd) // hands the dialog a key
 }
 
-// tabs are the five v1 views, in tab order; number key i+1 selects tab i.
+// tabs are the three views, in tab order; number key i+1 selects tab i.
 func tabs() [tabCount]tab {
-	return [tabCount]tab{dashboardTab(), importingTab(), schedulingTab(), forecastTab(), reportsTab()}
+	return [tabCount]tab{dashboardTab(), importingTab(), schedulingTab()}
 }
 
 // dashboardTab is the Dashboard: Tab moves its panel focus, the focused panel scrolls.
@@ -85,57 +84,17 @@ func schedulingTab() tab {
 	}
 }
 
-// forecastTab is the Forecast, which takes no keys of its own.
-func forecastTab() tab {
-	return tab{
-		name: "forecast",
-		resize: func(m Model, w, h int) Model {
-			m.forecasts = m.forecasts.Resize(w, h)
-
-			return m
-		},
-		view:   func(m Model) string { return m.forecasts.View() },
-		hidden: func(m Model) int { return m.forecasts.HiddenPanels() },
-	}
-}
-
-// reportsTab is the Reports view.
-func reportsTab() tab {
-	return tab{
-		name: "reports", keys: reports.Bindings(),
-		resize: func(m Model, w, h int) Model {
-			m.reports = m.reports.Resize(w, h)
-
-			return m
-		},
-		view: func(m Model) string { return m.reports.View() },
-		key:  Model.onReportsKey,
-	}
-}
-
 // activeTab is the view on screen.
 func (m Model) activeTab() tab { return tabs()[m.active] }
 
 // onActiveViewKey hands a key to the view on screen.
-func (m Model) onActiveViewKey(key string) (Model, tea.Cmd) {
-	if handle := m.activeTab().key; handle != nil {
-		return handle(m, key)
-	}
-
-	return m, nil
-}
+func (m Model) onActiveViewKey(key string) (Model, tea.Cmd) { return m.activeTab().key(m, key) }
 
 // onCapturedKey hands a key to the dialog that has the keyboard: the Import dialog or the Scheduled form.
 func (m Model) onCapturedKey(key string) (Model, tea.Cmd) { return m.activeTab().capture.key(m, key) }
 
-// position is the active view's cursor row and row count; views without a cursor have none.
-func (m Model) position() (row, total int) {
-	if position := m.activeTab().position; position != nil {
-		return position(m)
-	}
-
-	return 0, 0
-}
+// position is the active view's cursor row and row count.
+func (m Model) position() (row, total int) { return m.activeTab().position(m) }
 
 // hiddenPanels is how many panels of the active view the terminal is too small to show.
 func (m Model) hiddenPanels() int {

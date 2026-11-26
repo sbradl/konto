@@ -6,7 +6,7 @@ session needs before writing code. It does not restate the UX — that lives in
 [`design_handoff_hledger_tui/README.md`](design_handoff_hledger_tui/README.md), which is
 authoritative and frozen (except the deviations in §11).
 
-Per-feature design (periodic rules, CSV import and forecast resolved into §4.8–§4.10;
+Per-feature design (periodic rules and CSV import resolved into §4.8–§4.9;
 responsive layout into §6.8) beyond that is **deliberately not in this spec** — it is grilled just-in-time as each view is built
 (§12).
 
@@ -23,18 +23,12 @@ Sources: the wayfinder map and decision tickets under `.scratch/konto-spec/`, `C
 | TUI framework | Bubble Tea **v2** | `charm.land/bubbletea/v2 v2.0.9` |
 | Styling | Lip Gloss **v2** | `charm.land/lipgloss/v2 v2.0.6` |
 | Components | Bubbles **v2** | `charm.land/bubbles/v2 v2.2.1` |
-| Charts | ntcharts **v2** | `github.com/NimbleMarkets/ntcharts/v2 v2.2.0` |
 | Accounting engine | the `hledger` **binary** (hard runtime dependency) | require `>= 1.32` |
 
 v2 uses vanity import paths (`charm.land/...`), **not** `github.com/charmbracelet/.../v2`.
 v1 is frozen; do not use it. Rationale and the overlay-compositing consequence: ADR 0003 is
 about layering; the stack choice is in ticket `06-overlay-popup-compositing` and
 `research/06-overlay-compositing.md`.
-
-**Stack locked** (ticket 07, 2026-09-30): `ntcharts/v2`'s `go.mod` carries an ignored
-`replace charm.land/bubbletea/v2 => github.com/neomantra/bubbletea/v2 ...`; a trivial
-`timeserieslinechart` program built cleanly against real `charm.land/bubbletea/v2 v2.0.10`
-+ `lipgloss/v2 v2.0.6` + `ntcharts/v2 v2.2.0`. The Charm v1 fallback is off the table.
 
 No external decimal, config, or CSV-framework dependency is planned. Keep the dependency
 tree minimal.
@@ -53,7 +47,7 @@ the concrete in.
 cmd/konto            Composition root. Only package importing concretes from every circle.
 
 internal/ui/…         Frameworks & Drivers. Bubble Tea / Lip Gloss confined here.
-internal/{ledger,accounts,checks,report,csvimport,periodic,forecast,entry}
+internal/{ledger,accounts,checks,csvimport,periodic,entry}
                      Use cases. Plain Go, no tea/lipgloss/exec. Each declares its own ports.
 internal/hledger     Adapter → the hledger binary.       ┐ import domain (and support) only;
 internal/journal     Adapter → the journal text file.    ┘ satisfy the ports structurally
@@ -65,21 +59,21 @@ internal/domain      Entities. Types + pure rules. Imports nothing of konto's.
 The port pattern, concretely:
 
 ```go
-// internal/report
-type ledgerGateway interface {
-    BalanceSheet(p domain.Period, v domain.ValuationMode) (domain.ReportTable, error)
-    IncomeStatement(p domain.Period, v domain.ValuationMode) (domain.ReportTable, error)
+// internal/ledger
+type gateway interface {
+    Balances(ctx context.Context) ([]domain.Account, error)
+    Print(ctx context.Context) ([]domain.Transaction, error)
 }
-type Service struct { gw ledgerGateway }
-func New(gw ledgerGateway) *Service { return &Service{gw} }
+type Loader struct { gw gateway }
+func NewLoader(gw gateway, …) *Loader
 ```
 
-`*hledger.Client` already has methods with those signatures, so `report` imports `domain`,
+`*hledger.Client` already has methods with those signatures, so `ledger` imports `domain`,
 `hledger` imports `domain`, and neither imports the other. `cmd/konto`:
 
 ```go
-hl      := hledger.New(cfg.HledgerBin, cfg.JournalPath)
-reports := report.New(hl)     // *hledger.Client used as report.ledgerGateway
+hl     := hledger.New(cfg.HledgerBin, cfg.JournalPath)
+loader := ledger.NewLoader(hl, …)     // *hledger.Client used as ledger.gateway
 ```
 
 **Deliberate deviations from strict Clean Architecture** (ADR 0001, 0003): adapters return
@@ -97,7 +91,7 @@ cmd/konto/main.go        wiring: config → hledger version preflight → constr
 
 internal/
   domain/                SHARED KERNEL (ADR 0012). types + pure rules (Amount arithmetic/
-                         format, MultiAmount helpers, ReportRow.Kind, check-severity-by-name,
+                         format, MultiAmount helpers, check-severity-by-name,
                          Account aggregate behaviour, Changeset/Edit write model). No I/O.
 
   hledger/               ADAPTER. unexported run(ctx, args...) exec chokepoint + exported
@@ -111,28 +105,26 @@ internal/
   accounts/              USE CASE. close/reopen (ADR 0012).
   checks/                USE CASE. the check run: per-check hledger calls + konto's own
                          checks → CheckRun (ADR 0012).
-  report/                USE CASE. Reports: bs/is for the selected period (native only in v1).
   csvimport/             USE CASE. import staging, dedup, rule building, write. Owns
                          StagedImport, CsvRow, ImportRule, Watermark. (t.08)
   periodic/              USE CASE. ~ rule read/new/edit/delete. Owns RuleSpec. (ticket 13)
-  forecast/              USE CASE. read-only projection. (ticket 09)
   entry/                 USE CASE. draft-entry validation, commit. NOT IN v1 (ADR 0010).
   config/                journal-path resolution (no config file in v1).
 
   ui/                    ui.go = root model, app-level key dispatch; tabs.go = the tab table
                          (names, key hints, per-view closures, §6.2); render.go = chrome.
     theme/               ANSI-16 palette → named lipgloss.Style values.
-    layout/              hand-rolled render helpers (panel, cursor, text edit, ntcharts style)
+    layout/              hand-rolled render helpers (panel, cursor, text edit)
                          + the lipgloss.Compositor overlay wrapper (§6.6).
-    dashboard/ imports/ scheduled/ forecast/ reports/   (entry/ deferred, ADR 0010)
+    dashboard/ imports/ scheduled/   (entry/ deferred, ADR 0010)
                          one package per view: pure models, no ports. Imports domain (and a
                          use case's types) + the ui leaves. NEVER imports hledger/journal. NEVER imports
                          another view.
 ```
 
 Naming: the Import view package is `imports` (avoids shadowing `import`); its use case stays
-`csvimport`. One app/view name clash (`forecast`; `entry` too once it returns) — the view aliases its service
-import (`forecastsvc "…/internal/forecast"`).
+`csvimport`. Should `entry` return, its view and use case clash by name — the view aliases its service
+import.
 
 ---
 
@@ -150,8 +142,6 @@ Verified against `hledger 1.52.1`.
   `floatingPoint` (lossy).
 - `bal -O json` keeps multi-commodity amounts separate (the "+ N cur" case); `-V` /
   `--value=end` collapses them to one commodity via the latest `P` directive.
-- `bs`/`is` JSON is a compound balance report; subreports `Assets`/`Liabilities` and
-  `Revenues`/`Expenses`.
 
 ### 4.2 What hledger will not give us → `internal/journal`
 
@@ -182,8 +172,8 @@ ADR 0013) and works per file. It never needs to understand transactions, amounts
 
 ### 4.3 Invocation architecture
 
-- **`internal/hledger` is plain blocking Go**, no `bubbletea` import. `Client.Balance(q)
-  (domain.ReportTable, error)` etc. The UI wraps each call in a `tea.Cmd` goroutine.
+- **`internal/hledger` is plain blocking Go**, no `bubbletea` import. `Client.Balances(ctx)
+  ([]domain.Account, error)` etc. The UI wraps each call in a `tea.Cmd` goroutine.
 - Two layers inside it: unexported `run(ctx, args...) ([]byte, error)` — the single
   `exec.Command` chokepoint and the test seam — and exported `Client` that builds args,
   calls `run`, maps output to `domain`.
@@ -251,7 +241,7 @@ jump-to-location — its only use in v1 (no `e`-to-editor on list views, ADR 001
 
 ### 4.8 Periodic rules (ticket 13, ADR 0006)
 
-- **Forecast-only.** konto never writes an occurrence; no Enter-to-post, no pause.
+- **Never posted.** konto never writes an occurrence; no Enter-to-post, no pause.
 - **Dates from hledger only**: one `print --forecast=<today>..<today+1y> -O json`, generated
   txns grouped by `tsourcepos` (the `~` line) → next date, next 6 occurrences, 12-month sum.
   `--forecast=PERIOD` must be explicit (default horizon starts after the latest regular
@@ -324,22 +314,6 @@ jump-to-location — its only use in v1 (no `e`-to-editor on list views, ADR 001
   purpose alone when the pattern is left empty; widening takes the same two inputs. Nothing
   else written. Full format notes: ticket 08.
 
-### 4.10 Forecast (ticket 09, ADR 0007)
-
-- **Current balances + scheduled transactions only.** No averages, no scenarios, no drivers.
-- **Projection starts at each account's watermark** (ADR 0007 amendment), not today:
-  occurrences between the last import and today count, so a stale import doesn't understate
-  the forecast. Import-fed: from watermark + 1 day; manual (no watermark): from today.
-- **One call per account**: `bal <account> -M -H --layout=bare -b <today−6m>
-  --forecast=<start>..<today+12m> -O json` → month-end balance per commodity, history +
-  forecast (one global `--forecast` start would double-count or miss occurrences across
-  accounts with different watermarks). konto drops closed accounts and the clearing account,
-  groups by commodity, ignores `Total:`.
-- **View**: one braille chart per currency, stacked vertically; one line per open
-  asset/liability account in that currency; colour per account in fixed order (ANSI
-  2,4,5,6,3,1); legend; dim vertical line at today. Below: milestone table
-  (accounts grouped by currency × today/+3/+6/+12 months), no totals.
-
 ---
 
 ## 5. Domain model
@@ -374,20 +348,16 @@ each service that needs it takes `today func() domain.Date` in its constructor.
 - **`PriceDirective`** `{Date, From Commodity, Price Amount}` (from `hledger prices` text).
 - **`PeriodicRule`** `{Period string (raw expression), Description, Postings []Posting,
   Raw string (block text), Pos SourcePos, FitsForm bool}`. `FitsForm` is computed (§4.8).
-  Occurrences / annual impact are joined from the forecast call, not stored on the rule.
+  Occurrences / annual impact are joined from the occurrences call, not stored on the rule.
 - **`CheckIssue`** `{Check string, Severity ERR|WARN, Message, File string, Line, Col int}`.
   `CheckRun` aggregates issues + clean/dirty for the `● clean` indicator. Severity by check
   name: `parseable`/`autobalanced`/`assertions`/`balanced` = ERR; `commodities`/`accounts`/
   `ordereddates`/`uniqueleafnames`/`tags`/`payees`/`recentassertions` + konto's
   unclassified-account check = WARN.
-- **`ReportTable`** `{Rows []ReportRow}` where `ReportRow{Kind, Label, Depth, Amounts
-  []MultiAmount, Delta *MultiAmount}` (no `Share` — dropped, ADR 0011), `Kind ∈ {SectionHeader, Leaf,
-  NegativeLeaf, Subtotal, GrandTotal}` computed from structure + sign.
-
 ### 5.3 Account (ADR 0002)
 
 - **`[]Account` — flat list of postable accounts only.** No parent/aggregation entities.
-- **`Account.Source`** — optional `Manual | Import | Clearing`, unset = unclassified. `Clearing` = the one transfer clearing account `assets:transfers`: in net worth and the account list, never closable, never an import target, not forecast. **Only
+- **`Account.Source`** — optional `Manual | Import | Clearing`, unset = unclassified. `Clearing` = the one transfer clearing account `assets:transfers`: in net worth and the account list, never closable, never an import target. **Only
   `assets:*` / `liabilities:*`** are classified; categories (`expenses:*`, `income:*`) and
   equity never are, never WARN, and are usable from Import (and Entry, once it returns). From the
   `konto:source:` tag on the `account` directive (§4.2).
@@ -397,7 +367,7 @@ each service that needs it takes `today func() domain.Date` in its constructor.
 - **Manual** accounts stay in the model but have no v1 UI (ADR 0010); import refuses them.
 - **`Account.Closed`** — optional date, from a `konto:closed:<date>` tag. Closing is refused
   unless balance is zero and no `~` rule references the account. Closed accounts appear only
-  in the Dashboard Accounts panel; excluded from Forecast, Entry, import targets and the rule form.
+  in the Dashboard Accounts panel; excluded from Entry, import targets and the rule form.
 - **Close / reopen** (Dashboard Accounts panel): **`c`** closes the selected open account after
   y/n — refused with the reason (nonzero balance / referencing rules) — writing
   `konto:closed:<today>`; **`o`** reopens a closed one after y/n (removes the tag). Closed
@@ -408,7 +378,6 @@ each service that needs it takes `today func() domain.Date` in its constructor.
   and `CanBeImportTarget()` enforce the rules above and return the `Changeset` to write.
   `internal/accounts` orchestrates close/reopen (loads balance + referencing rules, calls the
   aggregate, validates, applies).
-- Balance-report hierarchies are `ReportTable`, separate from `[]Account`.
 
 ### 5.4 konto-only entities (no hledger counterpart)
 
@@ -422,7 +391,6 @@ Context-owned, in their use-case package (ADR 0012):
   (ADR 0009). No `ImportSource`: the source is the chosen file. Ticket 08 (§4.9).
 - **`internal/periodic`** — `RuleSpec`, the form's value object (frequency, from, count,
   amount, from/to account) that renders a `~` block (§4.8).
-- Forecast has none — `ForecastDriver` / `Scenario` dropped, ADR 0007.
 
 ### 5.5 `Ledger` — the loaded snapshot (`internal/ledger`)
 
@@ -453,14 +421,14 @@ Full detail: ticket `05-bubble-tea-model-composition`.
 
 The program's single `tea.Model`. Holds:
 
-- the **five view sub-models** (six once Entry returns, ADR 0010), constructed at startup, alive for the
+- the **three view sub-models** (six once Entry returns, ADR 0010), constructed at startup, alive for the
   whole run. Tab switch changes which one renders + receives input; cursor/scroll/draft state survives.
 - **app-global state**: terminal size, the read-only `*domain.Ledger`, the latest `CheckRun`, the
   `refreshing` flag (spinner) and the last hledger `failure` (`✗ error`).
 - **chrome**: active tab index, tab bar, status bar, the open y/n `prompt` (with an import's write
   preview), a one-line `notice`. **Overlay state**: one `popupKind` (`?` keys or `!` checks). No
   which-key goto, no command line (ADR 0011).
-- the use-case **ports** (`Ports`: loader, checks, writer, verifier, planners, report/forecast builders,
+- the use-case **ports** (`Ports`: loader, checks, writer, verifier, planners,
   importer, editor) — injected by `cmd/konto`.
 
 What fills the terminal is one `screen()` over the model, in precedence order: too small → first run (no
@@ -469,16 +437,16 @@ views. Rendering and key dispatch both switch on it; first run and parse error a
 views.
 
 Views never reference each other. Cross-view effects are mediated: a view acts → the root runs the command
-→ the journal reloads → the root hands the new `Ledger` to every view (`WithLedger`, `WithReport`, …).
+→ the journal reloads → the root hands the new `Ledger` to every view (`WithLedger`, …).
 
 ### 6.2 Views and the tab table
 
-There is no `View` interface. Each view package (`dashboard`, `imports`, `scheduled`, `forecast`,
-`reports`) exports a value `Model` with pure methods: `Resize(w, h)`, `View() string`, `Key(key)` →
+There is no `View` interface. Each view package (`dashboard`, `imports`, `scheduled`)
+exports a value `Model` with pure methods: `Resize(w, h)`, `View() string`, `Key(key)` →
 `(Model, action)`, and `With…` setters for the data the root hands it. A view holds **no ports and runs no
 commands**: its action tells the root what to do, and the root plans, writes or loads. Every view's `Action`
 is a sealed interface (`interface{ isAction() }`) over small concrete types — `dashboard.CloseSelected{}`,
-`imports.Open{Path: …}`, `*scheduled.Save`, `reports.LoadReport{}` — nil asking for nothing, so an action
+`imports.Open{Path: …}`, `*scheduled.Save` — nil asking for nothing, so an action
 that sets two things at once cannot be built; the root type-switches on it.
 
 The root drives the views through one table, `tabs()` in `tabs.go`: per tab its name, its hinted
@@ -494,14 +462,14 @@ One type switch:
 | Message | Handled by |
 |---|---|
 | `tea.WindowSizeMsg` | root keeps the size and hands each view its content area (window − tab bar − rule − status bar) |
-| `tea.KeyPressMsg` | `onKey`: a capturing dialog first (only `Ctrl+C` escapes it); `q`/`Ctrl+C`; then by `screen()`. On the views: open prompt → open popup (`r` still reloads) → global keys (`1`–`5`, `?`, `!`, `r`) → the active tab's `key` |
-| `ledgerLoadedMsg` | root takes the snapshot and check run, hands them to the views, then batches the report, forecast and staged-export re-read for it |
+| `tea.KeyPressMsg` | `onKey`: a capturing dialog first (only `Ctrl+C` escapes it); `q`/`Ctrl+C`; then by `screen()`. On the views: open prompt → open popup (`r` still reloads) → global keys (`1`–`3`, `?`, `!`, `r`) → the active tab's `key` |
+| `ledgerLoadedMsg` | root takes the snapshot and check run, hands them to the views, then re-reads the staged export for it |
 | `writtenMsg`, `ruleSavedMsg`, `editorClosedMsg` | root carries on: write, reload |
-| any other result (`reportLoadedMsg`, `forecastLoadedMsg`, `openedMsg`, `browsedMsg`, `formReadyMsg`, …) | its own `takeIn(Model) Model` |
+| any other result (`openedMsg`, `browsedMsg`, `formReadyMsg`, …) | its own `takeIn(Model) Model` |
 
 **Stale results**: the root keeps one counter, `loads`, bumped by every reload. Each async result
 asked for from a snapshot carries the `loads` it was asked under and is dropped when it no longer
-matches; the report is also dropped when its period is no longer shown, and a rule's form when the
+matches; a rule's form is also dropped when the
 model has since become busy, prompted or opened another form.
 
 **Writes**: a key that plans a write first checks `busy()` (a write or reload in flight) and asks to try
@@ -525,12 +493,11 @@ letter means the same action in every view (`d` = delete, `n` new, `e` edit, `c`
 
 | Scope | Keys |
 |---|---|
-| Global | `1`–`5` views · `?` keys popup · `!` checks panel · `r` refresh · `q` / `Ctrl+C` quit · `Esc` cancel / close popup |
+| Global | `1`–`3` views · `?` keys popup · `!` checks panel · `r` refresh · `q` / `Ctrl+C` quit · `Esc` cancel / close popup |
 | Movement | `↑`/`↓` row · `PgUp`/`PgDn` page · `Home`/`End` ends — the same in every list, popup and scrolled view (`layout.Cursor`) · `Tab`/`Shift+Tab` or `↓`/`↑` form fields (in the Scheduled form's account picker the arrows move through the matches; `←`/`→` cycle a dropdown). No `j`/`k`. |
 | Dashboard | `Tab`/`Shift+Tab` focus Accounts ↔ Activity (ADR 0014, 0015) · arrows move the Accounts cursor or scroll the focused panel · `t` today back in Activity's middle · `c` close · `o` reopen |
 | Import | `Enter` categorise row (popup: new rule / add to rule / once — `✓` rows: once only; picked with arrows + Enter) · `c` next row that needs a category (wraps) · `w` write import (y/n, only with no `?` rows) · `n` new file |
 | Scheduled | `n` new · `c` copy a transaction into a new rule (filterable list, newest first) · `e` edit · `d` delete |
-| Reports | `p` cycle report period (Reports-local state; Dashboard is always month to date). Read-only, no cursor; arrows scroll both tables together. |
 | `!` panel | arrows select · `Enter` jump to `$EDITOR` |
 
 No panel focus outside the Dashboard (ADR 0014): each other view has at most one cursor panel;
@@ -538,7 +505,7 @@ read-only panels that overflow show `… N more`.
 
 ### 6.4a Chrome and Dashboard (v1)
 
-- **Tab bar**: ` 1 dash │ 2 import │ 3 sched │ 4 forecast │ 5 reports `; right-aligned
+- **Tab bar**: ` 1 dash │ 2 import │ 3 sched `; right-aligned
   journal path + transaction count.
 - **Status bar**: view name · per-view hint · `n/total` (cursor views only) · refresh
   spinner / error indicator · check status `● clean` (green) or `● 2 err · 3 warn` (red with
@@ -556,12 +523,6 @@ read-only panels that overflow show `… N more`.
   not selectable; it opens with the today line in its middle (`t` puts it back) and scrolls when focused, a first or
   last row with more beyond it reading `… N more`. No spend chart.
 - **`!` panel**: issues only; when clean a single dim-green `✓ all N checks pass`.
-- **Reports**: `p` cycles `month to date · quarter to date · year to date · all time`, all
-  ending today. Balance sheet = balance at today (`bs -H`) + **`Δ period`** = change within
-  the period (second call, `bs --change -p <period>`), green/red, a zero dim; the Δ column is
-  hidden under `all time`. Income statement = account + amount for the period only — no
-  share, no third column.
-
 ### 6.5 Overlays
 
 Root-owned. The `?` keys popup and the `!` checks panel are
@@ -582,19 +543,13 @@ through. konto draws with hand-rolled helpers in `ui/layout`:
 | Helper | Use |
 |---|---|
 | `Panel`, `TitleRule`, `Fit`, `AlignRight`, `More` | bordered panels, popup title rules, cell fitting, `… N more` |
-| `Cursor`, `Visible` | the one selectable list per view (Accounts, rule list, import rows, pickers), the dialogs' lists, and — offset only, `Scroll` — the Reports tables and the write preview |
+| `Cursor`, `Visible` | the one selectable list per view (Accounts, rule list, import rows, pickers), the dialogs' lists, and — offset only, `Scroll` — the write preview |
 | `Edit`, `WithCaret` | text input of the forms, dialogs and pickers: typed text at a caret, `←`/`→`, `Home`/`End` (in a list's input they stay with the list; `Ctrl+A`/`Ctrl+E` there), `Ctrl+←`/`Ctrl+→` by word, `Backspace`/`Delete`, `Ctrl+Backspace` / `Ctrl+W` / `Alt+Backspace` delete a word, `Ctrl+U` clears |
 | `Popup`, `PopupCapacity`, `Overlay`, `OverlayFlush`, `Columns` | every titled bottom popup — keys, checks, write preview, Import dialogs, Scheduled form (§6.5) — and the `?` reflow |
 | `Binding`, `Key…` | key hints and the shared key names |
-| `ChartStyle`, `Number` | `ntcharts` braille charts (Forecast) |
+| `Number` | thousands-grouped figures |
 
 The refresh spinner is a static `⣾` while `refreshing`; scrolling panels clamp their own offsets.
-
-ntcharts API fit (ticket 07): `timeserieslinechart` has named datasets (`PushDataSet`,
-`SetDataSetStyle`, `DrawBrailleDataSets`) for one line per account, and
-`WithYLabelFormatter` for thousands labels. Visual check in the shell/Forecast build: the
-dim forecast-start vertical line, and colour where two series share a braille cell (one
-colour per cell).
 
 ### 6.7 Startup
 
@@ -615,7 +570,7 @@ the result.
   `N panels hidden · widen terminal`. No zoom key.
 - **`ui/layout` helpers** (§6.6), not a layout engine: each view computes its own sizes from its
   content area and decides what to drop — a `fit()` of which panels have room (Dashboard), shares of the
-  height (Import), as many charts as fit (Forecast) — and reports `HiddenPanels()` from that same
+  height (Import) — and reports `HiddenPanels()` from that same
   computation. `Panel(title, w, h, body)` draws a rounded border, title inset 2 cells.
 - **Popups** (§6.5): full width; height = content, capped at ½ screen height; each popup
   reports its natural size and the root clamps it. Over the cap the checks list scrolls
@@ -654,7 +609,7 @@ user-remappable (no override planned — the terminal theme is the colour knob):
 | red (negative, error) | `1` |
 | green (positive) | `2` |
 | amber (warning, focus, manual-source `✎`) | `3` |
-| blue (mode indicator; forecast account line) | `4` |
+| blue (mode indicator) | `4` |
 | magenta (rule / price directive text) | `5` |
 | cyan (panel titles) | `6` |
 | bright-white (emphasis, grand totals) | `15` |
@@ -730,8 +685,6 @@ bar at fixed sizes only, not whole views during active development.
 ## 10. Domain rules that must hold (from `CONTEXT.md` + the handoff)
 
 - An account is **manual or import-fed, never both**.
-- **Forecast transactions are never written** to the journal — it is a read-only
-  `hledger balance --forecast`-style projection.
 - **CSV dedup** derives the watermark from the journal (ADR 0009); konto surfaces skipped
   rows as a **list**, not a count.
 - **No overlapping import rules**, except that a fallback rule yields to the others (CONTEXT); a failing
@@ -745,8 +698,7 @@ bar at fixed sizes only, not whole views during active development.
 - All layout is **responsive to `tea.WindowSizeMsg`**, recomputed from real terminal
   columns/rows — never hardcoded to the mock's 180×60.
 - Colours are **ANSI indices, never hex**.
-- **Periodic rules never post** — they are forecast inputs only (ADR 0006).
-- **The forecast never guesses** — current balances + periodic rules only (ADR 0007).
+- **Periodic rules never post** — konto only shows their occurrences (ADR 0006).
 - **Closed accounts** are visible only in the Dashboard Accounts panel; closing requires zero
   balance and no referencing `~` rule.
 - UI copy says **"currency"**, never "commodity" (code/domain keep `Commodity`).
@@ -765,13 +717,9 @@ The handoff (`design_handoff_hledger_tui/README.md`) is otherwise authoritative.
 
 - **ADR 0002** — the Dashboard **Accounts panel is a flat, non-indented list** (full account
   names + balance + source glyph). No account tree, no parent/header rows, no subtotals.
-  Balance sheet / income statement hierarchies are unaffected.
 - **ADR 0006** — the **Scheduled view has no Enter-to-post and no `p` pause**; periodic rules
-  are forecast-only. `n`/`e` use an in-TUI form (not free text); cadence shows the raw
+  are never posted. `n`/`e` use an in-TUI form (not free text); cadence shows the raw
   period expression, not plain English.
-- **ADR 0007** — the **Forecast view has no scenarios, no drivers panel, no projection
-  table, no averages**; it shows one chart per currency (line per account) plus a milestone
-  table.
 - **ADR 0008** — **no `?` uncategorised marker and no `c` categorise key** on the Dashboard;
   transactions cannot be uncategorised.
 - **ADR 0009** — **Import has no watched-folder file list, no `.latest`, no `d`/`u`
@@ -782,14 +730,13 @@ The handoff (`design_handoff_hledger_tui/README.md`) is otherwise authoritative.
 - **Dashboard layout** (ADR 0015): Accounts is only as tall as its rows, the cards beside it, and one
   full-width Activity panel under them replaces Upcoming, Recent and the spend chart. The handoff has
   Accounts full height and Upcoming beside the chart under Recent, which left Accounts mostly empty.
-- **ADR 0010** — **no Entry view in v1**: five tabs on `1`–`5`, no manual-account UI, no
+- **ADR 0010** — **no Entry view in v1**: three tabs on `1`–`3`, no manual-account UI, no
   classify-on-open prompt; accounts are created by first import.
-- **ADR 0011** — **keyboard and chrome**: arrows not `j`/`k`; views on `1`–`5` only (no `:`
+- **ADR 0011** — **keyboard and chrome**: arrows not `j`/`k`; views on `1`–`3` only (no `:`
   command line, no `g` prefix / which-key goto, no mode badge); no panel focus outside the Dashboard (ADR 0014); EUR-only UI
   (no `v`, no Market Prices panel); no Budget panel; no Dashboard Journal Checks panel or
-  stat card (check status lives in the status bar); no Reports drill-in; no `y` export; no
-  Recent `e` edit; `!` panel lists issues only (no `OK` rows); Reports period is `p`,
-  `quarter` is quarter-to-date, and the income statement has no `% share` column.
+  stat card (check status lives in the status bar); no `y` export; no
+  Recent `e` edit; `!` panel lists issues only (no `OK` rows).
 
 - **Glossary** — the handoff's *Cash Flow* stat card is **`<MONTH> NET INCOME`**: it shows
   income − expenses, which hledger calls net income; hledger's *cashflow* (`cf`, change in
@@ -804,8 +751,8 @@ New deviations get an ADR and a line here.
 Not in this spec by design. Each is a wayfinder ticket under `.scratch/konto-spec/issues/`,
 grilled immediately before the `tdd-loop` pass for its view:
 
-None open — 07 (responsive layout) resolved into §6.8, 08/09/13/15 into §4.8–§4.10 and §7.
-Dashboard, Reports have no ticket; grill inline if a question surfaces. Entry is out of v1
+None open — 07 (responsive layout) resolved into §6.8, 08/13/15 into §4.8–§4.9 and §7.
+Dashboard has no ticket; grill inline if a question surfaces. Entry is out of v1
 (ADR 0010).
 
 ### 12.1 Large journals
@@ -813,7 +760,7 @@ Dashboard, Reports have no ticket; grill inline if a question surfaces. Entry is
 Every hledger call parses the whole journal (about 1.1 s at 20 000 transactions; startup makes ~23 calls
 side by side). konto does not cache or checkpoint. It owns a year-partitioned ledger and loads only this
 year and last year (ADR 0013): `main.journal` holds directives and rules, transactions live in
-`YYYY.journal` files, and carry transactions keep earlier balances right. Reports and
+`YYYY.journal` files, and carry transactions keep earlier balances right. Balances and
 checks stop at the window's start.
 
 ---
@@ -823,11 +770,11 @@ checks stop at the window's start.
 Test-first (`/tdd-loop`), each slice the smallest nameable behaviour:
 
 1. **Shell** — `cmd/konto` skeleton, `hledger` version preflight, empty root model, alt
-   screen, quit. (ntcharts/v2 build check already passed — §1.)
-2. **Chrome** — tab bar (five tabs, active styling), horizontal rule, status bar (view
+   screen, quit.
+2. **Chrome** — tab bar (three tabs, active styling), horizontal rule, status bar (view
    name + hint + `n/total` + check status + `? keys`), all responsive to `WindowSizeMsg`. `theme` package. `ui/layout` `Allocate` + `Panel` and
 the too-small floor screen (§6.8).
-3. **Navigation** — number keys `1`–`5` over empty view stubs.
+3. **Navigation** — number keys `1`–`3` over empty view stubs.
 4. **Overlays** — `lipgloss.Compositor` wrapper in `ui/layout`; `?` keys popup, `!` checks
    panel shell.
 5. **Ledger load** — `internal/hledger` `run()` + `Client.Print`/`Balance`; `internal/ledger`

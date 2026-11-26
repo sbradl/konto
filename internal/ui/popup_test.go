@@ -23,7 +23,7 @@ func TestQuestionMarkOpensTheKeysPopupListingTheGlobalKeys(t *testing.T) {
 	model, _ := press(started(t, fakeLoader{}), "?")
 
 	content := uitest.Plain(model.View().Content)
-	for _, want := range []string{"keys", "1–5", "?", "!", "r", "q"} {
+	for _, want := range []string{"keys", "1–3", "?", "!", "r", "q"} {
 		if !strings.Contains(content, want) {
 			t.Errorf("content lacks %q:\n%s", want, content)
 		}
@@ -56,7 +56,7 @@ func TestOnlyOnePopupIsOpenAtATime(t *testing.T) {
 	model, _ = press(model, "!")
 
 	content := uitest.Plain(model.View().Content)
-	if !strings.Contains(content, "checks") || strings.Contains(content, "1–5") {
+	if !strings.Contains(content, "checks") || strings.Contains(content, "1–3") {
 		t.Errorf("want the checks panel only:\n%s", content)
 	}
 }
@@ -181,7 +181,7 @@ func TestKeysBodyFillsColumnsTopToBottom(t *testing.T) {
 
 	want := []string{
 		"─ keys " + strings.Repeat("─", 93),
-		" 1–5    switch view       r      refresh           n      new               c      copy transaction",
+		" 1–3    switch view       r      refresh           n      new               c      copy transaction",
 		" ?      keys              q      quit              e      edit" + "",
 		" !      checks            Esc    close popup       d      delete" + "",
 	}
@@ -191,13 +191,12 @@ func TestKeysBodyFillsColumnsTopToBottom(t *testing.T) {
 }
 
 func TestKeysBodyIsOneColumnOnANarrowScreen(t *testing.T) {
-	model, _ := press(started(t, fakeLoader{}), "5")
-	model, _ = press(model, "?")
+	model, _ := press(started(t, fakeLoader{}), "?")
 	model = resized(model, 30, 40)
 
 	rows := plainRows(model.popupBox())
 
-	if len(rows) != 8 || rows[1] != " 1–5    switch view"+strings.Repeat(" ", 11) || rows[7] != " p      period"+strings.Repeat(" ", 16) {
+	if len(rows) != 11 || rows[1] != " 1–3    switch view"+strings.Repeat(" ", 11) || rows[10] != " t      today"+strings.Repeat(" ", 17) {
 		t.Errorf("popup =\n%s", strings.Join(rows, "\n"))
 	}
 }
