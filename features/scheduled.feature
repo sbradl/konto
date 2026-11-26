@@ -64,6 +64,26 @@ Feature: Scheduled — periodic rules (forecast-only)
       And I press "3"
       Then the status of "Old once-off" is "none in the next 12 months"
 
+    Scenario: a past payment nothing booked covers stays listed as overdue
+      Given the journal "household-scheduled" with a rule "~ monthly from 2026-09-28  Gym\n    expenses:rent  25,00 EUR\n    assets:checking\n"
+      And I start konto
+      And I press "3"
+      Then the status of "Gym" is "overdue"
+      And the next occurrence of "Gym" is "2026-09-28"
+
+    Scenario: a booking in the same category with the same amount covers a past payment
+      Given the journal "household-scheduled" with a rule "~ monthly from 2026-09-25  Salary paid\n    assets:checking  3.000,00 EUR\n    income:salary\n"
+      And I start konto
+      And I press "3"
+      Then the status of "Salary paid" is "upcoming"
+      And the next occurrence of "Salary paid" is "2026-10-25"
+
+    Scenario: a payment due before the last week no longer counts as overdue
+      Given the journal "household-scheduled" with a rule "~ 2026-09-20  Old bill\n    expenses:rent  25,00 EUR\n    assets:checking\n"
+      And I start konto
+      And I press "3"
+      Then the status of "Old bill" is "none in the next 12 months"
+
     Scenario: an ended rule says none in the next 12 months
       Given the journal "household-scheduled" with a rule "~ monthly from 2026-01-01 to 2026-03-01  Ended\n    expenses:rent  5,00 EUR\n    assets:checking\n"
       And I start konto
@@ -74,7 +94,8 @@ Feature: Scheduled — periodic rules (forecast-only)
       Given the journal "household-scheduled" with a rule "~ monthly from 2026-01-31  Month end\n    expenses:rent  5,00 EUR\n    assets:checking\n"
       And I start konto
       And I press "3"
-      Then the next occurrence of "Month end" is "2026-10-31"
+      Then the next occurrence of "Month end" is "2026-09-30"
+      And the status of "Month end" is "overdue"
 
     Scenario: hint and keys
       Then the status bar hint lists "n new" "e edit" "d delete"

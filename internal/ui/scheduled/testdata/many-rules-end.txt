@@ -1,14 +1,14 @@
 ╭─ RULES ──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│             Rule 02                         monthly from 2026-10-05                        none in the next 12 months│
-│             Rule 03                         monthly from 2026-10-05                        none in the next 12 months│
-│             Rule 04                         monthly from 2026-10-05                        none in the next 12 months│
-│             Rule 05                         monthly from 2026-10-05                        none in the next 12 months│
-│             Rule 06                         monthly from 2026-10-05                        none in the next 12 months│
-│             Rule 07                         monthly from 2026-10-05                        none in the next 12 months│
-│             Rule 08                         monthly from 2026-10-05                        none in the next 12 months│
-│             Rule 09                         monthly from 2026-10-05                        none in the next 12 months│
-│             Rule 10                         monthly from 2026-10-05                        none in the next 12 months│
-│             Rule 11                         monthly from 2026-10-05                        none in the next 12 months│
+│             Rule 02                  monthly from 2026-10-05                               none in the next 12 months│
+│             Rule 03                  monthly from 2026-10-05                               none in the next 12 months│
+│             Rule 04                  monthly from 2026-10-05                               none in the next 12 months│
+│             Rule 05                  monthly from 2026-10-05                               none in the next 12 months│
+│             Rule 06                  monthly from 2026-10-05                               none in the next 12 months│
+│             Rule 07                  monthly from 2026-10-05                               none in the next 12 months│
+│             Rule 08                  monthly from 2026-10-05                               none in the next 12 months│
+│             Rule 09                  monthly from 2026-10-05                               none in the next 12 months│
+│             Rule 10                  monthly from 2026-10-05                               none in the next 12 months│
+│             Rule 11                  monthly from 2026-10-05                               none in the next 12 months│
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ ENTRY ──────────────────────────────────────────────────╮╭─ OCCURRENCES ────────────────────────────────────────────╮
 │ ~ monthly from 2026-10-05  Rule 11                       ││ none in the next 12 months                               │

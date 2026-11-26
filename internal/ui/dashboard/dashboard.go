@@ -405,19 +405,10 @@ func monthLine(month time.Time, totals domain.MonthSummary, width int) string {
 	rule := func(text string) string { return theme.Warn.Render(text) }
 	net := totals.Net()
 	label := rule(" ── ") + theme.Bold.Render(month.Format("January 2006")) + rule(" ── ") +
-		signStyle(net).Render(plus(net)) + " (" + theme.Ok.Render(plus(totals.Income)) + " / " +
+		signStyle(net).Render(layout.Signed(net)) + " (" + theme.Ok.Render(layout.Signed(totals.Income)) + " / " +
 		theme.Negative.Render(totals.Expenses.Negated().Format()) + ") "
 
 	return label + rule(strings.Repeat("─", max(0, width-lipgloss.Width(label)-1)))
-}
-
-// plus is the amount with a plus in front when it is above zero.
-func plus(amount domain.MultiAmount) string {
-	if amount.IsAllNegative() || amount.IsZero() {
-		return amount.Format()
-	}
-
-	return "+" + amount.Format()
 }
 
 // todayLine is the rule between the upcoming and the recent rows, carrying today's date.
@@ -448,9 +439,14 @@ func recentColumns(entries []domain.RecentEntry, width int) columns {
 	}
 }
 
-// line is one transaction: the amount, then the balance after it at the right edge.
+// line is one transaction, its date red when overdue: the amount, then the balance after it at the right edge.
 func (c columns) line(entry domain.RecentEntry) string {
-	left := " " + entry.Date.Format(time.DateOnly) + "  " + layout.Fit(entry.Description, c.description)
+	date := entry.Date.Format(time.DateOnly)
+	if entry.Overdue {
+		date = theme.Negative.Render(date)
+	}
+
+	left := " " + date + "  " + layout.Fit(entry.Description, c.description)
 	if c.category > 0 { // a narrow screen leaves the category out rather than squeeze the figures
 		left += "  " + layout.Fit(entry.Category, c.category)
 	}

@@ -30,6 +30,7 @@ type RecentEntry struct {
 	Category    string // the counterpart account: an expense or income category, or a transfer
 	Amount      MultiAmount
 	Balance     MultiAmount // the account's balance once the transaction is booked
+	Overdue     bool        // a past occurrence of a periodic rule that nothing booked covers
 }
 
 // Recent lists the transactions newest first (later ones first within a day). Each is seen from
@@ -48,9 +49,16 @@ func (l Ledger) Recent() []RecentEntry {
 	return entries
 }
 
-// UpcomingEntries lists the periodic rules' projected occurrences soonest first, shaped like Recent's.
+// UpcomingEntries lists the periodic rules' overdue occurrences, then their projected ones, soonest first,
+// shaped like Recent's.
 func (l Ledger) UpcomingEntries() []RecentEntry {
-	return l.entries(l.Upcoming, l.balances())
+	overdue := l.Overdue()
+	entries := l.entries(slices.Concat(overdue, l.Upcoming), l.balances())
+	for i := range overdue { // overdue dates are up to today, before every upcoming one
+		entries[i].Overdue = true
+	}
+
+	return entries
 }
 
 // entries books the transactions oldest first (in their given order within a day) onto the running

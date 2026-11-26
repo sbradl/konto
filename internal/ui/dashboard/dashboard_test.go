@@ -494,6 +494,25 @@ func TestActivityListsUpcomingFurthestFirstOverTodayOverRecentNewestFirst(t *tes
 	}
 }
 
+func TestAnOverdueOccurrenceSitsJustAboveTodayInRed(t *testing.T) {
+	ledger := withUpcoming(withTransactions(1), "Streaming")
+	ledger.Past = []domain.Transaction{{
+		Date: time.Date(2026, 9, 15, 0, 0, 0, 0, time.UTC), Description: "Gym",
+		Postings: []domain.Posting{{Account: "expenses:gym", Amounts: eur(3000)}, {Account: "assets:cash", Amounts: eur(-3000)}},
+	}}
+	m := New().Resize(180, 40).WithLedger(ledger)
+	rows := activityRows(m)
+
+	today := slices.IndexFunc(rows, func(row string) bool { return strings.Contains(row, "━━ today") })
+	if today < 1 || !strings.Contains(rows[today-1], "2026-09-15  Gym") {
+		t.Errorf("the overdue Gym sits right above the today line:\n%s", strings.Join(rows, "\n"))
+	}
+
+	if !strings.Contains(m.View(), "\x1b[31m2026-09-15") {
+		t.Errorf("an overdue date is red:\n%q", m.View())
+	}
+}
+
 func TestEachMonthOpensWithItsIncomeAndExpensesAboveItsLatestRow(t *testing.T) {
 	ledger := withUpcoming(withTransactions(1), "rent")
 	ledger.Upcoming = append(ledger.Upcoming, domain.Transaction{

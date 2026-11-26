@@ -133,8 +133,9 @@ func (s *Service) Form(ctx context.Context, rule domain.PeriodicRule, ledger dom
 
 // nextDue is the next occurrence hledger projects for the rule at pos, false when none is upcoming.
 func nextDue(ledger domain.Ledger, pos domain.SourcePos) (time.Time, bool) {
-	for _, schedule := range ledger.Schedules() {
-		if next, found := schedule.Next(); found && schedule.Rule.Pos == pos {
+	schedules := ledger.Schedules()
+	for i := range schedules {
+		if next, found := schedules[i].Next(); found && schedules[i].Rule.Pos == pos {
 			return next, true
 		}
 	}

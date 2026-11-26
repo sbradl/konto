@@ -189,6 +189,25 @@ func TestPositiveImpactIsGreen(t *testing.T) {
 	}
 }
 
+func TestEachRuleShowsItsNextAmountSignedAndColoured(t *testing.T) {
+	ledger := domain.Ledger{
+		Rules:    []domain.PeriodicRule{rule(1, "monthly", "Salary"), rule(2, "monthly", "Rent"), rule(3, "monthly", "Never")},
+		Upcoming: append(occurrences(1, -300000, "2026-10-25", "2026-11-25"), occurrences(2, 90000, "2026-10-01")...),
+	}
+	_, rules, _ := strings.Cut(New().Resize(180, 30).WithLedger(ledger).Move("end").View(), "RULES")
+	rules, _, _ = strings.Cut(rules, "ENTRY")
+
+	for _, want := range []string{"\x1b[32m +3.000,00 EUR", "\x1b[31m   -900,00 EUR"} {
+		if !strings.Contains(rules, want) {
+			t.Errorf("rule list lacks %q:\n%q", want, rules)
+		}
+	}
+
+	if strings.Contains(uitest.Plain(rules), "0,00 EUR  none") {
+		t.Errorf("a rule without occurrences shows no amount:\n%s", uitest.Plain(rules))
+	}
+}
+
 func TestTheCursorStaysInRangeWhenTheRulesShrink(t *testing.T) {
 	m := loaded().Move("end")
 
@@ -308,5 +327,36 @@ func TestKeyAsksForNewEditOrDeleteOnlyWithARuleForEditAndDelete(t *testing.T) {
 
 	if moved, _ := loaded().Key("down"); moved.cursor.Row != 1 {
 		t.Errorf("down: row = %d, want the cursor moved", moved.cursor.Row)
+	}
+}
+
+func TestAnOverdueRuleStaysListedInRedFirst(t *testing.T) {
+	ledger := domain.Ledger{
+		Rules:    []domain.PeriodicRule{rule(1, "monthly", "Gym"), rule(2, "monthly", "Salary")},
+		Past:     occurrences(1, 3000, "2026-09-15"),
+		Upcoming: append(occurrences(1, 3000, "2026-10-15"), occurrences(2, -300000, "2026-10-01")...),
+	}
+	view := New().Resize(180, 30).WithLedger(ledger).Move("end").View()
+	text := uitest.Plain(view)
+
+	if !strings.Contains(text, "2026-09-15  Gym") || strings.Index(text, "Gym") > strings.Index(text, "Salary") {
+		t.Errorf("the overdue rule leads the list with its overdue date:\n%s", text)
+	}
+
+	if !strings.Contains(view, "\x1b[31moverdue") {
+		t.Errorf("the status says overdue in red:\n%q", view)
+	}
+}
+
+func TestTheOccurrencesShowTheOverdueOnesFirstInRed(t *testing.T) {
+	ledger := domain.Ledger{
+		Rules:    []domain.PeriodicRule{rule(1, "monthly", "Gym")},
+		Past:     occurrences(1, 3000, "2026-09-15"),
+		Upcoming: occurrences(1, 3000, "2026-10-15"),
+	}
+	_, panel, _ := strings.Cut(New().Resize(180, 30).WithLedger(ledger).View(), "OCCURRENCES")
+
+	if !strings.Contains(panel, "\x1b[31m2026-09-15  overdue") || strings.Index(panel, "09-15") > strings.Index(panel, "10-15") {
+		t.Errorf("the overdue date comes first, red:\n%q", panel)
 	}
 }

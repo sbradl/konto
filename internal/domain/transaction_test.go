@@ -116,6 +116,18 @@ func TestUpcomingListsTheProjectedOccurrencesSoonestFirstSeenFromTheirOwnAccount
 	}
 }
 
+func TestUpcomingStartsWithTheOverdueOccurrencesMarked(t *testing.T) {
+	ledger := recentLedger()
+	ledger.Past = []Transaction{{Date: day(10), Description: "Gym", Postings: []Posting{posting("expenses:gym", 3000), posting("assets:checking", -3000)}}}
+	ledger.Upcoming = []Transaction{{Date: day(25), Description: "Acme", Postings: []Posting{posting("assets:checking", 300000), posting("income:salary", -300000)}}}
+
+	got := ledger.UpcomingEntries()
+
+	if len(got) != 2 || got[0].Description != "Gym" || !got[0].Overdue || got[1].Overdue {
+		t.Errorf("upcoming = %+v, want the overdue Gym first and marked, then Acme", got)
+	}
+}
+
 // balances reads each entry's balance after it, in cents.
 func balances(entries []RecentEntry) []int64 {
 	cents := make([]int64, len(entries))

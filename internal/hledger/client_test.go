@@ -256,7 +256,7 @@ func TestUpcomingReturnsOnlyGeneratedOccurrencesInThePeriod(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	wantArgs := []string{"-f", "/data/main.journal", "print", "--forecast=2026-09-30..2027-09-30", "-O", "json"}
+	wantArgs := []string{"-f", "/data/main.journal", "print", "--forecast=2026-09-30..2027-09-30", "-I", "-O", "json"}
 	assertOneCall(t, calls, wantArgs)
 
 	if len(got) == 1 && got[0].Source != (domain.SourcePos{File: "/data/main.journal", Line: 10}) {

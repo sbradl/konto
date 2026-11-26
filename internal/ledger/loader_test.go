@@ -212,21 +212,28 @@ func TestLoadReportsAFailureToSummariseTheMonth(t *testing.T) {
 	assertCarriesCause(t, err, "period failed")
 }
 
-// The upcoming occurrences are the next year of the periodic rules, from tomorrow: today's are not upcoming.
-func TestLoadProjectsTheNextYearOfPeriodicRules(t *testing.T) {
-	gw := &upcomingRecorder{fakeGateway{upcoming: []domain.Transaction{{Description: "Rent"}}}, time.Time{}, time.Time{}}
+// The occurrences run from the overdue window up to a year ahead: those up to today are past, the rest upcoming.
+func TestLoadProjectsThePeriodicRulesFromTheOverdueWindowToNextYear(t *testing.T) {
+	today := sept30()
+	gw := &upcomingRecorder{fakeGateway{upcoming: []domain.Transaction{
+		{Description: "Gym", Date: today}, {Description: "Rent", Date: today.AddDate(0, 0, 1)},
+	}}, time.Time{}, time.Time{}}
 
 	got, err := NewLoader(gw, present, sept30).Load(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if first, last := gw.first.Format(time.DateOnly), gw.last.Format(time.DateOnly); first != "2026-10-01" || last != "2027-09-30" {
-		t.Errorf("projected %s..%s, want 2026-10-01..2027-09-30", first, last)
+	if first, last := gw.first.Format(time.DateOnly), gw.last.Format(time.DateOnly); first != "2026-09-24" || last != "2027-09-30" {
+		t.Errorf("projected %s..%s, want 2026-09-24..2027-09-30", first, last)
 	}
 
 	if len(got.Upcoming) != 1 || got.Upcoming[0].Description != "Rent" {
 		t.Errorf("Upcoming = %+v, want the projected Rent", got.Upcoming)
+	}
+
+	if len(got.Past) != 1 || got.Past[0].Description != "Gym" {
+		t.Errorf("Past = %+v, want today's Gym", got.Past)
 	}
 }
 

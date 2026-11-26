@@ -16,6 +16,7 @@ import (
 const (
 	minListHeight  = 5
 	nextWidth      = 10
+	amountWidth    = 14 // "-12.345,00 EUR"
 	statusWidth    = 26 // "none in the next 12 months"
 	columnGap      = 2
 	descShare      = 40 // percent of the room between date and status that description takes
@@ -193,30 +194,44 @@ func (m Model) list(height int) string {
 	return layout.Panel("RULES", m.width, height, strings.Join(rows, "\n"))
 }
 
-// listRow is one row of the list: everything before the status, and the status in its own style.
+// listRow is one row of the list: everything before the amount, then the amount and the status in their styles.
 type listRow struct {
-	prefix, status string
-	statusStyle    lipgloss.Style
+	prefix, amount, status   string
+	amountStyle, statusStyle lipgloss.Style
 }
 
-func (r listRow) text() string { return r.prefix + r.status }
+func (r listRow) text() string { return r.prefix + r.amount + r.gap() + r.status }
 func (r listRow) styled() string {
-	return r.prefix + r.statusStyle.Render(layout.Fit(r.status, statusWidth))
+	return r.prefix + r.amountStyle.Render(r.amount) + r.gap() + r.statusStyle.Render(layout.Fit(r.status, statusWidth))
 }
+
+func (listRow) gap() string { return strings.Repeat(" ", columnGap) }
 
 func ruleLine(schedule domain.RuleSchedule, width int) listRow {
-	spare := max(0, width-1-nextWidth-3*columnGap-statusWidth)
+	spare := max(0, width-1-nextWidth-amountWidth-4*columnGap-statusWidth)
 	description := spare * descShare / 100
 
 	next, status, style := "", noneUpcoming, theme.Dim
-	if date, ok := schedule.Next(); ok {
+	if date, ok := schedule.Due(); ok {
 		next, status, style = date.Format(time.DateOnly), "upcoming", theme.Ok
+	}
+
+	if schedule.IsOverdue() {
+		status, style = "overdue", theme.Negative
 	}
 	gap := strings.Repeat(" ", columnGap)
 	prefix := " " + layout.Fit(next, nextWidth) + gap + layout.Fit(schedule.Rule.Description, description) + gap +
 		layout.Fit(schedule.Rule.Period, spare-description) + gap
 
-	return listRow{prefix: prefix, status: status, statusStyle: style}
+	amount := schedule.Amount()
+	if _, ok := schedule.Due(); !ok {
+		return listRow{prefix: prefix, amount: strings.Repeat(" ", amountWidth), status: status, statusStyle: style}
+	}
+
+	return listRow{
+		prefix: prefix, amount: layout.AlignRight(layout.Signed(amount), amountWidth), amountStyle: amountStyle(amount),
+		status: status, statusStyle: style,
+	}
 }
 
 // Selected is the rule under the cursor; false when there are none.
@@ -264,20 +279,24 @@ func styleEntryLine(line string) string {
 	return line
 }
 
-// occurrences lists the next six dates of the selected rule.
+// occurrences lists the selected rule's overdue dates in red, then its next ones: six at most.
 func (m Model) occurrences() string {
 	schedule, ok := m.current()
 	if !ok {
 		return ""
 	}
 
-	if len(schedule.Occurrences) == 0 {
+	if len(schedule.Overdue)+len(schedule.Occurrences) == 0 {
 		return theme.Dim.Render(" " + noneUpcoming)
 	}
 	rows := make([]string, 0, occurrenceRows)
-	for _, occurrence := range schedule.Occurrences[:min(occurrenceRows, len(schedule.Occurrences))] {
+	for _, occurrence := range schedule.Overdue {
+		rows = append(rows, " "+theme.Negative.Render(occurrence.Date.Format(time.DateOnly)+"  overdue"))
+	}
+	for _, occurrence := range schedule.Occurrences {
 		rows = append(rows, " "+occurrence.Date.Format(time.DateOnly))
 	}
+	rows = rows[:min(occurrenceRows, len(rows))]
 
 	return strings.Join(rows, "\n")
 }
@@ -285,7 +304,8 @@ func (m Model) occurrences() string {
 // impact is the signed twelve-month net-worth effect of every rule, and their total.
 func (m Model) impact(width, capacity int) string {
 	rows := make([]string, 0, len(m.schedules)+1)
-	for _, schedule := range m.schedules {
+	for i := range m.schedules {
+		schedule := &m.schedules[i]
 		rows = append(rows, impactLine(schedule.Rule.Description, schedule.Impact(), width, lipgloss.NewStyle()))
 	}
 
@@ -304,14 +324,20 @@ func (m Model) impact(width, capacity int) string {
 // impactLine is a label with its amount at the right edge: green when positive, red when negative, dim at zero.
 func impactLine(label string, amount domain.MultiAmount, width int, labelStyle lipgloss.Style) string {
 	text := amount.Format()
-	style := theme.Ok
-	switch {
-	case amount.IsZero():
-		style = theme.Dim
-	case amount.IsAllNegative():
-		style = theme.Negative
-	}
+	style := amountStyle(amount)
 	room := max(0, width-lipgloss.Width(text)-columnGap-1)
 
 	return " " + labelStyle.Render(layout.Fit(label, room)) + strings.Repeat(" ", columnGap) + style.Render(text)
+}
+
+// amountStyle is green when positive, red when negative, dim at zero.
+func amountStyle(amount domain.MultiAmount) lipgloss.Style {
+	switch {
+	case amount.IsZero():
+		return theme.Dim
+	case amount.IsAllNegative():
+		return theme.Negative
+	}
+
+	return theme.Ok
 }

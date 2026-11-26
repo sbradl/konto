@@ -86,8 +86,8 @@ func (l *Loader) read(ctx context.Context) (domain.Ledger, error) {
 
 // fromHledger is what hledger reports: the transactions, the balances (returned apart: the directives
 // complete them), the month to date, the spend history and the projected occurrences. The queries are
-// independent, so they run side by side. The occurrences start tomorrow: one due today is not upcoming any
-// more, unlike in a forecast, whose balance still has to count it (forecast.start).
+// independent, so they run side by side. The occurrences up to today are past, the overdue candidates; upcoming
+// ones start tomorrow, unlike in a forecast, whose balance still has to count today's (forecast.start).
 func (l *Loader) fromHledger(ctx context.Context) (domain.Ledger, []domain.Account, error) {
 	var (
 		snapshot domain.Ledger
@@ -104,8 +104,10 @@ func (l *Loader) fromHledger(ctx context.Context) (domain.Ledger, []domain.Accou
 
 			return err
 		},
-		func() error {
-			return assign(&snapshot.Upcoming)(l.gw.Upcoming(ctx, today.AddDate(0, 0, 1), today.AddDate(1, 0, 0)))
+		func() (err error) {
+			snapshot.Past, snapshot.Upcoming, err = l.occurrences(ctx, today)
+
+			return err
 		},
 	)
 	if err != nil {
@@ -113,6 +115,28 @@ func (l *Loader) fromHledger(ctx context.Context) (domain.Ledger, []domain.Accou
 	}
 
 	return snapshot, accounts, nil
+}
+
+// occurrences are the periodic rules' occurrences of the overdue window up to today, and of the year after it.
+func (l *Loader) occurrences(ctx context.Context, today time.Time) (past, upcoming []domain.Transaction, err error) {
+	all, err := l.gw.Upcoming(ctx, today.AddDate(0, 0, 1-domain.OverdueDays), today.AddDate(1, 0, 0))
+	past, upcoming = splitAfter(today, all)
+
+	return past, upcoming, err //nolint:wrapcheck // Load adds the context
+}
+
+// splitAfter parts the occurrences into those up to today and those after it.
+func splitAfter(today time.Time, occurrences []domain.Transaction) (past, upcoming []domain.Transaction) {
+	tomorrow := time.Date(today.Year(), today.Month(), today.Day()+1, 0, 0, 0, 0, today.Location())
+	for _, occurrence := range occurrences {
+		if occurrence.Date.Before(tomorrow) {
+			past = append(past, occurrence)
+		} else {
+			upcoming = append(upcoming, occurrence)
+		}
+	}
+
+	return past, upcoming
 }
 
 // assign stores a query's result in dst, passing its error on.

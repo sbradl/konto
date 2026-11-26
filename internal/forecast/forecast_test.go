@@ -286,3 +286,50 @@ func TestAnEmptyLedgerGivesAnAccountWithoutBalancesNoLine(t *testing.T) {
 		t.Errorf("charts = %+v", got.Charts)
 	}
 }
+
+func TestAnOverduePaymentTheProjectionMissesCountsFromToday(t *testing.T) {
+	ends := []string{"2026-08-31", "2026-09-30", "2026-10-31"}
+	eur := func(mantissa int64) domain.MultiAmount { return domain.MultiAmount{amount("EUR", mantissa)} }
+	gw := &fakeGateway{projections: map[string]domain.Projection{"assets:cash": months(ends, eur(10000), eur(10000), eur(10000))}}
+	ledger := domain.Ledger{
+		Accounts: []domain.Account{{Name: "assets:cash", Source: domain.SourceManual}},
+		Past: []domain.Transaction{{Date: day("2026-09-15"), Postings: []domain.Posting{
+			{Account: "expenses:gym", Amounts: eur(3000)}, {Account: "assets:cash", Amounts: eur(-3000)},
+		}}},
+	}
+
+	got, err := NewService(gw, today).Forecast(context.Background(), ledger)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	balances := make([]int64, 0, len(ends))
+	for _, point := range got.Charts[0].Lines[0].Points {
+		balances = append(balances, point.Balance.Mantissa)
+	}
+
+	if want := []int64{10000, 7000, 7000}; !reflect.DeepEqual(balances, want) {
+		t.Errorf("balances = %v, want %v: the past month untouched, the gym taken off from today", balances, want)
+	}
+}
+
+func TestAnOverduePaymentAfterTheWatermarkIsAlreadyProjected(t *testing.T) {
+	ends := []string{"2026-09-30"}
+	eur := func(mantissa int64) domain.MultiAmount { return domain.MultiAmount{amount("EUR", mantissa)} }
+	gw := &fakeGateway{projections: map[string]domain.Projection{"assets:checking": months(ends, eur(10000))}}
+	ledger := domain.Ledger{
+		Accounts:     []domain.Account{{Name: "assets:checking", Source: domain.SourceImport}},
+		Transactions: []domain.Transaction{{Date: day("2026-09-10"), Postings: []domain.Posting{{Account: "assets:checking"}}}},
+		Past: []domain.Transaction{{Date: day("2026-09-15"), Postings: []domain.Posting{
+			{Account: "expenses:gym", Amounts: eur(3000)}, {Account: "assets:checking", Amounts: eur(-3000)},
+		}}},
+	}
+
+	got, err := NewService(gw, today).Forecast(context.Background(), ledger)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if balance := got.Charts[0].Lines[0].Points[0].Balance.Mantissa; balance != 10000 {
+		t.Errorf("balance = %d, want 10000: hledger projects from the watermark, past the gym", balance)
+	}
+}
