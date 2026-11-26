@@ -1,5 +1,5 @@
 name: Set up konto toolchain
-description: Installs the mise-pinned toolchain (go, golangci-lint, gotestsum, gremlins, govulncheck, hledger) and restores Go caches.
+description: Installs the mise-pinned toolchain (go, golangci-lint, gotestsum, gremlins, govulncheck, gitleaks, trivy, opengrep, hledger) and restores Go caches.
 runs:
   using: composite
   steps:

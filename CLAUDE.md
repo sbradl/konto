@@ -58,14 +58,14 @@ on top of the preflight, architecture tests, e2e harness and CI. No `@wip` or `@
 
 ## Commands
 
-Toolchain (go, golangci-lint, gotestsum, gremlins, hledger) is pinned in `mise.toml`;
+Toolchain (go, golangci-lint, gotestsum, gremlins, govulncheck, gitleaks, trivy, opengrep, hledger) is pinned in `mise.toml`;
 `mise install` provisions it. `mise tasks` lists every task.
 
 - `mise run build` — `go build ./...`
 - `mise run vet` — `go vet -tags integration,e2e ./...`
 - `mise run lint` — `golangci-lint run`
 - `mise run check` — build + vet + lint + cover:check (fast gate; archtest runs inside the tests)
-- `mise run qa` — everything CI runs on a PR: tidy, check, vuln, test:integration, test:e2e,
+- `mise run qa` — everything CI runs on a PR: tidy, check, security (govulncheck, gitleaks, trivy, opengrep), test:integration, test:e2e,
   mutation:diff (`.github/workflows/qa.yml` calls the same tasks)
 - `mise run test:e2e` — Gherkin suite (`features/`, harness in `e2e/`); godog flags after `--`,
   e.g. `mise run test:e2e -- -godog.tags=@spec-4.5`.

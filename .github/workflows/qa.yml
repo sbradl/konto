@@ -36,13 +36,15 @@ jobs:
           path: coverage.out
           if-no-files-found: ignore
 
-  vuln:
-    name: govulncheck
+  security:
+    name: security (govulncheck · gitleaks · trivy · opengrep)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # gitleaks scans the whole history
       - uses: ./.github/actions/setup
-      - run: mise run vuln
+      - run: mise run security
 
   integration:
     name: integration (real hledger)

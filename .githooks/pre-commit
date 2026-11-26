@@ -1,0 +1,8 @@
+#!/bin/sh
+# Stops a commit that adds a secret or personal data: IBANs, bank exports, email addresses, home paths
+# (rules in .gitleaks.toml). A false positive: add the value to that rule's allowlist, never a real one.
+if ! command -v mise >/dev/null 2>&1; then
+  echo "pre-commit: mise not found; install it (https://mise.jdx.dev) to run the leak check" >&2
+  exit 1
+fi
+exec mise run secrets:staged

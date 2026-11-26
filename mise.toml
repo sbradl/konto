@@ -5,7 +5,14 @@ gotestsum     = "1.13.0"
 hledger       = "1.52.4"   # hard runtime dep, spec requires >= 1.32; startup preflight also checks
 "go:github.com/go-gremlins/gremlins/cmd/gremlins" = "0.6.0"
 "go:golang.org/x/vuln/cmd/govulncheck" = "1.10.0"
+gitleaks      = "8.30.1"
+trivy         = "0.76.2"
+# the registry's aqua entry looks for an asset opengrep no longer publishes; linux x86-64 only
+"github:opengrep/opengrep" = { version = "2.1.0", asset_pattern = "opengrep_linux_x86", bin = "opengrep" }
 gh = "latest"
+
+[hooks]
+postinstall = "git config core.hooksPath .githooks" # `mise install` also turns the pre-commit leak check on
 
 [env]
 # keep tool-installed binaries + `go install` output on PATH inside tasks
@@ -46,6 +53,37 @@ run = 'gotestsum --format standard-verbose -- -count=1 -timeout 30m -tags e2e ./
 [tasks.vuln]
 description = "Known-vulnerability scan of reachable code (govulncheck)"
 run = "govulncheck -tags integration,e2e ./..."
+
+[tasks.secrets]
+description = "Secrets and personal data anywhere in the git history (gitleaks, rules in .gitleaks.toml)"
+run = "gitleaks git --redact --no-banner ."
+
+[tasks."secrets:staged"]
+description = "Secrets and personal data in the staged changes (gitleaks; the pre-commit hook runs this)"
+run = "gitleaks git --pre-commit --staged --redact --no-banner ."
+
+[tasks."hooks:install"]
+description = "Use the repository's git hooks (.githooks): the pre-commit leak check"
+run = "git config core.hooksPath .githooks"
+
+[tasks.trivy]
+description = "Vulnerable dependencies, misconfigurations and secrets in the working tree (trivy)"
+run = "trivy fs --scanners vuln,misconfig,secret --exit-code 1 --quiet ."
+
+# Fails on forbidden (GPL/AGPL family: HIGH, CRITICAL) and unidentified (UNKNOWN) licenses. MEDIUM is MPL-2.0
+# (file-level copyleft), allowed: it reaches only the e2e harness through godog, never the shipped binary.
+[tasks.licenses]
+description = "License compatibility of the dependencies (trivy)"
+run = "trivy fs --scanners license --severity UNKNOWN,HIGH,CRITICAL --exit-code 1 --quiet ."
+
+[tasks.sast]
+description = "Static security analysis of the Go code and CI workflows (opengrep, Semgrep's public rule packs)"
+# Actions stay on version tags, not commit hashes (user decision 2026-11-26), so the mutable-tag rule is off.
+run = "opengrep scan --config p/golang --config p/github-actions --exclude-rule yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag --error --quiet ."
+
+[tasks.security]
+description = "Every security scan: govulncheck, gitleaks, trivy (incl. licenses), opengrep"
+depends = ["vuln", "secrets", "trivy", "licenses", "sast"]
 
 [tasks.tidy]
 description = "Fail if go.mod/go.sum are not tidy"
@@ -127,4 +165,4 @@ depends = ["build", "vet", "lint", "cover:check"]
 
 [tasks.qa]
 description = "Everything CI runs on a pull request, locally (mutation:diff needs a main branch)"
-depends = ["tidy", "check", "vuln", "test:integration", "test:e2e", "mutation:diff"]
+depends = ["tidy", "check", "security", "test:integration", "test:e2e", "mutation:diff"]
