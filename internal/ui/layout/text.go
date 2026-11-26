@@ -9,6 +9,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 
+	"github.com/sbradl/konto/internal/domain"
 	"github.com/sbradl/konto/internal/ui/theme"
 )
 
@@ -26,6 +27,15 @@ func Fit(text string, width int) string {
 // AlignRight pads text on the left to width; text wider than that is left whole.
 func AlignRight(text string, width int) string {
 	return strings.Repeat(" ", max(0, width-lipgloss.Width(text))) + text
+}
+
+// Signed is the amount with a plus in front when it is above zero.
+func Signed(amount domain.MultiAmount) string {
+	if amount.IsAllNegative() || amount.IsZero() {
+		return amount.Format()
+	}
+
+	return "+" + amount.Format()
 }
 
 // TitleRule is a dim top edge width cells wide with the title inset two cells, for a popup, dialog or form.

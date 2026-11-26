@@ -1,6 +1,6 @@
 // Package forecast is the use case behind the Forecast view: each open asset and liability account's balance
 // over the six months behind and the twelve ahead, the future as the periodic rules make it (spec §4.10,
-// ADR 0007). It estimates nothing; hledger does all the projecting.
+// ADR 0007). It estimates nothing; hledger does the projecting, konto only adds the overdue payments it misses.
 package forecast
 
 import (
@@ -90,15 +90,18 @@ func (s *Service) project(
 ) ([]domain.Projection, error) {
 	projections := make([]domain.Projection, len(accounts))
 	projects := make([]func() error, len(accounts))
+	overdue := ledger.Overdue()
 	for i, account := range accounts {
-		projects[i] = func() (err error) {
-			projections[i], err = s.gw.Projection(ctx, domain.ProjectionQuery{
-				Account: account.Name, Begin: forecast.Begin, ForecastTo: forecast.End,
-				ForecastFrom: start(account, ledger, forecast.Today),
+		projects[i] = func() error {
+			from := start(account, ledger, forecast.Today)
+
+			projection, err := s.gw.Projection(ctx, domain.ProjectionQuery{
+				Account: account.Name, Begin: forecast.Begin, ForecastTo: forecast.End, ForecastFrom: from,
 			})
 			if err != nil {
 				return fmt.Errorf("projecting %s: %w", account.Name, err)
 			}
+			projections[i] = withMissed(projection, missed(overdue, account.Name, from), forecast.Today)
 
 			return nil
 		}
@@ -128,6 +131,36 @@ func start(account domain.Account, ledger domain.Ledger, today time.Time) time.T
 	}
 
 	return today
+}
+
+// missed is what the overdue occurrences dated before from, which the projection leaves out, do to the account.
+func missed(overdue []domain.Transaction, account string, from time.Time) domain.MultiAmount {
+	var total domain.MultiAmount
+	for _, occurrence := range overdue {
+		for _, posting := range occurrence.Postings {
+			if posting.Account == account && occurrence.Date.Before(from) {
+				total = total.Plus(posting.Amounts)
+			}
+		}
+	}
+
+	return total
+}
+
+// withMissed adds the missed payments to every balance from today on: they are still to be paid.
+func withMissed(projection domain.Projection, missed domain.MultiAmount, today time.Time) domain.Projection {
+	if len(missed) == 0 {
+		return projection
+	}
+	balances := slices.Clone(projection.Balances)
+	for i, end := range projection.Ends {
+		if !end.Before(today) {
+			balances[i] = balances[i].Plus(missed)
+		}
+	}
+	projection.Balances = balances
+
+	return projection
 }
 
 // addMonths is the date months later, or earlier, on the same day of the month as far as the month has one.

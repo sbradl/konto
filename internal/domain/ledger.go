@@ -21,6 +21,7 @@ type Ledger struct {
 	Accounts     []Account
 	Transactions []Transaction
 	Upcoming     []Transaction // the periodic rules' occurrences for the next year, soonest first; never in the journal
+	Past         []Transaction // the rules' occurrences of the last OverdueDays up to today; never in the journal
 	Month        MonthSummary
 	Rules        []PeriodicRule // every `~` block of the journal, in file order
 	Commodities  []string       // the currencies the journal declares, in order

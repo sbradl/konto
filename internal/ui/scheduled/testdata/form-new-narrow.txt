@@ -1,7 +1,7 @@
 ╭─ RULES ──────────────────────────────────────────────────╮
-│ 2026-10-01  Vermie  monthly f  upcoming                  │
-│ 2026-10-05  Stream  monthly f  upcoming                  │
-│             Old on  2026-01-0  none in the next 12 months│
+│ 2026-10-01  Vermieter Mueller  monthly from 2026-10-01   │
+│ 2026-10-05  Streaming  monthly from 2026-10-05      -13,0│
+│             Old once-off  2026-01-05                  non│
 ╰──────────────────────────────────────────────────────────╯
 ╭─ ENTRY ────────────────────╮╭─ OCCURRENCES ──────────────╮
 │ ~ monthly from 2026-10-01  ││ 2026-10-01                 │

@@ -167,7 +167,8 @@ Feature: Forecast — balances plus scheduled transactions, nothing else
       Then the "today" figure of "assets:checking" is "13.227,00 EUR"
       When I import "later.csv" categorising every row
       And I press "4"
-      Then the "today" figure of "assets:checking" is "13.239,00 EUR"
+      # the import brings the Kiosk, not the fee: the fee is overdue and still to be paid
+      Then the "today" figure of "assets:checking" is "13.226,00 EUR"
 
   Rule: The forecast is never written (ADR 0007, spec §10)
     Scenario: viewing the forecast leaves the journal byte-identical
