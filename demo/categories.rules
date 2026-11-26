@@ -1,0 +1,79 @@
+if %payee Hausverwaltung Schmidt
+    account2 expenses:rent
+    comment2 konto-rule:1
+
+if %payee Muster Software GmbH
+    account2 income:salary
+    comment2 konto-rule:2
+
+if %payee Stadtwerke Musterstadt
+    account2 expenses:utilities
+    comment2 konto-rule:3
+
+if %payee Telekom
+    account2 expenses:internet
+    comment2 konto-rule:4
+
+if %payee Netflix
+    account2 expenses:streaming
+    comment2 konto-rule:5
+
+if %payee FitX
+    account2 expenses:gym
+    comment2 konto-rule:6
+
+if %payee REWE
+    account2 expenses:groceries
+    comment2 konto-rule:7
+
+if %payee EDEKA
+    account2 expenses:groceries
+    comment2 konto-rule:8
+
+if %payee ALDI SUED
+    account2 expenses:groceries
+    comment2 konto-rule:9
+
+if %payee Sparen
+    account2 assets:transfers
+    comment2 konto-rule:10
+
+if %payee Ausgleich Kreditkarte
+    account2 assets:transfers
+    comment2 konto-rule:11
+
+if %payee Deutsche Bahn
+    account2 expenses:transport
+    comment2 konto-rule:12
+
+if %payee Pizzeria Roma
+    account2 expenses:dining
+    comment2 konto-rule:13
+
+if %payee Cafe Central
+    account2 expenses:dining
+    comment2 konto-rule:14
+
+if %payee Thalia
+    account2 expenses:books
+    comment2 konto-rule:15
+
+if %payee Amazon
+    account2 expenses:shopping
+    comment2 konto-rule:16
+
+if %payee Zalando
+    account2 expenses:clothing
+    comment2 konto-rule:17
+
+if %payee Zinsen
+    account2 income:interest
+    comment2 konto-rule:18
+
+if %payee Allianz
+    account2 expenses:insurance
+    comment2 konto-rule:19
+
+if %payee dm-drogerie markt
+    account2 expenses:household
+    comment2 konto-rule:20

@@ -1,0 +1,14 @@
+﻿Umsätze
+Konto;Kontonummer;IBAN;Währung
+Postbank Giro plus;0000000011;DE00000000000000000011;EUR
+
+10.10.2026 - 15.10.2026
+Letzter Kontostand;;;;21.470,01;EUR
+Vorgemerkte und noch nicht gebuchte Umsätze sind nicht Bestandteil dieser Übersicht.
+Buchungstag;Wert;Umsatzart;Begünstigter / Auftraggeber;Verwendungszweck;IBAN / Kontonummer;BIC;Kundenreferenz;Mandatsreferenz;Gläubiger ID;Fremde Gebühren;Betrag;Abweichender Empfänger;Anzahl der Aufträge;Anzahl der Schecks;Soll;Haben;Währung
+15.10.2026;15.10.2026;SEPA Lastschrift;EDEKA;Einkauf;DE00000000000000000001;DEMODEFFXXX;ref1;;;;-31,86;;;;-31,86;;EUR
+14.10.2026;14.10.2026;SEPA Lastschrift;Kino Lichtspiele;Tickets;DE00000000000000000002;DEMODEFFXXX;ref2;;;;-24,00;;;;-24,00;;EUR
+13.10.2026;13.10.2026;SEPA Lastschrift;REWE;Einkauf;DE00000000000000000003;DEMODEFFXXX;ref3;;;;-47,12;;;;-47,12;;EUR
+12.10.2026;12.10.2026;SEPA Lastschrift;EDEKA;Einkauf;DE00000000000000000004;DEMODEFFXXX;ref4;;;;-14,33;;;;-14,33;;EUR
+10.10.2026;10.10.2026;SEPA Lastschrift;FitX;Mitgliedsbeitrag;DE00000000000000000005;DEMODEFFXXX;ref5;;;;-24,90;;;;-24,90;;EUR
+Kontostand;15.10.2026;;;21.470,01;EUR

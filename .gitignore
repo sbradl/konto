@@ -20,3 +20,6 @@
 
 # e2e failure dumps (screen, stderr, hledger calls)
 /e2e-artifacts/
+
+# konto's lock file beside a journal it has open (e.g. the demo ledger)
+*.journal.lock

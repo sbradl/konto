@@ -1,0 +1,83 @@
+decimal-mark ,
+commodity 1.000,00 EUR
+
+account equity:opening-balances
+account assets:transfers  ; konto:source:clearing
+account assets:checking  ; konto:source:import, konto:iban:DE00000000000000000011, konto:format:postbank
+account assets:savings  ; konto:source:import, konto:iban:DE00000000000000000012, konto:format:postbank
+account liabilities:creditcard  ; konto:source:import, konto:iban:DE00000000000000000013, konto:format:postbank
+account expenses:books
+account expenses:cinema
+account expenses:clothing
+account expenses:dining
+account expenses:groceries
+account expenses:gym
+account expenses:household
+account expenses:insurance
+account expenses:internet
+account expenses:rent
+account expenses:shopping
+account expenses:streaming
+account expenses:transport
+account expenses:utilities
+account income:interest
+account income:salary
+
+tag konto
+tag konto-rule
+
+payee ALDI SUED
+payee Allianz
+payee Amazon
+payee Ausgleich Kreditkarte
+payee Cafe Central
+payee Deutsche Bahn
+payee EDEKA
+payee FitX
+payee Hausverwaltung Schmidt
+payee Muster Software GmbH
+payee Netflix
+payee Pizzeria Roma
+payee REWE
+payee Sparen
+payee Stadtwerke Musterstadt
+payee Telekom
+payee Thalia
+payee Zalando
+payee Zinsen
+payee closing balance
+payee dm-drogerie markt
+payee opening balance
+payee Kino Lichtspiele
+
+~ monthly from 2026-11-01  Hausverwaltung Schmidt
+    expenses:rent  950,00 EUR
+    assets:checking
+
+~ monthly from 2026-10-25  Muster Software GmbH
+    assets:checking  3.450,00 EUR
+    income:salary
+
+~ monthly from 2026-10-26  Sparen
+    assets:transfers  400,00 EUR
+    assets:checking
+
+~ monthly from 2026-11-03  Stadtwerke Musterstadt
+    expenses:utilities  86,00 EUR
+    assets:checking
+
+~ monthly from 2026-11-05  Netflix
+    expenses:streaming  13,99 EUR
+    assets:checking
+
+~ monthly from 2026-11-07  Telekom
+    expenses:internet  39,95 EUR
+    assets:checking
+
+~ monthly from 2026-11-10  FitX  ; ends 2027-06
+    expenses:gym  24,90 EUR
+    assets:checking
+
+~ yearly from 2026-11-15  Allianz
+    expenses:insurance  89,00 EUR
+    assets:checking

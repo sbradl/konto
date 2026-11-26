@@ -20,6 +20,38 @@ konto has three views:
 
 konto never writes a periodic rule as a transaction. A rule only shows the future payments.
 
+![The Dashboard: accounts, net worth, net income and the Activity timeline](docs/screenshots/dashboard.png)
+
+![The Import view: a bank CSV file with one row that needs a category](docs/screenshots/import.png)
+
+![The Scheduled view: periodic rules, their next dates and their annual impact](docs/screenshots/scheduled.png)
+
+## Try the demo
+
+The `demo/` directory contains a demo ledger with fake data. Use it to see konto before you
+use your own data. The demo has three bank accounts with transactions from July 2025 to
+October 2026, periodic rules and one bank CSV file to import.
+
+The demo data stops on 15 October 2026. konto shows the demo as if today is that date.
+
+With [mise](https://mise.jdx.dev):
+
+```sh
+git clone https://github.com/sbradl/konto.git
+cd konto
+mise run demo
+```
+
+Without mise, copy the demo first. konto writes to the journal when you import or edit.
+
+```sh
+cp -r demo /tmp/konto-demo
+KONTO_TODAY=2026-10-15 XDG_DOWNLOAD_DIR=/tmp/konto-demo/downloads \
+  konto --file /tmp/konto-demo/main.journal
+```
+
+To see the import, push `2`, then `n`, then select `demo-postbank-checking.csv`.
+
 ## Requirements
 
 - hledger 1.32 or later. The `hledger` command must be on your `PATH`.
@@ -116,6 +148,8 @@ konto reads Postbank CSV exports at this time.
    row to a rule, or set the category one time.
 7. Push `w` to write the import. konto writes only when all rows have a category.
 
+![The categorise popup: make a rule, add the row to a rule, or set the category one time](docs/screenshots/import-categorise.png)
+
 konto adds a balance assertion with the closing balance of the bank file. If the balance in
 the journal is different, hledger shows an error. Thus you see a missing or a wrong row
 immediately.
@@ -150,7 +184,6 @@ When the editor closes, konto reads the journal again.
 | [`CONTEXT.md`](CONTEXT.md) | The glossary. Use these terms in code and in documents. |
 | [`docs/adr/`](docs/adr/) | The decisions that are difficult to change. |
 | [`features/`](features/) | The behaviour, as Gherkin scenarios. |
-| [`CLAUDE.md`](CLAUDE.md) | The rules for coding agents. They also apply to people. |
 
 ## Stack
 
@@ -199,6 +232,8 @@ mise tasks        # list all tasks
 | `mise run test:e2e` | Gherkin scenarios against the compiled binary on a pseudo-terminal. |
 | `mise run mutation:diff` | Mutation tests on the changed lines. |
 | `mise run security` | govulncheck, gitleaks, trivy (also licenses) and opengrep. |
+| `mise run demo` | Starts konto on a copy of the demo ledger. |
+| `mise run screenshots` | Makes the README screenshots again from the demo ledger. |
 | `mise run qa` | All the steps that CI runs. |
 
 Run one test:
@@ -223,11 +258,77 @@ mise run test:e2e -- -godog.tags=@spec-4.5
 The thresholds are at the maximum. Do not make a threshold lower without a written reason in
 `mise.toml`.
 
-## Workflow
+## Add a bank file format
 
-- Write the test first. Then write the code. Then refactor.
-- Commit to `main` directly. The project does not use feature branches.
-- CI (`.github/workflows/qa.yml`) runs the same mise tasks as `mise run qa`.
+konto reads Postbank CSV exports at this time. A bank format is a layout description, not a
+parser. konto uses the description for two tasks:
+
+- konto reads the preamble of the export: the IBAN, the closing balance and the raw columns.
+- konto writes an hledger rules file from the description. hledger converts the bookings.
+
+Thus the two readings of the file always agree. Do not write a new CSV parser.
+
+### Requirements for a format
+
+The bank export must give this data:
+
+- The IBAN of the account, in a fixed line and column above the bookings.
+- The closing balance, in a trailer line or a preamble line. konto writes it as a balance
+  assertion (ADR 0009).
+- One line for each booking, with a date, a type, a payee, a purpose and an amount.
+- One currency for all amounts.
+
+If a bank export does not give the IBAN or the closing balance, discuss the change first. The
+import rules depend on them.
+
+### Procedure
+
+1. Get a real export from the bank. Keep it in `.scratch/konto-spec/samples/`. Git ignores
+   this directory. Do not commit a real export.
+2. In `internal/csvimport/bankformat.go`, add a constant for the format name, for example
+   `FormatComdirect = "comdirect"`. konto writes this name into the `konto:format:` tag of
+   each account that it creates from an import.
+3. Add a function that returns the `bankFormat` value of the bank. Use `postbank()` as the
+   example. Set these fields:
+
+   | Field | Contents |
+   |---|---|
+   | `skip` | The number of preamble lines above the header line. |
+   | `header` | The start of the header line. konto finds the bookings with it. |
+   | `trailer` | The first field of the line with the closing balance. |
+   | `dateLayout`, `dateFormat` | The date format, as Go reads it and as hledger reads it. |
+   | `decimalMark`, `groupMark` | For example `,` and `.` for German amounts. |
+   | `ibanLine`, `ibanColumn` | The position of the IBAN. Lines and columns start at 0. |
+   | `balanceColumn` | The column of the closing balance in the trailer line. |
+   | `dateColumn` … `amountColumn` | The columns of the booking fields. |
+
+4. Add the function to the list in `formatNamed`.
+5. Make `Open` in `internal/csvimport/csvimport.go` find the format. At this time, `Open` uses
+   `postbank()` directly. Try each format in sequence and use the first format whose header
+   line is in the file. For an existing account, the format must agree with its
+   `konto:format:` tag.
+6. If the bank does not use `;` between the columns, change the `separator` constant into a
+   field of `bankFormat`.
+
+### Tests
+
+1. Add unit tests in `internal/csvimport` for the preamble, the IBAN, the closing balance and
+   the rules text.
+2. Add an e2e export generator for the bank. Use `e2e/postbank_test.go` as the example. Use
+   only fake data.
+3. Add a feature file for the format mechanics. Use `features/import-format.feature` as the
+   example.
+4. Use the fake IBANs `DE00000000000000000001` to `DE00000000000000000099`. The pre-commit
+   hook accepts them. The hook stops a real IBAN.
+
+## Demo ledger and screenshots
+
+`demo/` is the demo ledger. It uses only fake data and fake IBANs (`DE000…`). All hledger checks
+pass on it. If you change konto's journal format, change the demo too.
+
+`mise run screenshots` uses [VHS](https://github.com/charmbracelet/vhs) and the script
+`docs/screenshots/demo.tape`. VHS needs `ffmpeg` and Chromium on your system. The task copies
+the demo to `/tmp/konto-demo`, so no personal path shows in the images.
 
 ## Data safety
 

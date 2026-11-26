@@ -1,0 +1,545 @@
+2025-07-01 opening balance
+    assets:checking  2.350,00 EUR = 2.350,00 EUR
+    equity:opening-balances
+
+2025-07-01 opening balance
+    assets:savings  8.000,00 EUR = 8.000,00 EUR
+    equity:opening-balances
+
+2025-07-01 opening balance
+    liabilities:creditcard  0,00 EUR = 0,00 EUR
+    equity:opening-balances
+
+2025-07-01 Hausverwaltung Schmidt  ; Miete
+    expenses:rent  950,00 EUR  ; konto-rule:1
+    assets:checking
+
+2025-07-03 Stadtwerke Musterstadt  ; Abschlag Strom/Gas
+    expenses:utilities  86,00 EUR  ; konto-rule:3
+    assets:checking
+
+2025-07-03 dm-drogerie markt  ; Einkauf
+    expenses:household  27,42 EUR  ; konto-rule:20
+    assets:checking
+
+2025-07-03 Amazon  ; Kartenzahlung
+    expenses:shopping  110,93 EUR  ; konto-rule:16
+    liabilities:creditcard
+
+2025-07-04 ALDI SUED  ; Einkauf
+    expenses:groceries  21,50 EUR  ; konto-rule:9
+    assets:checking
+
+2025-07-04 Cafe Central
+    expenses:dining  11,42 EUR  ; konto-rule:14
+    assets:checking
+
+2025-07-05 Netflix  ; Abo
+    expenses:streaming  13,99 EUR  ; konto-rule:5
+    assets:checking
+
+2025-07-06 dm-drogerie markt  ; Einkauf
+    expenses:household  47,17 EUR  ; konto-rule:20
+    assets:checking
+
+2025-07-07 Telekom  ; Festnetz/Internet
+    expenses:internet  39,95 EUR  ; konto-rule:4
+    assets:checking
+
+2025-07-10 FitX  ; Mitgliedsbeitrag
+    expenses:gym  24,90 EUR  ; konto-rule:6
+    assets:checking
+
+2025-07-12 REWE  ; Einkauf
+    expenses:groceries  26,08 EUR  ; konto-rule:7
+    assets:checking
+
+2025-07-14 REWE  ; Einkauf
+    expenses:groceries  80,51 EUR  ; konto-rule:7
+    assets:checking
+
+2025-07-19 Pizzeria Roma
+    expenses:dining  47,80 EUR  ; konto-rule:13
+    assets:checking
+
+2025-07-20 Zalando  ; Kartenzahlung
+    expenses:clothing  23,12 EUR  ; konto-rule:17
+    liabilities:creditcard
+
+2025-07-21 Thalia  ; Buecher
+    expenses:books  21,14 EUR  ; konto-rule:15
+    assets:checking
+
+2025-07-22 REWE  ; Einkauf
+    expenses:groceries  51,43 EUR  ; konto-rule:7
+    assets:checking
+
+2025-07-22 Amazon  ; Kartenzahlung
+    expenses:shopping  22,63 EUR  ; konto-rule:16
+    liabilities:creditcard  -22,63 EUR = -156,68 EUR
+
+2025-07-25 Muster Software GmbH  ; Gehalt
+    income:salary  -3.450,00 EUR  ; konto-rule:2
+    assets:checking
+
+2025-07-26 Sparen  ; Dauerauftrag
+    assets:transfers  400,00 EUR  ; konto-rule:10
+    assets:checking  -400,00 EUR = 3.950,69 EUR
+
+2025-07-26 Sparen  ; Dauerauftrag
+    assets:transfers  -400,00 EUR  ; konto-rule:10
+    assets:savings  400,00 EUR = 8.400,00 EUR
+
+2025-08-01 Hausverwaltung Schmidt  ; Miete
+    expenses:rent  950,00 EUR  ; konto-rule:1
+    assets:checking
+
+2025-08-03 Stadtwerke Musterstadt  ; Abschlag Strom/Gas
+    expenses:utilities  86,00 EUR  ; konto-rule:3
+    assets:checking
+
+2025-08-05 Netflix  ; Abo
+    expenses:streaming  13,99 EUR  ; konto-rule:5
+    assets:checking
+
+2025-08-06 REWE  ; Einkauf
+    expenses:groceries  62,54 EUR  ; konto-rule:7
+    assets:checking
+
+2025-08-07 Telekom  ; Festnetz/Internet
+    expenses:internet  39,95 EUR  ; konto-rule:4
+    assets:checking
+
+2025-08-08 Cafe Central
+    expenses:dining  36,86 EUR  ; konto-rule:14
+    assets:checking
+
+2025-08-10 FitX  ; Mitgliedsbeitrag
+    expenses:gym  24,90 EUR  ; konto-rule:6
+    assets:checking
+
+2025-08-11 dm-drogerie markt  ; Einkauf
+    expenses:household  41,61 EUR  ; konto-rule:20
+    assets:checking
+
+2025-08-13 Zalando  ; Kartenzahlung
+    expenses:clothing  55,70 EUR  ; konto-rule:17
+    liabilities:creditcard
+
+2025-08-15 REWE  ; Einkauf
+    expenses:groceries  42,78 EUR  ; konto-rule:7
+    assets:checking
+
+2025-08-16 Amazon  ; Kartenzahlung
+    expenses:shopping  54,99 EUR  ; konto-rule:16
+    liabilities:creditcard
+
+2025-08-18 Deutsche Bahn  ; Fahrkarte
+    expenses:transport  44,73 EUR  ; konto-rule:12
+    assets:checking
+
+2025-08-19 ALDI SUED  ; Einkauf
+    expenses:groceries  27,96 EUR  ; konto-rule:9
+    assets:checking
+
+2025-08-20 Amazon  ; Kartenzahlung
+    expenses:shopping  109,11 EUR  ; konto-rule:16
+    liabilities:creditcard
+
+2025-08-21 Cafe Central
+    expenses:dining  40,83 EUR  ; konto-rule:14
+    assets:checking
+
+2025-08-25 Muster Software GmbH  ; Gehalt
+    income:salary  -3.450,00 EUR  ; konto-rule:2
+    assets:checking
+
+2025-08-26 Sparen  ; Dauerauftrag
+    assets:transfers  400,00 EUR  ; konto-rule:10
+    assets:checking
+
+2025-08-26 dm-drogerie markt  ; Einkauf
+    expenses:household  22,28 EUR  ; konto-rule:20
+    assets:checking
+
+2025-08-26 Sparen  ; Dauerauftrag
+    assets:transfers  -400,00 EUR  ; konto-rule:10
+    assets:savings  400,00 EUR = 8.800,00 EUR
+
+2025-08-27 dm-drogerie markt  ; Einkauf
+    expenses:household  21,76 EUR  ; konto-rule:20
+    assets:checking
+
+2025-08-28 Ausgleich Kreditkarte  ; Kreditkartenabrechnung
+    assets:transfers  156,68 EUR  ; konto-rule:11
+    assets:checking  -156,68 EUR = 5.387,82 EUR
+
+2025-08-28 Ausgleich Kreditkarte  ; Ausgleich
+    assets:transfers  -156,68 EUR  ; konto-rule:11
+    liabilities:creditcard  156,68 EUR = -219,80 EUR
+
+2025-09-01 Hausverwaltung Schmidt  ; Miete
+    expenses:rent  950,00 EUR  ; konto-rule:1
+    assets:checking
+
+2025-09-03 Stadtwerke Musterstadt  ; Abschlag Strom/Gas
+    expenses:utilities  86,00 EUR  ; konto-rule:3
+    assets:checking
+
+2025-09-04 Amazon  ; Kartenzahlung
+    expenses:shopping  25,64 EUR  ; konto-rule:16
+    liabilities:creditcard
+
+2025-09-05 Netflix  ; Abo
+    expenses:streaming  13,99 EUR  ; konto-rule:5
+    assets:checking
+
+2025-09-07 Telekom  ; Festnetz/Internet
+    expenses:internet  39,95 EUR  ; konto-rule:4
+    assets:checking
+
+2025-09-10 FitX  ; Mitgliedsbeitrag
+    expenses:gym  24,90 EUR  ; konto-rule:6
+    assets:checking
+
+2025-09-10 Amazon  ; Kartenzahlung
+    expenses:shopping  65,72 EUR  ; konto-rule:16
+    liabilities:creditcard
+
+2025-09-11 dm-drogerie markt  ; Einkauf
+    expenses:household  23,99 EUR  ; konto-rule:20
+    assets:checking
+
+2025-09-12 Cafe Central
+    expenses:dining  33,34 EUR  ; konto-rule:14
+    assets:checking
+
+2025-09-12 REWE  ; Einkauf
+    expenses:groceries  80,50 EUR  ; konto-rule:7
+    assets:checking
+
+2025-09-16 EDEKA  ; Einkauf
+    expenses:groceries  68,04 EUR  ; konto-rule:8
+    assets:checking
+
+2025-09-17 EDEKA  ; Einkauf
+    expenses:groceries  92,11 EUR  ; konto-rule:8
+    assets:checking
+
+2025-09-17 Amazon  ; Kartenzahlung
+    expenses:shopping  109,69 EUR  ; konto-rule:16
+    liabilities:creditcard
+
+2025-09-18 REWE  ; Einkauf
+    expenses:groceries  18,42 EUR  ; konto-rule:7
+    assets:checking
+
+2025-09-24 Cafe Central
+    expenses:dining  32,75 EUR  ; konto-rule:14
+    assets:checking
+
+2025-09-25 Muster Software GmbH  ; Gehalt
+    income:salary  -3.450,00 EUR  ; konto-rule:2
+    assets:checking
+
+2025-09-26 Sparen  ; Dauerauftrag
+    assets:transfers  400,00 EUR  ; konto-rule:10
+    assets:checking
+
+2025-09-26 Sparen  ; Dauerauftrag
+    assets:transfers  -400,00 EUR  ; konto-rule:10
+    assets:savings
+
+2025-09-27 REWE  ; Einkauf
+    expenses:groceries  63,40 EUR  ; konto-rule:7
+    assets:checking
+
+2025-09-28 Ausgleich Kreditkarte  ; Kreditkartenabrechnung
+    assets:transfers  219,80 EUR  ; konto-rule:11
+    assets:checking  -219,80 EUR = 6.690,63 EUR
+
+2025-09-28 Ausgleich Kreditkarte  ; Ausgleich
+    assets:transfers  -219,80 EUR  ; konto-rule:11
+    liabilities:creditcard  219,80 EUR = -201,05 EUR
+
+2025-09-30 Zinsen  ; Zinsgutschrift
+    income:interest  -17,34 EUR  ; konto-rule:18
+    assets:savings  17,34 EUR = 9.217,34 EUR
+
+2025-10-01 Hausverwaltung Schmidt  ; Miete
+    expenses:rent  950,00 EUR  ; konto-rule:1
+    assets:checking
+
+2025-10-03 Stadtwerke Musterstadt  ; Abschlag Strom/Gas
+    expenses:utilities  86,00 EUR  ; konto-rule:3
+    assets:checking
+
+2025-10-05 Netflix  ; Abo
+    expenses:streaming  13,99 EUR  ; konto-rule:5
+    assets:checking
+
+2025-10-06 Amazon  ; Kartenzahlung
+    expenses:shopping  60,61 EUR  ; konto-rule:16
+    liabilities:creditcard
+
+2025-10-07 Telekom  ; Festnetz/Internet
+    expenses:internet  39,95 EUR  ; konto-rule:4
+    assets:checking
+
+2025-10-10 FitX  ; Mitgliedsbeitrag
+    expenses:gym  24,90 EUR  ; konto-rule:6
+    assets:checking
+
+2025-10-10 Amazon  ; Kartenzahlung
+    expenses:shopping  83,04 EUR  ; konto-rule:16
+    liabilities:creditcard
+
+2025-10-11 REWE  ; Einkauf
+    expenses:groceries  87,64 EUR  ; konto-rule:7
+    assets:checking
+
+2025-10-13 ALDI SUED  ; Einkauf
+    expenses:groceries  39,53 EUR  ; konto-rule:9
+    assets:checking
+
+2025-10-14 Pizzeria Roma
+    expenses:dining  15,81 EUR  ; konto-rule:13
+    assets:checking
+
+2025-10-14 dm-drogerie markt  ; Einkauf
+    expenses:household  31,18 EUR  ; konto-rule:20
+    assets:checking
+
+2025-10-15 Zalando  ; Kartenzahlung
+    expenses:clothing  77,33 EUR  ; konto-rule:17
+    liabilities:creditcard
+
+2025-10-16 REWE  ; Einkauf
+    expenses:groceries  21,65 EUR  ; konto-rule:7
+    assets:checking
+
+2025-10-17 Cafe Central
+    expenses:dining  25,45 EUR  ; konto-rule:14
+    assets:checking
+
+2025-10-18 Deutsche Bahn  ; Fahrkarte
+    expenses:transport  64,01 EUR  ; konto-rule:12
+    assets:checking
+
+2025-10-23 EDEKA  ; Einkauf
+    expenses:groceries  59,09 EUR  ; konto-rule:8
+    assets:checking
+
+2025-10-24 EDEKA  ; Einkauf
+    expenses:groceries  52,56 EUR  ; konto-rule:8
+    assets:checking
+
+2025-10-25 Muster Software GmbH  ; Gehalt
+    income:salary  -3.450,00 EUR  ; konto-rule:2
+    assets:checking
+
+2025-10-26 Sparen  ; Dauerauftrag
+    assets:transfers  400,00 EUR  ; konto-rule:10
+    assets:checking
+
+2025-10-26 Sparen  ; Dauerauftrag
+    assets:transfers  -400,00 EUR  ; konto-rule:10
+    assets:savings  400,00 EUR = 9.617,34 EUR
+
+2025-10-28 Ausgleich Kreditkarte  ; Kreditkartenabrechnung
+    assets:transfers  201,05 EUR  ; konto-rule:11
+    assets:checking  -201,05 EUR = 8.027,82 EUR
+
+2025-10-28 Ausgleich Kreditkarte  ; Ausgleich
+    assets:transfers  -201,05 EUR  ; konto-rule:11
+    liabilities:creditcard  201,05 EUR = -220,98 EUR
+
+2025-11-01 Hausverwaltung Schmidt  ; Miete
+    expenses:rent  950,00 EUR  ; konto-rule:1
+    assets:checking
+
+2025-11-03 Stadtwerke Musterstadt  ; Abschlag Strom/Gas
+    expenses:utilities  86,00 EUR  ; konto-rule:3
+    assets:checking
+
+2025-11-04 EDEKA  ; Einkauf
+    expenses:groceries  13,97 EUR  ; konto-rule:8
+    assets:checking
+
+2025-11-05 Netflix  ; Abo
+    expenses:streaming  13,99 EUR  ; konto-rule:5
+    assets:checking
+
+2025-11-05 Amazon  ; Kartenzahlung
+    expenses:shopping  80,60 EUR  ; konto-rule:16
+    liabilities:creditcard
+
+2025-11-06 Pizzeria Roma
+    expenses:dining  27,70 EUR  ; konto-rule:13
+    assets:checking
+
+2025-11-06 REWE  ; Einkauf
+    expenses:groceries  41,87 EUR  ; konto-rule:7
+    assets:checking
+
+2025-11-07 ALDI SUED  ; Einkauf
+    expenses:groceries  58,19 EUR  ; konto-rule:9
+    assets:checking
+
+2025-11-07 Telekom  ; Festnetz/Internet
+    expenses:internet  39,95 EUR  ; konto-rule:4
+    assets:checking
+
+2025-11-09 REWE  ; Einkauf
+    expenses:groceries  35,86 EUR  ; konto-rule:7
+    assets:checking
+
+2025-11-10 FitX  ; Mitgliedsbeitrag
+    expenses:gym  24,90 EUR  ; konto-rule:6
+    assets:checking
+
+2025-11-14 Amazon  ; Kartenzahlung
+    expenses:shopping  46,22 EUR  ; konto-rule:16
+    liabilities:creditcard
+
+2025-11-15 Allianz  ; Haftpflicht jaehrlich
+    expenses:insurance  89,00 EUR  ; konto-rule:19
+    assets:checking
+
+2025-11-17 Amazon  ; Kartenzahlung
+    expenses:shopping  49,20 EUR  ; konto-rule:16
+    liabilities:creditcard
+
+2025-11-21 Thalia  ; Buecher
+    expenses:books  28,34 EUR  ; konto-rule:15
+    assets:checking
+
+2025-11-24 Cafe Central
+    expenses:dining  25,30 EUR  ; konto-rule:14
+    assets:checking
+
+2025-11-25 Muster Software GmbH  ; Gehalt
+    income:salary  -3.450,00 EUR  ; konto-rule:2
+    assets:checking
+
+2025-11-26 REWE  ; Einkauf
+    expenses:groceries  72,49 EUR  ; konto-rule:7
+    assets:checking
+
+2025-11-26 Sparen  ; Dauerauftrag
+    assets:transfers  400,00 EUR  ; konto-rule:10
+    assets:checking
+
+2025-11-26 Sparen  ; Dauerauftrag
+    assets:transfers  -400,00 EUR  ; konto-rule:10
+    assets:savings  400,00 EUR = 10.017,34 EUR
+
+2025-11-27 dm-drogerie markt  ; Einkauf
+    expenses:household  64,20 EUR  ; konto-rule:20
+    assets:checking
+
+2025-11-28 Ausgleich Kreditkarte  ; Kreditkartenabrechnung
+    assets:transfers  220,98 EUR  ; konto-rule:11
+    assets:checking  -220,98 EUR = 9.285,08 EUR
+
+2025-11-28 Ausgleich Kreditkarte  ; Ausgleich
+    assets:transfers  -220,98 EUR  ; konto-rule:11
+    liabilities:creditcard  220,98 EUR = -176,02 EUR
+
+2025-12-01 Hausverwaltung Schmidt  ; Miete
+    expenses:rent  950,00 EUR  ; konto-rule:1
+    assets:checking
+
+2025-12-03 REWE  ; Einkauf
+    expenses:groceries  12,03 EUR  ; konto-rule:7
+    assets:checking
+
+2025-12-03 Stadtwerke Musterstadt  ; Abschlag Strom/Gas
+    expenses:utilities  86,00 EUR  ; konto-rule:3
+    assets:checking
+
+2025-12-05 Netflix  ; Abo
+    expenses:streaming  13,99 EUR  ; konto-rule:5
+    assets:checking
+
+2025-12-05 dm-drogerie markt  ; Einkauf
+    expenses:household  36,78 EUR  ; konto-rule:20
+    assets:checking
+
+2025-12-06 Cafe Central
+    expenses:dining  23,22 EUR  ; konto-rule:14
+    assets:checking
+
+2025-12-07 Telekom  ; Festnetz/Internet
+    expenses:internet  39,95 EUR  ; konto-rule:4
+    assets:checking
+
+2025-12-07 dm-drogerie markt  ; Einkauf
+    expenses:household  28,62 EUR  ; konto-rule:20
+    assets:checking
+
+2025-12-10 FitX  ; Mitgliedsbeitrag
+    expenses:gym  24,90 EUR  ; konto-rule:6
+    assets:checking
+
+2025-12-11 Amazon  ; Kartenzahlung
+    expenses:shopping  38,61 EUR  ; konto-rule:16
+    liabilities:creditcard
+
+2025-12-12 ALDI SUED  ; Einkauf
+    expenses:groceries  16,17 EUR  ; konto-rule:9
+    assets:checking
+
+2025-12-16 REWE  ; Einkauf
+    expenses:groceries  46,07 EUR  ; konto-rule:7
+    assets:checking
+
+2025-12-16 Amazon  ; Kartenzahlung
+    expenses:shopping  71,13 EUR  ; konto-rule:16
+    liabilities:creditcard
+
+2025-12-17 Amazon  ; Kartenzahlung
+    expenses:shopping  58,37 EUR  ; konto-rule:16
+    liabilities:creditcard
+
+2025-12-18 Deutsche Bahn  ; Fahrkarte
+    expenses:transport  29,06 EUR  ; konto-rule:12
+    assets:checking
+
+2025-12-21 dm-drogerie markt  ; Einkauf
+    expenses:household  73,64 EUR  ; konto-rule:20
+    assets:checking
+
+2025-12-22 Cafe Central
+    expenses:dining  28,42 EUR  ; konto-rule:14
+    assets:checking
+
+2025-12-25 Muster Software GmbH  ; Gehalt
+    income:salary  -3.450,00 EUR  ; konto-rule:2
+    assets:checking
+
+2025-12-26 Sparen  ; Dauerauftrag
+    assets:transfers  400,00 EUR  ; konto-rule:10
+    assets:checking
+
+2025-12-26 Sparen  ; Dauerauftrag
+    assets:transfers  -400,00 EUR  ; konto-rule:10
+    assets:savings
+
+2025-12-28 Ausgleich Kreditkarte  ; Kreditkartenabrechnung
+    assets:transfers  176,02 EUR  ; konto-rule:11
+    assets:checking  -176,02 EUR = 10.750,21 EUR
+
+2025-12-28 Ausgleich Kreditkarte  ; Ausgleich
+    assets:transfers  -176,02 EUR  ; konto-rule:11
+    liabilities:creditcard  176,02 EUR = -168,11 EUR
+
+2025-12-30 Zinsen  ; Zinsgutschrift
+    income:interest  -10,36 EUR  ; konto-rule:18
+    assets:savings  10,36 EUR = 10.427,70 EUR
+
+2025-12-31 closing balance  ; konto:carry
+    assets:checking  -10.750,21 EUR
+    assets:savings  -10.427,70 EUR
+    liabilities:creditcard  168,11 EUR
+    equity:opening-balances

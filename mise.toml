@@ -85,6 +85,27 @@ run = "opengrep scan --config p/golang --config p/github-actions --exclude-rule 
 description = "Every security scan: govulncheck, gitleaks, trivy (incl. licenses), opengrep"
 depends = ["vuln", "secrets", "trivy", "licenses", "sast"]
 
+[tasks.demo]
+description = "Start konto on a copy of the demo ledger (demo/), with today set to 2026-10-15"
+run = '''
+dir="${TMPDIR:-/tmp}/konto-demo"
+rm -rf "$dir" && cp -r demo "$dir"
+KONTO_TODAY=2026-10-15 XDG_DOWNLOAD_DIR="$dir/downloads" go run ./cmd/konto --file "$dir/main.journal"
+'''
+
+# VHS drives konto in a headless browser terminal (needs ffmpeg and chromium on the system). The tape reads the
+# demo from /tmp/konto-demo, a fixed path, so the tab bar shows no user's home directory.
+[tasks.screenshots]
+description = "Render the README screenshots (docs/screenshots/*.png) from the demo ledger with VHS"
+tools = { vhs = "0.12.1", ttyd = "1.7.7" }
+run = '''
+set -e
+rm -rf /tmp/konto-demo && cp -r demo /tmp/konto-demo
+go build -o /tmp/konto-demo/konto ./cmd/konto
+KONTO_BIN=/tmp/konto-demo/konto vhs docs/screenshots/demo.tape
+rm -rf /tmp/konto-demo
+'''
+
 [tasks.tidy]
 description = "Fail if go.mod/go.sum are not tidy"
 run = "go mod tidy -diff"
